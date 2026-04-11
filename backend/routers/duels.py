@@ -90,8 +90,14 @@ async def submit_duel(
     score_a, score_b = outcome_to_scores(outcome)
     if outcome in ("neither", "a_only", "b_only"):
         new_elo_a, new_elo_b = old_elo_a, old_elo_b
-    else:
-        new_elo_a, new_elo_b = update_elo(old_elo_a, old_elo_b, score_a)
+    elif outcome == "a_wins":
+        new_elo_a, new_elo_b = update_elo(
+            old_elo_a, old_elo_b, um_a.battles, um_b.battles
+        )
+    else:  # b_wins
+        new_elo_b, new_elo_a = update_elo(
+            old_elo_b, old_elo_a, um_b.battles, um_a.battles
+        )
 
     delta_a = new_elo_a - old_elo_a
     delta_b = new_elo_b - old_elo_b
