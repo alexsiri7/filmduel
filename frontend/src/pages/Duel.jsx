@@ -62,6 +62,7 @@ export default function Duel() {
     try {
       const res = await submitDuel(pair.movie_a.id, pair.movie_b.id, outcome);
       setResult(res);
+      // 1500ms gives the user a moment to read the ELO delta before the next pair loads
       setTimeout(loadPair, 1500);
     } catch (err) {
       console.error("Failed to submit duel:", err);
