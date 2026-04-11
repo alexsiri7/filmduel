@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
+from backend.config import get_settings
 from backend.db_models import UserMovie
 from backend.services.elo import elo_to_trakt_rating
 from backend.services.trakt import TraktClient
@@ -50,7 +51,8 @@ async def sync_post_duel(
         access_token: User's current Trakt access token.
         movie_ratings: List of (trakt_id, elo) pairs to sync.
     """
-    client = TraktClient(access_token=access_token)
+    settings = get_settings()
+    client = TraktClient(client_id=settings.TRAKT_CLIENT_ID, access_token=access_token)
     for trakt_id, elo in movie_ratings:
         rating = elo_to_trakt_rating(elo)
         await _rate_with_retry(client, trakt_id, rating)
@@ -65,7 +67,8 @@ async def sync_ratings_to_trakt(
 
     Returns a summary of synced/failed counts.
     """
-    client = TraktClient(access_token=access_token)
+    settings = get_settings()
+    client = TraktClient(client_id=settings.TRAKT_CLIENT_ID, access_token=access_token)
 
     stmt = (
         select(UserMovie)

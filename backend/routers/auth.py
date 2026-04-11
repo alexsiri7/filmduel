@@ -77,8 +77,13 @@ async def ensure_fresh_token(user: User, db: AsyncSession) -> User:
     if expires_at - now > timedelta(hours=1):
         return user
 
-    client = TraktClient()
-    tokens = await client.refresh_token(user.trakt_refresh_token)
+    settings = get_settings()
+    client = TraktClient(client_id=settings.TRAKT_CLIENT_ID)
+    tokens = await client.refresh_token(
+        user.trakt_refresh_token,
+        client_secret=settings.TRAKT_CLIENT_SECRET,
+        redirect_uri=settings.TRAKT_REDIRECT_URI,
+    )
 
     user.trakt_access_token = tokens["access_token"]
     user.trakt_refresh_token = tokens.get("refresh_token", user.trakt_refresh_token)
@@ -111,12 +116,19 @@ async def callback(
     db: AsyncSession = Depends(get_db),
 ):
     """Handle the OAuth callback from Trakt."""
-    client = TraktClient()
-    tokens = await client.exchange_code(code)
+    client = TraktClient(client_id=settings.TRAKT_CLIENT_ID)
+    tokens = await client.exchange_code(
+        code,
+        client_secret=settings.TRAKT_CLIENT_SECRET,
+        redirect_uri=settings.TRAKT_REDIRECT_URI,
+    )
 
     # Fetch user profile
-    authed_client = TraktClient(access_token=tokens["access_token"])
-    profile = await authed_client.get_user_profile()
+    authed_client = TraktClient(
+        client_id=settings.TRAKT_CLIENT_ID,
+        access_token=tokens["access_token"],
+    )
+    profile = await authed_client.get_profile()
 
     trakt_user_id = str(profile["ids"]["slug"])
     expires_at = datetime.now(timezone.utc) + timedelta(
