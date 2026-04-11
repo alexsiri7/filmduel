@@ -19,7 +19,7 @@ export default function Login() {
         </CardHeader>
         <CardContent className="pt-6">
           <Button size="lg" className="w-full text-base" asChild>
-            <a href="/api/auth/login">Sign in with Trakt</a>
+            <a href="/auth/login">Sign in with Trakt</a>
           </Button>
         </CardContent>
       </Card>

@@ -20,7 +20,7 @@ from backend.services.pool import populate_movie_pool
 from backend.services.tmdb import backfill_posters
 from backend.services.trakt import TraktClient
 
-router = APIRouter(prefix="/api/auth", tags=["auth"])
+router = APIRouter(tags=["auth"])
 
 COOKIE_NAME = "filmduel_session"
 JWT_ALGORITHM = "HS256"
@@ -121,7 +121,7 @@ async def _sync_pool_background(user_id) -> None:
         logger.exception("Background pool sync failed for user %s", user_id)
 
 
-@router.get("/login")
+@router.get("/auth/login")
 async def login(settings: Settings = Depends(get_settings)):
     """Redirect the user to Trakt's OAuth authorization page."""
     params = urlencode(
@@ -134,7 +134,7 @@ async def login(settings: Settings = Depends(get_settings)):
     return RedirectResponse(f"https://trakt.tv/oauth/authorize?{params}")
 
 
-@router.get("/callback")
+@router.get("/auth/callback")
 async def callback(
     code: str,
     background_tasks: BackgroundTasks,
@@ -205,7 +205,7 @@ async def callback(
     return response
 
 
-@router.post("/logout")
+@router.post("/auth/logout")
 async def logout():
     """Clear the session cookie."""
     response = Response(status_code=204)
@@ -213,7 +213,7 @@ async def logout():
     return response
 
 
-@router.get("/me", response_model=UserResponse)
+@router.get("/api/me", response_model=UserResponse)
 async def me(user: User = Depends(get_current_user)):
     """Return the current authenticated user's profile."""
     return UserResponse(

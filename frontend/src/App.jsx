@@ -9,7 +9,7 @@ function ProtectedRoute({ children }) {
   const [status, setStatus] = useState("loading");
 
   useEffect(() => {
-    fetch("/api/auth/me", { credentials: "include" })
+    fetch("/api/me", { credentials: "include" })
       .then((r) => setStatus(r.ok ? "authenticated" : "unauthenticated"))
       .catch(() => setStatus("unauthenticated"));
   }, []);
