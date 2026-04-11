@@ -115,6 +115,7 @@ class TraktClient:
             resp = await client.get(
                 f"{TRAKT_API_URL}/users/{username}/ratings/movies",
                 headers=self._headers,
+                params={"extended": "full"},
             )
             resp.raise_for_status()
             return resp.json()
@@ -125,6 +126,7 @@ class TraktClient:
             resp = await client.post(
                 f"{TRAKT_API_URL}/sync/ratings",
                 headers=self._headers,
+                params={"extended": "full"},
                 json={
                     "movies": [
                         {
