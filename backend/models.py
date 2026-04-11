@@ -195,6 +195,7 @@ class RankingsResponse(BaseModel):
 class StatsResponse(BaseModel):
     total_duels: int
     total_movies_ranked: int
+    unseen_count: int = 0
     average_elo: float
     highest_rated: Optional[RankedMovie] = None
     lowest_rated: Optional[RankedMovie] = None

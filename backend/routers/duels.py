@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -21,6 +22,8 @@ from backend.models import (
 from backend.routers.auth import get_current_user
 from backend.services.elo import outcome_to_scores, update_elo
 from backend.services.sync import sync_post_duel
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/duels", tags=["duels"])
 
@@ -103,7 +106,6 @@ async def submit_duel(
     elif outcome in ("a_wins", "b_wins"):
         um_a.seen = True
         um_b.seen = True
-    # "neither" — both unseen, leave seen as-is or set False
     elif outcome == "neither":
         um_a.seen = False
         um_b.seen = False

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Swords, Eye, EyeOff } from "lucide-react";
-import { getMoviePair, submitDuel } from "../api";
+import { getMoviePair, submitDuel, getStats } from "../api";
 import MovieCard from "../components/MovieCard";
 import { Button } from "../components/ui/button";
 
@@ -9,6 +9,16 @@ export default function Duel() {
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [stats, setStats] = useState(null);
+
+  const loadStats = useCallback(async () => {
+    try {
+      const data = await getStats();
+      setStats(data);
+    } catch (err) {
+      console.error("Failed to load stats:", err);
+    }
+  }, []);
 
   const loadPair = useCallback(async () => {
     setLoading(true);
@@ -26,7 +36,8 @@ export default function Duel() {
 
   useEffect(() => {
     loadPair();
-  }, [loadPair]);
+    loadStats();
+  }, [loadPair, loadStats]);
 
   const handleChoice = async (outcome) => {
     if (!pair || submitting) return;
@@ -34,7 +45,10 @@ export default function Duel() {
     try {
       const res = await submitDuel(pair.movie_a.id, pair.movie_b.id, outcome);
       setResult(res);
-      setTimeout(loadPair, 1200);
+      setTimeout(() => {
+        loadPair();
+        loadStats();
+      }, 1200);
     } catch (err) {
       console.error("Failed to submit duel:", err);
     } finally {
@@ -67,6 +81,26 @@ export default function Duel() {
 
   return (
     <div className="flex flex-col items-center gap-8">
+      {/* Stats bar */}
+      {stats && (
+        <div className="flex items-center gap-6 text-sm text-muted-foreground">
+          <span>
+            <span className="font-semibold text-foreground">{stats.total_duels}</span>
+            {" duels"}
+          </span>
+          <span className="text-muted-foreground/40">·</span>
+          <span>
+            <span className="font-semibold text-foreground">{stats.total_movies_ranked}</span>
+            {" ranked"}
+          </span>
+          <span className="text-muted-foreground/40">·</span>
+          <span>
+            <span className="font-semibold text-foreground">{stats.unseen_count}</span>
+            {" unseen"}
+          </span>
+        </div>
+      )}
+
       <h2 className="text-2xl font-bold tracking-tight">Which do you prefer?</h2>
 
       {/* Duel arena — two cards with VS divider */}
