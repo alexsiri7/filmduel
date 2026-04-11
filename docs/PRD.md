@@ -23,13 +23,29 @@ The experience should feel like a game — fast, opinionated, oddly compelling.
 | Layer | Technology |
 |---|---|
 | Backend | Python 3.12, FastAPI |
-| Database | Supabase (PostgreSQL) via `supabase-py` |
-| Auth | Trakt OAuth2 (Authorization Code flow) |
-| Frontend | React (single-page app, served as static files by FastAPI) |
-| Deployment | Railway (single service, web) |
-| Movie data | Trakt API |
+| ORM | SQLAlchemy 2.0 (async, declarative mapped_column style) |
+| Migrations | Alembic (async, runs automatically on deploy) |
+| Database | Supabase PostgreSQL (direct connection via asyncpg, NOT supabase-py SDK) |
+| Auth | Trakt OAuth2 (Authorization Code flow), JWT httpOnly cookies |
+| Frontend | React 18, Vite, Tailwind CSS, shadcn/ui components |
+| Deployment | Railway (single service, auto-deploy from `main` branch) |
+| DNS | Cloudflare (filmduel.interstellarai.net → Railway) |
+| Error tracking | Sentry (FastAPI integration) |
+| Movie data | Trakt API + TMDB API (poster images) |
 
-**Key constraint:** No separate frontend deployment. FastAPI serves the React build from `/static` and catches all non-API routes with a wildcard that returns `index.html`.
+**Key constraints:**
+- No separate frontend deployment. FastAPI serves the React build from `/static` and catches all non-API routes with a wildcard that returns `index.html`.
+- No supabase-py SDK — we connect directly to the Supabase Postgres instance via `DATABASE_URL` using SQLAlchemy + asyncpg.
+- Supabase uses PgBouncer in transaction mode — asyncpg must disable prepared statement caching (`statement_cache_size=0`).
+- Branch protection on `main` — all changes via PR. Railway auto-deploys on merge to `main`.
+
+### Design Decisions
+
+1. **SQLAlchemy + Alembic over raw Supabase client** — Gives us proper ORM with typed models, versioned migrations that run in CI/deploy, and no vendor lock-in to Supabase's SDK.
+2. **Direct Postgres over Supabase SDK** — Supabase is just hosted Postgres. Using the connection string directly means we get full SQLAlchemy power (joins, eager loading, transactions) without the SDK's limitations.
+3. **Tailwind + shadcn/ui over plain CSS** — Provides polished, accessible UI components out of the box with minimal overhead. The `cn()` utility (clsx + tailwind-merge) handles conditional classes cleanly.
+4. **Transaction pooler (port 6543)** — Supabase's session pooler (5432) holds connections per session; the transaction pooler (6543) is better for serverless/short-lived connections. Requires `statement_cache_size=0` for asyncpg compatibility.
+5. **Sentry from day one** — Error tracking wired in before features ship, so we catch issues immediately.
 
 ---
 
@@ -77,21 +93,24 @@ filmduel/
 All config comes from environment variables. Provide an `.env.example` with every variable documented.
 
 ```bash
-# Trakt API
+# Database — Supabase Postgres via transaction pooler (port 6543)
+# URL-encode special chars in password (e.g. ! → %21)
+DATABASE_URL=postgresql+asyncpg://postgres.PROJECT_REF:PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres
+
+# Trakt OAuth2 — https://trakt.tv/oauth/applications
 TRAKT_CLIENT_ID=
 TRAKT_CLIENT_SECRET=
-TRAKT_REDIRECT_URI=https://your-app.railway.app/auth/callback
+TRAKT_REDIRECT_URI=https://filmduel.interstellarai.net/auth/callback
 
-# Supabase
-SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=   # use service role key (bypasses RLS — app manages auth)
+# TMDB — https://www.themoviedb.org/settings/api (free, instant)
+TMDB_API_KEY=
+
+# Sentry — https://sentry.io
+SENTRY_DSN=
 
 # App
-SECRET_KEY=                  # random 32-byte hex, used to sign session JWTs
-BASE_URL=https://your-app.railway.app
-
-# Frontend (injected at build time by Vite)
-VITE_API_BASE_URL=           # empty string for same-origin, or full URL for local dev
+SECRET_KEY=                  # random 32-byte hex (generate with: openssl rand -hex 32)
+BASE_URL=https://filmduel.interstellarai.net
 ```
 
 ---
