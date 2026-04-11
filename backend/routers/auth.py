@@ -16,6 +16,7 @@ from backend.config import Settings, get_settings
 from backend.db import async_session_factory, get_db
 from backend.db_models import User
 from backend.schemas import UserResponse
+from backend.services.pool import populate_movie_pool
 from backend.services.tmdb import backfill_posters
 from backend.services.trakt import TraktClient
 
@@ -103,6 +104,23 @@ async def _backfill_posters_background() -> None:
         await backfill_posters(session)
 
 
+async def _sync_pool_background(user_id) -> None:
+    """Run pool sync in a background task with its own DB session."""
+    import logging
+
+    logger = logging.getLogger(__name__)
+    try:
+        async with async_session_factory() as session:
+            stmt = select(User).where(User.id == user_id)
+            result = await session.execute(stmt)
+            user = result.scalar_one_or_none()
+            if user:
+                await populate_movie_pool(user, session)
+                await session.commit()
+    except Exception:
+        logger.exception("Background pool sync failed for user %s", user_id)
+
+
 @router.get("/login")
 async def login(settings: Settings = Depends(get_settings)):
     """Redirect the user to Trakt's OAuth authorization page."""
@@ -153,7 +171,7 @@ async def callback(
         user.trakt_access_token = tokens["access_token"]
         user.trakt_refresh_token = tokens.get("refresh_token", "")
         user.trakt_token_expires_at = expires_at
-        user.last_seen_at = datetime.now(timezone.utc)
+        # Note: last_seen_at is updated by populate_movie_pool after sync
     else:
         user = User(
             trakt_user_id=trakt_user_id,
@@ -165,6 +183,10 @@ async def callback(
         db.add(user)
 
     await db.flush()
+
+    # Kick off movie pool import in the background (uses its own DB session)
+    user_id = user.id
+    background_tasks.add_task(_sync_pool_background, user_id)
 
     # Backfill missing poster URLs in the background
     background_tasks.add_task(_backfill_posters_background)
