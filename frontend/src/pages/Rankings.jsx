@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Download, Trophy, Swords, BarChart3 } from "lucide-react";
-import { getRankings, getStats } from "../api";
+import { getRankings, fetchStats } from "../api";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Card, CardContent } from "../components/ui/card";
@@ -14,8 +14,8 @@ export default function Rankings() {
     async function load() {
       try {
         const [rankData, statsData] = await Promise.all([
-          getRankings(),
-          getStats(),
+          getRankings(50),
+          fetchStats(),
         ]);
         setRankings(rankData.rankings);
         setStats(statsData);
@@ -104,17 +104,20 @@ export default function Rankings() {
                 <th className="text-left p-3 text-xs font-medium text-muted-foreground uppercase tracking-wider w-12">
                   #
                 </th>
+                <th className="text-left p-3 text-xs font-medium text-muted-foreground uppercase tracking-wider w-14 hidden sm:table-cell">
+                  {/* Poster */}
+                </th>
                 <th className="text-left p-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Title
                 </th>
-                <th className="text-left p-3 text-xs font-medium text-muted-foreground uppercase tracking-wider w-20 hidden sm:table-cell">
+                <th className="text-left p-3 text-xs font-medium text-muted-foreground uppercase tracking-wider w-16 hidden sm:table-cell">
                   Year
                 </th>
                 <th className="text-right p-3 text-xs font-medium text-muted-foreground uppercase tracking-wider w-20">
                   ELO
                 </th>
                 <th className="text-right p-3 text-xs font-medium text-muted-foreground uppercase tracking-wider w-20 hidden sm:table-cell">
-                  Duels
+                  Battles
                 </th>
               </tr>
             </thead>
@@ -133,6 +136,18 @@ export default function Rankings() {
                       <span className="text-muted-foreground text-sm">
                         {r.rank}
                       </span>
+                    )}
+                  </td>
+                  <td className="p-2 hidden sm:table-cell">
+                    {r.movie.poster_url ? (
+                      <img
+                        src={r.movie.poster_url}
+                        alt=""
+                        className="w-8 h-12 rounded object-cover bg-secondary"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="w-8 h-12 rounded bg-secondary" />
                     )}
                   </td>
                   <td className="p-3 font-medium">{r.movie.title}</td>

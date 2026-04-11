@@ -33,27 +33,38 @@ export function getMe() {
   return request("/auth/me");
 }
 
-export function getMoviePair() {
-  return request("/movies/pair");
+export function fetchPair(mode = "discovery") {
+  return request(`/movies/pair?mode=${encodeURIComponent(mode)}`);
 }
 
-export function submitDuel(movieAId, movieBId, outcome) {
+// Legacy alias
+export function getMoviePair() {
+  return fetchPair("discovery");
+}
+
+export function submitDuel(movieAId, movieBId, outcome, mode = "discovery") {
   return request("/duels", {
     method: "POST",
     body: JSON.stringify({
       movie_a_id: movieAId,
       movie_b_id: movieBId,
       outcome,
+      mode,
     }),
   });
 }
 
-export function getRankings(limit = 50, offset = 0) {
-  return request(`/rankings?limit=${limit}&offset=${offset}`);
+export function fetchStats() {
+  return request("/rankings/stats");
 }
 
+// Legacy alias
 export function getStats() {
-  return request("/rankings/stats");
+  return fetchStats();
+}
+
+export function getRankings(limit = 50, offset = 0) {
+  return request(`/rankings?limit=${limit}&offset=${offset}`);
 }
 
 export function logout() {
