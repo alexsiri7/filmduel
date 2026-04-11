@@ -104,9 +104,10 @@ async def _backfill_posters_background() -> None:
         await backfill_posters(session)
 
 
-async def _sync_pool_background(user_id) -> None:
+async def _sync_pool_background(user_id, force: bool = False) -> None:
     """Run pool sync in a background task with its own DB session."""
     import logging
+    from datetime import timedelta
 
     logger = logging.getLogger(__name__)
     try:
@@ -115,6 +116,10 @@ async def _sync_pool_background(user_id) -> None:
             result = await session.execute(stmt)
             user = result.scalar_one_or_none()
             if user:
+                if force:
+                    # Reset last_seen_at so the throttle doesn't skip
+                    user.last_seen_at = datetime.now(timezone.utc) - timedelta(hours=2)
+                    await session.flush()
                 await populate_movie_pool(user, session)
                 await session.commit()
     except Exception:
@@ -186,7 +191,7 @@ async def callback(
 
     # Kick off movie pool import in the background (uses its own DB session)
     user_id = user.id
-    background_tasks.add_task(_sync_pool_background, user_id)
+    background_tasks.add_task(_sync_pool_background, user_id, force=True)
 
     # Backfill missing poster URLs in the background
     background_tasks.add_task(_backfill_posters_background)
