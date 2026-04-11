@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import random
-import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, or_
@@ -11,8 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from backend.db import get_db
-from backend.models import Movie, MovieSchema, MoviePairResponse, UserMovie
-from backend.routers.auth import get_current_user_id
+from backend.models import Movie, MovieSchema, MoviePairResponse, User, UserMovie
+from backend.routers.auth import get_current_user
 
 router = APIRouter(prefix="/api/movies", tags=["movies"])
 
@@ -32,7 +31,7 @@ def _movie_to_schema(movie: Movie) -> MovieSchema:
 
 @router.get("/pair", response_model=MoviePairResponse)
 async def get_movie_pair(
-    user_id: str = Depends(get_current_user_id),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Generate a random pair of movies for a duel.
@@ -40,7 +39,7 @@ async def get_movie_pair(
     Selects two movies from the user's pool where seen is NULL or true,
     preferring movies with fewer battles for coverage.
     """
-    uid = uuid.UUID(user_id)
+    uid = current_user.id
 
     # Get user movies eligible for dueling (seen or unknown)
     stmt = (

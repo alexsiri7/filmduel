@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,9 +14,10 @@ from backend.models import (
     Duel,
     DuelSubmit,
     DuelResult,
+    User,
     UserMovie,
 )
-from backend.routers.auth import get_current_user_id
+from backend.routers.auth import get_current_user
 from backend.services.elo import outcome_to_scores, update_elo
 
 router = APIRouter(prefix="/api/duels", tags=["duels"])
@@ -25,11 +26,11 @@ router = APIRouter(prefix="/api/duels", tags=["duels"])
 @router.post("", response_model=DuelResult)
 async def submit_duel(
     body: DuelSubmit,
-    user_id: str = Depends(get_current_user_id),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Submit the result of a duel and update ELO ratings."""
-    uid = uuid.UUID(user_id)
+    uid = current_user.id
     movie_a_id = uuid.UUID(body.movie_a_id)
     movie_b_id = uuid.UUID(body.movie_b_id)
     outcome = body.outcome.value

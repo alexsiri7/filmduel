@@ -49,6 +49,23 @@ class TraktClient:
             resp.raise_for_status()
             return resp.json()
 
+    async def refresh_token(self, refresh_token: str) -> dict[str, Any]:
+        """Exchange a refresh token for a new access token."""
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{TRAKT_API_URL}/oauth/token",
+                json={
+                    "refresh_token": refresh_token,
+                    "client_id": self.client_id,
+                    "client_secret": self.client_secret,
+                    "redirect_uri": self.redirect_uri,
+                    "grant_type": "refresh_token",
+                },
+                headers=self._headers,
+            )
+            resp.raise_for_status()
+            return resp.json()
+
     async def get_user_profile(self) -> dict[str, Any]:
         """Fetch the authenticated user's profile."""
         async with httpx.AsyncClient() as client:

@@ -49,6 +49,47 @@ def get_current_user_id(request: Request) -> str:
         raise HTTPException(status_code=401, detail="Invalid session")
 
 
+async def get_current_user(
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """FastAPI dependency: validate JWT cookie and return the full User row."""
+    stmt = select(User).where(User.id == uuid.UUID(user_id))
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
+
+
+async def ensure_fresh_token(user: User, db: AsyncSession) -> User:
+    """Refresh the Trakt access token if it expires within 1 hour.
+
+    Call this before any Trakt API request that needs a valid token.
+    Returns the user with up-to-date tokens (already flushed to the session).
+    """
+    now = datetime.now(timezone.utc)
+    expires_at = user.trakt_token_expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+    if expires_at - now > timedelta(hours=1):
+        return user
+
+    client = TraktClient()
+    tokens = await client.refresh_token(user.trakt_refresh_token)
+
+    user.trakt_access_token = tokens["access_token"]
+    user.trakt_refresh_token = tokens.get("refresh_token", user.trakt_refresh_token)
+    user.trakt_token_expires_at = datetime.now(timezone.utc) + timedelta(
+        seconds=tokens.get("expires_in", 7776000)
+    )
+    user.last_seen_at = datetime.now(timezone.utc)
+    await db.flush()
+
+    return user
+
+
 @router.get("/login")
 async def login(settings: Settings = Depends(get_settings)):
     """Redirect the user to Trakt's OAuth authorization page."""
@@ -127,16 +168,8 @@ async def logout():
 
 
 @router.get("/me", response_model=UserResponse)
-async def me(
-    user_id: str = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-):
+async def me(user: User = Depends(get_current_user)):
     """Return the current authenticated user's profile."""
-    stmt = select(User).where(User.id == uuid.UUID(user_id))
-    result = await db.execute(stmt)
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
     return UserResponse(
         id=str(user.id),
         trakt_username=user.trakt_username,
