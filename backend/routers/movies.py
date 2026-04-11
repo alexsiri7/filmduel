@@ -204,7 +204,14 @@ async def _bootstrap_pair(
     uid,
     last_pair_ids: set[str] | None,
 ) -> tuple[UserMovie, UserMovie]:
-    """Bootstrap: pick two random Seen-unranked films."""
+    """Bootstrap: pick two films the user can classify.
+
+    Prefers Seen-unranked films (seen=True, battles=0).
+    Falls back to Unknown films (seen=None) if not enough seen films exist.
+    This lets brand new users start playing immediately with popular/trending
+    movies — they mark them as seen/unseen, which builds the initial pool.
+    """
+    # First try seen-unranked
     stmt = (
         select(UserMovie)
         .options(joinedload(UserMovie.movie))
@@ -217,10 +224,25 @@ async def _bootstrap_pair(
     result = await db.execute(stmt)
     candidates = list(result.unique().scalars().all())
 
+    # Fall back to unknown films if not enough seen ones
+    if len(candidates) < 2:
+        unknown_stmt = (
+            select(UserMovie)
+            .options(joinedload(UserMovie.movie))
+            .where(
+                UserMovie.user_id == uid,
+                UserMovie.seen.is_(None),
+            )
+            .limit(200)
+        )
+        unknown_result = await db.execute(unknown_stmt)
+        unknown = list(unknown_result.unique().scalars().all())
+        candidates.extend(unknown)
+
     if len(candidates) < 2:
         raise HTTPException(
             status_code=404,
-            detail="Not enough seen films to bootstrap. Watch more movies on Trakt!",
+            detail="Not enough movies in your pool yet. Your movie library is still loading — try refreshing in a few seconds.",
         )
 
     for _ in range(5):
