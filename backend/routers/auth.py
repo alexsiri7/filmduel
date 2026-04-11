@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
@@ -17,11 +18,14 @@ from backend.db import get_db
 from backend.models import User, UserResponse
 from backend.services.trakt import TraktClient
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 COOKIE_NAME = "filmduel_session"
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_HOURS = 72
+TOKEN_REFRESH_WINDOW_SECONDS = 3600  # refresh when within 1 hour of expiry
 
 
 def create_jwt(user_id: str, settings: Settings) -> str:

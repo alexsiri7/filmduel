@@ -1,39 +1,69 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Download, Trophy, Swords, BarChart3 } from "lucide-react";
 import { getRankings, getStats } from "../api";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Card, CardContent } from "../components/ui/card";
 
+function RankingsSkeleton() {
+  return (
+    <div className="skeleton-rankings">
+      <div className="skeleton-rankings-header">
+        <div className="skeleton skeleton-header" />
+        <div className="skeleton" style={{ height: 32, width: 100, borderRadius: 8 }} />
+      </div>
+      <div className="skeleton-stats">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="skeleton skeleton-stat-card" />
+        ))}
+      </div>
+      <div>
+        <div className="skeleton skeleton-table-header" />
+        {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+          <div key={i} className="skeleton skeleton-row" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Rankings() {
   const [rankings, setRankings] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const [rankData, statsData] = await Promise.all([
-          getRankings(),
-          getStats(),
-        ]);
-        setRankings(rankData.rankings);
-        setStats(statsData);
-      } catch (err) {
-        console.error("Failed to load rankings:", err);
-      } finally {
-        setLoading(false);
-      }
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [rankData, statsData] = await Promise.all([
+        getRankings(),
+        getStats(),
+      ]);
+      setRankings(rankData.rankings);
+      setStats(statsData);
+    } catch (err) {
+      console.error("Failed to load rankings:", err);
+      setError(err.message || "Could not load rankings.");
+    } finally {
+      setLoading(false);
     }
-    load();
   }, []);
 
-  if (loading) {
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (loading) return <RankingsSkeleton />;
+
+  if (error) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-muted-foreground text-lg animate-pulse">
-          Loading rankings...
-        </div>
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <p className="text-muted-foreground">{error}</p>
+        <Button variant="outline" onClick={load}>
+          Try Again
+        </Button>
       </div>
     );
   }

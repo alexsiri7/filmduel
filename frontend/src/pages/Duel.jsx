@@ -4,20 +4,48 @@ import { getMoviePair, submitDuel } from "../api";
 import MovieCard from "../components/MovieCard";
 import { Button } from "../components/ui/button";
 
+function DuelSkeleton() {
+  return (
+    <div className="skeleton-duel">
+      <div className="skeleton skeleton-header" />
+      <div className="skeleton-cards">
+        <div className="skeleton-card">
+          <div className="skeleton skeleton-poster" />
+          <div className="skeleton-card-body">
+            <div className="skeleton skeleton-title" />
+            <div className="skeleton skeleton-year" />
+          </div>
+        </div>
+        <div className="skeleton skeleton-vs" />
+        <div className="skeleton-card">
+          <div className="skeleton skeleton-poster" />
+          <div className="skeleton-card-body">
+            <div className="skeleton skeleton-title" />
+            <div className="skeleton skeleton-year" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Duel() {
   const [pair, setPair] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
   const loadPair = useCallback(async () => {
     setLoading(true);
+    setError(null);
     setResult(null);
     try {
       const data = await getMoviePair();
       setPair(data);
     } catch (err) {
       console.error("Failed to load movie pair:", err);
+      setError(err.message || "Could not load movies.");
       setPair(null);
     } finally {
       setLoading(false);
@@ -34,30 +62,23 @@ export default function Duel() {
     try {
       const res = await submitDuel(pair.movie_a.id, pair.movie_b.id, outcome);
       setResult(res);
-      setTimeout(loadPair, 1200);
+      setTimeout(loadPair, 1500);
     } catch (err) {
       console.error("Failed to submit duel:", err);
+      setError(err.message || "Failed to submit. Please try again.");
     } finally {
       setSubmitting(false);
     }
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-muted-foreground text-lg animate-pulse">
-          Loading movies...
-        </div>
-      </div>
-    );
+    return <DuelSkeleton />;
   }
 
-  if (!pair) {
+  if (error && !pair) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <p className="text-muted-foreground">
-          Could not load movies. Try refreshing.
-        </p>
+        <p className="text-muted-foreground">{error}</p>
         <Button variant="outline" onClick={loadPair}>
           Try Again
         </Button>
@@ -75,6 +96,7 @@ export default function Duel() {
           movie={pair.movie_a}
           onClick={() => handleChoice("a_wins")}
           delta={result?.movie_a_elo_delta}
+          disabled={submitting}
         />
 
         <div className="flex flex-col items-center gap-2 shrink-0">
@@ -90,6 +112,7 @@ export default function Duel() {
           movie={pair.movie_b}
           onClick={() => handleChoice("b_wins")}
           delta={result?.movie_b_elo_delta}
+          disabled={submitting}
         />
       </div>
 
@@ -124,8 +147,15 @@ export default function Duel() {
         </Button>
       </div>
 
+      {/* Error feedback */}
+      {error && (
+        <p className="text-sm text-destructive animate-in fade-in">
+          {error}
+        </p>
+      )}
+
       {/* Result feedback */}
-      {result && (
+      {result && !error && (
         <p className="text-sm text-muted-foreground animate-in fade-in">
           ELO updated. Next duel loading...
         </p>

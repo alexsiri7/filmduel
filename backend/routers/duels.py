@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,8 +17,9 @@ from backend.models import (
     User,
     UserMovie,
 )
-from backend.routers.auth import get_current_user
+from backend.routers.auth import ensure_fresh_token, get_current_user
 from backend.services.elo import outcome_to_scores, update_elo
+from backend.services.sync import sync_duel_ratings
 
 router = APIRouter(prefix="/api/duels", tags=["duels"])
 
@@ -26,6 +27,7 @@ router = APIRouter(prefix="/api/duels", tags=["duels"])
 @router.post("", response_model=DuelResult)
 async def submit_duel(
     body: DuelSubmit,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -123,6 +125,21 @@ async def submit_duel(
         loser_elo_after=l_elo_after,
     )
     db.add(duel)
+
+    # Fire-and-forget Trakt sync for decisive outcomes
+    if outcome in ("a_wins", "b_wins"):
+        try:
+            user = await ensure_fresh_token(current_user, db)
+            background_tasks.add_task(
+                sync_duel_ratings,
+                str(uid),
+                user.trakt_access_token,
+                str(movie_a_id),
+                str(movie_b_id),
+            )
+        except Exception:
+            # Sync is best-effort — never block or fail the duel response
+            pass
 
     return DuelResult(
         outcome=body.outcome,

@@ -1,20 +1,28 @@
 import { Card, CardContent } from "./ui/card";
 import { cn } from "../lib/utils";
 
-export default function MovieCard({ movie, onClick, delta, highlight }) {
+export default function MovieCard({ movie, onClick, delta, highlight, disabled }) {
   const posterSrc = movie.poster_url
     ? movie.poster_url
-    : "https://via.placeholder.com/300x450?text=No+Poster";
+    : "https://placehold.co/300x450?text=No+Poster";
 
   return (
     <Card
       className={cn(
         "w-full max-w-[280px] overflow-hidden cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:shadow-lg hover:shadow-primary/10",
-        highlight && "ring-2 ring-primary"
+        highlight && "ring-2 ring-primary",
+        disabled && "opacity-60 cursor-default pointer-events-none"
       )}
-      onClick={onClick}
+      onClick={disabled ? undefined : onClick}
       role="button"
-      tabIndex={0}
+      tabIndex={disabled ? -1 : 0}
+      onKeyDown={(e) => {
+        if (!disabled && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      aria-disabled={disabled}
     >
       <div className="aspect-[2/3] overflow-hidden">
         <img

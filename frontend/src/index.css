@@ -27,3 +27,136 @@ body {
   color: var(--color-foreground);
   font-family: system-ui, -apple-system, sans-serif;
 }
+
+/* ---- Skeleton Loader ---- */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    oklch(0.205 0 0) 25%,
+    oklch(0.24 0 0) 50%,
+    oklch(0.205 0 0) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 4px;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Duel skeleton */
+.skeleton-duel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+  min-height: 60vh;
+  justify-content: center;
+}
+
+.skeleton-header {
+  height: 28px;
+  width: 200px;
+}
+
+.skeleton-cards {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  justify-content: center;
+}
+
+.skeleton-card {
+  width: 280px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+}
+
+.skeleton-poster {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+}
+
+.skeleton-card-body {
+  padding: 1rem;
+}
+
+.skeleton-title {
+  height: 14px;
+  width: 80%;
+  margin-bottom: 0.5rem;
+}
+
+.skeleton-year {
+  height: 12px;
+  width: 35%;
+}
+
+.skeleton-vs {
+  height: 24px;
+  width: 32px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .skeleton-cards {
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .skeleton-card {
+    width: 85%;
+    max-width: 300px;
+  }
+}
+
+/* Rankings skeleton */
+.skeleton-rankings {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.skeleton-rankings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.skeleton-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.skeleton-stat-card {
+  height: 72px;
+  border-radius: var(--radius);
+}
+
+.skeleton-table-header {
+  height: 40px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+}
+
+.skeleton-row {
+  height: 44px;
+  border-radius: 4px;
+  margin-bottom: 2px;
+}
+
+@media (max-width: 640px) {
+  .skeleton-stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- Animations ---- */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
