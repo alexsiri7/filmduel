@@ -37,10 +37,14 @@ export function getMoviePair() {
   return request("/movies/pair");
 }
 
-export function submitDuel(duelId, outcome) {
-  return request("/duels/submit", {
+export function submitDuel(movieAId, movieBId, outcome) {
+  return request("/duels", {
     method: "POST",
-    body: JSON.stringify({ duel_id: duelId, outcome }),
+    body: JSON.stringify({
+      movie_a_id: movieAId,
+      movie_b_id: movieBId,
+      outcome,
+    }),
   });
 }
 

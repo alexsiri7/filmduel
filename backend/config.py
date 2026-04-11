@@ -12,9 +12,8 @@ class Settings(BaseSettings):
     TRAKT_CLIENT_SECRET: str = ""
     TRAKT_REDIRECT_URI: str = "http://localhost:8000/api/auth/callback"
 
-    # Supabase
-    SUPABASE_URL: str = ""
-    SUPABASE_SERVICE_ROLE_KEY: str = ""
+    # Database (Supabase Postgres via connection string)
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
 
     # App secrets
     SECRET_KEY: str = "change-me-in-production"
@@ -25,7 +24,7 @@ class Settings(BaseSettings):
 
     # ELO defaults
     ELO_K_FACTOR: int = 32
-    ELO_DEFAULT_RATING: float = 1500.0
+    ELO_DEFAULT_RATING: int = 1000
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

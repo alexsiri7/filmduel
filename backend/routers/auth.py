@@ -7,12 +7,14 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Response, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import Settings, get_settings
-from backend.db import get_supabase
-from backend.models import UserResponse
+from backend.db import get_db
+from backend.models import User, UserResponse
 from backend.services.trakt import TraktClient
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -61,7 +63,11 @@ async def login(settings: Settings = Depends(get_settings)):
 
 
 @router.get("/callback")
-async def callback(code: str, settings: Settings = Depends(get_settings)):
+async def callback(
+    code: str,
+    settings: Settings = Depends(get_settings),
+    db: AsyncSession = Depends(get_db),
+):
     """Handle the OAuth callback from Trakt."""
     client = TraktClient()
     tokens = await client.exchange_code(code)
@@ -70,37 +76,36 @@ async def callback(code: str, settings: Settings = Depends(get_settings)):
     authed_client = TraktClient(access_token=tokens["access_token"])
     profile = await authed_client.get_user_profile()
 
-    db = get_supabase()
-
-    # Upsert user record
-    user_data = {
-        "trakt_username": profile["username"],
-        "trakt_slug": profile["ids"]["slug"],
-        "trakt_access_token": tokens["access_token"],
-        "trakt_refresh_token": tokens.get("refresh_token", ""),
-        "avatar_url": profile.get("images", {}).get("avatar", {}).get("full"),
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }
-
-    # Check if user exists
-    existing = (
-        db.table("users")
-        .select("id")
-        .eq("trakt_slug", profile["ids"]["slug"])
-        .execute()
+    trakt_user_id = str(profile["ids"]["slug"])
+    expires_at = datetime.now(timezone.utc) + timedelta(
+        seconds=tokens.get("expires_in", 7776000)
     )
 
-    if existing.data:
-        user_id = existing.data[0]["id"]
-        db.table("users").update(user_data).eq("id", user_id).execute()
+    # Check if user exists
+    stmt = select(User).where(User.trakt_user_id == trakt_user_id)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+
+    if user:
+        user.trakt_username = profile["username"]
+        user.trakt_access_token = tokens["access_token"]
+        user.trakt_refresh_token = tokens.get("refresh_token", "")
+        user.trakt_token_expires_at = expires_at
+        user.last_seen_at = datetime.now(timezone.utc)
     else:
-        user_id = str(uuid.uuid4())
-        user_data["id"] = user_id
-        user_data["created_at"] = datetime.now(timezone.utc).isoformat()
-        db.table("users").insert(user_data).execute()
+        user = User(
+            trakt_user_id=trakt_user_id,
+            trakt_username=profile["username"],
+            trakt_access_token=tokens["access_token"],
+            trakt_refresh_token=tokens.get("refresh_token", ""),
+            trakt_token_expires_at=expires_at,
+        )
+        db.add(user)
+
+    await db.flush()
 
     # Set session cookie
-    token = create_jwt(user_id, settings)
+    token = create_jwt(str(user.id), settings)
     response = RedirectResponse(url=settings.BASE_URL)
     response.set_cookie(
         COOKIE_NAME,
@@ -122,17 +127,18 @@ async def logout():
 
 
 @router.get("/me", response_model=UserResponse)
-async def me(user_id: str = Depends(get_current_user_id)):
+async def me(
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
     """Return the current authenticated user's profile."""
-    db = get_supabase()
-    result = db.table("users").select("*").eq("id", user_id).execute()
-    if not result.data:
+    stmt = select(User).where(User.id == uuid.UUID(user_id))
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+    if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    user = result.data[0]
     return UserResponse(
-        id=user["id"],
-        trakt_username=user["trakt_username"],
-        trakt_slug=user["trakt_slug"],
-        avatar_url=user.get("avatar_url"),
-        created_at=user["created_at"],
+        id=str(user.id),
+        trakt_username=user.trakt_username,
+        created_at=user.created_at,
     )

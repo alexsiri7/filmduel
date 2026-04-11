@@ -6,76 +6,73 @@ import random
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select, or_
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
-from backend.db import get_supabase
-from backend.models import Movie, MoviePairResponse
+from backend.db import get_db
+from backend.models import Movie, MovieSchema, MoviePairResponse, UserMovie
 from backend.routers.auth import get_current_user_id
 
 router = APIRouter(prefix="/api/movies", tags=["movies"])
 
 
-def _row_to_movie(row: dict) -> Movie:
-    return Movie(
-        id=row["id"],
-        trakt_id=row["trakt_id"],
-        tmdb_id=row.get("tmdb_id"),
-        imdb_id=row.get("imdb_id"),
-        title=row["title"],
-        year=row.get("year"),
-        poster_url=row.get("poster_url"),
-        overview=row.get("overview"),
+def _movie_to_schema(movie: Movie) -> MovieSchema:
+    return MovieSchema(
+        id=str(movie.id),
+        trakt_id=movie.trakt_id,
+        tmdb_id=movie.tmdb_id,
+        imdb_id=movie.imdb_id,
+        title=movie.title,
+        year=movie.year,
+        poster_url=movie.poster_url,
+        overview=movie.overview,
     )
 
 
 @router.get("/pair", response_model=MoviePairResponse)
-async def get_movie_pair(user_id: str = Depends(get_current_user_id)):
+async def get_movie_pair(
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
     """Generate a random pair of movies for a duel.
 
-    Selects two movies from the user's movie pool, preferring movies
-    with fewer duels to ensure coverage.
+    Selects two movies from the user's pool where seen is NULL or true,
+    preferring movies with fewer battles for coverage.
     """
-    db = get_supabase()
+    uid = uuid.UUID(user_id)
 
-    # Get movies from the pool (user's watched + popular)
-    result = (
-        db.table("movie_pool")
-        .select("*, movies(*)")
-        .eq("user_id", user_id)
-        .limit(100)
-        .execute()
+    # Get user movies eligible for dueling (seen or unknown)
+    stmt = (
+        select(UserMovie)
+        .options(joinedload(UserMovie.movie))
+        .where(
+            UserMovie.user_id == uid,
+            or_(UserMovie.seen.is_(None), UserMovie.seen.is_(True)),
+        )
+        .limit(200)
     )
+    result = await db.execute(stmt)
+    user_movies = result.unique().scalars().all()
 
-    if not result.data or len(result.data) < 2:
+    if len(user_movies) < 2:
         raise HTTPException(
             status_code=404,
             detail="Not enough movies in your pool. Watch more movies on Trakt!",
         )
 
-    # Weighted random: prefer movies with fewer duels
-    pool = result.data
-    weights = [1.0 / (1 + entry.get("duel_count", 0)) for entry in pool]
-    chosen = random.choices(pool, weights=weights, k=2)
+    # Weighted random: prefer movies with fewer battles
+    weights = [1.0 / (1 + um.battles) for um in user_movies]
+    chosen = random.choices(user_movies, weights=weights, k=2)
 
-    # Ensure we got two different movies
-    if chosen[0]["movie_id"] == chosen[1]["movie_id"]:
-        others = [m for m in pool if m["movie_id"] != chosen[0]["movie_id"]]
+    # Ensure two different movies
+    if chosen[0].movie_id == chosen[1].movie_id:
+        others = [um for um in user_movies if um.movie_id != chosen[0].movie_id]
         if not others:
             raise HTTPException(status_code=404, detail="Not enough distinct movies.")
         chosen[1] = random.choice(others)
 
-    movie_a = _row_to_movie(chosen[0]["movies"])
-    movie_b = _row_to_movie(chosen[1]["movies"])
+    movie_a = _movie_to_schema(chosen[0].movie)
+    movie_b = _movie_to_schema(chosen[1].movie)
 
-    # Create a pending duel record
-    duel_id = str(uuid.uuid4())
-    db.table("duels").insert(
-        {
-            "id": duel_id,
-            "user_id": user_id,
-            "movie_a_id": movie_a.id,
-            "movie_b_id": movie_b.id,
-            "status": "pending",
-        }
-    ).execute()
-
-    return MoviePairResponse(movie_a=movie_a, movie_b=movie_b, duel_id=duel_id)
+    return MoviePairResponse(movie_a=movie_a, movie_b=movie_b)
