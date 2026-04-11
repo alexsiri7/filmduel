@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import csv
 import io
-import uuid
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
@@ -18,9 +17,10 @@ from backend.models import (
     RankedMovie,
     RankingsResponse,
     StatsResponse,
+    User,
     UserMovie,
 )
-from backend.routers.auth import get_current_user_id
+from backend.routers.auth import get_current_user
 
 router = APIRouter(prefix="/api/rankings", tags=["rankings"])
 
@@ -46,13 +46,13 @@ def _build_ranked_movie(um: UserMovie, rank: int) -> RankedMovie:
 
 @router.get("", response_model=RankingsResponse)
 async def get_rankings(
-    user_id: str = Depends(get_current_user_id),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
 ):
     """Return the user's ranked movies sorted by ELO descending."""
-    uid = uuid.UUID(user_id)
+    uid = current_user.id
 
     # Only show movies the user has actually seen and battled
     stmt = (
@@ -85,11 +85,11 @@ async def get_rankings(
 
 @router.get("/stats", response_model=StatsResponse)
 async def get_stats(
-    user_id: str = Depends(get_current_user_id),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Return aggregate stats for the user's rankings."""
-    uid = uuid.UUID(user_id)
+    uid = current_user.id
 
     stmt = (
         select(UserMovie)
@@ -125,11 +125,11 @@ async def get_stats(
 
 @router.get("/export/csv")
 async def export_csv(
-    user_id: str = Depends(get_current_user_id),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Export rankings as a Letterboxd-compatible CSV."""
-    uid = uuid.UUID(user_id)
+    uid = current_user.id
 
     stmt = (
         select(UserMovie)
