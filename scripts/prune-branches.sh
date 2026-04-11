@@ -1,0 +1,1 @@
+/mnt/ext-fast/gc/packs/maintenance/scripts/prune-branches.sh

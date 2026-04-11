@@ -9,3 +9,4 @@ frontend/dist/
 .dolt/
 *.db
 .beads-credential-key
+.venv/

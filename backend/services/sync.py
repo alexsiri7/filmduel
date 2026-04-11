@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from backend.models import UserMovie
+from backend.db_models import UserMovie
 from backend.services.elo import elo_to_trakt_rating
 from backend.services.trakt import TraktClient
 

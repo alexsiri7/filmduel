@@ -1,0 +1,1 @@
+/mnt/ext-fast/gc/packs/gastown/scripts/bind-key.sh

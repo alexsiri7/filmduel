@@ -1,0 +1,1 @@
+/mnt/ext-fast/gc/packs/gastown/scripts/status-line.sh

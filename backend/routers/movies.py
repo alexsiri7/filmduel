@@ -10,7 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from backend.db import get_db
-from backend.models import Movie, MovieSchema, MoviePairResponse, User, UserMovie
+from backend.db_models import Movie, User, UserMovie
+from backend.schemas import MovieSchema, MoviePairResponse
 from backend.routers.auth import get_current_user
 
 router = APIRouter(prefix="/api/movies", tags=["movies"])

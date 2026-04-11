@@ -14,7 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import Settings, get_settings
 from backend.db import get_db
-from backend.models import User, UserResponse
+from backend.db_models import User
+from backend.schemas import UserResponse
 from backend.services.trakt import TraktClient
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])

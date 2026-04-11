@@ -65,7 +65,8 @@ filmduel/
 │   │   ├── elo.py         # ELO calculation logic
 │   │   └── sync.py        # Push ratings to Trakt
 │   ├── db.py              # Supabase client initialisation
-│   ├── models.py          # Pydantic models
+│   ├── db_models.py       # SQLAlchemy ORM models (User, Movie, UserMovie, Duel)
+│   ├── schemas.py         # Pydantic request/response schemas
 │   └── config.py          # Settings from environment variables
 ├── frontend/
 │   ├── src/
@@ -117,7 +118,7 @@ BASE_URL=https://filmduel.interstellarai.net
 
 ## Database Schema
 
-Run these migrations via Supabase SQL editor or a migration file. No ORM — use the Supabase client directly with raw queries where needed, or the Supabase Python client's table API.
+Schema is managed via Alembic migrations (`backend/migrations/versions/`). The SQL below is for reference only — do not execute manually. SQLAlchemy ORM models in `backend/db_models.py` are the source of truth; Pydantic request/response schemas live separately in `backend/schemas.py`.
 
 ```sql
 -- Users (one row per Trakt account)
@@ -268,9 +269,27 @@ def update_elo(winner_elo: int, loser_elo: int, k: int = 32) -> tuple[int, int]:
     return new_winner, new_loser
 ```
 
+### Draw support
+ELO supports draws with `score_a = 0.5`. Two equally-rated movies stay roughly the same; two unequally-rated ones converge slightly. The `draw` outcome is the 6th duel outcome — user has seen both but can't choose a winner.
+
 ### ELO → Trakt rating conversion
 Map ELO back to Trakt's 1–10 scale:
 `trakt_rating = max(1, min(10, round((elo - 600) * 9 / 800) + 1))`
+
+### Pair selection strategy
+Every duel should be anchored by a movie the user has already rated (ELO != 1000 or battles > 0). This ensures comparisons are meaningful — you're always comparing against a known reference point, not two unknowns.
+
+Selection rules:
+1. If user has rated movies → always pair one rated movie with one unrated/unknown
+2. Only show two rated movies once the unrated pool is exhausted
+3. Never show two movies with `seen = false`
+4. Weight toward movies with fewer battles (spread coverage)
+
+### Starting ELO and bootstrapping
+- Movies from Trakt watch history with ratings get starting ELO from the rating formula above
+- Movies watched but never rated on Trakt start at 1000
+- Popular/trending movies the user hasn't seen start at 1000 with `seen = null`
+- The system bootstraps from the user's existing Trakt ratings — these provide the initial anchors that make early duels meaningful
 
 ---
 
@@ -301,7 +320,7 @@ Body:
 {
   "movie_a_id": "uuid",
   "movie_b_id": "uuid",
-  "outcome": "a_wins" | "b_wins" | "a_only" | "b_only" | "neither"
+  "outcome": "a_wins" | "b_wins" | "draw" | "a_only" | "b_only" | "neither"
 }
 ```
 
