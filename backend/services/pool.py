@@ -38,11 +38,27 @@ async def populate_movie_pool(user: User, db: AsyncSession) -> None:
         access_token=user.trakt_access_token,
     )
 
-    # Fetch all sources concurrently-ish (serial to respect Trakt rate limits)
-    popular = await client.get_popular(limit=100)
-    trending = await client.get_trending(limit=100)
-    watched = await client.get_user_watched(user.trakt_username)
-    ratings_list = await client.get_user_ratings(user.trakt_username)
+    # Fetch all sources (serial to respect Trakt rate limits, graceful on failure)
+    try:
+        popular = await client.get_popular(limit=100)
+    except Exception:
+        logger.exception("Failed to fetch popular movies")
+        popular = []
+    try:
+        trending = await client.get_trending(limit=100)
+    except Exception:
+        logger.exception("Failed to fetch trending movies")
+        trending = []
+    try:
+        watched = await client.get_user_watched(user.trakt_user_id)
+    except Exception:
+        logger.exception("Failed to fetch watch history for %s", user.trakt_user_id)
+        watched = []
+    try:
+        ratings_list = await client.get_user_ratings(user.trakt_user_id)
+    except Exception:
+        logger.exception("Failed to fetch ratings for %s", user.trakt_user_id)
+        ratings_list = []
 
     # Build ratings lookup: trakt_id -> rating (1-10)
     ratings_by_trakt_id: dict[int, int] = {
