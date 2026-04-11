@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     # TMDB for poster images
     TMDB_API_KEY: str = ""
 
+    # Sentry
+    SENTRY_DSN: str = ""
+
     # ELO defaults
     ELO_K_FACTOR: int = 32
     ELO_DEFAULT_RATING: int = 1000
