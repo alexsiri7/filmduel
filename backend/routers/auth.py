@@ -7,15 +7,16 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import Settings, get_settings
-from backend.db import get_db
+from backend.db import async_session_factory, get_db
 from backend.db_models import User
 from backend.schemas import UserResponse
+from backend.services.tmdb import backfill_posters
 from backend.services.trakt import TraktClient
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -96,6 +97,12 @@ async def ensure_fresh_token(user: User, db: AsyncSession) -> User:
     return user
 
 
+async def _backfill_posters_background() -> None:
+    """Run poster backfill in a standalone session (background task)."""
+    async with async_session_factory() as session:
+        await backfill_posters(session)
+
+
 @router.get("/login")
 async def login(settings: Settings = Depends(get_settings)):
     """Redirect the user to Trakt's OAuth authorization page."""
@@ -112,6 +119,7 @@ async def login(settings: Settings = Depends(get_settings)):
 @router.get("/callback")
 async def callback(
     code: str,
+    background_tasks: BackgroundTasks,
     settings: Settings = Depends(get_settings),
     db: AsyncSession = Depends(get_db),
 ):
@@ -157,6 +165,9 @@ async def callback(
         db.add(user)
 
     await db.flush()
+
+    # Backfill missing poster URLs in the background
+    background_tasks.add_task(_backfill_posters_background)
 
     # Set session cookie
     token = create_jwt(str(user.id), settings)
