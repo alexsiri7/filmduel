@@ -100,10 +100,20 @@ async def get_stats(
     result = await db.execute(stmt)
     user_movies = result.unique().scalars().all()
 
+    # Count unseen movies in user's pool
+    unseen_stmt = (
+        select(func.count())
+        .select_from(UserMovie)
+        .where(UserMovie.user_id == uid, UserMovie.seen.is_(False))
+    )
+    unseen_result = await db.execute(unseen_stmt)
+    unseen_count = unseen_result.scalar() or 0
+
     if not user_movies:
         return StatsResponse(
             total_duels=0,
             total_movies_ranked=0,
+            unseen_count=unseen_count,
             average_elo=0.0,
         )
 
@@ -117,6 +127,7 @@ async def get_stats(
     return StatsResponse(
         total_duels=total_duels,
         total_movies_ranked=len(user_movies),
+        unseen_count=unseen_count,
         average_elo=round(sum(elos) / len(elos), 2),
         highest_rated=highest,
         lowest_rated=lowest,
