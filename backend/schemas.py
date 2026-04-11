@@ -26,9 +26,19 @@ class MovieSchema(BaseModel):
     overview: Optional[str] = None
 
 
+class MovieWithStateSchema(MovieSchema):
+    """Movie with user-specific state from user_movies."""
+
+    genres: Optional[list[str]] = None
+    seen: Optional[bool] = None
+    elo: Optional[int] = None
+    battles: int = 0
+
+
 class MoviePairResponse(BaseModel):
-    movie_a: MovieSchema
-    movie_b: MovieSchema
+    movie_a: MovieWithStateSchema
+    movie_b: MovieWithStateSchema
+    next_pair_token: Optional[str] = None
 
 
 class DuelOutcome(str, Enum):
