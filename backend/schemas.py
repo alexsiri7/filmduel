@@ -44,6 +44,7 @@ class DuelSubmit(BaseModel):
     movie_a_id: str
     movie_b_id: str
     outcome: DuelOutcome
+    mode: str = "discovery"
 
 
 class DuelResult(BaseModel):

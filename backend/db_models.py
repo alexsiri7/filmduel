@@ -73,7 +73,12 @@ class UserMovie(Base):
         UniqueConstraint("user_id", "movie_id"),
         Index("ix_user_movies_user_id", "user_id"),
         Index("ix_user_movies_user_seen", "user_id", "seen"),
-        Index("ix_user_movies_user_elo", "user_id", "elo"),
+        Index(
+            "ix_user_movies_user_elo",
+            "user_id",
+            "elo",
+            postgresql_where="elo IS NOT NULL",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -86,7 +91,8 @@ class UserMovie(Base):
         UUID(as_uuid=True), ForeignKey("movies.id", ondelete="CASCADE"), nullable=False
     )
     seen: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
-    elo: Mapped[int] = mapped_column(Integer, nullable=False, default=1000)
+    elo: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    seeded_elo: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     battles: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     trakt_rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     last_dueled_at: Mapped[Optional[datetime]] = mapped_column(
@@ -120,6 +126,7 @@ class Duel(Base):
     loser_elo_before: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     winner_elo_after: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     loser_elo_after: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    mode: Mapped[str] = mapped_column(Text, nullable=False, server_default="discovery")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
