@@ -2,137 +2,138 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
-
 import httpx
-
-from backend.config import get_settings
-
-TRAKT_API_URL = "https://api.trakt.tv"
 
 
 class TraktClient:
     """Async client for the Trakt.tv API."""
 
-    def __init__(self, access_token: Optional[str] = None) -> None:
-        settings = get_settings()
-        self.client_id = settings.TRAKT_CLIENT_ID
-        self.client_secret = settings.TRAKT_CLIENT_SECRET
-        self.redirect_uri = settings.TRAKT_REDIRECT_URI
-        self.access_token = access_token
+    BASE_URL = "https://api.trakt.tv"
 
-    @property
-    def _headers(self) -> dict[str, str]:
-        headers = {
+    def __init__(self, client_id: str, access_token: str | None = None) -> None:
+        self._headers: dict[str, str] = {
             "Content-Type": "application/json",
             "trakt-api-version": "2",
-            "trakt-api-key": self.client_id,
+            "trakt-api-key": client_id,
         }
-        if self.access_token:
-            headers["Authorization"] = f"Bearer {self.access_token}"
-        return headers
+        self._client_id = client_id
+        if access_token:
+            self._headers["Authorization"] = f"Bearer {access_token}"
 
-    async def exchange_code(self, code: str) -> dict[str, Any]:
+    def _client(self) -> httpx.AsyncClient:
+        return httpx.AsyncClient(
+            base_url=self.BASE_URL,
+            headers=self._headers,
+        )
+
+    async def exchange_code(
+        self, code: str, client_secret: str, redirect_uri: str
+    ) -> dict:
         """Exchange an OAuth authorization code for tokens."""
-        async with httpx.AsyncClient() as client:
+        async with self._client() as client:
             resp = await client.post(
-                f"{TRAKT_API_URL}/oauth/token",
+                "/oauth/token",
                 json={
                     "code": code,
-                    "client_id": self.client_id,
-                    "client_secret": self.client_secret,
-                    "redirect_uri": self.redirect_uri,
+                    "client_id": self._client_id,
+                    "client_secret": client_secret,
+                    "redirect_uri": redirect_uri,
                     "grant_type": "authorization_code",
                 },
-                headers=self._headers,
             )
             resp.raise_for_status()
             return resp.json()
 
-    async def refresh_token(self, refresh_token: str) -> dict[str, Any]:
+    async def refresh_token(
+        self, refresh_token: str, client_secret: str, redirect_uri: str
+    ) -> dict:
         """Exchange a refresh token for a new access token."""
-        async with httpx.AsyncClient() as client:
+        async with self._client() as client:
             resp = await client.post(
-                f"{TRAKT_API_URL}/oauth/token",
+                "/oauth/token",
                 json={
                     "refresh_token": refresh_token,
-                    "client_id": self.client_id,
-                    "client_secret": self.client_secret,
-                    "redirect_uri": self.redirect_uri,
+                    "client_id": self._client_id,
+                    "client_secret": client_secret,
+                    "redirect_uri": redirect_uri,
                     "grant_type": "refresh_token",
                 },
-                headers=self._headers,
             )
             resp.raise_for_status()
             return resp.json()
 
-    async def get_user_profile(self) -> dict[str, Any]:
+    async def get_profile(self) -> dict:
         """Fetch the authenticated user's profile."""
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                f"{TRAKT_API_URL}/users/me",
-                headers=self._headers,
-            )
+        async with self._client() as client:
+            resp = await client.get("/users/me")
             resp.raise_for_status()
             return resp.json()
 
-    async def get_popular_movies(self, page: int = 1, limit: int = 50) -> list[dict[str, Any]]:
+    async def get_popular(self, limit: int = 100) -> list[dict]:
         """Fetch popular movies."""
-        async with httpx.AsyncClient() as client:
+        async with self._client() as client:
             resp = await client.get(
-                f"{TRAKT_API_URL}/movies/popular",
-                headers=self._headers,
-                params={"page": page, "limit": limit, "extended": "full"},
+                "/movies/popular",
+                params={"limit": limit, "extended": "full"},
             )
             resp.raise_for_status()
             return resp.json()
 
-    async def get_trending_movies(self, page: int = 1, limit: int = 50) -> list[dict[str, Any]]:
-        """Fetch trending movies."""
-        async with httpx.AsyncClient() as client:
+    async def get_trending(self, limit: int = 100) -> list[dict]:
+        """Fetch trending movies.
+
+        Trending returns [{watchers, movie}, ...] — this extracts the movie
+        dicts.
+        """
+        async with self._client() as client:
             resp = await client.get(
-                f"{TRAKT_API_URL}/movies/trending",
-                headers=self._headers,
-                params={"page": page, "limit": limit, "extended": "full"},
+                "/movies/trending",
+                params={"limit": limit, "extended": "full"},
             )
             resp.raise_for_status()
-            return resp.json()
+            return [item["movie"] for item in resp.json()]
 
-    async def get_user_watched(self, username: str) -> list[dict[str, Any]]:
-        """Fetch a user's watched movie history."""
-        async with httpx.AsyncClient() as client:
+    async def get_user_watched(self, username: str) -> list[dict]:
+        """Fetch a user's watched movies.
+
+        Returns [{plays, last_watched_at, movie}, ...] — this extracts the
+        movie dicts.
+        """
+        async with self._client() as client:
             resp = await client.get(
-                f"{TRAKT_API_URL}/users/{username}/watched/movies",
-                headers=self._headers,
+                f"/users/{username}/watched/movies",
                 params={"extended": "full"},
             )
             resp.raise_for_status()
-            return resp.json()
+            return [item["movie"] for item in resp.json()]
 
-    async def get_user_ratings(self, username: str) -> list[dict[str, Any]]:
-        """Fetch a user's movie ratings."""
-        async with httpx.AsyncClient() as client:
+    async def get_user_ratings(self, username: str) -> list[dict]:
+        """Fetch a user's movie ratings.
+
+        Returns [{rating, movie}, ...] — keeps rating + movie.ids.trakt.
+        """
+        async with self._client() as client:
             resp = await client.get(
-                f"{TRAKT_API_URL}/users/{username}/ratings/movies",
-                headers=self._headers,
+                f"/users/{username}/ratings/movies",
             )
             resp.raise_for_status()
-            return resp.json()
+            return [
+                {"rating": item["rating"], "trakt_id": item["movie"]["ids"]["trakt"]}
+                for item in resp.json()
+            ]
 
-    async def rate_movie(self, trakt_id: int, rating: int) -> dict[str, Any]:
+    async def rate_movie(self, trakt_id: int, rating: int) -> None:
         """Submit a rating for a movie (1-10 scale)."""
-        async with httpx.AsyncClient() as client:
+        async with self._client() as client:
             resp = await client.post(
-                f"{TRAKT_API_URL}/sync/ratings",
-                headers=self._headers,
+                "/sync/ratings",
                 json={
                     "movies": [
                         {
-                            "ids": {"trakt": trakt_id},
                             "rating": rating,
+                            "ids": {"trakt": trakt_id},
                         }
                     ]
                 },
             )
             resp.raise_for_status()
-            return resp.json()
