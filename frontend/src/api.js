@@ -32,8 +32,11 @@ export function submitDuel(movieAId, movieBId, outcome, mode = "discovery") {
   });
 }
 
-export function getRankings(limit = 50, offset = 0) {
-  return request(`/api/rankings?limit=${limit}&offset=${offset}`);
+export function getRankings(limit = 50, offset = 0, genre = null, decade = null) {
+  const params = new URLSearchParams({ limit, offset });
+  if (genre) params.set("genre", genre);
+  if (decade) params.set("decade", decade);
+  return request(`/api/rankings?${params}`);
 }
 
 export function fetchStats() { return request("/api/rankings/stats"); }

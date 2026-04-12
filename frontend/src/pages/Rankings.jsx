@@ -8,15 +8,19 @@ export default function Rankings() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState("All");
+  const [total, setTotal] = useState(0);
 
   useEffect(() => {
     async function load() {
+      setLoading(true);
       try {
+        const genre = activeFilter === "All" ? null : activeFilter;
         const [rankData, statsData] = await Promise.all([
-          getRankings(50),
+          getRankings(50, 0, genre),
           fetchStats(),
         ]);
         setRankings(rankData.rankings);
+        setTotal(rankData.total);
         setStats(statsData);
       } catch (err) {
         console.error("Failed to load rankings:", err);
@@ -25,16 +29,7 @@ export default function Rankings() {
       }
     }
     load();
-  }, []);
-
-  const filteredRankings =
-    activeFilter === "All"
-      ? rankings
-      : rankings.filter((r) =>
-          (r.movie.genres || [])
-            .map((g) => g.toLowerCase())
-            .includes(activeFilter.toLowerCase())
-        );
+  }, [activeFilter]);
 
   if (loading) {
     return (
@@ -73,7 +68,7 @@ export default function Rankings() {
       </header>
 
       {/* Rankings List */}
-      {filteredRankings.length === 0 ? (
+      {rankings.length === 0 ? (
         <div className="p-8 text-center text-[#6B6760] bg-[#1d1b1a] font-body">
           {rankings.length === 0
             ? "No rankings yet. Start dueling to build your list!"
@@ -81,7 +76,7 @@ export default function Rankings() {
         </div>
       ) : (
         <div className="space-y-4">
-          {filteredRankings.map((r, idx) => {
+          {rankings.map((r, idx) => {
             const isFirst = idx === 0;
             const rank = String(idx + 1).padStart(2, "0");
 

@@ -24,6 +24,7 @@ class MovieSchema(BaseModel):
     year: Optional[int] = None
     poster_url: Optional[str] = None
     overview: Optional[str] = None
+    genres: Optional[list[str]] = None
 
 
 class MovieWithStateSchema(MovieSchema):
