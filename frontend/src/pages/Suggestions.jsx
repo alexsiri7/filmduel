@@ -100,7 +100,7 @@ export default function Suggestions() {
     );
   }
 
-  // Not enough films
+  // Not enough ranked films
   if (status === "not_enough_films") {
     return (
       <div className="min-h-screen bg-[#0F0E0D] p-6 md:p-12 pb-32">
@@ -110,7 +110,6 @@ export default function Suggestions() {
           </h2>
         </header>
         <div className="max-w-md mx-auto text-center space-y-6 mt-24">
-          <div className="text-6xl mb-4 opacity-30">🎬</div>
           <h3 className="text-2xl font-headline font-bold uppercase text-[#F5F0E8]">
             Keep dueling!
           </h3>
@@ -118,17 +117,39 @@ export default function Suggestions() {
             We need at least 20 ranked films to understand your taste and generate
             personalized suggestions. Head to the duel page and keep ranking!
           </p>
-          <div className="w-full bg-[#1d1b1a] h-2 mt-6">
-            <div
-              className="h-full bg-[#E8A020] transition-all duration-500"
-              style={{ width: "0%" }}
-            />
-          </div>
           <a
             href="/"
             className="inline-block mt-6 px-8 py-4 bg-[#E8A020] text-[#0F0E0D] font-headline font-black uppercase tracking-widest text-sm hover:scale-[1.02] active:scale-95 transition-all"
           >
             Start Dueling
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  // Not enough candidates in pool
+  if (status === "no_candidates") {
+    return (
+      <div className="min-h-screen bg-[#0F0E0D] p-6 md:p-12 pb-32">
+        <header className="mb-12">
+          <h2 className="text-5xl md:text-7xl font-headline font-black uppercase tracking-tighter text-[#F5F0E8] mb-2 leading-none">
+            Watch <span className="text-[#E8A020]">Next</span>
+          </h2>
+        </header>
+        <div className="max-w-md mx-auto text-center space-y-6 mt-24">
+          <h3 className="text-2xl font-headline font-bold uppercase text-[#F5F0E8]">
+            Pool expanding...
+          </h3>
+          <p className="text-[#6B6760] font-body leading-relaxed">
+            We're adding more films to your pool. Swipe a few rounds to classify
+            new films, then come back for personalized suggestions.
+          </p>
+          <a
+            href="/swipe"
+            className="inline-block mt-6 px-8 py-4 bg-[#E8A020] text-[#0F0E0D] font-headline font-black uppercase tracking-widest text-sm hover:scale-[1.02] active:scale-95 transition-all"
+          >
+            Swipe Films
           </a>
         </div>
       </div>
