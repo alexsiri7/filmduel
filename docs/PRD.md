@@ -2,7 +2,11 @@
 
 ## Overview
 
-FilmDuel is a web app that helps users discover and rank movies through pairwise comparisons. Users authenticate with their Trakt account, are shown two films at a time, answer whether they've seen each one, and (if they've seen both) pick which they rate higher. This generates an ELO-ranked list of every film the user has seen. Ratings are synced back to Trakt in real time.
+FilmDuel is a web app that helps users discover and rank movies through pairwise comparisons. Users authenticate with their Trakt account, classify films rapidly via a Tinder-style swipe session, then duel seen films against each other to build an ELO-ranked library. Ratings sync back to Trakt in real time.
+
+The experience has two distinct modes that alternate naturally:
+- **Swipe** — fast, mindless sorting. Seen it or not?
+- **Duel** — deliberate, opinionated ranking. Which do you rate higher?
 
 The experience should feel like a game — fast, opinionated, oddly compelling.
 
@@ -10,11 +14,12 @@ The experience should feel like a game — fast, opinionated, oddly compelling.
 
 ## Goals
 
-- Let users rapidly build a ranked film library without manually searching for titles
-- Surface films they may have forgotten they've seen (from their Trakt history)
-- Expose them to popular/trending films they haven't seen yet
-- Produce a clean ELO ranking exportable to Letterboxd CSV format
+- Rapidly classify a large film pool as seen/unseen without friction
+- Generate meaningful ELO rankings through enjoyable head-to-head duels
+- Always show interesting match-ups (good vs good, bad vs bad — not random)
+- Surface films the user has forgotten they've seen
 - Sync ratings back to Trakt so the data lives somewhere useful
+- Export rankings to Letterboxd CSV format
 
 ---
 
@@ -29,25 +34,25 @@ The experience should feel like a game — fast, opinionated, oddly compelling.
 | Auth | Trakt OAuth2 (Authorization Code flow), JWT httpOnly cookies |
 | Frontend | React 18, Vite, Tailwind CSS, shadcn/ui components |
 | Deployment | Railway (single service, auto-deploy from `main` branch) |
-| DNS | Cloudflare (filmduel.interstellarai.net → Railway) |
+| DNS | Cloudflare (filmduel.interstellarai.net -> Railway) |
 | Error tracking | Sentry (FastAPI integration) |
 | Movie data | Trakt API + TMDB API (poster images) |
 
 **Key constraints:**
-
-- No separate frontend deployment. FastAPI serves the React build from `/static` and catches all non-API routes with a wildcard that returns `index.html`.
-- No supabase-py SDK — we connect directly to the Supabase Postgres instance via `DATABASE_URL` using SQLAlchemy + asyncpg.
-- Supabase uses PgBouncer in transaction mode — asyncpg must disable prepared statement caching (`statement_cache_size=0`).
-- Branch protection on `main` — all changes via PR. Railway auto-deploys on merge to `main`.
+- No separate frontend deployment. FastAPI serves the React build from `/static` and catches all non-API routes with a wildcard returning `index.html`.
+- No supabase-py SDK -- connect directly via `DATABASE_URL` using SQLAlchemy + asyncpg.
+- Supabase uses PgBouncer in transaction mode -- asyncpg must set `statement_cache_size=0`.
+- Branch protection on `main` -- all changes via PR. Railway auto-deploys on merge.
 
 ### Design Decisions
 
-1. **SQLAlchemy + Alembic over raw Supabase client** — Gives us proper ORM with typed models, versioned migrations that run in CI/deploy, and no vendor lock-in to Supabase's SDK.
-2. **Direct Postgres over Supabase SDK** — Supabase is just hosted Postgres. Using the connection string directly means we get full SQLAlchemy power (joins, eager loading, transactions) without the SDK's limitations.
-3. **Tailwind + shadcn/ui over plain CSS** — Provides polished, accessible UI components out of the box with minimal overhead. The `cn()` utility (clsx + tailwind-merge) handles conditional classes cleanly.
-4. **Transaction pooler (port 6543)** — Supabase's session pooler (5432) holds connections per session; the transaction pooler (6543) is better for serverless/short-lived connections. Requires `statement_cache_size=0` for asyncpg compatibility.
-5. **Sentry from day one** — Error tracking wired in before features ship, so we catch issues immediately.
-6. **SQLAlchemy models separated from Pydantic schemas** — `db_models.py` contains SQLAlchemy ORM models; `schemas.py` contains Pydantic request/response models. Never conflate the two.
+1. **SQLAlchemy + Alembic over raw Supabase client** -- proper ORM, typed models, versioned migrations, no vendor lock-in.
+2. **Direct Postgres over Supabase SDK** -- full SQLAlchemy power (joins, eager loading, transactions).
+3. **Tailwind + shadcn/ui** -- polished accessible components, `cn()` utility for conditional classes.
+4. **Transaction pooler (port 6543)** -- better for short-lived connections. Requires `statement_cache_size=0`.
+5. **Sentry from day one** -- catch issues immediately after deploy.
+6. **SQLAlchemy models separated from Pydantic schemas** -- `db_models.py` for ORM, `schemas.py` for request/response. Never conflate.
+7. **Swipe phase separated from duel phase** -- classification (seen/unseen) and ranking are distinct activities with distinct UIs. Mixing them makes both feel like homework.
 
 ---
 
@@ -56,22 +61,23 @@ The experience should feel like a game — fast, opinionated, oddly compelling.
 ```
 filmduel/
 ├── backend/
-│   ├── main.py            # FastAPI app, mounts static, registers routers
-│   ├── db_models.py       # SQLAlchemy ORM models (User, Movie, UserMovie, Duel)
+│   ├── main.py
+│   ├── db_models.py       # SQLAlchemy ORM models
 │   ├── schemas.py         # Pydantic request/response models
-│   ├── db.py              # SQLAlchemy engine, session factory
-│   ├── config.py          # Settings from environment variables (pydantic-settings)
+│   ├── db.py              # SQLAlchemy engine, async session factory
+│   ├── config.py          # pydantic-settings from env vars
 │   ├── routers/
-│   │   ├── auth.py        # Trakt OAuth routes
-│   │   ├── movies.py      # Movie pool, duel pair generation
-│   │   ├── duels.py       # Submit duel results
-│   │   └── rankings.py    # Fetch ELO rankings, export CSV
+│   │   ├── auth.py
+│   │   ├── swipe.py       # Swipe session: get cards, submit results
+│   │   ├── duels.py       # Duel pairs and results
+│   │   └── rankings.py    # ELO rankings, CSV export, stats
 │   └── services/
-│       ├── trakt.py       # Trakt API client (async httpx)
-│       ├── elo.py         # ELO calculation logic
+│       ├── trakt.py       # Async httpx Trakt API client
+│       ├── elo.py         # ELO + K-factor logic
+│       ├── pool.py        # Film pool management, pair selection
 │       └── sync.py        # Push ratings to Trakt
 ├── alembic.ini
-├── backend/migrations/    # Alembic migrations
+├── backend/migrations/
 │   ├── env.py
 │   └── versions/
 ├── frontend/
@@ -79,12 +85,14 @@ filmduel/
 │   │   ├── App.jsx
 │   │   ├── pages/
 │   │   │   ├── Login.jsx
-│   │   │   ├── Duel.jsx
+│   │   │   ├── Swipe.jsx      # Tinder-style classification
+│   │   │   ├── Duel.jsx       # Head-to-head ranking
 │   │   │   └── Rankings.jsx
 │   │   ├── components/
+│   │   │   ├── SwipeCard.jsx
 │   │   │   ├── MovieCard.jsx
 │   │   │   └── Nav.jsx
-│   │   └── api.js         # Thin fetch wrapper for backend API
+│   │   └── api.js
 │   ├── package.json
 │   └── vite.config.js
 ├── Dockerfile
@@ -97,26 +105,23 @@ filmduel/
 
 ## Environment Variables
 
-All config comes from environment variables. Provide an `.env.example` with every variable documented.
-
 ```bash
-# Database — Supabase Postgres via transaction pooler (port 6543)
-# URL-encode special chars in password (e.g. ! → %21)
+# Database -- Supabase Postgres via transaction pooler (port 6543)
 DATABASE_URL=postgresql+asyncpg://postgres.PROJECT_REF:PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres
 
-# Trakt OAuth2 — https://trakt.tv/oauth/applications
+# Trakt OAuth2
 TRAKT_CLIENT_ID=
 TRAKT_CLIENT_SECRET=
 TRAKT_REDIRECT_URI=https://filmduel.interstellarai.net/auth/callback
 
-# TMDB — https://www.themoviedb.org/settings/api (free, instant)
+# TMDB
 TMDB_API_KEY=
 
-# Sentry — https://sentry.io
+# Sentry
 SENTRY_DSN=
 
 # App
-SECRET_KEY=                  # random 32-byte hex (generate with: openssl rand -hex 32)
+SECRET_KEY=       # openssl rand -hex 32
 BASE_URL=https://filmduel.interstellarai.net
 ```
 
@@ -124,10 +129,10 @@ BASE_URL=https://filmduel.interstellarai.net
 
 ## Database Schema
 
-Schema is managed via Alembic migrations — the SQL below is for reference only. Do not run it manually; Alembic handles all schema creation and migration on deploy.
+Managed via Alembic. The SQL below is reference only -- do not run manually.
 
 ```sql
--- Users (one row per Trakt account)
+-- Users
 create table users (
   id uuid primary key default gen_random_uuid(),
   trakt_user_id text unique not null,
@@ -139,7 +144,7 @@ create table users (
   last_seen_at timestamptz default now()
 );
 
--- Movies (shared cache of Trakt movie data, not per-user)
+-- Shared movie cache
 create table movies (
   id uuid primary key default gen_random_uuid(),
   trakt_id integer unique not null,
@@ -151,6 +156,7 @@ create table movies (
   overview text,
   runtime integer,
   poster_url text,
+  community_rating numeric(4,1),  -- Trakt community score 0-100
   cached_at timestamptz default now()
 );
 
@@ -159,11 +165,11 @@ create table user_movies (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references users(id) on delete cascade,
   movie_id uuid references movies(id) on delete cascade,
-  seen boolean,           -- null=unknown, true=seen, false=not seen
-  elo integer,            -- NULL until first real duel (seen=true, battles>0)
-  seeded_elo integer,     -- from Trakt rating import, used as starting point for first duel
+  seen boolean,              -- null=unknown, true=seen, false=not seen
+  elo integer,               -- NULL until first real duel (seen=true, battles>=1)
+  seeded_elo integer,        -- from imported Trakt rating, used as first-duel starting point
   battles integer not null default 0,
-  trakt_rating integer,   -- last value synced to Trakt (1-10)
+  trakt_rating integer,      -- last value synced to Trakt (1-10)
   last_dueled_at timestamptz,
   updated_at timestamptz default now(),
   unique(user_id, movie_id)
@@ -179,7 +185,16 @@ create table duels (
   loser_elo_before integer,
   winner_elo_after integer,
   loser_elo_after integer,
-  mode text not null default 'discovery',  -- 'discovery' | 'refinement' | 'playoff'
+  pair_type text not null,   -- 'ranked_vs_ranked' | 'ranked_vs_unranked'
+  created_at timestamptz default now()
+);
+
+-- Swipe history
+create table swipe_results (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id) on delete cascade,
+  movie_id uuid references movies(id) on delete cascade,
+  seen boolean not null,
   created_at timestamptz default now()
 );
 
@@ -187,218 +202,210 @@ create table duels (
 create index on user_movies(user_id);
 create index on user_movies(user_id, seen);
 create index on user_movies(user_id, elo desc) where elo is not null;
+create index on user_movies(user_id, seen, battles) where seen = true;
 create index on duels(user_id);
+create index on swipe_results(user_id);
 ```
 
 ---
 
 ## Film State Model
 
-A film's state in `user_movies` determines how it participates in duels and rankings. There are four states:
-
-| State | `seen` | `battles` | `elo` | Description |
+| State | `seen` | `battles` | `elo` | Participates in |
 |---|---|---|---|---|
-| **Unknown** | `null` | `0` | `null` | In the pool, never shown to user yet |
-| **Unseen** | `false` | any | `null` | User confirmed they haven't seen it. Never shown again. No ELO ever. |
-| **Seen -- unranked** | `true` | `0` | `null` | User confirmed they've seen it, but no duel result yet |
-| **Ranked** | `true` | `>=1` | integer | Has a real ELO from at least one duel |
+| **Unknown** | `null` | `0` | `null` | Swipe sessions only |
+| **Unseen** | `false` | any | `null` | Never shown again |
+| **Seen -- unranked** | `true` | `0` | `null` | Duel as challenger |
+| **Ranked** | `true` | `>=1` | integer | Duel as anchor or challenger |
 
 **Critical rules:**
-- `elo` is `NULL` until a film is both `seen=true` AND `battles>=1`. The DB column default is `NULL`, not `1000`. There is no "default ELO" -- a film either has a real ELO or it doesn't.
-- A film with `seen=false` never appears in a duel pair again and never receives an ELO.
-- The rankings page only shows films where `seen=true AND battles>=1` (i.e. Ranked state).
-- Films imported from Trakt watch history start as Seen -- unranked (`seen=true, battles=0, elo=null`).
-- Films imported with an existing Trakt rating start with a `seeded_elo` value and `battles=0`. They are Seen -- unranked but have a starting ELO seed that will be used as their initial value once they enter their first duel.
+- `elo` is `NULL` until `seen=true AND battles>=1`. DB default is `NULL`, not 1000.
+- `seen=false` films never appear in swipe or duel again.
+- Rankings page only shows `seen=true AND battles>=1`.
+- Films from Trakt watch history import as Seen -- unranked.
+- Films with existing Trakt ratings get a `seeded_elo` but still have `battles=0` and `elo=NULL` until their first duel.
+
+---
+
+## Core Game Loop
+
+```
+On first login:
+  1. Import Trakt watch history -> mark as seen=true
+  2. Import Trakt ratings -> set seeded_elo
+  3. Always start with a Swipe Session (10 cards)
+  4. After swipe: enter Duel Loop
+
+Duel Loop:
+  - Select pair using weighted selection (see Duel Pair Selection below)
+  - After each duel result: backend returns next_action
+  - If next_action == "swipe": frontend shows swipe interstitial before next duel
+  - Otherwise: animate next pair in immediately
+
+next_action logic (evaluated server-side after every duel):
+  - seen_unranked = count(user_movies where seen=true, battles=0)
+  - If seen_unranked < 3: next_action = "swipe"
+  - Else: next_action = "duel"
+
+Swipe Session:
+  - Show 10 films one at a time, full poster, swipe or tap seen/not seen
+  - Films drawn from Unknown pool, weighted by community rating band
+  - Progress indicator: 3 / 10
+  - On completion: show summary ("You've seen 6 of these") then return to duel
+```
+
+The loop is **organic, not staged**. There is no "finish introducing all unranked films before refining" -- every duel draw comes from a single weighted pool that naturally balances new introductions against refinement based on how settled each film's ranking is. Swipe sessions feed that pool on demand rather than on a fixed schedule.
+
+---
+
+## Swipe Session
+
+### Film selection for swipe
+
+Draw from `user_movies where seen IS NULL`. Weight by community rating band to match the user's established taste:
+
+1. Find user's median ELO across all ranked films (default 1000 if no ranked films)
+2. Map median ELO to a quality band (see table below)
+3. 60% of cards from that band, 20% from band above, 20% from band below
+
+### Swipe API
+
+```
+GET  /api/swipe/cards          Returns 10 unknown films
+POST /api/swipe/results        Submit all 10 results in one call
+```
+
+Swipe results body:
+```json
+{
+  "results": [
+    { "movie_id": "uuid", "seen": true },
+    { "movie_id": "uuid", "seen": false }
+  ]
+}
+```
+
+On submission: bulk upsert all 10 `user_movies.seen` values in a single query. Return:
+```json
+{ "seen_count": 6, "unseen_count": 4 }
+```
+
+The swipe interstitial is triggered by `next_action: "swipe"` in the duel result response -- not by a separate polling endpoint.
 
 ---
 
 ## ELO System
 
+### Quality bands
+
+| Band | ELO range | Community rating |
+|---|---|---|
+| Elite | 1300+ | 80-100 |
+| Strong | 1100-1299 | 65-79 |
+| Mid | 900-1099 | 45-64 |
+| Weak | 700-899 | 25-44 |
+| Poor | <700 | 0-24 |
+
 ### ELO column behaviour
 
 - `elo` is `NULL` for Unknown, Unseen, and Seen -- unranked films.
-- On a film's first duel win/loss, `elo` is set for the first time (not updated from null -- set from scratch using the seeded value if available, or 1000 as the bootstrap value for that first calculation only).
-- After the first duel, `elo` is always an integer and is updated on every subsequent duel.
+- On a film's first duel: use `seeded_elo` if available, otherwise 1000 as bootstrap value for that calculation only.
+- After first duel: `elo` is always a real integer updated on every subsequent duel.
 
-### Seeding ELO from existing Trakt ratings
+### K-factor
 
-If the user has an existing Trakt rating (1-10) for a film at import time, store a `seeded_elo` value:
-
-```
-seeded_elo = 600 + (trakt_rating - 1) * (800 / 9)
-```
-
-This maps: 1->600, 5.5->1000, 10->1400. Store in `seeded_elo` column on `user_movies` (nullable integer).
-
-### ELO calculation
-
-Standard ELO. Use K=64 for a film's first 5 battles (provisional period -- converges faster), then K=32 thereafter.
+K=64 for first 5 battles (provisional), K=32 thereafter.
 
 ```python
-def expected_score(rating_a: int, rating_b: int) -> float:
-    return 1 / (1 + 10 ** ((rating_b - rating_a) / 400))
-
 def k_factor(battles: int) -> int:
     return 64 if battles < 5 else 32
 
-def update_elo(winner_elo: int, loser_elo: int, winner_battles: int, loser_battles: int) -> tuple[int, int]:
+def expected_score(rating_a: int, rating_b: int) -> float:
+    return 1 / (1 + 10 ** ((rating_b - rating_a) / 400))
+
+def update_elo(winner_elo: int, loser_elo: int,
+               winner_battles: int, loser_battles: int) -> tuple[int, int]:
     exp = expected_score(winner_elo, loser_elo)
-    kw = k_factor(winner_battles)
-    kl = k_factor(loser_battles)
-    new_winner = round(winner_elo + kw * (1 - exp))
-    new_loser = round(loser_elo + kl * (0 - (1 - exp)))
+    new_winner = round(winner_elo + k_factor(winner_battles) * (1 - exp))
+    new_loser  = round(loser_elo  + k_factor(loser_battles)  * (0 - (1 - exp)))
     return new_winner, new_loser
 ```
 
-When a film enters its first duel, use `seeded_elo` if present, otherwise use 1000 as the bootstrap starting point for that calculation only.
+### ELO -> Trakt rating
 
-### ELO -> Trakt rating conversion (for sync)
-
-```
+```python
 trakt_rating = max(1, min(10, round((elo - 600) * 9 / 800) + 1))
 ```
 
 ---
 
-## Game Modes
+## Duel Pair Selection
 
-FilmDuel has three distinct game modes. The active mode is passed as a parameter to `GET /api/movies/pair` and stored on each duel record.
+### Philosophy
 
-### Discovery mode (default)
+The pair selection is a **single weighted pool** -- not discrete stages with shifting ratios. Every seen film has a weight based on how settled its ranking is. Films that need more duels naturally get selected more often. New films entering the pool (from swipe sessions) automatically compete for selection without any special-casing.
 
-**Purpose:** Expand the ranked library. Introduce unseen/unknown films by measuring them against established anchors.
+### Settlement weight
 
-**Pair selection rule:** One film must be **Ranked** (the anchor). The other is drawn from **Seen -- unranked** or **Unknown** films (the challenger).
-
-- The anchor is weighted toward films in the 900-1100 ELO band (mid-range anchors are most informative).
-- The challenger is weighted toward films with `seen=true, battles=0` first (known seen but unranked), then `seen=null` (unknown).
-- Never pair two unranked films in Discovery mode.
-
-**Bootstrap exception:** If the user has zero Ranked films (brand new user with no Trakt ratings), run a special bootstrap duel: pick two Seen -- unranked films and let them fight. This produces the first Ranked film, which then becomes the anchor for all future Discovery duels.
-
-### Refinement mode
-
-**Purpose:** Sharpen existing rankings. Battle Ranked films against each other.
-
-**Pair selection rule:** Both films must be **Ranked**.
-
-- Weight toward films with fewer battles (noisier rankings benefit more from refinement).
-- Weight toward films with similar ELO (close matchups are more informative than a 1400 vs 600 blowout). Target ELO difference < 200.
-- Never pair the same two films twice in the same session.
-
-### Playoff mode
-
-**Purpose:** Run a tournament within a filtered subset of the user's ranked films.
-
-**Pair selection rule:** Both films must be **Ranked**, filtered by a playoff definition (genre, decade, director, custom list).
-
-- Request parameters: `mode=playoff&filter_type=genre&filter_value=horror`
-- Supported filter types: `genre`, `decade` (e.g. `1990s`), `director` (Trakt person ID)
-- Minimum pool size: 4 films matching the filter. Return an error if fewer than 4 ranked films match.
-- Pair selection within playoff: same as Refinement (similar ELO, fewer battles first).
-
----
-
-## Pair Selection Algorithm
-
-`GET /api/movies/pair?mode=discovery|refinement|playoff&filter_type=...&filter_value=...`
-
-```
-function select_pair(user_id, mode, filter):
-
-  if mode == "discovery":
-    anchors = user_movies where user_id=user_id, seen=true, battles>=1, elo IS NOT NULL
-    if len(anchors) == 0:
-      # Bootstrap: first ever duel
-      challengers = user_movies where seen=true, battles=0
-      if len(challengers) < 2: return error("not enough seen films")
-      return pick_two_random(challengers)
-
-    anchor = weighted_sample(anchors, weight_toward_elo_band(900, 1100))
-    challengers = user_movies where seen=true, battles=0  (prefer)
-                  OR seen=null                             (fallback)
-    challenger = weighted_sample(challengers, weight_toward_fewer_battles)
-    return (anchor, challenger)
-
-  if mode == "refinement":
-    ranked = user_movies where seen=true, battles>=1, elo IS NOT NULL
-    if len(ranked) < 2: return error("not enough ranked films")
-    film_a = weighted_sample(ranked, weight_toward_fewer_battles)
-    film_b = weighted_sample(ranked - {film_a}, weight_toward_similar_elo(film_a))
-    return (film_a, film_b)
-
-  if mode == "playoff":
-    ranked = user_movies where seen=true, battles>=1, elo IS NOT NULL, matches filter
-    if len(ranked) < 4: return error("not enough ranked films for this filter")
-    film_a = weighted_sample(ranked, weight_toward_fewer_battles)
-    film_b = weighted_sample(ranked - {film_a}, weight_toward_similar_elo(film_a))
-    return (film_a, film_b)
+```python
+weight = 1 / (battles + 1)
 ```
 
-**Anti-repeat:** The server tracks the last pair served (stored in the session or returned as an opaque `last_pair_token` in the response). The pair selection must not return the same combination of two films consecutively.
+| Battles | Weight | Meaning |
+|---|---|---|
+| 0 | 1.000 | Unranked -- highest priority |
+| 1 | 0.500 | Very noisy -- high priority |
+| 4 | 0.200 | Settling -- medium priority |
+| 9 | 0.100 | Stable -- low priority |
+| 19 | 0.050 | Settled -- occasional calibration |
+
+### Anchor rule
+
+Every duel must include at least one **anchor** -- a film with `battles >= 1` and a real ELO.
+
+- Film A drawn from anchor pool (`battles >= 1`), weighted by settlement
+- Film B drawn from full seen pool (minus A), same quality band as A
+
+Bootstrap exception: if no anchors exist, draw both from `seen=true, battles=0`, matched by community rating band.
+
+### Quality band matching
+
+After selecting anchor (film A), constrain film B to same community rating band as A's ELO band. For unranked film B, use `community_rating_to_band()`. If no films in target band, expand to adjacent bands.
+
+### Match distance variation (ranked-vs-ranked only)
+
+- 70% close matches (ELO diff < 150)
+- 30% wide matches (ELO diff > 300)
+
+### Swipe refill trigger
+
+After every duel: `next_action = "swipe" if count(seen=true, battles=0) < 3 else "duel"`
 
 ---
 
 ## Duel Outcomes
 
-`POST /api/duels`
-
-```json
+```
+POST /api/duels
 {
   "movie_a_id": "uuid",
   "movie_b_id": "uuid",
   "outcome": "a_wins" | "b_wins" | "a_only" | "b_only" | "neither",
-  "mode": "discovery" | "refinement" | "playoff"
+  "pair_type": "ranked_vs_ranked" | "ranked_vs_unranked"
 }
 ```
 
-| Outcome | Meaning | ELO update | State changes |
-|---|---|---|---|
-| `a_wins` | Seen both, prefer A | Update both | Both -> Ranked (if not already) |
-| `b_wins` | Seen both, prefer B | Update both | Both -> Ranked (if not already) |
-| `a_only` | Only seen A | None | A -> Seen -- unranked (if unknown), B -> Unseen |
-| `b_only` | Only seen B | None | B -> Seen -- unranked (if unknown), A -> Unseen |
-| `neither` | Seen neither | None | Both -> Unseen |
+| Outcome | ELO update | State changes |
+|---|---|---|
+| `a_wins` | Update both | Both -> Ranked |
+| `b_wins` | Update both | Both -> Ranked |
+| `a_only` | None | A -> Seen -- unranked; B -> Unseen |
+| `b_only` | None | B -> Seen -- unranked; A -> Unseen |
+| `neither` | None | Both -> Unseen |
 
-On `a_wins` or `b_wins`, sync both films' ratings to Trakt asynchronously after updating ELO.
+On `a_wins` or `b_wins`: sync both films to Trakt asynchronously.
 
----
-
-## Trakt OAuth2 Flow
-
-### Step 1 -- Redirect to Trakt
-
-`GET /auth/login`
-
-- Build Trakt auth URL: `https://trakt.tv/oauth/authorize?response_type=code&client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}`
-- Redirect user there
-
-### Step 2 -- Handle callback
-
-`GET /auth/callback?code={code}`
-
-- Exchange code for tokens via `POST https://api.trakt.tv/oauth/token`
-- Fetch user profile via `GET https://api.trakt.tv/users/me`
-- Upsert user row in `users` table
-- Issue a signed JWT (`python-jose` or `PyJWT`) containing `user_id` and expiry
-- Set JWT as an httpOnly cookie named `session`
-- Redirect to `/`
-
-### Step 3 -- Auth middleware
-
-- FastAPI dependency `get_current_user` reads `session` cookie, validates JWT, returns user row
-- All protected routes use this dependency
-- If token is missing or invalid, return 401
-
-### Step 4 -- Token refresh
-
-- Before every Trakt API call, check if `trakt_token_expires_at` is within 1 hour
-- If so, refresh using `POST https://api.trakt.tv/oauth/token` with `grant_type=refresh_token`
-- Update user row with new tokens
-
-### Logout
-
-`POST /auth/logout` -- delete `session` cookie, return 200
+Response includes `next_action: "duel" | "swipe"`.
 
 ---
 
@@ -406,164 +413,102 @@ On `a_wins` or `b_wins`, sync both films' ratings to Trakt asynchronously after 
 
 ### Sources
 
-**Source 1 -- Trakt popular movies**
-- `GET https://api.trakt.tv/movies/popular?limit=100&extended=full`
-- Fetch on first login, refresh weekly
+| # | Endpoint | Refresh | Notes |
+|---|---|---|---|
+| 1 | `GET /movies/popular?limit=100&extended=full` | Weekly | Broad well-known pool |
+| 2 | `GET /movies/trending?limit=100&extended=full` | Weekly | Recent/buzzy |
+| 3 | `GET /users/{u}/watched/movies?extended=full` | Hourly | User history -> `seen=true` |
+| 4 | `GET /movies/recommended?extended=full` | Daily | Personalised, authenticated |
+| 5 | `GET /users/{u}/ratings/movies` | On login | Sets `seeded_elo` |
 
-**Source 2 -- Trakt trending movies**
-- `GET https://api.trakt.tv/movies/trending?limit=100&extended=full`
-- Same caching strategy
+- Always `?extended=full` for overview, runtime, genres, ids.tmdb, community rating
+- `community_rating`: Trakt's `rating` field is 0-10, store as `rating * 10` (0-100 scale)
+- TMDB poster: `GET https://api.themoviedb.org/3/movie/{tmdb_id}?api_key=...` -> store full URL
 
-**Source 3 -- User's Trakt watch history**
-- `GET https://api.trakt.tv/users/{username}/watched/movies?extended=full`
-- Fetch on first login, sync once per hour per session
-- Films from this source: `seen=true` in `user_movies`
-- If user has Trakt ratings, also fetch `GET https://api.trakt.tv/users/{username}/ratings/movies` and set `seeded_elo` accordingly
+---
 
-### Pool management
+## Trakt OAuth2 Flow
 
-- All sources upserted into shared `movies` table (deduped by `trakt_id`)
-- `user_movies` rows created for new films: `seen=null, elo=null, battles=0`
-- Films already in watch history: `seen=true`
-- Always request `?extended=full` to get `overview`, `runtime`, `genres`, and `ids` (which includes `tmdb` for poster lookup)
-- Target pool: ~500 films per user (100 popular + 100 trending + full watch history)
-
-### Poster images
-
-Use TMDB API to fetch poster paths when caching a movie:
-`GET https://api.themoviedb.org/3/movie/{tmdb_id}?api_key={TMDB_API_KEY}`
-
-Store the full URL as `https://image.tmdb.org/t/p/w500{poster_path}` in `movies.poster_url`. Fall back to a placeholder if TMDB returns no poster.
+**Login:** `GET /auth/login` -> redirect to Trakt authorize URL
+**Callback:** `GET /auth/callback?code=...` -> exchange, upsert user, JWT cookie, redirect
+**Middleware:** `get_current_user` dependency, 401 if invalid
+**Token refresh:** Before every Trakt call, if expires within 1 hour
+**Logout:** `POST /auth/logout` -> delete cookie
 
 ---
 
 ## API Routes
 
-All routes under `/api`. Auth-protected routes require `session` cookie.
+```
+GET  /auth/login
+GET  /auth/callback
+POST /auth/logout
+GET  /api/me
 
-### Auth
-```
-GET  /auth/login                    Redirect to Trakt OAuth
-GET  /auth/callback                 OAuth callback, set cookie, redirect to /
-POST /auth/logout                   Clear session cookie
-GET  /api/me                        Current user profile and stats
-```
+GET  /api/swipe/cards
+POST /api/swipe/results
 
-### Movies
-```
-GET  /api/movies/pair               Return a duel pair
-     ?mode=discovery|refinement|playoff
-     &filter_type=genre|decade|director
-     &filter_value=...
-     &last_pair_token=...           Opaque token to avoid repeating last pair
+GET  /api/duels/pair?last_pair_token=...
+POST /api/duels
+
+GET  /api/rankings?limit=50&offset=0&genre=...&decade=...
+GET  /api/rankings/export/csv
+GET  /api/stats
 ```
 
-Response includes full movie objects (id, title, year, genres, overview, poster_url, seen, elo, battles) plus a `next_pair_token` for the anti-repeat mechanism.
-
-### Duels
-```
-POST /api/duels                     Submit a duel result
-```
-
-### Rankings
-```
-GET  /api/rankings                  Ranked films (seen=true, battles>=1), ELO desc
-     ?limit=50&offset=0
-     &filter_type=genre&filter_value=horror   (optional, for playoff view)
-GET  /api/rankings/export/csv       Letterboxd-compatible CSV download
-GET  /api/stats                     Summary stats for the user
-```
-
-Stats response:
-```json
-{
-  "total_duels": 142,
-  "films_ranked": 67,
-  "films_seen_unranked": 12,
-  "films_unseen": 31,
-  "films_unknown": 389,
-  "top_film": { "title": "...", "elo": 1387 }
-}
-```
+`POST /api/duels` response includes `next_action: "duel" | "swipe"`.
 
 ---
 
 ## Rating Sync to Trakt
 
-After every `a_wins` or `b_wins` outcome, sync both films to Trakt asynchronously (fire-and-forget, do not block the duel response).
-
-```
-POST https://api.trakt.tv/sync/ratings
-Authorization: Bearer {user_access_token}
-trakt-api-version: 2
-Content-Type: application/json
-
-{
-  "movies": [
-    { "rating": 8, "ids": { "trakt": 12345 } },
-    { "rating": 6, "ids": { "trakt": 67890 } }
-  ]
-}
-```
-
-Log failures, retry once on 5xx. On 401, trigger token refresh first then retry.
+Fire-and-forget after `a_wins` or `b_wins`. Retry once on 5xx. On 401: refresh then retry. Log to Sentry.
 
 ---
 
 ## Frontend
 
-React SPA, three pages. Fast and game-like -- the primary interaction should feel snappy.
+React SPA. Four screens.
 
-### Login page (`/login`)
+### Login (`/login`)
+Full screen. Logo. Single CTA: "Sign in with Trakt" (amber). Tagline: "Rate films. Rank everything."
 
-Single button: "Sign in with Trakt". Shown if no valid session cookie.
+### Swipe (`/swipe`)
+Single full-screen poster card. Title, year, genre pill overlaid at bottom. Two large buttons: "Seen it" (amber) / "Never seen it" (ghost). Progress: `4 / 10`. Gesture: swipe right = seen, left = not seen (80px threshold). After 10: summary screen, CTA to start dueling.
 
-### Duel page (`/`) -- main screen
+### Duel (`/`)
+Two tall poster cards side by side. "VS" badge between. Title, year, genres. ELO + battles if ranked. Four action buttons. Prefetch next pair on button tap. Stats bar. When `next_action == "swipe"`: interstitial before next duel.
 
-Two movie cards side by side with a "vs" divider. Each card shows: poster, title, year, up to 2 genre tags, ELO + battle count if ranked.
-
-Mode selector (tabs or toggle): Discovery / Refinement / Playoff. Playoff mode shows a filter picker (genre, decade).
-
-Action buttons below the cards:
-1. **Seen both -- pick a winner** -> cards become tappable, user taps one
-2. **Only seen [Film A]**
-3. **Only seen [Film B]**
-4. **Haven't seen either**
-
-After any action, immediately prefetch the next pair (start fetch on button tap, before animation completes) and animate the new pair in.
-
-Stats bar: `{duels} duels / {ranked} ranked / {unranked} seen / {unknown} to discover`
-
-### Rankings page (`/rankings`)
-
-Ranked films sorted by ELO descending. Shows rank, poster thumbnail, title, year, ELO, battles. Filter by genre/decade for playoff prep. Export to Letterboxd CSV button. Paginated at 50.
-
-### Nav
-
-FilmDuel / Duel / Rankings / {username} + logout
+### Rankings (`/rankings`)
+Leaderboard. Filter pills. Row: rank, poster thumb, title, year, ELO, battles. Export button. Paginated at 50.
 
 ---
 
 ## Implementation Phases
 
-1. **Skeleton** -- FastAPI app, SQLAlchemy + Alembic setup, schema migration, Dockerfile, empty React app with Vite + Tailwind, routing
-2. **Auth** -- Trakt OAuth2 end-to-end, JWT session cookie, login page, protected route wrapper
-3. **Movie Pool** -- Trakt API client (popular, trending, watch history + ratings), movie upsert, TMDB poster fetch, `user_movies` population
-4. **Duels + ELO** -- `GET /api/movies/pair` with Discovery mode, `POST /api/duels`, ELO logic (provisional K=64, then K=32), all four action buttons, next-pair prefetch
-5. **Sync + Rankings** -- Trakt rating sync, rankings page, CSV export, stats endpoint
-6. **Refinement + Playoff modes** -- pair selection for both modes, mode selector in UI, playoff filter picker
-7. **Polish** -- Token refresh, error states, loading skeletons, mobile layout, README
+1. **Skeleton** -- FastAPI, SQLAlchemy + Alembic, schema, Dockerfile, React + Vite + Tailwind
+2. **Auth** -- Trakt OAuth2, JWT cookie, login page, route protection
+3. **Movie Pool** -- Trakt client (all 5 sources), upsert, TMDB posters, community rating
+4. **Swipe** -- `/api/swipe/cards` + `/api/swipe/results`, Swipe page with gestures, progress, summary
+5. **Duels + ELO** -- pair selection with settlement weights, `/api/duels/pair`, `POST /api/duels`, ELO logic, duel UI, prefetch, swipe interstitial
+6. **Sync + Rankings** -- Trakt sync, rankings page, CSV export, stats
+7. **Polish** -- token refresh, error states, skeletons, mobile layout, README
 
 ---
 
 ## Notes for Claude Code
 
-- Use `async/await` throughout -- all DB and HTTP calls are async
-- Trakt API requires `Content-Type: application/json` and `trakt-api-version: 2` headers on every request
-- Always request `?extended=full` from Trakt to get full movie metadata
-- `movies` table is a shared cache -- multiple users share movie rows. `user_movies` is per-user state
-- `elo` column on `user_movies` is nullable -- never default to 1000 in the DB or application logic. A film with `battles=0` has no ELO
-- `seeded_elo` (from imported Trakt ratings) is used as the starting value for a film's first duel calculation, then discarded in favour of the live `elo` column
-- Pair selection must never return a film with `seen=false`
-- Store the `mode` on every duel record for future analytics
+- `async/await` throughout -- all DB and HTTP calls are async
+- Trakt requires `Content-Type: application/json` and `trakt-api-version: 2` on every request
+- Always `?extended=full` from Trakt
+- `movies` is a shared cache. `user_movies` is per-user state
+- `elo` is nullable -- never default to 1000. No ELO until `battles>=1`
+- `seeded_elo` used only as starting point for first duel, then `elo` takes over
+- `community_rating` = Trakt `rating` field x 10 (stored as 0-100)
+- Swipe results: single bulk upsert, not 10 individual queries
+- `next_action` is computed server-side after every `POST /api/duels` -- check `count(seen=true, battles=0) < 3`
+- Pair selection uses `weight = 1/(battles+1)` -- never blend ratios or staged modes
+- Pair selection never returns `seen=false` films
+- Store `pair_type` on every duel record (derived from result, not used for selection)
+- Swipe gesture: CSS transform + transition, 80px horizontal threshold
 - All timestamps UTC ISO 8601
