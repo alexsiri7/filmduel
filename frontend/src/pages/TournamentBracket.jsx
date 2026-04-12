@@ -231,18 +231,50 @@ export default function TournamentBracket() {
     // Immediately show winner flash
     setWinnerFlash(winnerMovie);
 
-    // Fire API in background — don't block the UI
+    // Optimistically update local tournament state so nextMatch recalculates instantly
+    setTournament((prev) => {
+      if (!prev) return prev;
+      const updatedMatches = prev.matches.map((m) => {
+        if (m.id === matchId) {
+          return { ...m, winner_movie_id: winnerMovieId };
+        }
+        // Propagate winner to next round slot
+        const nextPos = Math.floor(
+          prev.matches.find((mm) => mm.id === matchId)?.position / 2
+        );
+        if (
+          m.round === currentRound + 1 &&
+          m.position === nextPos
+        ) {
+          const srcMatch = prev.matches.find((mm) => mm.id === matchId);
+          if (srcMatch && srcMatch.position % 2 === 0) {
+            return { ...m, movie_a: winnerMovie };
+          } else {
+            return { ...m, movie_b: winnerMovie };
+          }
+        }
+        return m;
+      });
+      return { ...prev, matches: updatedMatches };
+    });
+
+    // Fire API in background — reconcile with server state when it responds
     submitTournamentMatch(id, matchId, winnerMovieId)
-      .then((updated) => {
-        setTournament(updated);
-        const newNext = findNextPlayable(updated);
+      .then((serverState) => {
+        // Server state is authoritative — reconcile
+        setTournament(serverState);
+        const newNext = findNextPlayable(serverState);
         if (!newNext || newNext.round !== currentRound) {
           setPlaying(false);
         }
       })
-      .catch((err) => setError(err.message));
+      .catch((err) => {
+        setError(err.message);
+        // Reload on error to get correct state
+        loadTournament();
+      });
 
-    // Re-enable interaction after flash — don't wait for API
+    // Re-enable interaction after flash
     setTimeout(() => {
       setWinnerFlash(null);
       setSubmitting(false);

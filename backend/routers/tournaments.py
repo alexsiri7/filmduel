@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,7 +26,9 @@ from backend.services.tournament import (
     create_tournament_bracket,
     generate_seeded_bracket,
     get_filtered_ranked_films,
-    submit_match_result,
+    record_match_elo,
+    record_match_winner,
+    validate_match,
     _num_rounds,
 )
 
@@ -445,22 +447,22 @@ async def submit_match_result_endpoint(
     tournament_id: uuid.UUID,
     match_id: uuid.UUID,
     body: MatchResult,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Submit the result of a tournament match."""
+    """Submit a tournament match result. ELO updates happen in background."""
     uid = current_user.id
     tournament = await _load_tournament(tournament_id, uid, db)
-
     winner_id = uuid.UUID(body.winner_movie_id)
+
     try:
-        await submit_match_result(db, tournament, match_id, winner_id, uid)
+        loser_id = validate_match(tournament, match_id, winner_id)
     except ValueError as e:
-        status = 400
-        msg = str(e)
-        if msg == "Match not found":
-            status = 404
-        raise HTTPException(status_code=status, detail=msg)
+        raise HTTPException(status_code=400, detail=str(e))
+
+    await record_match_winner(db, tournament_id, tournament.bracket_size, match_id, winner_id)
+    background_tasks.add_task(record_match_elo, uid, match_id, winner_id, loser_id)
 
     tournament = await _load_tournament(tournament_id, uid, db)
     return _tournament_schema(tournament)
