@@ -56,6 +56,10 @@ export function getTournaments() {
   return request("/api/tournaments");
 }
 
+export function getTournamentGenres() {
+  return request("/api/tournaments/genres");
+}
+
 export function createTournament(name, bracketSize, filterType, filterValue) {
   return request("/api/tournaments", {
     method: "POST",
