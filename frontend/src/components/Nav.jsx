@@ -52,7 +52,7 @@ export default function Nav() {
         })}
       </nav>
 
-      {/* Logout / Start Duel */}
+      {/* Actions */}
       <div className="px-2 space-y-3">
         <Link
           to="/"
@@ -60,6 +60,14 @@ export default function Nav() {
         >
           START DUEL
         </Link>
+        <a
+          href="https://github.com/alexsiri7/filmduel/issues/new?labels=feedback&title=Feedback:+&body=Describe+the+issue+or+suggestion..."
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block w-full text-center text-[#F5F0E8]/30 hover:text-[#E8A020]/70 font-headline font-bold uppercase text-xs tracking-widest py-2 transition-colors"
+        >
+          Report Issue
+        </a>
         <button
           onClick={handleLogout}
           className="w-full text-[#F5F0E8]/30 hover:text-[#F5F0E8]/60 font-headline font-bold uppercase text-xs tracking-widest py-2 transition-colors"
