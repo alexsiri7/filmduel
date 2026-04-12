@@ -5,6 +5,7 @@ const navItems = [
   { path: "/", label: "Current Duel", icon: "swords" },
   { path: "/swipe", label: "Swipe", icon: "swipe" },
   { path: "/rankings", label: "Rankings", icon: "leaderboard" },
+  { path: "/tournaments", label: "Tournaments", icon: "bracket" },
 ];
 
 export default function Nav() {
@@ -35,7 +36,10 @@ export default function Nav() {
       {/* Nav items */}
       <nav className="flex-1 space-y-2">
         {navItems.map((item) => {
-          const isActive = location.pathname === item.path;
+          const isActive =
+            item.path === "/"
+              ? location.pathname === "/"
+              : location.pathname.startsWith(item.path);
           return (
             <Link
               key={item.path}
