@@ -1,4 +1,4 @@
-"""Movie pair generation endpoint — Discovery mode pair selection."""
+"""Movie pair generation endpoint — duel pair selection."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import random
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, or_, and_
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -20,7 +20,6 @@ router = APIRouter(prefix="/api/movies", tags=["movies"])
 
 
 def _user_movie_to_schema(um: UserMovie) -> MovieWithStateSchema:
-    """Convert a UserMovie (with loaded movie relationship) to response schema."""
     movie = um.movie
     return MovieWithStateSchema(
         id=str(movie.id),
@@ -39,13 +38,11 @@ def _user_movie_to_schema(um: UserMovie) -> MovieWithStateSchema:
 
 
 def _encode_pair_token(id_a: str, id_b: str) -> str:
-    """Encode a pair of movie IDs into an opaque base64 token."""
     raw = f"{id_a},{id_b}"
     return base64.urlsafe_b64encode(raw.encode()).decode()
 
 
 def _decode_pair_token(token: str) -> set[str] | None:
-    """Decode a pair token back into a set of two movie ID strings."""
     try:
         raw = base64.urlsafe_b64decode(token.encode()).decode()
         parts = raw.split(",")
@@ -56,29 +53,6 @@ def _decode_pair_token(token: str) -> set[str] | None:
     return None
 
 
-def _pick_anchor(ranked: list[UserMovie]) -> UserMovie:
-    """Pick an anchor weighted toward the 900-1100 ELO band."""
-    weights = []
-    for um in ranked:
-        elo = um.elo or 1000
-        # Gaussian-ish weight centered on 1000, sigma ~100
-        dist = abs(elo - 1000)
-        weight = max(0.1, 1.0 / (1 + (dist / 100) ** 2))
-        weights.append(weight)
-    return random.choices(ranked, weights=weights, k=1)[0]
-
-
-def _pick_challenger(
-    challengers: list[UserMovie], exclude_id: str
-) -> UserMovie | None:
-    """Pick a challenger weighted toward fewer battles, excluding a movie ID."""
-    filtered = [um for um in challengers if str(um.movie_id) != exclude_id]
-    if not filtered:
-        return None
-    weights = [1.0 / (1 + um.battles) for um in filtered]
-    return random.choices(filtered, weights=weights, k=1)[0]
-
-
 @router.get("/pair", response_model=MoviePairResponse)
 async def get_movie_pair(
     mode: str = Query(default="discovery"),
@@ -86,28 +60,18 @@ async def get_movie_pair(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Generate a pair of movies for a duel.
+    """Generate a pair of seen films for a duel.
 
-    Discovery mode (default):
-    - Picks one Ranked anchor (weighted toward 900-1100 ELO) and one challenger
-      from Seen-unranked or Unknown films.
-    - Bootstrap: if no Ranked films, picks two random Seen-unranked films.
-    - Anti-repeat via last_pair_token.
+    Only returns films with seen=true. If not enough seen films
+    are available, returns 404 with a signal to go swipe first.
     """
     uid = current_user.id
 
-    # Decode anti-repeat token
     last_pair_ids: set[str] | None = None
     if last_pair_token:
         last_pair_ids = _decode_pair_token(last_pair_token)
 
-    if mode == "discovery":
-        pair = await _select_discovery_pair(db, uid, last_pair_ids)
-    else:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported mode: {mode}. Only 'discovery' is implemented.",
-        )
+    pair = await _select_pair(db, uid, last_pair_ids)
 
     movie_a, movie_b = pair
     schema_a = _user_movie_to_schema(movie_a)
@@ -121,134 +85,78 @@ async def get_movie_pair(
     )
 
 
-async def _select_discovery_pair(
+async def _select_pair(
     db: AsyncSession,
     uid,
     last_pair_ids: set[str] | None,
 ) -> tuple[UserMovie, UserMovie]:
-    """Discovery mode pair selection per PRD algorithm."""
+    """Select a duel pair from seen films only.
 
-    # 1. Query Ranked films: seen=True, battles>=1, elo IS NOT NULL
-    ranked_stmt = (
+    Uses settlement weight: 1/(battles+1).
+    Anchor rule: at least one film must have battles >= 1 (unless bootstrap).
+    If not enough seen films, signal swipe needed.
+    """
+
+    # All seen films
+    seen_stmt = (
         select(UserMovie)
         .options(joinedload(UserMovie.movie))
         .where(
             UserMovie.user_id == uid,
             UserMovie.seen.is_(True),
-            UserMovie.battles >= 1,
-            UserMovie.elo.isnot(None),
         )
     )
-    ranked_result = await db.execute(ranked_stmt)
-    ranked = list(ranked_result.unique().scalars().all())
+    seen_result = await db.execute(seen_stmt)
+    seen_films = list(seen_result.unique().scalars().all())
 
-    # 2. Bootstrap: zero ranked films — pick two random Seen-unranked
-    if len(ranked) == 0:
-        return await _bootstrap_pair(db, uid, last_pair_ids)
-
-    # 3. Normal discovery: anchor + challenger
-    # Query Seen-unranked (preferred challengers)
-    seen_unranked_stmt = (
-        select(UserMovie)
-        .options(joinedload(UserMovie.movie))
-        .where(
-            UserMovie.user_id == uid,
-            UserMovie.seen.is_(True),
-            UserMovie.battles == 0,
-        )
-    )
-    seen_unranked_result = await db.execute(seen_unranked_stmt)
-    seen_unranked = list(seen_unranked_result.unique().scalars().all())
-
-    # Query Unknown (fallback challengers)
-    unknown_stmt = (
-        select(UserMovie)
-        .options(joinedload(UserMovie.movie))
-        .where(
-            UserMovie.user_id == uid,
-            UserMovie.seen.is_(None),
-        )
-    )
-    unknown_result = await db.execute(unknown_stmt)
-    unknown = list(unknown_result.unique().scalars().all())
-
-    # Combine challengers: seen-unranked first, then unknown
-    all_challengers = seen_unranked + unknown
-
-    if not all_challengers:
+    if len(seen_films) < 2:
         raise HTTPException(
             status_code=404,
-            detail="No challenger films available. All films are already ranked!",
+            detail="Need more seen films to duel. Swipe to classify some movies first!",
         )
 
-    # Try up to 5 times to avoid repeating last pair
-    for _ in range(5):
-        anchor = _pick_anchor(ranked)
-        challenger = _pick_challenger(all_challengers, str(anchor.movie_id))
-        if challenger is None:
-            raise HTTPException(
-                status_code=404,
-                detail="No challenger films available after excluding anchor.",
-            )
+    # Split into anchors (ranked, battles >= 1) and full pool
+    anchor_pool = [f for f in seen_films if f.battles >= 1 and f.elo is not None]
 
+    # Bootstrap: no anchors yet — pick two seen films by settlement weight
+    if len(anchor_pool) == 0:
+        return _pick_bootstrap_pair(seen_films, last_pair_ids)
+
+    # Normal: anchor + challenger from full seen pool
+    for _ in range(5):
+        # Pick anchor weighted by settlement
+        anchor = _weighted_sample(anchor_pool)
+
+        # Pick challenger from all seen films (minus anchor)
+        candidates = [f for f in seen_films if f.movie_id != anchor.movie_id]
+        if not candidates:
+            break
+
+        challenger = _weighted_sample(candidates)
+
+        # Anti-repeat
         pair_ids = {str(anchor.movie_id), str(challenger.movie_id)}
         if last_pair_ids is None or pair_ids != last_pair_ids:
             return anchor, challenger
 
-    # After retries, return whatever we have (anti-repeat is best-effort)
-    return anchor, challenger  # type: ignore[return-value]
+    # Fallback after retries
+    return anchor, challenger  # type: ignore
 
 
-async def _bootstrap_pair(
-    db: AsyncSession,
-    uid,
+def _pick_bootstrap_pair(
+    seen_films: list[UserMovie],
     last_pair_ids: set[str] | None,
 ) -> tuple[UserMovie, UserMovie]:
-    """Bootstrap: pick two films the user can classify.
-
-    Prefers Seen-unranked films (seen=True, battles=0).
-    Falls back to Unknown films (seen=None) if not enough seen films exist.
-    This lets brand new users start playing immediately with popular/trending
-    movies — they mark them as seen/unseen, which builds the initial pool.
-    """
-    # First try seen-unranked
-    stmt = (
-        select(UserMovie)
-        .options(joinedload(UserMovie.movie))
-        .where(
-            UserMovie.user_id == uid,
-            UserMovie.seen.is_(True),
-            UserMovie.battles == 0,
-        )
-    )
-    result = await db.execute(stmt)
-    candidates = list(result.unique().scalars().all())
-
-    # Fall back to unknown films if not enough seen ones
-    if len(candidates) < 2:
-        unknown_stmt = (
-            select(UserMovie)
-            .options(joinedload(UserMovie.movie))
-            .where(
-                UserMovie.user_id == uid,
-                UserMovie.seen.is_(None),
-            )
-            .limit(200)
-        )
-        unknown_result = await db.execute(unknown_stmt)
-        unknown = list(unknown_result.unique().scalars().all())
-        candidates.extend(unknown)
-
-    if len(candidates) < 2:
-        raise HTTPException(
-            status_code=404,
-            detail="Not enough movies in your pool yet. Your movie library is still loading — try refreshing in a few seconds.",
-        )
-
+    """Bootstrap: pick two seen films when no anchors exist."""
     for _ in range(5):
-        chosen = random.sample(candidates, 2)
-        pair_ids = {str(chosen[0].movie_id), str(chosen[1].movie_id)}
+        a, b = random.sample(seen_films, 2)
+        pair_ids = {str(a.movie_id), str(b.movie_id)}
         if last_pair_ids is None or pair_ids != last_pair_ids:
-            return chosen[0], chosen[1]
+            return a, b
+    return a, b  # type: ignore
 
-    return chosen[0], chosen[1]
+
+def _weighted_sample(films: list[UserMovie]) -> UserMovie:
+    """Sample one film weighted by settlement: 1/(battles+1)."""
+    weights = [1.0 / (f.battles + 1) for f in films]
+    return random.choices(films, weights=weights, k=1)[0]

@@ -61,6 +61,11 @@ export default function Duel() {
         prefetchNext();
       } catch (err) {
         console.error("Failed to load movie pair:", err);
+        // If not enough seen films, redirect to swipe
+        if (err.message?.includes("Swipe") || err.message?.includes("seen films")) {
+          navigate("/swipe");
+          return;
+        }
         setError(err.message);
         setPair(null);
       } finally {
