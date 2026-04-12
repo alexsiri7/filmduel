@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import collections
+import logging
 import secrets
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
@@ -10,18 +13,25 @@ from urllib.parse import urlencode
 import jwt
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import Settings, get_settings
 from backend.db import async_session_factory, get_db
-from backend.db_models import User
+from backend.db_models import User, UserMovie
 from backend.schemas import UserResponse
 from backend.services.pool import populate_movie_pool
 from backend.services.tmdb import backfill_posters
 from backend.services.trakt import TraktClient
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["auth"])
+
+# ── Simple in-memory rate limiter for sync endpoint ──────────────────
+_sync_timestamps: dict[str, list[float]] = collections.defaultdict(list)
+SYNC_RATE_LIMIT = 3  # max calls
+SYNC_RATE_WINDOW = 3600  # per hour (seconds)
 
 COOKIE_NAME = "filmduel_session"
 JWT_ALGORITHM = "HS256"
@@ -248,3 +258,70 @@ async def me(user: User = Depends(get_current_user)):
         trakt_username=user.trakt_username,
         created_at=user.created_at,
     )
+
+
+@router.post("/api/sync")
+async def sync_trakt(
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Trigger a manual Trakt re-sync, bypassing the 1-hour cooldown.
+
+    Rate limited to 3 calls per hour per user.
+    """
+    user_key = str(current_user.id)
+    now = time.monotonic()
+
+    # Prune old timestamps outside the window
+    _sync_timestamps[user_key] = [
+        ts for ts in _sync_timestamps[user_key] if now - ts < SYNC_RATE_WINDOW
+    ]
+    if len(_sync_timestamps[user_key]) >= SYNC_RATE_LIMIT:
+        raise HTTPException(
+            status_code=429,
+            detail="Sync rate limit exceeded. Try again later.",
+        )
+    _sync_timestamps[user_key].append(now)
+
+    # Count movies before sync so we can report new additions
+    before_count_result = await db.execute(
+        select(func.count()).select_from(UserMovie).where(
+            UserMovie.user_id == current_user.id
+        )
+    )
+    before_count = before_count_result.scalar() or 0
+
+    # Ensure fresh Trakt token
+    current_user = await ensure_fresh_token(current_user, db)
+
+    # Force sync (bypass cooldown by resetting last_seen_at)
+    current_user.last_seen_at = datetime.now(timezone.utc) - timedelta(hours=2)
+    await db.flush()
+
+    await populate_movie_pool(current_user, db)
+    await db.commit()
+
+    # Count movies after sync
+    after_count_result = await db.execute(
+        select(func.count()).select_from(UserMovie).where(
+            UserMovie.user_id == current_user.id
+        )
+    )
+    after_count = after_count_result.scalar() or 0
+    new_movies = max(0, after_count - before_count)
+
+    # Backfill posters in background
+    background_tasks.add_task(_backfill_posters_background)
+
+    logger.info(
+        "Manual sync for %s: %d new movies (total: %d)",
+        current_user.trakt_username,
+        new_movies,
+        after_count,
+    )
+
+    return {
+        "new_movies": new_movies,
+        "total_movies": after_count,
+    }
