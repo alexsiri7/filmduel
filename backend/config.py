@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     LLM_BASE_URL: str = "https://router.requesty.ai/v1"
     LLM_MODEL: str = "google/gemini-3.1-flash-lite-preview"
 
+    # CORS
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
+
     # Sentry
     SENTRY_DSN: str = ""
 

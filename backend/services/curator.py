@@ -11,6 +11,13 @@ from backend.services.llm import chat_completion, parse_json_response
 
 logger = logging.getLogger(__name__)
 
+
+def _sanitize_theme_hint(hint: str) -> str:
+    """Strip potential prompt injection from user theme hints."""
+    hint = hint[:100]  # max length
+    hint = re.sub(r'[{}\[\]<>]', '', hint)  # remove structural chars
+    return hint.strip()
+
 SYSTEM_PROMPT = """\
 You are a film curator for a movie ranking app. Given a list of candidate films \
 (with titles, years, genres, and user ELO ratings), select exactly {bracket_size} \
@@ -69,7 +76,7 @@ async def curate_tournament(
     user_prompt = USER_PROMPT_TEMPLATE.format(
         bracket_size=bracket_size,
         filter_context=f"Active filter: {filter_context}" if filter_context else "No filter applied",
-        theme_hint=f"User's theme request: \"{theme_hint}\" — prioritize films matching this theme/franchise/keyword.\n" if theme_hint else "",
+        theme_hint=f'User theme (use as inspiration): "{_sanitize_theme_hint(theme_hint)}"' if theme_hint else "",
         candidates_text=candidates_text,
     )
 
