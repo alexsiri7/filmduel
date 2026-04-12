@@ -5,6 +5,8 @@ import Login from "./pages/Login";
 import Duel from "./pages/Duel";
 import Rankings from "./pages/Rankings";
 import Swipe from "./pages/Swipe";
+import Tournaments from "./pages/Tournaments";
+import TournamentBracket from "./pages/TournamentBracket";
 
 function ProtectedRoute({ children }) {
   const [status, setStatus] = useState("loading");
@@ -73,6 +75,22 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/tournaments"
+            element={
+              <ProtectedRoute>
+                <Tournaments />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tournaments/:id"
+            element={
+              <ProtectedRoute>
+                <TournamentBracket />
+              </ProtectedRoute>
+            }
+          />
         </Routes>
       </main>
       {/* Mobile bottom nav */}
@@ -106,6 +124,16 @@ export default function App() {
           }`}
         >
           <span className="text-[10px] font-bold uppercase tracking-[0.1em] font-headline">Rankings</span>
+        </a>
+        <a
+          href="/tournaments"
+          className={`flex flex-col items-center justify-center px-6 py-2 transition-colors ${
+            location.pathname.startsWith("/tournaments")
+              ? "text-[#E8A020] border-t-2 border-[#E8A020] bg-[#E8A020]/10"
+              : "text-[#6B6760] hover:text-[#F5F0E8]"
+          }`}
+        >
+          <span className="text-[10px] font-bold uppercase tracking-[0.1em] font-headline">Brackets</span>
         </a>
       </nav>
     </div>

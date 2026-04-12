@@ -49,3 +49,40 @@ export function submitSwipeResults(results) {
 }
 
 export function logout() { return request("/auth/logout", { method: "POST" }); }
+
+// ── Tournaments ──────────────────────────────────────────────────────
+
+export function getTournaments() {
+  return request("/api/tournaments");
+}
+
+export function createTournament(name, bracketSize, filterType, filterValue) {
+  return request("/api/tournaments", {
+    method: "POST",
+    body: JSON.stringify({
+      name,
+      bracket_size: bracketSize,
+      filter_type: filterType || null,
+      filter_value: filterValue || null,
+    }),
+  });
+}
+
+export function getTournament(id) {
+  return request(`/api/tournaments/${id}`);
+}
+
+export function getNextMatch(tournamentId) {
+  return request(`/api/tournaments/${tournamentId}/next`);
+}
+
+export function submitTournamentMatch(tournamentId, matchId, winnerMovieId) {
+  return request(`/api/tournaments/${tournamentId}/matches/${matchId}`, {
+    method: "POST",
+    body: JSON.stringify({ winner_movie_id: winnerMovieId }),
+  });
+}
+
+export function abandonTournament(id) {
+  return request(`/api/tournaments/${id}`, { method: "DELETE" });
+}
