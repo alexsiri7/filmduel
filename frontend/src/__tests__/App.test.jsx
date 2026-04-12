@@ -39,7 +39,8 @@ describe("App", () => {
         <App />
       </MemoryRouter>
     );
-    expect(screen.getByText(/sign in with trakt/i)).toBeInTheDocument();
+    const buttons = screen.getAllByText(/sign in with trakt/i);
+    expect(buttons.length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText("Current Duel")).not.toBeInTheDocument();
   });
 
@@ -65,7 +66,8 @@ describe("App", () => {
       </MemoryRouter>
     );
     await waitFor(() => {
-      expect(screen.getByText(/sign in with trakt/i)).toBeInTheDocument();
+      const buttons = screen.getAllByText(/sign in with trakt/i);
+      expect(buttons.length).toBeGreaterThanOrEqual(1);
     });
   });
 

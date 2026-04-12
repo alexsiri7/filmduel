@@ -11,14 +11,16 @@ describe("Login", () => {
       </MemoryRouter>
     );
 
-  it("renders 'Sign in with Trakt' button", () => {
+  it("renders 'Sign in with Trakt' buttons", () => {
     renderLogin();
-    expect(screen.getByText("Sign in with Trakt")).toBeInTheDocument();
+    const buttons = screen.getAllByText("Sign in with Trakt");
+    expect(buttons.length).toBeGreaterThanOrEqual(1);
   });
 
   it("sign in button links to /auth/login", () => {
     renderLogin();
-    const link = screen.getByText("Sign in with Trakt").closest("a");
+    const buttons = screen.getAllByText("Sign in with Trakt");
+    const link = buttons[0].closest("a");
     expect(link).toHaveAttribute("href", "/auth/login");
   });
 
