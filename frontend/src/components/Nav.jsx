@@ -19,8 +19,8 @@ export default function Nav() {
     <aside className="fixed left-0 top-0 h-full w-64 z-40 bg-[#141312] shadow-[10px_0_30px_rgba(0,0,0,0.3)] hidden md:flex flex-col py-8 px-4 gap-8">
       {/* Logo */}
       <div className="flex items-center gap-3 px-2">
-        <div className="w-10 h-10 bg-[#E8A020] flex items-center justify-center">
-          <img src="/logo.png" alt="FilmDuel" className="w-7 h-7 object-contain" />
+        <div className="w-10 h-10 flex items-center justify-center">
+          <img src="/logo.png" alt="FilmDuel" className="w-10 h-10 object-contain" />
         </div>
         <div>
           <h1 className="text-[#E8A020] text-xl font-black font-headline tracking-tighter uppercase">
