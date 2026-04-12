@@ -65,21 +65,28 @@ async def _expand_pool_inner(user_id: uuid.UUID) -> int:
             (row.source, row.source_key) for row in result.all()
         }
 
-        # Source A: TMDB similar films from top-ranked movies
+        # Source A: Trakt personalized recommendations (highest quality)
+        if total_added < TARGET_ADDED:
+            added = await _expand_from_recommendations(
+                db, user_id, user, settings, recent_keys, now
+            )
+            total_added += added
+
+        # Source B: TMDB similar films from top-ranked movies
         if total_added < TARGET_ADDED:
             added = await _expand_from_similar(
                 db, user_id, settings, recent_keys, now
             )
             total_added += added
 
-        # Source B: Trakt anticipated
+        # Source C: Trakt anticipated
         if total_added < TARGET_ADDED and ("anticipated", None) not in recent_keys:
             added = await _expand_from_anticipated(
                 db, user_id, user, settings, recent_keys, now
             )
             total_added += added
 
-        # Source C: Deeper popular pages
+        # Source D: Deeper popular pages
         if total_added < TARGET_ADDED:
             added = await _expand_from_popular_pages(
                 db, user_id, user, settings, recent_keys, now
@@ -97,6 +104,45 @@ async def _expand_pool_inner(user_id: uuid.UUID) -> int:
         "Pool expansion complete for user %s: %d films added", user_id, total_added
     )
     return total_added
+
+
+async def _expand_from_recommendations(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    user: User,
+    settings,
+    recent_keys: set[tuple[str, str | None]],
+    now: datetime,
+) -> int:
+    """Source A: Trakt personalized recommendations."""
+    if ("trakt_recommendations", "default") in recent_keys:
+        return 0
+
+    client = TraktClient(
+        client_id=settings.TRAKT_CLIENT_ID,
+        access_token=user.trakt_access_token,
+    )
+    try:
+        recs = await client.get_recommendations(limit=100)
+    except Exception:
+        logger.exception("Failed to fetch Trakt recommendations")
+        return 0
+
+    added = 0
+    for movie in recs:
+        ok = await _upsert_film_from_trakt(db, user_id, movie, now)
+        if ok:
+            added += 1
+
+    db.add(PoolExpansion(
+        user_id=user_id,
+        source="trakt_recommendations",
+        source_key="default",
+        films_added=added,
+        ran_at=now,
+    ))
+    await db.flush()
+    return added
 
 
 async def _expand_from_similar(
