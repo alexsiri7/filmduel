@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.config import get_settings
 from backend.db import async_session_factory
 from backend.db_models import Movie, PoolExpansion, User, UserMovie
-from backend.services.tmdb import fetch_similar_films
+from backend.services.tmdb import backfill_posters, fetch_similar_films
 from backend.services.trakt import TraktClient
 
 logger = logging.getLogger(__name__)
@@ -87,6 +87,11 @@ async def _expand_pool_inner(user_id: uuid.UUID) -> int:
             total_added += added
 
         await db.commit()
+
+    # Backfill poster URLs for newly added films (fresh session so commit is independent)
+    if total_added > 0:
+        async with async_session_factory() as poster_db:
+            await backfill_posters(poster_db)
 
     logger.info(
         "Pool expansion complete for user %s: %d films added", user_id, total_added

@@ -13,7 +13,7 @@ from sqlalchemy.orm import joinedload
 
 from backend.config import get_settings
 from backend.db import get_db
-from backend.db_models import Suggestion, User, UserMovie
+from backend.db_models import Movie, Suggestion, User, UserMovie
 from backend.routers.auth import get_current_user
 from backend.schemas import MovieSchema, SuggestionSchema, SuggestionsResponse
 from backend.services.suggest import generate_suggestions, has_enough_ranked
@@ -55,9 +55,11 @@ async def _get_active_suggestions(
     stmt = (
         select(Suggestion)
         .options(joinedload(Suggestion.movie))
+        .join(Suggestion.movie)
         .where(
             Suggestion.user_id == user_id,
             Suggestion.dismissed_at.is_(None),
+            Movie.poster_url.isnot(None),
         )
         .order_by(Suggestion.generated_at.desc())
     )
