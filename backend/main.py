@@ -18,7 +18,7 @@ settings = get_settings()
 if settings.SENTRY_DSN:
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN,
-        send_default_pii=True,
+        send_default_pii=False,
         traces_sample_rate=0.1,
     )
 
@@ -57,7 +57,7 @@ if STATIC_DIR.is_dir():
     @app.get("/{full_path:path}")
     async def spa_fallback(full_path: str):
         """Serve the SPA index.html for any non-API route."""
-        file_path = STATIC_DIR / full_path
-        if file_path.is_file():
+        file_path = (STATIC_DIR / full_path).resolve()
+        if file_path.is_file() and str(file_path).startswith(str(STATIC_DIR.resolve())):
             return FileResponse(file_path)
         return FileResponse(STATIC_DIR / "index.html")

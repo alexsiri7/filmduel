@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
@@ -126,27 +127,47 @@ async def _sync_pool_background(user_id, force: bool = False) -> None:
         logger.exception("Background pool sync failed for user %s", user_id)
 
 
+OAUTH_STATE_COOKIE = "filmduel_oauth_state"
+
+
 @router.get("/auth/login")
 async def login(settings: Settings = Depends(get_settings)):
     """Redirect the user to Trakt's OAuth authorization page."""
+    state = secrets.token_urlsafe(32)
     params = urlencode(
         {
             "response_type": "code",
             "client_id": settings.TRAKT_CLIENT_ID,
             "redirect_uri": settings.TRAKT_REDIRECT_URI,
+            "state": state,
         }
     )
-    return RedirectResponse(f"https://trakt.tv/oauth/authorize?{params}")
+    response = RedirectResponse(f"https://trakt.tv/oauth/authorize?{params}")
+    response.set_cookie(
+        OAUTH_STATE_COOKIE,
+        state,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=300,
+    )
+    return response
 
 
 @router.get("/auth/callback")
 async def callback(
     code: str,
+    request: Request,
     background_tasks: BackgroundTasks,
+    state: str | None = None,
     settings: Settings = Depends(get_settings),
     db: AsyncSession = Depends(get_db),
 ):
     """Handle the OAuth callback from Trakt."""
+    # Validate OAuth state parameter to prevent CSRF
+    expected_state = request.cookies.get(OAUTH_STATE_COOKIE)
+    if not expected_state or not state or state != expected_state:
+        raise HTTPException(status_code=400, detail="Invalid OAuth state")
     client = TraktClient(client_id=settings.TRAKT_CLIENT_ID)
     tokens = await client.exchange_code(
         code,
@@ -207,6 +228,7 @@ async def callback(
         samesite="lax",
         max_age=JWT_EXPIRY_HOURS * 3600,
     )
+    response.delete_cookie(OAUTH_STATE_COOKIE)
     return response
 
 
