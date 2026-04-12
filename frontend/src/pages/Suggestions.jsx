@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getSuggestions, regenerateSuggestions, dismissSuggestion, addToWatchlist } from "../api";
+import { getSuggestions, regenerateSuggestions, dismissSuggestion, addToWatchlist, markSuggestionSeen } from "../api";
 
 function SkeletonCard() {
   return (
@@ -75,6 +75,15 @@ export default function Suggestions() {
       );
     } catch (err) {
       console.error("Failed to add to watchlist:", err);
+    }
+  }
+
+  async function handleMarkSeen(id) {
+    try {
+      await markSuggestionSeen(id);
+      setSuggestions((prev) => prev.filter((s) => s.id !== id));
+    } catch (err) {
+      console.error("Failed to mark seen:", err);
     }
   }
 
@@ -283,6 +292,13 @@ export default function Suggestions() {
                     Add to Watchlist
                   </button>
                 )}
+                <button
+                  onClick={() => handleMarkSeen(s.id)}
+                  className="px-3 py-3 border border-[#E8A020]/30 text-[#E8A020]/70 font-headline font-bold uppercase text-[10px] tracking-widest hover:bg-[#E8A020]/10 hover:text-[#E8A020] transition-colors"
+                  title="I've seen this film"
+                >
+                  Seen it
+                </button>
                 <button
                   onClick={() => handleDismiss(s.id)}
                   className="w-12 h-12 flex items-center justify-center border border-[#F5F0E8]/10 text-[#F5F0E8]/40 hover:text-[#F5F0E8] hover:border-[#F5F0E8]/30 transition-colors text-lg"

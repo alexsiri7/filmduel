@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from backend.db import get_db
-from backend.db_models import Suggestion, User
+from backend.db_models import Suggestion, User, UserMovie
 from backend.routers.auth import get_current_user
 from backend.schemas import MovieSchema, SuggestionSchema, SuggestionsResponse
 from backend.services.suggest import generate_suggestions, has_enough_ranked
@@ -233,4 +233,45 @@ async def add_to_watchlist(
         raise HTTPException(status_code=404, detail="Suggestion not found")
 
     suggestion.added_to_watchlist_at = datetime.now(timezone.utc)
+    return _build_suggestion_schema(suggestion)
+
+
+@router.post("/{suggestion_id}/seen", response_model=SuggestionSchema)
+async def mark_seen(
+    suggestion_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark the suggested film as seen and dismiss the suggestion."""
+    uid = current_user.id
+    stmt = (
+        select(Suggestion)
+        .options(joinedload(Suggestion.movie))
+        .where(
+            Suggestion.id == uuid.UUID(suggestion_id),
+            Suggestion.user_id == uid,
+        )
+    )
+    result = await db.execute(stmt)
+    suggestion = result.unique().scalar_one_or_none()
+
+    if not suggestion:
+        raise HTTPException(status_code=404, detail="Suggestion not found")
+
+    # Update user_movies.seen = true
+    um_stmt = select(UserMovie).where(
+        UserMovie.user_id == uid,
+        UserMovie.movie_id == suggestion.movie_id,
+    )
+    um = (await db.execute(um_stmt)).scalar_one_or_none()
+    now = datetime.now(timezone.utc)
+    if um:
+        um.seen = True
+        um.updated_at = now
+    else:
+        # Create user_movie if it doesn't exist
+        um = UserMovie(user_id=uid, movie_id=suggestion.movie_id, seen=True)
+        db.add(um)
+
+    suggestion.dismissed_at = now
     return _build_suggestion_schema(suggestion)
