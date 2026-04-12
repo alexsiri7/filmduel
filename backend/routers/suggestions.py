@@ -6,16 +6,18 @@ import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
+from backend.config import get_settings
 from backend.db import get_db
 from backend.db_models import Suggestion, User, UserMovie
 from backend.routers.auth import get_current_user
 from backend.schemas import MovieSchema, SuggestionSchema, SuggestionsResponse
 from backend.services.suggest import generate_suggestions, has_enough_ranked
+from backend.services.trakt import TraktClient
 
 logger = logging.getLogger(__name__)
 
@@ -214,10 +216,11 @@ async def dismiss_suggestion(
 @router.post("/{suggestion_id}/watchlist", response_model=SuggestionSchema)
 async def add_to_watchlist(
     suggestion_id: str,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Mark suggestion as added to watchlist."""
+    """Mark suggestion as added to watchlist and sync to Trakt."""
     stmt = (
         select(Suggestion)
         .options(joinedload(Suggestion.movie))
@@ -233,6 +236,21 @@ async def add_to_watchlist(
         raise HTTPException(status_code=404, detail="Suggestion not found")
 
     suggestion.added_to_watchlist_at = datetime.now(timezone.utc)
+
+    # Sync to Trakt watchlist in background
+    trakt_id = suggestion.movie.trakt_id
+    access_token = current_user.trakt_access_token
+    settings = get_settings()
+
+    async def _sync_trakt_watchlist():
+        try:
+            client = TraktClient(client_id=settings.TRAKT_CLIENT_ID, access_token=access_token)
+            await client.add_to_watchlist(trakt_id)
+        except Exception:
+            logger.exception("Failed to sync watchlist to Trakt for movie %s", trakt_id)
+
+    background_tasks.add_task(_sync_trakt_watchlist)
+
     return _build_suggestion_schema(suggestion)
 
 

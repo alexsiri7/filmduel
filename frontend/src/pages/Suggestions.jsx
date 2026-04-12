@@ -274,22 +274,48 @@ export default function Suggestions() {
               </div>
             </div>
 
-            {/* Reason + actions */}
-            <div className="p-4 space-y-4">
-              <p className="text-[#F5F0E8]/50 font-body text-sm italic leading-relaxed line-clamp-2">
+            {/* Reason + links + actions */}
+            <div className="p-4 space-y-3">
+              <p className="text-[#F5F0E8]/50 font-body text-sm italic leading-relaxed">
                 {s.reason}
               </p>
+
+              {/* External links */}
+              <div className="flex gap-3">
+                {s.movie.imdb_id && (
+                  <a
+                    href={`https://www.imdb.com/title/${s.movie.imdb_id}/`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[10px] font-label uppercase tracking-widest text-[#F5F0E8]/30 hover:text-[#E8A020] transition-colors"
+                  >
+                    IMDB
+                  </a>
+                )}
+                {s.movie.trakt_id && (
+                  <a
+                    href={`https://trakt.tv/search/trakt/${s.movie.trakt_id}?id_type=movie`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[10px] font-label uppercase tracking-widest text-[#F5F0E8]/30 hover:text-[#E8A020] transition-colors"
+                  >
+                    Trakt
+                  </a>
+                )}
+              </div>
+
+              {/* Action buttons */}
               <div className="flex gap-2">
                 {s.added_to_watchlist_at ? (
                   <div className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-[#E8A020]/20 text-[#E8A020] font-headline font-bold uppercase text-xs tracking-widest">
-                    Added
+                    On Watchlist
                   </div>
                 ) : (
                   <button
                     onClick={() => handleAddToWatchlist(s.id)}
                     className="flex-1 px-4 py-3 bg-[#E8A020] text-[#0F0E0D] font-headline font-bold uppercase text-xs tracking-widest hover:scale-[1.02] active:scale-95 transition-all"
                   >
-                    Add to Watchlist
+                    Watchlist
                   </button>
                 )}
                 <button
