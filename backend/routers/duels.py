@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db import async_session_factory, get_db
@@ -165,4 +165,19 @@ async def submit_duel(
             _sync_ratings_background, uid, movie_a_id, new_elo_a, movie_b_id, new_elo_b,
         )
 
-    return DuelResult(outcome=body.outcome, movie_a_elo_delta=delta_a, movie_b_elo_delta=delta_b)
+    # Compute next_action: if fewer than 3 seen-but-unranked films, suggest swipe
+    seen_unranked_stmt = select(func.count()).where(
+        UserMovie.user_id == uid,
+        UserMovie.seen.is_(True),
+        UserMovie.battles == 0,
+    )
+    seen_unranked_result = await db.execute(seen_unranked_stmt)
+    seen_unranked = seen_unranked_result.scalar_one()
+    next_action = "swipe" if seen_unranked < 3 else "duel"
+
+    return DuelResult(
+        outcome=body.outcome,
+        movie_a_elo_delta=delta_a,
+        movie_b_elo_delta=delta_b,
+        next_action=next_action,
+    )

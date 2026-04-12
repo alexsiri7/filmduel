@@ -3,6 +3,7 @@ import { logout } from "../api";
 
 const navItems = [
   { path: "/", label: "Current Duel", icon: "swords" },
+  { path: "/swipe", label: "Swipe", icon: "swipe" },
   { path: "/rankings", label: "Rankings", icon: "leaderboard" },
 ];
 
