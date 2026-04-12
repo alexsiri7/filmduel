@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel
 
@@ -108,3 +108,45 @@ class StatsResponse(BaseModel):
     average_elo: float
     highest_rated: Optional[RankedMovie] = None
     lowest_rated: Optional[RankedMovie] = None
+
+
+# ── Tournament schemas ──────────────────────────────────────────────
+
+
+class TournamentCreate(BaseModel):
+    name: str
+    filter_type: Optional[str] = None
+    filter_value: Optional[str] = None
+    bracket_size: Literal[8, 16, 32, 64]
+
+
+class TournamentMatchSchema(BaseModel):
+    id: str
+    round: int
+    position: int
+    movie_a: Optional[MovieSchema] = None
+    movie_b: Optional[MovieSchema] = None
+    winner_movie_id: Optional[str] = None
+    played_at: Optional[datetime] = None
+
+
+class TournamentSchema(BaseModel):
+    id: str
+    name: str
+    filter_type: Optional[str] = None
+    filter_value: Optional[str] = None
+    bracket_size: int
+    status: str
+    champion_movie_id: Optional[str] = None
+    created_at: datetime
+    completed_at: Optional[datetime] = None
+    matches: list[TournamentMatchSchema] = []
+
+
+class TournamentListItem(BaseModel):
+    id: str
+    name: str
+    bracket_size: int
+    status: str
+    created_at: datetime
+    progress: str = ""
