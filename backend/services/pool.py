@@ -50,6 +50,11 @@ async def populate_movie_pool(user: User, db: AsyncSession) -> None:
         logger.exception("Failed to fetch trending movies")
         trending = []
     try:
+        recommended = await client.get_recommendations(limit=100)
+    except Exception:
+        logger.exception("Failed to fetch recommendations")
+        recommended = []
+    try:
         watched = await client.get_user_watched(user.trakt_user_id)
     except Exception:
         logger.exception("Failed to fetch watch history for %s", user.trakt_user_id)
@@ -70,7 +75,7 @@ async def populate_movie_pool(user: User, db: AsyncSession) -> None:
     movie_pool: dict[int, dict] = {}
     seen_trakt_ids: set[int] = set()
 
-    for movie in popular + trending:
+    for movie in popular + trending + recommended:
         trakt_id = movie["ids"]["trakt"]
         if trakt_id not in movie_pool:
             movie_pool[trakt_id] = movie

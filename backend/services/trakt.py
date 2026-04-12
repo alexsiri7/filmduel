@@ -138,6 +138,16 @@ class TraktClient:
             )
             resp.raise_for_status()
 
+    async def get_recommendations(self, limit: int = 100) -> list[dict]:
+        """Get personalized movie recommendations for the authenticated user."""
+        async with self._client() as client:
+            resp = await client.get(
+                "/recommendations/movies",
+                params={"limit": limit, "extended": "full", "ignore_collected": "true"},
+            )
+            resp.raise_for_status()
+            return resp.json()
+
     async def add_to_watchlist(self, trakt_id: int) -> None:
         """Add a movie to the user's Trakt watchlist."""
         async with self._client() as client:
