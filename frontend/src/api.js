@@ -70,7 +70,7 @@ export function getTournamentPoolCount(filterType, filterValue) {
   return request(`/api/tournaments/pool-count?${params}`);
 }
 
-export function createTournament(name, bracketSize, filterType, filterValue) {
+export function createTournament(name, bracketSize, filterType, filterValue, aiCurated = false) {
   return request("/api/tournaments", {
     method: "POST",
     body: JSON.stringify({
@@ -78,6 +78,7 @@ export function createTournament(name, bracketSize, filterType, filterValue) {
       bracket_size: bracketSize,
       filter_type: filterType || null,
       filter_value: filterValue || null,
+      ai_curated: aiCurated,
     }),
   });
 }
@@ -99,6 +100,10 @@ export function submitTournamentMatch(tournamentId, matchId, winnerMovieId) {
 
 export function abandonTournament(id) {
   return request(`/api/tournaments/${id}`, { method: "DELETE" });
+}
+
+export function regenerateTournament(id) {
+  return request(`/api/tournaments/${id}/regenerate`, { method: "POST" });
 }
 
 // ── Suggestions ─────────────────────────────────────────────────────

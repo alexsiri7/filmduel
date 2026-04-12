@@ -23,6 +23,7 @@ from backend.schemas import (
     TournamentMatchSchema,
     TournamentSchema,
 )
+from backend.services.curator import curate_tournament
 from backend.services.elo import get_initial_elo, update_elo
 
 router = APIRouter(prefix="/api/tournaments", tags=["tournaments"])
@@ -100,6 +101,10 @@ def _tournament_schema(t: Tournament) -> TournamentSchema:
         bracket_size=t.bracket_size,
         status=t.status,
         champion_movie_id=str(t.champion_movie_id) if t.champion_movie_id else None,
+        tagline=t.tagline,
+        theme_description=t.theme_description,
+        is_ai_curated=t.is_ai_curated,
+        llm_response=t.llm_response,
         created_at=t.created_at,
         completed_at=t.completed_at,
         matches=[_match_schema(m) for m in sorted_matches],
@@ -254,23 +259,82 @@ async def create_tournament(
             detail=f"Bracket too large. Max {len(user_movies) * 4} for {len(user_movies)} films",
         )
 
-    # 4. Sort by ELO descending, take top films (up to bracket_size)
+    # 4. Sort by ELO descending
     user_movies.sort(key=lambda um: um.elo or 0, reverse=True)
-    actual_films = min(len(user_movies), body.bracket_size)
-    seeded_films = user_movies[:actual_films]
+
+    # 5. AI curation or standard selection
+    ai_name = None
+    ai_tagline = None
+    ai_theme_description = None
+    ai_llm_response = None
+
+    if body.ai_curated:
+        # Build candidate list: cap at bracket_size * 3
+        candidate_pool = user_movies[: body.bracket_size * 3]
+        candidates = [
+            {
+                "id": str(um.movie_id),
+                "title": um.movie.title,
+                "year": um.movie.year,
+                "genres": um.movie.genres or [],
+                "elo": um.elo,
+                "battles": um.battles,
+            }
+            for um in candidate_pool
+        ]
+
+        filter_context = ""
+        if body.filter_type and body.filter_value:
+            filter_context = f"{body.filter_type}: {body.filter_value}"
+
+        llm_result = await curate_tournament(
+            candidates=candidates,
+            bracket_size=body.bracket_size,
+            filter_context=filter_context,
+        )
+
+        # Validate returned film_ids are all in candidate list
+        candidate_ids = {str(um.movie_id) for um in candidate_pool}
+        invalid_ids = set(llm_result["film_ids"]) - candidate_ids
+        if invalid_ids:
+            raise HTTPException(
+                status_code=500,
+                detail=f"AI selected films not in candidate pool: {invalid_ids}",
+            )
+
+        # Build seeded_films from LLM selection, ordered by ELO for seeding
+        film_id_set = set(llm_result["film_ids"])
+        selected_ums = [um for um in candidate_pool if str(um.movie_id) in film_id_set]
+        # Re-sort by ELO descending for proper seeding
+        selected_ums.sort(key=lambda um: um.elo or 0, reverse=True)
+        seeded_films = selected_ums
+
+        ai_name = llm_result["name"]
+        ai_tagline = llm_result.get("tagline")
+        ai_theme_description = llm_result.get("theme_description")
+        ai_llm_response = llm_result
+    else:
+        seeded_films = user_movies[: body.bracket_size]
+
+    actual_films = len(seeded_films)
     num_byes = body.bracket_size - actual_films
 
-    # 5. Generate seeded bracket pairings
+    # 6. Generate seeded bracket pairings
     pairings = generate_seeded_bracket(body.bracket_size)
 
-    # 6. Create tournament record
+    # 7. Create tournament record
+    tournament_name = ai_name if ai_name else body.name
     tournament = Tournament(
         user_id=uid,
-        name=body.name,
+        name=tournament_name,
         filter_type=body.filter_type,
         filter_value=body.filter_value,
         bracket_size=body.bracket_size,
         status="active",
+        tagline=ai_tagline,
+        theme_description=ai_theme_description,
+        is_ai_curated=body.ai_curated,
+        llm_response=ai_llm_response,
     )
     db.add(tournament)
     await db.flush()
@@ -370,6 +434,215 @@ async def create_tournament(
 
     # Reload the tournament with all relationships
     tournament = await _load_tournament(tournament.id, uid, db)
+    return _tournament_schema(tournament)
+
+
+@router.post("/{tournament_id}/regenerate", response_model=TournamentSchema)
+async def regenerate_tournament(
+    tournament_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Re-run LLM curation with same candidates. Max 3 regenerations."""
+    uid = current_user.id
+    tournament = await _load_tournament(tournament_id, uid, db)
+
+    if not tournament.is_ai_curated:
+        raise HTTPException(status_code=400, detail="Only AI-curated tournaments can be regenerated")
+
+    # Check no matches have been played (excluding byes)
+    played_matches = [
+        m for m in tournament.matches
+        if m.winner_movie_id is not None and not m.is_bye
+    ]
+    if played_matches:
+        raise HTTPException(status_code=400, detail="Cannot regenerate after matches have been played")
+
+    # Track regeneration count in llm_response
+    regen_count = 0
+    if tournament.llm_response and isinstance(tournament.llm_response, dict):
+        regen_count = tournament.llm_response.get("_regen_count", 0)
+    if regen_count >= 3:
+        raise HTTPException(status_code=400, detail="Maximum regeneration attempts (3) reached")
+
+    # Rebuild candidate list from user's ranked films with same filters
+    stmt = (
+        select(UserMovie)
+        .options(joinedload(UserMovie.movie))
+        .where(
+            UserMovie.user_id == uid,
+            UserMovie.seen.is_(True),
+            UserMovie.battles >= 1,
+            UserMovie.elo.isnot(None),
+        )
+    )
+    result = await db.execute(stmt)
+    user_movies = result.unique().scalars().all()
+
+    if tournament.filter_type == "genre" and tournament.filter_value:
+        genre_lower = tournament.filter_value.lower()
+        user_movies = [
+            um for um in user_movies
+            if um.movie.genres and any(g.lower() == genre_lower for g in um.movie.genres)
+        ]
+    elif tournament.filter_type == "decade" and tournament.filter_value:
+        decade_str = tournament.filter_value.rstrip("s")
+        try:
+            decade_start = int(decade_str)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid decade format")
+        user_movies = [
+            um for um in user_movies
+            if um.movie.year and decade_start <= um.movie.year <= decade_start + 9
+        ]
+
+    user_movies.sort(key=lambda um: um.elo or 0, reverse=True)
+    candidate_pool = user_movies[: tournament.bracket_size * 3]
+
+    candidates = [
+        {
+            "id": str(um.movie_id),
+            "title": um.movie.title,
+            "year": um.movie.year,
+            "genres": um.movie.genres or [],
+            "elo": um.elo,
+            "battles": um.battles,
+        }
+        for um in candidate_pool
+    ]
+
+    filter_context = ""
+    if tournament.filter_type and tournament.filter_value:
+        filter_context = f"{tournament.filter_type}: {tournament.filter_value}"
+
+    llm_result = await curate_tournament(
+        candidates=candidates,
+        bracket_size=tournament.bracket_size,
+        filter_context=filter_context,
+    )
+
+    # Validate returned film_ids
+    candidate_ids = {str(um.movie_id) for um in candidate_pool}
+    invalid_ids = set(llm_result["film_ids"]) - candidate_ids
+    if invalid_ids:
+        raise HTTPException(
+            status_code=500,
+            detail=f"AI selected films not in candidate pool: {invalid_ids}",
+        )
+
+    # Build new seeded films
+    film_id_set = set(llm_result["film_ids"])
+    selected_ums = [um for um in candidate_pool if str(um.movie_id) in film_id_set]
+    selected_ums.sort(key=lambda um: um.elo or 0, reverse=True)
+    actual_films = len(selected_ums)
+
+    # Delete existing matches
+    from sqlalchemy import delete
+
+    await db.execute(
+        delete(TournamentMatch).where(TournamentMatch.tournament_id == tournament_id)
+    )
+    await db.flush()
+
+    # Update tournament metadata
+    t_stmt = select(Tournament).where(Tournament.id == tournament_id)
+    t = (await db.execute(t_stmt)).scalar_one()
+    llm_result["_regen_count"] = regen_count + 1
+    t.name = llm_result["name"]
+    t.tagline = llm_result.get("tagline")
+    t.theme_description = llm_result.get("theme_description")
+    t.llm_response = llm_result
+
+    # Recreate bracket
+    pairings = generate_seeded_bracket(tournament.bracket_size)
+    num_rounds = _num_rounds(tournament.bracket_size)
+    now = datetime.now(timezone.utc)
+    num_byes = tournament.bracket_size - actual_films
+
+    for position, (seed_a, seed_b) in enumerate(pairings):
+        has_a = seed_a <= actual_films
+        has_b = seed_b <= actual_films
+
+        if has_a and has_b:
+            match = TournamentMatch(
+                tournament_id=tournament_id,
+                round=1,
+                position=position,
+                movie_a_id=selected_ums[seed_a - 1].movie_id,
+                movie_b_id=selected_ums[seed_b - 1].movie_id,
+            )
+        elif has_a and not has_b:
+            match = TournamentMatch(
+                tournament_id=tournament_id,
+                round=1,
+                position=position,
+                movie_a_id=selected_ums[seed_a - 1].movie_id,
+                movie_b_id=None,
+                winner_movie_id=selected_ums[seed_a - 1].movie_id,
+                is_bye=True,
+                played_at=now,
+            )
+        elif has_b and not has_a:
+            match = TournamentMatch(
+                tournament_id=tournament_id,
+                round=1,
+                position=position,
+                movie_a_id=selected_ums[seed_b - 1].movie_id,
+                movie_b_id=None,
+                winner_movie_id=selected_ums[seed_b - 1].movie_id,
+                is_bye=True,
+                played_at=now,
+            )
+        else:
+            match = TournamentMatch(
+                tournament_id=tournament_id,
+                round=1,
+                position=position,
+            )
+        db.add(match)
+
+    for round_num in range(2, num_rounds + 1):
+        matches_in_round = tournament.bracket_size // (2**round_num)
+        for position in range(matches_in_round):
+            match = TournamentMatch(
+                tournament_id=tournament_id,
+                round=round_num,
+                position=position,
+            )
+            db.add(match)
+
+    await db.flush()
+
+    # Propagate bye winners to round 2
+    if num_byes > 0:
+        r1_stmt = (
+            select(TournamentMatch)
+            .where(
+                TournamentMatch.tournament_id == tournament_id,
+                TournamentMatch.round == 1,
+                TournamentMatch.is_bye.is_(True),
+            )
+        )
+        r1_result = await db.execute(r1_stmt)
+        bye_matches = r1_result.scalars().all()
+
+        for bye_match in bye_matches:
+            next_pos = bye_match.position // 2
+            next_round_stmt = select(TournamentMatch).where(
+                TournamentMatch.tournament_id == tournament_id,
+                TournamentMatch.round == 2,
+                TournamentMatch.position == next_pos,
+            )
+            next_match_obj = (await db.execute(next_round_stmt)).scalar_one()
+            if bye_match.position % 2 == 0:
+                next_match_obj.movie_a_id = bye_match.winner_movie_id
+            else:
+                next_match_obj.movie_b_id = bye_match.winner_movie_id
+
+        await db.flush()
+
+    # Reload and return
+    tournament = await _load_tournament(tournament_id, uid, db)
     return _tournament_schema(tournament)
 
 

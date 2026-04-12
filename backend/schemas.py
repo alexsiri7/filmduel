@@ -119,6 +119,7 @@ class TournamentCreate(BaseModel):
     filter_type: Optional[str] = None
     filter_value: Optional[str] = None
     bracket_size: Literal[8, 16, 32, 64]
+    ai_curated: bool = False
 
 
 class TournamentMatchSchema(BaseModel):
@@ -140,9 +141,21 @@ class TournamentSchema(BaseModel):
     bracket_size: int
     status: str
     champion_movie_id: Optional[str] = None
+    tagline: Optional[str] = None
+    theme_description: Optional[str] = None
+    is_ai_curated: bool = False
+    llm_response: Optional[dict] = None
     created_at: datetime
     completed_at: Optional[datetime] = None
     matches: list[TournamentMatchSchema] = []
+
+
+class TournamentPreview(BaseModel):
+    name: str
+    tagline: str
+    theme_description: str
+    film_ids: list[str]
+    films: list[MovieSchema] = []
 
 
 class TournamentListItem(BaseModel):

@@ -6,23 +6,19 @@ unknown films, and asks an LLM to pick 6 personalised recommendations.
 
 from __future__ import annotations
 
-import json
 import logging
 import uuid
 from collections import defaultdict
 
-import httpx
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from backend.config import get_settings
 from backend.db_models import Movie, UserMovie
+from backend.services.llm import chat_completion, parse_json_response
 
 logger = logging.getLogger(__name__)
 
-ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
-MODEL = "claude-sonnet-4-20250514"
 MIN_RANKED = 20
 NUM_PICKS = 6
 CANDIDATE_LIMIT = 50
@@ -127,14 +123,7 @@ async def _get_candidates(
 
 
 async def _call_llm(taste_profile: dict, candidates: list[dict]) -> list[dict]:
-    """Call Anthropic API to pick 6 films. Returns list of {trakt_id, reason}."""
-    settings = get_settings()
-    if not settings.ANTHROPIC_API_KEY:
-        raise ValueError(
-            "ANTHROPIC_API_KEY is not configured. "
-            "Set it in your environment or .env file to enable AI suggestions."
-        )
-
+    """Call LLM to pick 6 films. Returns list of {trakt_id, reason}."""
     system_prompt = (
         "You are a film recommendation assistant for FilmDuel, a movie ranking app. "
         "The user has ranked films via head-to-head duels, producing ELO ratings. "
@@ -176,34 +165,8 @@ async def _call_llm(taste_profile: dict, candidates: list[dict]) -> list[dict]:
         )
     )
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        resp = await client.post(
-            ANTHROPIC_API_URL,
-            headers={
-                "x-api-key": settings.ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            json={
-                "model": MODEL,
-                "max_tokens": 500,
-                "system": system_prompt,
-                "messages": [{"role": "user", "content": user_message}],
-            },
-        )
-        resp.raise_for_status()
-
-    data = resp.json()
-    text_content = data["content"][0]["text"]
-
-    # Parse JSON from response (handle markdown code fences)
-    text_clean = text_content.strip()
-    if text_clean.startswith("```"):
-        # Strip code fence
-        lines = text_clean.split("\n")
-        text_clean = "\n".join(lines[1:-1]) if lines[-1].strip() == "```" else "\n".join(lines[1:])
-
-    parsed = json.loads(text_clean)
+    text_content = await chat_completion(system_prompt, user_message)
+    parsed = parse_json_response(text_content)
     return parsed["picks"]
 
 
@@ -213,7 +176,7 @@ async def generate_suggestions(
     """Generate 6 personalized film suggestions.
 
     Returns list of {movie_id: str, reason: str}.
-    Raises ValueError if ANTHROPIC_API_KEY is not set.
+    Raises ValueError if LLM_API_KEY is not set.
     Returns empty list if user has < MIN_RANKED films (caller should check taste_profile).
     """
     taste_profile = await _build_taste_profile(user_id, db)

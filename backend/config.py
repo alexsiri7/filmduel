@@ -22,8 +22,10 @@ class Settings(BaseSettings):
     # TMDB for poster images
     TMDB_API_KEY: str = ""
 
-    # Anthropic (for AI suggestions)
-    ANTHROPIC_API_KEY: str = ""
+    # LLM (OpenRouter / Requesty.ai)
+    LLM_API_KEY: str = ""
+    LLM_BASE_URL: str = "https://router.requesty.ai/v1"
+    LLM_MODEL: str = "anthropic/claude-sonnet-4-20250514"
 
     # Sentry
     SENTRY_DSN: str = ""

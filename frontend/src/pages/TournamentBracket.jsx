@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getTournament, submitTournamentMatch, abandonTournament } from "../api";
+import { getTournament, submitTournamentMatch, abandonTournament, regenerateTournament } from "../api";
 import MovieCard from "../components/MovieCard";
 
 function roundLabel(round, totalRounds) {
@@ -141,6 +141,7 @@ export default function TournamentBracket() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [winnerFlash, setWinnerFlash] = useState(null); // brief flash between matches
+  const [regenerating, setRegenerating] = useState(false);
 
   const loadTournament = useCallback(async () => {
     try {
@@ -250,6 +251,24 @@ export default function TournamentBracket() {
       setSubmitting(false);
     }
   }
+
+  async function handleRegenerate() {
+    setRegenerating(true);
+    setError(null);
+    try {
+      const updated = await regenerateTournament(id);
+      setTournament(updated);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setRegenerating(false);
+    }
+  }
+
+  // Check if regeneration is available (AI-curated, no non-bye matches played)
+  const canRegenerate = tournament?.is_ai_curated &&
+    tournament?.status === "active" &&
+    !tournament?.matches?.some((m) => m.winner_movie_id && !m.is_bye);
 
   async function handleAbandon() {
     if (!confirm("Abandon this tournament? This cannot be undone.")) return;
@@ -388,9 +407,19 @@ export default function TournamentBracket() {
           </button>
           <span className="text-[#F5F0E8]/20">/</span>
         </div>
-        <h2 className="text-4xl md:text-6xl font-headline font-black uppercase tracking-tighter text-[#F5F0E8] leading-none mb-4">
+        <h2 className="text-4xl md:text-6xl font-headline font-black uppercase tracking-tighter text-[#F5F0E8] leading-none mb-2">
           {tournament.name}
         </h2>
+        {tournament.tagline && (
+          <p className="text-lg md:text-xl font-body text-[#E8A020]/80 italic mb-2">
+            {tournament.tagline}
+          </p>
+        )}
+        {tournament.theme_description && (
+          <p className="text-sm font-body text-[#F5F0E8]/50 mb-4 max-w-2xl leading-relaxed">
+            {tournament.theme_description}
+          </p>
+        )}
         <div className="flex items-center gap-6 flex-wrap">
           <span className="text-[10px] font-label uppercase tracking-[0.3em] text-[#6B6760]">
             {tournament.bracket_size} films
@@ -438,7 +467,7 @@ export default function TournamentBracket() {
         </div>
       )}
 
-      {/* Play Round Button */}
+      {/* Play Round Button + Regenerate */}
       {nextMatch && !isCompleted && !isAbandoned && (() => {
         const roundMatches = rounds.find((r) => r.round === nextMatch.round)?.matches || [];
         const remaining = roundMatches.filter((m) => !m.winner_movie_id).length;
@@ -446,13 +475,22 @@ export default function TournamentBracket() {
           ? `Play ${roundLabel(nextMatch.round, totalRounds)} (${remaining} matches)`
           : "Play Next Match";
         return (
-          <div className="mb-8">
+          <div className="mb-8 flex items-center gap-4 flex-wrap">
             <button
               onClick={() => setPlaying(true)}
               className="bg-[#E8A020] text-[#0F0E0D] font-headline font-black uppercase py-4 px-8 tracking-widest text-sm hover:shadow-[0_0_30px_rgba(232,160,32,0.4)] active:scale-[0.98] transition-all"
             >
               {label}
             </button>
+            {canRegenerate && (
+              <button
+                onClick={handleRegenerate}
+                disabled={regenerating}
+                className="border border-[#E8A020]/30 text-[#E8A020] font-headline font-bold uppercase py-4 px-6 tracking-widest text-xs hover:bg-[#E8A020]/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {regenerating ? "Regenerating..." : "Regenerate"}
+              </button>
+            )}
           </div>
         );
       })()}
