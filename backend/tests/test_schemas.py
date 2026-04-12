@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from backend.schemas import (
+    DuelMode,
     DuelOutcome,
     DuelResult,
     DuelSubmit,
@@ -55,24 +56,51 @@ class TestDuelSubmit:
             movie_b_id="550e8400-e29b-41d4-a716-446655440001",
             outcome=DuelOutcome.a_wins,
         )
-        assert ds.movie_a_id == "550e8400-e29b-41d4-a716-446655440000"
-        assert ds.outcome == DuelOutcome.a_wins
-        assert ds.mode == "discovery"  # default
+        from uuid import UUID
 
-    def test_custom_mode(self):
+        assert ds.movie_a_id == UUID("550e8400-e29b-41d4-a716-446655440000")
+        assert ds.outcome == DuelOutcome.a_wins
+        assert ds.mode == DuelMode.discovery  # default
+
+    def test_tournament_mode(self):
         ds = DuelSubmit(
-            movie_a_id="abc",
-            movie_b_id="def",
+            movie_a_id="550e8400-e29b-41d4-a716-446655440000",
+            movie_b_id="550e8400-e29b-41d4-a716-446655440001",
             outcome=DuelOutcome.b_wins,
-            mode="ranking",
+            mode="tournament",
         )
-        assert ds.mode == "ranking"
+        assert ds.mode == DuelMode.tournament
+
+    def test_invalid_mode_rejected(self):
+        with pytest.raises(ValidationError):
+            DuelSubmit(
+                movie_a_id="550e8400-e29b-41d4-a716-446655440000",
+                movie_b_id="550e8400-e29b-41d4-a716-446655440001",
+                outcome=DuelOutcome.a_wins,
+                mode="invalid_mode",
+            )
+
+    def test_invalid_uuid_rejected(self):
+        with pytest.raises(ValidationError):
+            DuelSubmit(
+                movie_a_id="not-a-uuid",
+                movie_b_id="also-not-a-uuid",
+                outcome=DuelOutcome.a_wins,
+            )
+
+    def test_same_movie_ids_rejected(self):
+        with pytest.raises(ValidationError, match="must be different"):
+            DuelSubmit(
+                movie_a_id="550e8400-e29b-41d4-a716-446655440000",
+                movie_b_id="550e8400-e29b-41d4-a716-446655440000",
+                outcome=DuelOutcome.a_wins,
+            )
 
     def test_invalid_outcome_rejected(self):
         with pytest.raises(ValidationError):
             DuelSubmit(
-                movie_a_id="abc",
-                movie_b_id="def",
+                movie_a_id="550e8400-e29b-41d4-a716-446655440000",
+                movie_b_id="550e8400-e29b-41d4-a716-446655440001",
                 outcome="invalid_outcome",
             )
 
@@ -83,7 +111,9 @@ class TestDuelSubmit:
     def test_all_outcome_values_accepted(self):
         for outcome in DuelOutcome:
             ds = DuelSubmit(
-                movie_a_id="a", movie_b_id="b", outcome=outcome
+                movie_a_id="550e8400-e29b-41d4-a716-446655440000",
+                movie_b_id="550e8400-e29b-41d4-a716-446655440001",
+                outcome=outcome,
             )
             assert ds.outcome == outcome
 

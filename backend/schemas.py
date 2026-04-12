@@ -5,8 +5,9 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 from typing import Literal, Optional
+from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class UserResponse(BaseModel):
@@ -55,11 +56,22 @@ class DuelOutcome(str, Enum):
     draw = "draw"
 
 
+class DuelMode(str, Enum):
+    discovery = "discovery"
+    tournament = "tournament"
+
+
 class DuelSubmit(BaseModel):
-    movie_a_id: str
-    movie_b_id: str
+    movie_a_id: UUID
+    movie_b_id: UUID
     outcome: DuelOutcome
-    mode: str = "discovery"
+    mode: DuelMode = DuelMode.discovery
+
+    @model_validator(mode="after")
+    def movies_must_differ(self):
+        if self.movie_a_id == self.movie_b_id:
+            raise ValueError("movie_a_id and movie_b_id must be different")
+        return self
 
 
 class DuelResult(BaseModel):
@@ -98,7 +110,7 @@ class SwipeResultItem(BaseModel):
 
 
 class SwipeSubmit(BaseModel):
-    results: list[SwipeResultItem]
+    results: list[SwipeResultItem] = Field(..., max_length=50)
 
 
 class SwipeResponse(BaseModel):

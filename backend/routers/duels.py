@@ -63,29 +63,15 @@ async def submit_duel(
     db: AsyncSession = Depends(get_db),
 ):
     uid = current_user.id
-    movie_a_id = uuid.UUID(body.movie_a_id)
-    movie_b_id = uuid.UUID(body.movie_b_id)
+    movie_a_id = body.movie_a_id
+    movie_b_id = body.movie_b_id
     outcome = body.outcome.value
-    mode = body.mode
+    mode = body.mode.value
 
-    # Prevent self-duels
-    if movie_a_id == movie_b_id:
-        raise HTTPException(status_code=400, detail="Cannot duel a movie against itself")
-
-    # For competitive outcomes, verify both movies are in the user's seen pool
-    if outcome in ("a_wins", "b_wins"):
-        from backend.db_models import UserMovie
-        for mid in (movie_a_id, movie_b_id):
-            stmt = select(UserMovie).where(
-                UserMovie.user_id == uid,
-                UserMovie.movie_id == mid,
-                UserMovie.seen.is_(True),
-            )
-            um_check = await db.execute(stmt)
-            if not um_check.scalar_one_or_none():
-                raise HTTPException(status_code=400, detail="Movie not in your seen pool")
-
-    result = await process_duel(db, uid, movie_a_id, movie_b_id, outcome, mode)
+    try:
+        result = await process_duel(db, uid, movie_a_id, movie_b_id, outcome, mode)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     # Trakt sync in background (fire-and-forget)
     if outcome in ("a_wins", "b_wins"):

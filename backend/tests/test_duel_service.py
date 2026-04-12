@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from backend.services.duel import get_or_create_user_movie, process_duel
+from backend.services.duel import get_user_movie, process_duel
 
 
 def _make_user_movie(
@@ -66,13 +66,13 @@ def _make_fake_execute(um_a: MagicMock, um_b: MagicMock, seen_unranked: int = 5,
 
 
 # ---------------------------------------------------------------------------
-# get_or_create_user_movie
+# get_user_movie
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_existing():
-    """Returns existing UserMovie without creating a new one."""
+async def test_get_user_movie_existing():
+    """Returns existing UserMovie."""
     uid = uuid.uuid4()
     mid = uuid.uuid4()
     existing = _make_user_movie(uid, mid)
@@ -83,15 +83,13 @@ async def test_get_or_create_existing():
     db = AsyncMock()
     db.execute.return_value = mock_result
 
-    um = await get_or_create_user_movie(db, uid, mid)
+    um = await get_user_movie(db, uid, mid)
     assert um is existing
-    db.add.assert_not_called()
-    db.flush.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_new():
-    """Creates a new UserMovie when none exists."""
+async def test_get_user_movie_not_found():
+    """Raises ValueError when UserMovie does not exist."""
     uid = uuid.uuid4()
     mid = uuid.uuid4()
 
@@ -101,11 +99,8 @@ async def test_get_or_create_new():
     db = AsyncMock()
     db.execute.return_value = mock_result
 
-    um = await get_or_create_user_movie(db, uid, mid)
-    assert um.user_id == uid
-    assert um.movie_id == mid
-    db.add.assert_called_once()
-    db.flush.assert_awaited_once()
+    with pytest.raises(ValueError, match="Movie not in your pool"):
+        await get_user_movie(db, uid, mid)
 
 
 # ---------------------------------------------------------------------------
