@@ -29,7 +29,7 @@ Return ONLY valid JSON with no markdown formatting:
 USER_PROMPT_TEMPLATE = """\
 Bracket size: {bracket_size}
 {filter_context}
-
+{theme_hint}
 Candidate films:
 {candidates_text}
 """
@@ -39,6 +39,7 @@ async def curate_tournament(
     candidates: list[dict],
     bracket_size: int,
     filter_context: str = "",
+    theme_hint: str = "",
 ) -> dict:
     """Call LLM to select films and generate a theme.
 
@@ -68,6 +69,7 @@ async def curate_tournament(
     user_prompt = USER_PROMPT_TEMPLATE.format(
         bracket_size=bracket_size,
         filter_context=f"Active filter: {filter_context}" if filter_context else "No filter applied",
+        theme_hint=f"User's theme request: \"{theme_hint}\" — prioritize films matching this theme/franchise/keyword.\n" if theme_hint else "",
         candidates_text=candidates_text,
     )
 
