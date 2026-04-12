@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
 
     # App secrets
-    SECRET_KEY: str = "change-me-in-production"
+    SECRET_KEY: str
     BASE_URL: str = "http://localhost:8000"
 
     # TMDB for poster images
