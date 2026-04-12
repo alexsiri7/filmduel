@@ -151,3 +151,20 @@ class TournamentListItem(BaseModel):
     status: str
     created_at: datetime
     progress: str = ""
+
+
+# ── Suggestion schemas ─────────────────────────────────────────────
+
+
+class SuggestionSchema(BaseModel):
+    id: str
+    movie: MovieSchema
+    reason: str
+    generated_at: datetime
+    dismissed_at: Optional[datetime] = None
+    added_to_watchlist_at: Optional[datetime] = None
+
+
+class SuggestionsResponse(BaseModel):
+    suggestions: list[SuggestionSchema]
+    status: str = "ready"  # "ready" | "generating" | "not_enough_films"
