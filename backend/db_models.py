@@ -16,7 +16,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -138,6 +138,12 @@ class Tournament(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+    tagline: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    theme_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_ai_curated: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    llm_response: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

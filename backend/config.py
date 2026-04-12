@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     # TMDB for poster images
     TMDB_API_KEY: str = ""
 
+    # Anthropic (AI-curated tournaments)
+    ANTHROPIC_API_KEY: str = ""
+
     # Sentry
     SENTRY_DSN: str = ""
 
