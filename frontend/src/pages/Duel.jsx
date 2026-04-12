@@ -88,7 +88,6 @@ export default function Duel() {
   const handleSubmit = async (outcome) => {
     if (!pair || submitting) return;
     setSubmitting(true);
-    prefetchNext();
     try {
       const res = await submitDuel(
         pair.movie_a.id,
