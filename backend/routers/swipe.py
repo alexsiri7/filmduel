@@ -76,9 +76,9 @@ async def get_swipe_cards(
     )
 
     if median_elo is None:
-        # No ranked films yet — prioritize popular/trending (high community_rating)
+        # No ranked films yet — pick randomly from rated films
         stmt = base.where(Movie.community_rating.isnot(None)).order_by(
-            Movie.community_rating.desc(), func.random()
+            func.random()
         ).limit(10)
         result = await db.execute(stmt)
         rows = result.all()
