@@ -204,6 +204,7 @@ async def create_tournament(
             candidates=candidates,
             bracket_size=body.bracket_size,
             filter_context=filter_context,
+            theme_hint=body.name.strip() if body.name else "",
         )
 
         candidate_ids = {str(um.movie_id) for um in candidate_pool}
@@ -222,6 +223,7 @@ async def create_tournament(
         ai_name = llm_result["name"]
         ai_tagline = llm_result.get("tagline")
         ai_theme_description = llm_result.get("theme_description")
+        llm_result["_theme_hint"] = body.name.strip() if body.name else ""
         ai_llm_response = llm_result
     else:
         seeded_films = user_movies[: body.bracket_size]
@@ -298,10 +300,13 @@ async def regenerate_tournament(
     if tournament.filter_type and tournament.filter_value:
         filter_context = f"{tournament.filter_type}: {tournament.filter_value}"
 
+    # Use original name as theme hint for regeneration
+    original_hint = tournament.llm_response.get("_theme_hint", "") if tournament.llm_response else ""
     llm_result = await curate_tournament(
         candidates=candidates,
         bracket_size=tournament.bracket_size,
         filter_context=filter_context,
+        theme_hint=original_hint,
     )
 
     candidate_ids = {str(um.movie_id) for um in candidate_pool}

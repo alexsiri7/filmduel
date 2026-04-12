@@ -219,37 +219,36 @@ export default function TournamentBracket() {
     return null;
   }
 
-  async function handlePick(winnerMovieId) {
+  function handlePick(winnerMovieId) {
     if (submitting || !nextMatch) return;
     setSubmitting(true);
-    try {
-      const currentRound = nextMatch.round;
-      const winnerMovie =
-        nextMatch.movie_a.id === winnerMovieId ? nextMatch.movie_a : nextMatch.movie_b;
 
-      const updated = await submitTournamentMatch(id, nextMatch.id, winnerMovieId);
+    const currentRound = nextMatch.round;
+    const winnerMovie =
+      nextMatch.movie_a.id === winnerMovieId ? nextMatch.movie_a : nextMatch.movie_b;
 
-      // Determine if there is another match in this same round
-      const newNext = findNextPlayable(updated);
-      const stayInPlayMode = newNext && newNext.round === currentRound;
+    // Immediately show winner flash
+    setWinnerFlash(winnerMovie);
 
-      if (stayInPlayMode) {
-        // Show brief winner flash, then advance to next match
-        setWinnerFlash(winnerMovie);
+    // Fire API in background — don't block the UI
+    submitTournamentMatch(id, nextMatch.id, winnerMovieId)
+      .then((updated) => {
+        const newNext = findNextPlayable(updated);
+        const stayInPlayMode = newNext && newNext.round === currentRound;
+
+        // Update bracket state when response arrives
         setTournament(updated);
-        setTimeout(() => {
-          setWinnerFlash(null);
-        }, 600);
-      } else {
-        // Round complete (or tournament done) — return to bracket
-        setTournament(updated);
-        setPlaying(false);
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSubmitting(false);
-    }
+        if (!stayInPlayMode) {
+          setPlaying(false);
+        }
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setSubmitting(false));
+
+    // Clear winner flash after 600ms (next match renders from updated state)
+    setTimeout(() => {
+      setWinnerFlash(null);
+    }, 600);
   }
 
   async function handleRegenerate() {
