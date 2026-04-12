@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     # LLM (OpenRouter / Requesty.ai)
     LLM_API_KEY: str = ""
     LLM_BASE_URL: str = "https://router.requesty.ai/v1"
-    LLM_MODEL: str = "openrouter/google/gemini-2.5-flash-preview"
+    LLM_MODEL: str = "google/gemini-3.1-flash-lite-preview"
 
     # Sentry
     SENTRY_DSN: str = ""

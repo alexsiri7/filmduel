@@ -2,7 +2,6 @@
 
 import json
 import logging
-import os
 
 from backend.config import get_settings
 
@@ -22,15 +21,13 @@ async def chat_completion(
             "Set it in your environment or .env file to enable AI features."
         )
 
-    # LiteLLM uses env vars for API keys — set them before the call
-    os.environ["OPENROUTER_API_KEY"] = settings.LLM_API_KEY
-
     # Import here to avoid import-time side effects from litellm
     from litellm import acompletion
 
     response = await acompletion(
-        model=settings.LLM_MODEL,
+        model=f"openai/{settings.LLM_MODEL}",
         max_tokens=max_tokens,
+        api_key=settings.LLM_API_KEY,
         api_base=settings.LLM_BASE_URL,
         messages=[
             {"role": "system", "content": system},
