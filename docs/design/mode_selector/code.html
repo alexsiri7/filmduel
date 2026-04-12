@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&amp;family=Manrope:wght@200..800&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary-fixed": "#cae6ff",
+                    "on-primary-fixed": "#291800",
+                    "on-secondary-fixed": "#390b00",
+                    "tertiary-fixed-dim": "#8dcdff",
+                    "inverse-on-surface": "#32302f",
+                    "surface-container-lowest": "#0f0e0d",
+                    "on-tertiary-container": "#004668",
+                    "on-secondary": "#5d1800",
+                    "tertiary-container": "#4ab7fc",
+                    "outline": "#9e8e7a",
+                    "surface-container-low": "#1d1b1a",
+                    "surface-tint": "#ffb94c",
+                    "on-background": "#e6e1df",
+                    "secondary": "#ffb59d",
+                    "surface-container-highest": "#363433",
+                    "surface-container-high": "#2b2a28",
+                    "secondary-fixed": "#ffdbd0",
+                    "primary-fixed-dim": "#ffb94c",
+                    "error-container": "#93000a",
+                    "on-secondary-container": "#ffaf96",
+                    "outline-variant": "#514534",
+                    "background": "#141312",
+                    "on-primary": "#442b00",
+                    "primary": "#ffbe5b",
+                    "tertiary": "#94d0ff",
+                    "secondary-fixed-dim": "#ffb59d",
+                    "surface-bright": "#3b3937",
+                    "on-error": "#690005",
+                    "inverse-primary": "#815500",
+                    "on-tertiary": "#00344f",
+                    "on-tertiary-fixed-variant": "#004b70",
+                    "on-surface": "#e6e1df",
+                    "primary-fixed": "#ffddb2",
+                    "error": "#ffb4ab",
+                    "surface-dim": "#141312",
+                    "surface-container": "#211f1e",
+                    "on-tertiary-fixed": "#001e30",
+                    "inverse-surface": "#e6e1df",
+                    "secondary-container": "#942b00",
+                    "primary-container": "#e8a020",
+                    "surface": "#141312",
+                    "on-error-container": "#ffdad6",
+                    "on-secondary-fixed-variant": "#842500",
+                    "on-surface-variant": "#d6c4ae",
+                    "on-primary-container": "#5b3b00",
+                    "surface-variant": "#363433",
+                    "on-primary-fixed-variant": "#624000"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "fontFamily": {
+                    "headline": ["Space Grotesk"],
+                    "body": ["Manrope"],
+                    "label": ["Manrope"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .noir-gradient {
+            background: linear-gradient(180deg, rgba(15, 14, 13, 0) 0%, rgba(15, 14, 13, 1) 100%);
+        }
+        .bottom-sheet-shadow {
+            box-shadow: 0 -20px 40px -10px rgba(0, 0, 0, 0.5);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body selection:bg-primary selection:text-on-primary min-h-screen overflow-hidden">
+<!-- Header / TopAppBar -->
+<header class="bg-[#0F0E0D] dark:bg-[#0F0E0D] fixed top-0 left-0 right-0 z-40">
+<div class="flex justify-between items-center w-full px-6 py-4 max-w-screen-xl mx-auto">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-[#E8A020] text-2xl" data-icon="movie_filter">movie_filter</span>
+<h1 class="text-2xl font-black text-[#E8A020] tracking-tighter font-headline">FILMDUEL</h1>
+</div>
+<div class="flex items-center gap-6">
+<nav class="hidden md:flex gap-8">
+<a class="text-[#E8A020] font-headline text-sm font-bold tracking-widest uppercase" href="#">Duel</a>
+<a class="text-[#6B6760] hover:bg-[#E8A020]/10 hover:text-[#E8A020] transition-colors font-headline text-sm font-bold tracking-widest uppercase" href="#">Rankings</a>
+</nav>
+<span class="material-symbols-outlined text-[#6B6760] cursor-pointer" data-icon="account_circle">account_circle</span>
+</div>
+</div>
+</header>
+<!-- Main Canvas (Blurred Background) -->
+<main class="pt-24 pb-32 px-6 max-w-screen-xl mx-auto opacity-40 grayscale pointer-events-none">
+<div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+<!-- Mock Background Content -->
+<div class="aspect-[2/3] bg-surface-container rounded-sm overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="dramatic cinematic still from a science fiction movie with cold blue lighting and neon reflections" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBh5ka3wThdbaP-3RVH36biKtocouRNdhXMMPrbKgw2Jlo-y0jjFtzSBFA8ulV7qiebwxbhTBSngBdxB7s0aKM7Xj7mwiijsVk1Cjrnk8gCCuKr_itshbHNie5b4g8wmAJPraPdHJFMSKiPvwrnTHfwYcB-HsxHifyJMfKxCZwGwLaNVlq8tcJCEvLui4jGq77lKCwuCfJNzXGuOMuw2KjGNOETJDUynwO3Zb-Hw0BTse3p4rMHjhvh6eRwY1RedLH1jGCTgd6nRNo"/>
+</div>
+<div class="aspect-[2/3] bg-surface-container rounded-sm overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="vintage black and white film frame showing a person in a trench coat walking down a foggy street" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAZq7rclfnzodqtZFIPu2Uf7ay91d3dTwNpu3WVKcv_yGR9jEy5vx-OJKVEgI45uXn2cvI2ypdnht2huulYwWr1AQUk8uiw3YnNE-6FcMbbjXIArYbZHiFyYucUYud6qVKqNjTNjYwyYSndqvVh_DE4mPe6p0G5lAPoW7y6hAQUrso59S4VusExcpMVJWgvgd2U7Q2u6N8vtd0YHXls469kuLJtyiUtYb7XwSoRt5z_LOQY6vQvI82-SRQkTkwc5FECN0wR4ehOLkM"/>
+</div>
+<div class="hidden md:block aspect-[2/3] bg-surface-container rounded-sm overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="close up of an old film projector lens with golden light dust particles floating in the beam" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAe1Esr4_rIdzfXKY6tnIWY25nZ6REIYkdW3C1dNnwEYu7roJiXB-g-ans9YbHF2Fmsyj1CA7VppM0Kz-FXLfnc5qJFwUkQReXePgkqeRdUFS_8QNGnCropsuBJ3xeUhc7efIPEBGEDfxuHJebSRCBKKcZlLAMVEs_-GMqE56jbpGrAItu2og5Aq46W_mbz6Ma8g6tfgGVe5UqfeDprz8gAco8ri2yiWieMngTUr8U_Zh8c8S1iL0tMY21ejcQ1PXrax-ZO3eC2tVs"/>
+</div>
+<div class="hidden md:block aspect-[2/3] bg-surface-container rounded-sm overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="abstract architectural building with harsh shadows and high contrast light in noir style" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAIKL6EjNS8Zv9g8rr0ChiXcQnV4ADub_c9v_y-ku15ppLJDJ2ELZyP5nn6D0I1FKR06PsajWQs1oQO0V1Lv7AEyduv7E_cK5f-j9P5r3UOhkYlmapyYbMXrgM6cK3IJUcxa-y9hLYIt63RWLahSAQ61jb-VJ2Ov0bD_F-GJR3cTgCaitQqiB9xHBMo2ue0YxVgzN44DSf3gZHzx0rv3Ikaj21hK91VWjUY1VpgrgHk2TvBs4lY3ToHPTPvl_39nXUtyWbhizWD2-w"/>
+</div>
+</div>
+</main>
+<!-- Overlay Backstop -->
+<div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"></div>
+<!-- Bottom Sheet: Mode Selector -->
+<div class="fixed bottom-0 left-0 right-0 z-50 transform translate-y-0 transition-transform duration-500 ease-out">
+<div class="max-w-3xl mx-auto bg-surface-container-lowest rounded-t-[2rem] p-8 pb-12 bottom-sheet-shadow border-t border-outline-variant/20">
+<!-- Handle -->
+<div class="w-12 h-1.5 bg-outline-variant/30 rounded-full mx-auto mb-10"></div>
+<div class="flex flex-col gap-8">
+<div class="space-y-1">
+<p class="text-primary font-label text-[10px] font-bold uppercase tracking-[0.3em]">Session Config</p>
+<h2 class="text-4xl font-headline font-black tracking-tighter text-on-surface">Game mode</h2>
+</div>
+<div class="grid grid-cols-1 gap-4">
+<!-- Mode Card: Discovery -->
+<button class="group relative flex items-start gap-6 p-6 bg-surface-container-low border border-transparent hover:bg-surface-container-high transition-all duration-200 text-left">
+<div class="flex-shrink-0 w-14 h-14 flex items-center justify-center bg-surface-container rounded-sm border border-outline-variant/10">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="explore">explore</span>
+</div>
+<div class="flex-grow">
+<h3 class="text-xl font-headline font-bold text-on-surface">Discovery</h3>
+<p class="text-on-surface-variant text-sm mt-1 leading-relaxed">Explore uncharted cinema. Introduce new films to your personal database and expand your taste.</p>
+</div>
+<div class="opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-primary" data-icon="chevron_right">chevron_right</span>
+</div>
+</button>
+<!-- Mode Card: Refinement (ACTIVE) -->
+<button class="group relative flex items-start gap-6 p-6 bg-primary/5 border-2 border-primary transition-all duration-200 text-left">
+<div class="flex-shrink-0 w-14 h-14 flex items-center justify-center bg-primary/20 rounded-sm">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="diamond" data-weight="fill">diamond</span>
+</div>
+<div class="flex-grow">
+<div class="flex items-center gap-3">
+<h3 class="text-xl font-headline font-bold text-on-surface">Refinement</h3>
+<span class="bg-primary text-on-primary text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-none">Recommended</span>
+</div>
+<p class="text-on-surface-variant text-sm mt-1 leading-relaxed">Sharpen your global rankings. Close-call duels between films already in your collection.</p>
+</div>
+<div>
+<span class="material-symbols-outlined text-primary" data-icon="check_circle">check_circle</span>
+</div>
+</button>
+<!-- Mode Card: Playoff -->
+<div class="group relative flex flex-col gap-6 p-6 bg-surface-container-low border border-transparent hover:bg-surface-container-high transition-all duration-200">
+<div class="flex items-start gap-6">
+<div class="flex-shrink-0 w-14 h-14 flex items-center justify-center bg-surface-container rounded-sm border border-outline-variant/10">
+<span class="material-symbols-outlined text-secondary text-3xl" data-icon="trophy">trophy</span>
+</div>
+<div class="flex-grow text-left">
+<h3 class="text-xl font-headline font-bold text-on-surface">Playoff</h3>
+<p class="text-on-surface-variant text-sm mt-1 leading-relaxed">Tournament bracket format. 16 films enter, one masterpiece leaves as the definitive champion.</p>
+</div>
+</div>
+<!-- Extra Chips for Playoff -->
+<div class="flex flex-wrap gap-2 pl-20">
+<button class="px-3 py-1 bg-surface-container-highest/50 border border-outline-variant/20 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-primary/50 hover:text-primary transition-colors">Horror</button>
+<button class="px-3 py-1 bg-surface-container-highest/50 border border-outline-variant/20 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-primary/50 hover:text-primary transition-colors">Sci-fi</button>
+<button class="px-3 py-1 bg-surface-container-highest/50 border border-outline-variant/20 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-primary/50 hover:text-primary transition-colors">Noir</button>
+<button class="px-3 py-1 bg-surface-container-highest/50 border border-outline-variant/20 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-primary/50 hover:text-primary transition-colors">90s Indie</button>
+</div>
+</div>
+</div>
+<button class="w-full bg-primary text-on-primary font-headline font-black py-5 text-lg uppercase tracking-widest active:scale-[0.98] transition-transform duration-200 mt-4">
+                    Confirm Selection
+                </button>
+</div>
+</div>
+</div>
+<!-- BottomNavBar (Hidden on Mobile) -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pb-safe bg-[#0F0E0D]/70 backdrop-blur-xl md:hidden">
+<a class="flex flex-col items-center justify-center text-[#E8A020] bg-[#E8A020]/10 rounded-none px-6 py-2 border-t-2 border-[#E8A020] active:scale-95 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="swords">swords</span>
+<span class="text-[10px] font-bold uppercase tracking-[0.1em] font-headline mt-1">Duel</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#6B6760] px-6 py-2 hover:text-[#F5F0E8] transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="leaderboard">leaderboard</span>
+<span class="text-[10px] font-bold uppercase tracking-[0.1em] font-headline mt-1">Rankings</span>
+</a>
+</nav>
+</body></html>

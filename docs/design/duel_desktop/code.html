@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;900&amp;family=Manrope:wght@200;300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container-lowest": "#0f0e0d",
+                    "tertiary-fixed": "#cae6ff",
+                    "tertiary-fixed-dim": "#8dcdff",
+                    "on-secondary-fixed": "#390b00",
+                    "on-primary-fixed": "#291800",
+                    "inverse-on-surface": "#32302f",
+                    "on-tertiary-container": "#004668",
+                    "tertiary-container": "#4ab7fc",
+                    "on-secondary": "#5d1800",
+                    "surface-tint": "#ffb94c",
+                    "secondary": "#ffb59d",
+                    "on-background": "#e6e1df",
+                    "surface-container-low": "#1d1b1a",
+                    "outline": "#9e8e7a",
+                    "surface-container-highest": "#363433",
+                    "primary-fixed-dim": "#ffb94c",
+                    "on-secondary-container": "#ffaf96",
+                    "error-container": "#93000a",
+                    "surface-container-high": "#2b2a28",
+                    "secondary-fixed": "#ffdbd0",
+                    "outline-variant": "#514534",
+                    "on-primary": "#442b00",
+                    "background": "#141312",
+                    "secondary-fixed-dim": "#ffb59d",
+                    "tertiary": "#94d0ff",
+                    "primary": "#ffbe5b",
+                    "on-error": "#690005",
+                    "surface-bright": "#3b3937",
+                    "error": "#ffb4ab",
+                    "on-tertiary-fixed-variant": "#004b70",
+                    "on-tertiary": "#00344f",
+                    "inverse-primary": "#815500",
+                    "primary-fixed": "#ffddb2",
+                    "on-surface": "#e6e1df",
+                    "surface-container": "#211f1e",
+                    "surface-dim": "#141312",
+                    "secondary-container": "#942b00",
+                    "surface": "#141312",
+                    "primary-container": "#e8a020",
+                    "on-tertiary-fixed": "#001e30",
+                    "inverse-surface": "#e6e1df",
+                    "on-surface-variant": "#d6c4ae",
+                    "on-secondary-fixed-variant": "#842500",
+                    "on-error-container": "#ffdad6",
+                    "on-primary-container": "#5b3b00",
+                    "on-primary-fixed-variant": "#624000",
+                    "surface-variant": "#363433"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "fontFamily": {
+                    "headline": ["Space Grotesk"],
+                    "body": ["Manrope"],
+                    "label": ["Manrope"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .noir-gradient {
+            background: linear-gradient(0deg, rgba(15,14,13,1) 0%, rgba(15,14,13,0) 60%);
+        }
+        .shimmer {
+            background: linear-gradient(90deg, transparent, rgba(232, 160, 32, 0.05), transparent);
+            background-size: 200% 100%;
+        }
+        .ticket-cutout {
+            clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+        }
+    </style>
+</head>
+<body class="bg-surface-dim text-on-surface font-body selection:bg-primary selection:text-on-primary">
+<!-- SideNavBar Anchor -->
+<aside class="fixed left-0 top-0 h-full w-64 z-40 bg-[#141312] shadow-[10px_0_30px_rgba(0,0,0,0.3)] flex flex-col py-8 px-4 gap-8">
+<div class="flex items-center gap-3 px-2">
+<div class="w-10 h-10 bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary-container" style="font-variation-settings: 'FILL' 1;">movie_filter</span>
+</div>
+<div>
+<h1 class="text-[#E8A020] text-xl font-black font-headline tracking-tighter">FILMDUEL</h1>
+<p class="text-on-surface-variant text-[10px] uppercase tracking-[0.2em] font-bold opacity-60">The Noir Projectionist</p>
+</div>
+</div>
+<nav class="flex-1 space-y-4">
+<!-- Current Duel Active -->
+<a class="flex items-center gap-4 px-4 py-3 bg-[#E8A020] text-[#0F0E0D] rounded-none shadow-[0_0_15px_rgba(232,160,32,0.3)] font-headline font-bold uppercase tracking-wider transition-all duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="swords">swords</span>
+<span>Current Duel</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 text-[#F5F0E8]/40 hover:text-[#F5F0E8] hover:bg-[#1d1b1a] font-headline font-bold uppercase tracking-wider transition-transform hover:translate-x-1 duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="leaderboard">leaderboard</span>
+<span>Global Rankings</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 text-[#F5F0E8]/40 hover:text-[#F5F0E8] hover:bg-[#1d1b1a] font-headline font-bold uppercase tracking-wider transition-transform hover:translate-x-1 duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="movie_filter">movie_filter</span>
+<span>Film Vault</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 text-[#F5F0E8]/40 hover:text-[#F5F0E8] hover:bg-[#1d1b1a] font-headline font-bold uppercase tracking-wider transition-transform hover:translate-x-1 duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="theater_comedy">theater_comedy</span>
+<span>Cinemas</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 text-[#F5F0E8]/40 hover:text-[#F5F0E8] hover:bg-[#1d1b1a] font-headline font-bold uppercase tracking-wider transition-transform hover:translate-x-1 duration-300 mt-auto" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span>Profile</span>
+</a>
+</nav>
+<div class="px-2">
+<button class="w-full bg-primary text-on-primary font-headline font-black uppercase py-4 tracking-widest text-sm hover:scale-[1.02] active:scale-95 transition-all">
+                START DUEL
+            </button>
+</div>
+</aside>
+<!-- Main Canvas -->
+<main class="ml-64 min-h-screen relative flex flex-col bg-surface-dim">
+<!-- Top Stats Bar -->
+<header class="h-20 px-12 flex justify-between items-center bg-[#0F0E0D]/70 backdrop-blur-xl border-b border-[#E8A020]/10 sticky top-0 z-30">
+<div class="flex gap-12">
+<div class="flex flex-col">
+<span class="text-[10px] font-label uppercase tracking-[0.2em] text-on-surface-variant/60">duels played</span>
+<span class="text-lg font-headline font-bold text-primary">1,284</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[10px] font-label uppercase tracking-[0.2em] text-on-surface-variant/60">films ranked</span>
+<span class="text-lg font-headline font-bold text-primary">452</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[10px] font-label uppercase tracking-[0.2em] text-on-surface-variant/60">to discover</span>
+<span class="text-lg font-headline font-bold text-primary">89</span>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<button class="text-on-surface-variant/60 hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="text-on-surface-variant/60 hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+<div class="w-10 h-10 bg-surface-container border border-outline-variant/30 overflow-hidden">
+<img alt="User profile" class="w-full h-full object-cover grayscale opacity-80" data-alt="Close up portrait of a man with cinematic lighting, shadows on one side of his face, high contrast noir aesthetic" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAnMEUYG9lck7SsTJwB2MP_URcNh80pstrEhNrdJFJ1Ys3_Gwvsrm5Vat6Kpa7atu4k0QOU325LzHfWRChR0G2FF1CQlYofbfvUhpJytvi_xvNsC-tmgRSvrbA03cqbdeIuhYrmndaIzYpHAef2ri1YuHC_eA3SzekwFuqYcItiPoS8rKkGBZgkpLTrbub3LeU5KyxzlGKe1qkK1BvjPQ17HeS6TGBKMgaLwgzuegQUEV2kW1uVnLTWkNgNz6kjJxRJlvf-I6tp3fQ"/>
+</div>
+</div>
+</header>
+<!-- Duel Content Area -->
+<section class="flex-1 p-12 flex flex-col items-center justify-center gap-12">
+<!-- Cards Container -->
+<div class="w-full max-w-7xl flex items-center justify-between gap-6 relative">
+<!-- Left Film Card -->
+<div class="relative flex-1 aspect-[2/3] group cursor-pointer overflow-hidden shadow-2xl transition-all duration-500 hover:scale-[1.02]">
+<img alt="Film Poster Left" class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 grayscale group-hover:grayscale-0" data-alt="Moody cinematic wide shot of a futuristic neon city in the rain, heavy atmospheric fog, blade runner aesthetic" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC8mdO5xRsk8ehjSSH89KbpsG1j2qpJreP6iUCe19kjshzwI_bYAOUE-vBxiPANShLFC1rR6yjYhXdYP6HNZ2rTMe2l7nF9_JMQcTQbNjMkzJV20ILSo0MtX78bEeqlvOcNjKBnXSIUI_SeQ0KtkRRZ6vg37XJV0E0BR6q3bKxIfbjkFVvpuVqMV_J7XQoVHKPFvCfQavApNwBpF6l0U86QP_pfaKnvRVALkTe7v5o-S4-r5ZA7Rf8453yIdzNjKcQBZatNhExrzEw"/>
+<div class="absolute inset-0 noir-gradient"></div>
+<!-- Genre Badges -->
+<div class="absolute top-6 left-6 flex gap-2">
+<span class="bg-[#0F0E0D]/80 backdrop-blur-md px-3 py-1 text-[10px] font-label font-bold uppercase tracking-widest border border-primary/20 text-primary">Sci-Fi</span>
+<span class="bg-[#0F0E0D]/80 backdrop-blur-md px-3 py-1 text-[10px] font-label font-bold uppercase tracking-widest border border-primary/20 text-primary">Noir</span>
+</div>
+<!-- Overlay Content -->
+<div class="absolute bottom-10 left-10 right-10">
+<p class="text-xs font-label uppercase tracking-[0.3em] text-on-surface-variant/80 mb-2">1982</p>
+<h2 class="text-5xl font-headline font-black uppercase tracking-tighter text-on-surface leading-none">CYBER<br/>DISTORTION</h2>
+</div>
+</div>
+<!-- VS Badge -->
+<div class="z-20 relative -mx-8">
+<div class="w-20 h-20 bg-secondary-container flex items-center justify-center rounded-none shadow-[0_0_40px_rgba(148,43,0,0.4)] border-2 border-secondary/20 rotate-45">
+<span class="font-headline font-black text-2xl text-secondary -rotate-45 italic tracking-tighter">VS</span>
+</div>
+</div>
+<!-- Right Film Card -->
+<div class="relative flex-1 aspect-[2/3] group cursor-pointer overflow-hidden shadow-2xl transition-all duration-500 hover:scale-[1.02]">
+<img alt="Film Poster Right" class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 grayscale group-hover:grayscale-0" data-alt="Close up of an old film projector lens in a dark room with a beam of light hitting floating dust particles" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAO8qvSaVpmA_gpLkVYPB4zI44aQuAVQHn8pL7zoC5feG6KRYnDRFjlVoatKOesQe8sj-k6bI5uhHts5L3zBSqXu2KhX5fYWrShO7FtBtwEn_Of1KnMFuAlqLIWoyKZLfeWzU3G-gtGwudhqfOBJuWkBNgAc2a5NdEOdkw89OehZTX_SOGJM8OqfSfNKfjHQfX-IiSKMvUqE8Ptvdz2Nta4NpJ-N-Je3NX3mudJ8S87MSgB0Xd19gJRlBavdbAQjokVAsdWVF4c5Vg"/>
+<div class="absolute inset-0 noir-gradient"></div>
+<!-- Genre Badges -->
+<div class="absolute top-6 right-6 flex gap-2">
+<span class="bg-[#0F0E0D]/80 backdrop-blur-md px-3 py-1 text-[10px] font-label font-bold uppercase tracking-widest border border-primary/20 text-primary">Thriller</span>
+</div>
+<!-- Overlay Content -->
+<div class="absolute bottom-10 left-10 right-10 text-right">
+<p class="text-xs font-label uppercase tracking-[0.3em] text-on-surface-variant/80 mb-2">2024</p>
+<h2 class="text-5xl font-headline font-black uppercase tracking-tighter text-on-surface leading-none">THE LAST<br/>REEL</h2>
+</div>
+</div>
+</div>
+<!-- Action Controls -->
+<div class="w-full max-w-4xl grid grid-cols-1 md:grid-cols-4 gap-4">
+<button class="md:col-span-4 bg-primary text-on-primary font-headline font-black py-6 uppercase tracking-[0.2em] text-lg hover:shadow-[0_0_30px_rgba(232,160,32,0.4)] active:scale-[0.98] transition-all">
+                    I've seen both — pick a winner
+                </button>
+<button class="border border-outline-variant/30 hover:border-primary/50 hover:bg-surface-container-low text-on-surface-variant font-label uppercase tracking-widest text-xs py-4 transition-all">
+                    Only seen left film
+                </button>
+<button class="border border-outline-variant/30 hover:border-primary/50 hover:bg-surface-container-low text-on-surface-variant font-label uppercase tracking-widest text-xs py-4 transition-all">
+                    Only seen right film
+                </button>
+<button class="md:col-span-2 border border-outline-variant/30 hover:border-secondary/50 hover:bg-surface-container-low text-on-surface-variant font-label uppercase tracking-widest text-xs py-4 transition-all">
+                    Haven't seen either
+                </button>
+</div>
+</section>
+<!-- Ambient Texture Overlays -->
+<div class="pointer-events-none fixed inset-0 opacity-[0.03] mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]"></div>
+</main>
+</body></html>

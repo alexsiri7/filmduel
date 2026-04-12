@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>FILMDUEL - Rankings</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Manrope:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-fixed": "#cae6ff",
+                        "on-primary-fixed": "#291800",
+                        "on-secondary-fixed": "#390b00",
+                        "tertiary-fixed-dim": "#8dcdff",
+                        "inverse-on-surface": "#32302f",
+                        "surface-container-lowest": "#0f0e0d",
+                        "on-tertiary-container": "#004668",
+                        "on-secondary": "#5d1800",
+                        "tertiary-container": "#4ab7fc",
+                        "outline": "#9e8e7a",
+                        "surface-container-low": "#1d1b1a",
+                        "surface-tint": "#ffb94c",
+                        "on-background": "#e6e1df",
+                        "secondary": "#ffb59d",
+                        "surface-container-highest": "#363433",
+                        "surface-container-high": "#2b2a28",
+                        "secondary-fixed": "#ffdbd0",
+                        "primary-fixed-dim": "#ffb94c",
+                        "error-container": "#93000a",
+                        "on-secondary-container": "#ffaf96",
+                        "outline-variant": "#514534",
+                        "background": "#141312",
+                        "on-primary": "#442b00",
+                        "primary": "#ffbe5b",
+                        "tertiary": "#94d0ff",
+                        "secondary-fixed-dim": "#ffb59d",
+                        "surface-bright": "#3b3937",
+                        "on-error": "#690005",
+                        "inverse-primary": "#815500",
+                        "on-tertiary": "#00344f",
+                        "on-tertiary-fixed-variant": "#004b70",
+                        "on-surface": "#e6e1df",
+                        "primary-fixed": "#ffddb2",
+                        "error": "#ffb4ab",
+                        "surface-dim": "#141312",
+                        "surface-container": "#211f1e",
+                        "on-tertiary-fixed": "#001e30",
+                        "inverse-surface": "#e6e1df",
+                        "secondary-container": "#942b00",
+                        "primary-container": "#e8a020",
+                        "surface": "#141312",
+                        "on-error-container": "#ffdad6",
+                        "on-secondary-fixed-variant": "#842500",
+                        "on-surface-variant": "#d6c4ae",
+                        "on-primary-container": "#5b3b00",
+                        "surface-variant": "#363433",
+                        "on-primary-fixed-variant": "#624000"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "fontFamily": {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Manrope"],
+                        "label": ["Manrope"]
+                    }
+                },
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Manrope', sans-serif; }
+        .font-headline { font-family: 'Space Grotesk', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .text-glow {
+            text-shadow: 0 0 15px rgba(232, 160, 32, 0.4);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-[#0F0E0D] text-[#F5F0E8] selection:bg-[#E8A020] selection:text-[#0F0E0D]">
+<!-- TopAppBar -->
+<header class="bg-[#0F0E0D] dark:bg-[#0F0E0D] fixed top-0 left-0 w-full z-50">
+<div class="flex justify-between items-center w-full px-6 py-4 max-w-screen-xl mx-auto">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-[#E8A020] text-2xl">movie_filter</span>
+<span class="text-2xl font-black text-[#E8A020] tracking-tighter font-headline">FILMDUEL</span>
+</div>
+<div class="flex items-center gap-6">
+<nav class="hidden md:flex gap-8">
+<a class="text-[#6B6760] font-headline font-bold uppercase tracking-widest text-[10px] hover:text-[#E8A020] transition-colors" href="#">Duel</a>
+<a class="text-[#E8A020] font-headline font-bold uppercase tracking-widest text-[10px]" href="#">Rankings</a>
+</nav>
+<span class="material-symbols-outlined text-[#6B6760] hover:text-[#E8A020] transition-transform duration-200 cursor-pointer active:scale-95">account_circle</span>
+</div>
+</div>
+</header>
+<main class="pt-24 pb-32 px-6 max-w-screen-xl mx-auto min-h-screen">
+<!-- Section Header -->
+<div class="mb-12">
+<h1 class="text-5xl md:text-7xl font-headline font-bold tracking-tighter uppercase mb-2">Your rankings</h1>
+<p class="text-[#6B6760] font-label text-[10px] uppercase tracking-[0.2em]">Based on 1,248 head-to-head duels</p>
+</div>
+<!-- Filter Pills -->
+<div class="flex gap-3 overflow-x-auto pb-8 scrollbar-hide no-scrollbar">
+<button class="bg-[#E8A020] text-[#0F0E0D] px-6 py-2 font-headline font-bold text-xs uppercase tracking-widest border border-transparent">All</button>
+<button class="bg-[#1d1b1a] text-[#6B6760] px-6 py-2 font-headline font-bold text-xs uppercase tracking-widest border border-[#363433] hover:text-[#F5F0E8] transition-colors">Drama</button>
+<button class="bg-[#1d1b1a] text-[#6B6760] px-6 py-2 font-headline font-bold text-xs uppercase tracking-widest border border-[#363433] hover:text-[#F5F0E8] transition-colors">Horror</button>
+<button class="bg-[#1d1b1a] text-[#6B6760] px-6 py-2 font-headline font-bold text-xs uppercase tracking-widest border border-[#363433] hover:text-[#F5F0E8] transition-colors">Sci-Fi</button>
+<button class="bg-[#1d1b1a] text-[#6B6760] px-6 py-2 font-headline font-bold text-xs uppercase tracking-widest border border-[#363433] hover:text-[#F5F0E8] transition-colors">Action</button>
+<button class="bg-[#1d1b1a] text-[#6B6760] px-6 py-2 font-headline font-bold text-xs uppercase tracking-widest border border-[#363433] hover:text-[#F5F0E8] transition-colors">Noir</button>
+</div>
+<!-- Rankings List -->
+<div class="flex flex-col gap-4">
+<!-- Rank 1 (Featured highlight) -->
+<div class="group relative bg-[#1d1b1a] hover:bg-[#211f1e] transition-all duration-300 overflow-hidden border-l-4 border-[#E8A020]">
+<div class="flex items-center p-4 md:p-6 gap-6 md:gap-10">
+<div class="flex flex-col items-center justify-center min-w-[60px]">
+<span class="text-[#E8A020] font-headline font-black text-4xl md:text-6xl text-glow italic">01</span>
+</div>
+<div class="relative h-20 w-14 md:h-28 md:w-20 shrink-0 bg-[#363433] shadow-2xl group-hover:scale-105 transition-transform">
+<img alt="Movie Poster" class="h-full w-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" data-alt="dramatic cinematic film poster of a lone figure in a raining street neon noir lighting moody atmosphere orange and teal" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDZWnuaDtal9DZbEmnUOS873tho5lhZwm3uR2wuMehafqFnvop-v1VpN08c4YVDOGI4cLiy9gT2BhzQGRx83m4O4oZstF0Nb2h7yINaDAiciv_kdfHYe2KEoHdMcT9pQJRzeGwheGwX-GSYOnSb1cwrRkKKKz5_5e6R52UBpJ-_WcFod-dMHk5P8FBibqk9oSWXYintQeoMbONFbwkUjuPyv71ekObVpDeymFhu6fHSLtsSbW6dM4OTv0Cxaky_w67mTRMvrlwsr3g"/>
+</div>
+<div class="flex-grow grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+<div>
+<h3 class="text-xl md:text-3xl font-headline font-bold uppercase tracking-tight text-[#E8A020]">Blade Runner 2049</h3>
+<p class="text-[#6B6760] font-label text-[10px] uppercase tracking-widest">Denis Villeneuve • 2017</p>
+</div>
+<div class="flex justify-end md:justify-center items-center gap-8 md:gap-16">
+<div class="text-right">
+<p class="text-[#6B6760] font-label text-[8px] uppercase tracking-widest mb-1">ELO Score</p>
+<p class="text-[#E8A020] font-headline font-bold text-2xl">2,842</p>
+</div>
+<div class="text-right">
+<p class="text-[#6B6760] font-label text-[8px] uppercase tracking-widest mb-1">Battles</p>
+<p class="text-[#F5F0E8] font-headline font-bold text-2xl">142</p>
+</div>
+</div>
+</div>
+<div class="hidden lg:flex items-center">
+<span class="material-symbols-outlined text-[#E8A020] opacity-0 group-hover:opacity-100 transition-opacity">trending_up</span>
+</div>
+</div>
+</div>
+<!-- Rank 2 -->
+<div class="group relative bg-[#141312] hover:bg-[#1d1b1a] transition-all duration-300 overflow-hidden">
+<div class="flex items-center p-4 md:p-6 gap-6 md:gap-10">
+<div class="flex flex-col items-center justify-center min-w-[60px]">
+<span class="text-[#363433] group-hover:text-[#6B6760] font-headline font-black text-4xl md:text-5xl italic transition-colors">02</span>
+</div>
+<div class="relative h-20 w-14 md:h-24 md:w-16 shrink-0 bg-[#363433]">
+<img alt="Movie Poster" class="h-full w-full object-cover grayscale opacity-60 group-hover:opacity-100 group-hover:grayscale-0 transition-all" data-alt="atmospheric black and white cinematic shot of a smoky poker table in a 1940s film noir style grainy texture" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB0Oh7wPuG8bwcbOAe1XmLqke6LMR4ITaa6kA_WLHv101uAs3iQXFR0VxeMQzCbZWCPlCuYjvMf-t6Qo40Bi_r3D5lbiMqNw-3kbFkkY5nq3DW6Y7-kcgimeba1VMFy8vzZnrxlFNZD9_bXBlbB2aTFIz6Krg6ytfai5mzI5Gf4YnVLvklmH2-yYY0gdW06bkmCFPz_1MPlZPdBNAXiGzh-zbpXOWjh_vcQEwpmF0pzuDiYCnPLvbSW3wiu_XWCWe7AtkAi5o2z-Uo"/>
+</div>
+<div class="flex-grow grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+<div>
+<h3 class="text-lg md:text-2xl font-headline font-bold uppercase tracking-tight text-[#F5F0E8]">The Godfather</h3>
+<p class="text-[#6B6760] font-label text-[10px] uppercase tracking-widest">Francis Ford Coppola • 1972</p>
+</div>
+<div class="flex justify-end md:justify-center items-center gap-8 md:gap-16">
+<div class="text-right">
+<p class="text-[#6B6760] font-label text-[8px] uppercase tracking-widest mb-1">ELO Score</p>
+<p class="text-[#F5F0E8] font-headline font-bold text-xl">2,795</p>
+</div>
+<div class="text-right">
+<p class="text-[#6B6760] font-label text-[8px] uppercase tracking-widest mb-1">Battles</p>
+<p class="text-[#F5F0E8] font-headline font-bold text-xl">189</p>
+</div>
+</div>
+</div>
+</div>
+<div class="absolute bottom-0 left-0 w-full h-[1px] bg-[#363433]/30"></div>
+</div>
+<!-- Rank 3 -->
+<div class="group relative bg-[#141312] hover:bg-[#1d1b1a] transition-all duration-300 overflow-hidden">
+<div class="flex items-center p-4 md:p-6 gap-6 md:gap-10">
+<div class="flex flex-col items-center justify-center min-w-[60px]">
+<span class="text-[#363433] group-hover:text-[#6B6760] font-headline font-black text-4xl md:text-5xl italic transition-colors">03</span>
+</div>
+<div class="relative h-20 w-14 md:h-24 md:w-16 shrink-0 bg-[#363433]">
+<img alt="Movie Poster" class="h-full w-full object-cover grayscale opacity-60 group-hover:opacity-100 group-hover:grayscale-0 transition-all" data-alt="vintage cinema projector shining light through a dark room with dust motes atmospheric lighting dramatic shadows" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAxm9DSwY6Z3n16cxz8jFtGm1TkmIGOeC24zT82PORXyF4yFZfjsQz5dFSv5xC7X7GYmW2xjzdZddO2T106dzaPGG3-LOEVoWbdHjbu7A7Vh2aBnqD8HL8T9rSGkppDNV7BI3aL_4pHzfbD7XRJyxRoR5PAFOe7qJiQQyjhUo48FOIPEn7CuJg2dRuYh0uIk1hzb7_2f-KLF8O61FCprUXFBlATm1lsYJGZNQZVXc3j1Oq--fQNd6Qz_w7QichPtqVeXWXiYDBbnJM"/>
+</div>
+<div class="flex-grow grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+<div>
+<h3 class="text-lg md:text-2xl font-headline font-bold uppercase tracking-tight text-[#F5F0E8]">Parasite</h3>
+<p class="text-[#6B6760] font-label text-[10px] uppercase tracking-widest">Bong Joon-ho • 2019</p>
+</div>
+<div class="flex justify-end md:justify-center items-center gap-8 md:gap-16">
+<div class="text-right">
+<p class="text-[#6B6760] font-label text-[8px] uppercase tracking-widest mb-1">ELO Score</p>
+<p class="text-[#F5F0E8] font-headline font-bold text-xl">2,710</p>
+</div>
+<div class="text-right">
+<p class="text-[#6B6760] font-label text-[8px] uppercase tracking-widest mb-1">Battles</p>
+<p class="text-[#F5F0E8] font-headline font-bold text-xl">96</p>
+</div>
+</div>
+</div>
+</div>
+<div class="absolute bottom-0 left-0 w-full h-[1px] bg-[#363433]/30"></div>
+</div>
+<!-- Rank 4 -->
+<div class="group relative bg-[#141312] hover:bg-[#1d1b1a] transition-all duration-300 overflow-hidden">
+<div class="flex items-center p-4 md:p-6 gap-6 md:gap-10">
+<div class="flex flex-col items-center justify-center min-w-[60px]">
+<span class="text-[#363433] group-hover:text-[#6B6760] font-headline font-black text-4xl md:text-5xl italic transition-colors">04</span>
+</div>
+<div class="relative h-20 w-14 md:h-24 md:w-16 shrink-0 bg-[#363433]">
+<img alt="Movie Poster" class="h-full w-full object-cover grayscale opacity-60 group-hover:opacity-100 group-hover:grayscale-0 transition-all" data-alt="surreal desert landscape with multiple moons at night cinematic sci-fi composition deep purple and orange tones" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBPxwxc6Xrt5Dn2uw3f4JQkw9tccRua9avbgQrsIXpNiZve_YVrcCKYerCutRuRHeTDqN41I76kLzuZ7QGHoppWd72HGb9NRVe8cr6yOvb_3WNa0XDs_LImBiVJUWmEWgjn6Z_ZdfR-I6yf9TCesVWb2IwtEAK6ppF3JDRjKwPBfeOb7QvKGg0jht22PaRSZRtG0U8FVIzu-XfNW6TKT0aPzIFC1KLE-xptB6mhohuw3Iq2h02X0UwdcUnx-2j_lKeFS2AysUV6MJ4"/>
+</div>
+<div class="flex-grow grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+<div>
+<h3 class="text-lg md:text-2xl font-headline font-bold uppercase tracking-tight text-[#F5F0E8]">Mad Max: Fury Road</h3>
+<p class="text-[#6B6760] font-label text-[10px] uppercase tracking-widest">George Miller • 2015</p>
+</div>
+<div class="flex justify-end md:justify-center items-center gap-8 md:gap-16">
+<div class="text-right">
+<p class="text-[#6B6760] font-label text-[8px] uppercase tracking-widest mb-1">ELO Score</p>
+<p class="text-[#F5F0E8] font-headline font-bold text-xl">2,688</p>
+</div>
+<div class="text-right">
+<p class="text-[#6B6760] font-label text-[8px] uppercase tracking-widest mb-1">Battles</p>
+<p class="text-[#F5F0E8] font-headline font-bold text-xl">212</p>
+</div>
+</div>
+</div>
+</div>
+<div class="absolute bottom-0 left-0 w-full h-[1px] bg-[#363433]/30"></div>
+</div>
+</div>
+</main>
+<!-- Floating Action Button -->
+<button class="fixed bottom-24 right-8 z-[60] bg-[#E8A020] text-[#0F0E0D] px-6 py-4 rounded-none shadow-[0_8px_32px_rgba(232,160,32,0.3)] flex items-center gap-3 active:scale-95 transition-all duration-200 group">
+<span class="font-headline font-black text-xs uppercase tracking-widest">Export to Letterboxd</span>
+<span class="material-symbols-outlined text-lg group-hover:translate-x-1 transition-transform">arrow_forward</span>
+</button>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pb-6 bg-[#0F0E0D]/70 dark:bg-[#0F0E0D]/70 backdrop-blur-xl md:hidden">
+<a class="flex flex-col items-center justify-center text-[#6B6760] px-6 py-2 hover:text-[#F5F0E8] transition-colors group" href="#">
+<span class="material-symbols-outlined text-2xl mb-1 group-active:scale-90 transition-transform">swords</span>
+<span class="text-[10px] font-bold font-label uppercase tracking-[0.1em]">Duel</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#E8A020] bg-[#E8A020]/10 rounded-none px-6 py-2 border-t-2 border-[#E8A020] group" href="#">
+<span class="material-symbols-outlined text-2xl mb-1 group-active:scale-90 transition-transform">leaderboard</span>
+<span class="text-[10px] font-bold font-label uppercase tracking-[0.1em]">Rankings</span>
+</a>
+</nav>
+</body></html>

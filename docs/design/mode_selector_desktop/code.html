@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;900&amp;family=Manrope:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container-lowest": "#0f0e0d",
+                    "tertiary-fixed": "#cae6ff",
+                    "tertiary-fixed-dim": "#8dcdff",
+                    "on-secondary-fixed": "#390b00",
+                    "on-primary-fixed": "#291800",
+                    "inverse-on-surface": "#32302f",
+                    "on-tertiary-container": "#004668",
+                    "tertiary-container": "#4ab7fc",
+                    "on-secondary": "#5d1800",
+                    "surface-tint": "#ffb94c",
+                    "secondary": "#ffb59d",
+                    "on-background": "#e6e1df",
+                    "surface-container-low": "#1d1b1a",
+                    "outline": "#9e8e7a",
+                    "surface-container-highest": "#363433",
+                    "primary-fixed-dim": "#ffb94c",
+                    "on-secondary-container": "#ffaf96",
+                    "error-container": "#93000a",
+                    "surface-container-high": "#2b2a28",
+                    "secondary-fixed": "#ffdbd0",
+                    "outline-variant": "#514534",
+                    "on-primary": "#442b00",
+                    "background": "#141312",
+                    "secondary-fixed-dim": "#ffb59d",
+                    "tertiary": "#94d0ff",
+                    "primary": "#ffbe5b",
+                    "on-error": "#690005",
+                    "surface-bright": "#3b3937",
+                    "error": "#ffb4ab",
+                    "on-tertiary-fixed-variant": "#004b70",
+                    "on-tertiary": "#00344f",
+                    "inverse-primary": "#815500",
+                    "primary-fixed": "#ffddb2",
+                    "on-surface": "#e6e1df",
+                    "surface-container": "#211f1e",
+                    "surface-dim": "#141312",
+                    "secondary-container": "#942b00",
+                    "surface": "#141312",
+                    "primary-container": "#e8a020",
+                    "on-tertiary-fixed": "#001e30",
+                    "inverse-surface": "#e6e1df",
+                    "on-surface-variant": "#d6c4ae",
+                    "on-secondary-fixed-variant": "#842500",
+                    "on-error-container": "#ffdad6",
+                    "on-primary-container": "#5b3b00",
+                    "on-primary-fixed-variant": "#624000",
+                    "surface-variant": "#363433"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "fontFamily": {
+                    "headline": ["Space Grotesk"],
+                    "body": ["Manrope"],
+                    "label": ["Manrope"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .noir-gradient {
+            background: radial-gradient(circle at top right, rgba(232, 160, 32, 0.05), transparent 40%),
+                        radial-gradient(circle at bottom left, rgba(192, 74, 32, 0.03), transparent 30%);
+        }
+        .ticket-shape {
+            clip-path: polygon(10% 0, 90% 0, 100% 15%, 100% 85%, 90% 100%, 10% 100%, 0 85%, 0 15%);
+        }
+    </style>
+</head>
+<body class="bg-surface-dim text-on-surface font-body selection:bg-primary selection:text-on-primary min-h-screen noir-gradient">
+<!-- TopNavBar -->
+<nav class="fixed top-0 w-full z-50 bg-[#0F0E0D]/70 backdrop-blur-xl border-b border-[#E8A020]/10 flex justify-between items-center px-12 h-20 shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
+<div class="text-2xl font-bold tracking-tighter text-[#E8A020] font-headline uppercase">FILMDUEL</div>
+<div class="hidden md:flex items-center gap-8 font-headline uppercase tracking-widest text-sm">
+<a class="text-[#F5F0E8]/60 hover:text-[#F5F0E8] transition-colors hover:bg-[#E8A020]/5 px-2 py-1" href="#">DUEL</a>
+<a class="text-[#F5F0E8]/60 hover:text-[#F5F0E8] transition-colors hover:bg-[#E8A020]/5 px-2 py-1" href="#">RANKINGS</a>
+<a class="text-[#F5F0E8]/60 hover:text-[#F5F0E8] transition-colors hover:bg-[#E8A020]/5 px-2 py-1" href="#">THEATER</a>
+<a class="text-[#F5F0E8]/60 hover:text-[#F5F0E8] transition-colors hover:bg-[#E8A020]/5 px-2 py-1" href="#">ARCHIVE</a>
+</div>
+<div class="flex items-center gap-6">
+<button class="material-symbols-outlined text-[#F5F0E8]/60 hover:text-[#E8A020] transition-all scale-95 active:scale-90" data-icon="notifications">notifications</button>
+<button class="material-symbols-outlined text-[#F5F0E8]/60 hover:text-[#E8A020] transition-all scale-95 active:scale-90" data-icon="settings">settings</button>
+<div class="w-10 h-10 bg-surface-container border border-outline-variant/20 rounded-none overflow-hidden">
+<img alt="User profile" class="w-full h-full object-cover" data-alt="close-up portrait of a man with dramatic cinematic lighting and high contrast shadows in a film noir style" src="https://lh3.googleusercontent.com/aida-public/AB6AXuClD--lbKCZIQPPrjDqRLQDX0bSjP-hf4GsAKIRIPIEo1_VcC3_n1L2cymK1o1aTm8R_UeamOhRKC4rlbxn8NJpT3XzKH7Z0m0se4rJMVg3FCvNwawqgKVGa4zAKR_RWWwQPupq4sMVdZKZd-zM-Nxrnq_5rbze7y--cC0_SC6au_HIogcM0sYN259WA0ofSW_y3bbWeOusX0gSKy1A9uJU61N847_u9bkL6_UqApM4Qrx3UvkXfc4I5OgOmcQpK-CVWPPjDDnA6-0"/>
+</div>
+</div>
+</nav>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full w-64 z-40 bg-[#141312] shadow-[10px_0_30px_rgba(0,0,0,0.3)] hidden lg:flex flex-col py-8 px-4 gap-8">
+<div class="mt-20 flex flex-col items-center gap-2">
+<div class="w-16 h-16 bg-primary-container rounded-none flex items-center justify-center mb-2">
+<span class="material-symbols-outlined text-on-primary-container text-3xl" data-icon="movie_filter" data-weight="fill" style="font-variation-settings: 'FILL' 1;">movie_filter</span>
+</div>
+<div class="text-[#E8A020] text-xl font-black font-headline uppercase tracking-tighter">FILMDUEL</div>
+<div class="text-[#F5F0E8]/40 text-[10px] uppercase tracking-[0.2em] font-headline">The Noir Projectionist</div>
+</div>
+<nav class="flex flex-col gap-2 mt-8">
+<a class="flex items-center gap-4 px-4 py-3 text-[#F5F0E8]/40 hover:text-[#F5F0E8] hover:bg-[#1d1b1a] transition-all font-headline font-bold uppercase tracking-wider group" href="#">
+<span class="material-symbols-outlined group-hover:translate-x-1 transition-transform" data-icon="swords">swords</span>
+<span class="group-hover:translate-x-1 transition-transform">Current Duel</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 text-[#F5F0E8]/40 hover:text-[#F5F0E8] hover:bg-[#1d1b1a] transition-all font-headline font-bold uppercase tracking-wider group" href="#">
+<span class="material-symbols-outlined group-hover:translate-x-1 transition-transform" data-icon="leaderboard">leaderboard</span>
+<span class="group-hover:translate-x-1 transition-transform">Global Rankings</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 bg-[#E8A020] text-[#0F0E0D] rounded-none shadow-[0_0_15px_rgba(232,160,32,0.3)] font-headline font-bold uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined" data-icon="movie_filter">movie_filter</span>
+<span>Film Vault</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 text-[#F5F0E8]/40 hover:text-[#F5F0E8] hover:bg-[#1d1b1a] transition-all font-headline font-bold uppercase tracking-wider group" href="#">
+<span class="material-symbols-outlined group-hover:translate-x-1 transition-transform" data-icon="theater_comedy">theater_comedy</span>
+<span class="group-hover:translate-x-1 transition-transform">Cinemas</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 text-[#F5F0E8]/40 hover:text-[#F5F0E8] hover:bg-[#1d1b1a] transition-all font-headline font-bold uppercase tracking-wider group" href="#">
+<span class="material-symbols-outlined group-hover:translate-x-1 transition-transform" data-icon="person">person</span>
+<span class="group-hover:translate-x-1 transition-transform">Profile</span>
+</a>
+</nav>
+<div class="mt-auto">
+<button class="w-full bg-primary text-on-primary font-headline font-black uppercase tracking-widest py-4 hover:brightness-110 transition-all active:scale-95">
+                START DUEL
+            </button>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="lg:ml-64 pt-20 min-h-screen">
+<div class="max-w-7xl mx-auto px-8 py-16">
+<!-- Header Section -->
+<header class="mb-16 relative">
+<div class="absolute -left-4 top-0 w-1 h-24 bg-primary"></div>
+<h1 class="text-7xl md:text-8xl font-black font-headline uppercase tracking-tighter leading-none mb-4 text-on-surface">
+                    Game <span class="text-primary">mode</span>
+</h1>
+<p class="text-on-surface-variant font-body text-xl max-w-2xl leading-relaxed opacity-80">
+                    Select your projection style. Choose how the celluloid unfolds in your private screening duel.
+                </p>
+</header>
+<!-- Mode Selector Grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+<!-- Discovery Card -->
+<div class="group relative bg-surface-container-low p-8 border border-outline-variant/10 hover:bg-surface-container transition-all cursor-pointer flex flex-col h-full min-h-[420px]">
+<div class="mb-8 flex justify-between items-start">
+<div class="w-12 h-12 flex items-center justify-center border border-primary/30 text-primary">
+<span class="material-symbols-outlined text-3xl" data-icon="explore">explore</span>
+</div>
+<span class="text-[10px] font-headline uppercase tracking-[0.3em] text-on-surface-variant/40">Mode 01</span>
+</div>
+<h3 class="text-4xl font-headline font-black uppercase tracking-tight mb-4 group-hover:text-primary transition-colors">Discovery</h3>
+<p class="text-on-surface-variant font-body mb-8 leading-relaxed">
+                        Venture into the unknown. A curated stream of obscure masterpieces and avant-garde gems tailored to expand your cinematic horizon.
+                    </p>
+<div class="mt-auto pt-8 border-t border-outline-variant/10">
+<div class="flex items-center gap-2 text-primary font-headline font-bold uppercase tracking-widest text-xs">
+<span>SELECT MODE</span>
+<span class="material-symbols-outlined text-sm" data-icon="arrow_forward">arrow_forward</span>
+</div>
+</div>
+</div>
+<!-- Refinement Card (Active) -->
+<div class="group relative bg-surface-container p-8 border-2 border-primary shadow-[0_0_40px_rgba(232,160,32,0.15)] flex flex-col h-full min-h-[420px]">
+<div class="absolute top-0 right-0 bg-primary text-on-primary px-3 py-1 text-[10px] font-headline font-bold uppercase tracking-widest">
+                        Active Selection
+                    </div>
+<div class="mb-8 flex justify-between items-start">
+<div class="w-12 h-12 flex items-center justify-center bg-primary text-on-primary">
+<span class="material-symbols-outlined text-3xl" data-icon="filter_vintage" data-weight="fill" style="font-variation-settings: 'FILL' 1;">filter_vintage</span>
+</div>
+<span class="text-[10px] font-headline uppercase tracking-[0.3em] text-on-surface-variant/40">Mode 02</span>
+</div>
+<h3 class="text-4xl font-headline font-black uppercase tracking-tight mb-4 text-primary">Refinement</h3>
+<p class="text-on-surface font-body mb-8 leading-relaxed">
+                        The connoisseur's choice. Narrow your focus to specific eras, directors, or visual styles. Deep dive into the craft of the greats.
+                    </p>
+<div class="mt-auto pt-8 border-t border-primary/20">
+<div class="flex items-center gap-2 text-on-surface font-headline font-bold uppercase tracking-widest text-xs">
+<span class="material-symbols-outlined text-primary" data-icon="check_circle" data-weight="fill" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span>CURRENTLY LOADED</span>
+</div>
+</div>
+</div>
+<!-- Playoff Card -->
+<div class="group relative bg-surface-container-low p-8 border border-outline-variant/10 hover:bg-surface-container transition-all cursor-pointer flex flex-col h-full min-h-[420px]">
+<div class="mb-8 flex justify-between items-start">
+<div class="w-12 h-12 flex items-center justify-center border border-primary/30 text-primary">
+<span class="material-symbols-outlined text-3xl" data-icon="local_fire_department">local_fire_department</span>
+</div>
+<span class="text-[10px] font-headline uppercase tracking-[0.3em] text-on-surface-variant/40">Mode 03</span>
+</div>
+<h3 class="text-4xl font-headline font-black uppercase tracking-tight mb-4 group-hover:text-primary transition-colors">Playoff</h3>
+<p class="text-on-surface-variant font-body mb-6 leading-relaxed">
+                        Competitive curation. Direct duels between established classics and rising challengers. You hold the jury's verdict.
+                    </p>
+<!-- Genre Chips -->
+<div class="flex flex-wrap gap-2 mb-8">
+<span class="px-3 py-1 bg-surface-container-highest text-on-surface-variant font-headline text-[10px] font-bold uppercase tracking-wider border border-outline-variant/20">Horror</span>
+<span class="px-3 py-1 bg-surface-container-highest text-on-surface-variant font-headline text-[10px] font-bold uppercase tracking-wider border border-outline-variant/20">Sci-fi</span>
+<span class="px-3 py-1 bg-surface-container-highest text-on-surface-variant font-headline text-[10px] font-bold uppercase tracking-wider border border-outline-variant/20">90s</span>
+<span class="px-3 py-1 bg-surface-container-highest text-on-surface-variant font-headline text-[10px] font-bold uppercase tracking-wider border border-outline-variant/20">Scorsese</span>
+</div>
+<div class="mt-auto pt-8 border-t border-outline-variant/10">
+<div class="flex items-center gap-2 text-primary font-headline font-bold uppercase tracking-widest text-xs">
+<span>ENTER THE ARENA</span>
+<span class="material-symbols-outlined text-sm" data-icon="bolt">bolt</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Visual Decorative Element (Editorial Asymmetry) -->
+<div class="mt-24 relative h-96 overflow-hidden">
+<img alt="Cinematic backdrop" class="w-full h-full object-cover grayscale opacity-20 hover:opacity-30 transition-opacity" data-alt="ultra-wide cinematic shot of an empty vintage movie theater with glowing screen light reflecting on velvet seats in deep shadows" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBPhbReVn48urXXo1PxHm9sb8mv56fzYuJjjl3xAhxYrrQzTPhv8TzL6VZfymVx0dXBlrtwkxOzmho-rkHsJnCy3AIq5bwT1Jfr5kM-Abc_MX0C_mW_kpcCj7vgjhHUL5go-WI7h-IW-XBkM75sLp9bkck5-6-gP60PZjTeqyJMjhDVsms04GxICP5do6ycOyN1f39c81Aw5dqmqwdeCUjKako9xB7AOX74krJ-17omeTyK-jGrrbbpIBoE7VorRcr6gyliRjBWphk"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-dim via-transparent to-transparent"></div>
+<div class="absolute bottom-12 left-12">
+<span class="text-[120px] font-black font-headline uppercase leading-none tracking-tighter text-on-surface/5 select-none pointer-events-none">PROJECTION</span>
+</div>
+</div>
+<!-- Footer Details -->
+<div class="mt-16 flex flex-col md:flex-row justify-between items-end gap-8 border-t border-outline-variant/10 pt-12">
+<div class="max-w-md">
+<h4 class="font-headline font-bold text-primary uppercase tracking-widest text-xs mb-4">SYSTEM STATUS</h4>
+<p class="text-on-surface-variant font-body text-sm leading-relaxed">
+                        The Noir Projectionist engine is currently rendering high-fidelity cinematic profiles. All duels are sanctioned by the International Film Duel League.
+                    </p>
+</div>
+<div class="flex gap-4">
+<button class="px-8 py-4 bg-outline-variant/10 text-on-surface font-headline font-bold uppercase tracking-widest text-xs hover:bg-outline-variant/20 transition-all border border-outline-variant/20">
+                        CANCEL SELECTION
+                    </button>
+<button class="px-8 py-4 bg-primary text-on-primary font-headline font-bold uppercase tracking-widest text-xs shadow-[0_0_20px_rgba(232,160,32,0.2)] hover:shadow-[0_0_30px_rgba(232,160,32,0.4)] transition-all">
+                        CONFIRM CHOICE
+                    </button>
+</div>
+</div>
+</div>
+</main>
+</body></html>

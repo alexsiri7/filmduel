@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&amp;family=Manrope:wght@200..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "secondary-fixed-dim": "#ffb59d",
+                    "tertiary-fixed": "#cae6ff",
+                    "tertiary-container": "#4ab7fc",
+                    "surface-container-lowest": "#0f0e0d",
+                    "inverse-surface": "#e6e1df",
+                    "inverse-on-surface": "#32302f",
+                    "surface-container-high": "#2b2a28",
+                    "surface-dim": "#141312",
+                    "on-primary-fixed": "#291800",
+                    "outline": "#9e8e7a",
+                    "on-tertiary-fixed": "#001e30",
+                    "on-secondary": "#5d1800",
+                    "on-secondary-container": "#ffaf96",
+                    "on-surface": "#e6e1df",
+                    "primary-fixed": "#ffddb2",
+                    "on-secondary-fixed-variant": "#842500",
+                    "surface-container": "#211f1e",
+                    "inverse-primary": "#815500",
+                    "error": "#ffb4ab",
+                    "background": "#141312",
+                    "surface-container-highest": "#363433",
+                    "primary-container": "#e8a020",
+                    "on-secondary-fixed": "#390b00",
+                    "on-error": "#690005",
+                    "primary-fixed-dim": "#ffb94c",
+                    "surface-container-low": "#1d1b1a",
+                    "surface-variant": "#363433",
+                    "on-primary-container": "#5b3b00",
+                    "on-surface-variant": "#d6c4ae",
+                    "tertiary-fixed-dim": "#8dcdff",
+                    "secondary": "#ffb59d",
+                    "primary": "#ffbe5b",
+                    "on-background": "#e6e1df",
+                    "on-primary-fixed-variant": "#624000",
+                    "surface": "#141312",
+                    "error-container": "#93000a",
+                    "surface-bright": "#3b3937",
+                    "outline-variant": "#514534",
+                    "on-primary": "#442b00",
+                    "tertiary": "#94d0ff",
+                    "on-tertiary": "#00344f",
+                    "secondary-fixed": "#ffdbd0",
+                    "on-tertiary-container": "#004668",
+                    "on-error-container": "#ffdad6",
+                    "surface-tint": "#ffb94c",
+                    "secondary-container": "#942b00",
+                    "on-tertiary-fixed-variant": "#004b70"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "fontFamily": {
+                    "headline": ["Space Grotesk"],
+                    "body": ["Manrope"],
+                    "label": ["Manrope"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #0F0E0D;
+            color: #F5F0E8;
+            font-family: 'Manrope', sans-serif;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface-container-lowest text-on-surface antialiased overflow-x-hidden pb-32">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-[#0F0E0D] dark:bg-[#0F0E0D] flex justify-between items-center px-6 h-16 w-full">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-amber-500" data-icon="movie_filter">movie_filter</span>
+<h1 class="text-2xl font-black tracking-widest text-amber-500 font-['Space_Grotesk'] uppercase">FILM_RANK</h1>
+</div>
+<button class="hover:opacity-80 active:scale-95 transition-transform duration-150 text-[#F5F0E8]">
+<span class="material-symbols-outlined" data-icon="search">search</span>
+</button>
+</header>
+<main class="mt-20 px-6 max-w-2xl mx-auto">
+<!-- Headline Section -->
+<div class="mb-8">
+<h2 class="text-4xl font-headline font-bold tracking-tighter uppercase text-on-surface">Your rankings</h2>
+</div>
+<!-- Filter Pill Row -->
+<div class="flex overflow-x-auto no-scrollbar gap-3 pb-6 sticky top-16 bg-[#0F0E0D] z-40 py-4 -mx-6 px-6">
+<button class="whitespace-nowrap px-6 py-2 bg-primary text-on-primary font-bold text-xs uppercase tracking-widest rounded-none">All</button>
+<button class="whitespace-nowrap px-6 py-2 bg-surface-container-high text-on-surface-variant font-bold text-xs uppercase tracking-widest rounded-none border border-outline-variant/20">Drama</button>
+<button class="whitespace-nowrap px-6 py-2 bg-surface-container-high text-on-surface-variant font-bold text-xs uppercase tracking-widest rounded-none border border-outline-variant/20">Horror</button>
+<button class="whitespace-nowrap px-6 py-2 bg-surface-container-high text-on-surface-variant font-bold text-xs uppercase tracking-widest rounded-none border border-outline-variant/20">Sci-fi</button>
+<button class="whitespace-nowrap px-6 py-2 bg-surface-container-high text-on-surface-variant font-bold text-xs uppercase tracking-widest rounded-none border border-outline-variant/20">1990s</button>
+</div>
+<!-- Ranking List -->
+<div class="space-y-4">
+<!-- Rank 1 (Highlighted) -->
+<div class="flex items-center bg-surface-container p-4 border-l-4 border-primary shadow-[0_8px_32px_rgba(232,160,32,0.05)]">
+<div class="w-12 shrink-0">
+<span class="text-3xl font-headline font-black text-primary italic">01</span>
+</div>
+<div class="w-16 h-16 shrink-0 mr-4 overflow-hidden rounded-lg">
+<img class="w-full h-full object-cover" data-alt="cinematic close up of high quality noir film poster artwork with dramatic moody lighting and bold shadows" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCTl92xRUpLOIIRzyhaSTmv4PWBLWi1Q_fSNXy2WTDp55GVa5bO3zdfrZkelfd6-BwYnunP8aQe-2rDMhspSmc5r5PEEpmK3SAUCPUGDLlRf7PNI15d_4zTroZXp2x8JHSqOpNAmSiqgrCXtIt9HBEgVbX4H0ADXnI-AOJlFb81Dl6ChgaQ2LDzKGPkBKGcxMnh6tzzNaBGvn9GU1jKuLEHfuxx58KtmH6h2T1IHTrGFcgJHBX-FeW24wphiseJZDK0O7IFGQZpwSk"/>
+</div>
+<div class="flex-grow">
+<h3 class="font-headline font-bold text-lg leading-tight uppercase tracking-tight">Blade Runner 2049</h3>
+<p class="text-sm text-on-surface-variant/60 font-body uppercase tracking-tighter">2017 • Denis Villeneuve</p>
+<div class="flex items-center mt-1 gap-4">
+<span class="text-xs font-bold text-primary tracking-widest uppercase">ELO 1842</span>
+<span class="bg-surface-container-highest px-2 py-0.5 text-[10px] text-on-surface-variant rounded-sm font-bold tracking-widest uppercase">42 BATTLES</span>
+</div>
+</div>
+</div>
+<!-- Rank 2 -->
+<div class="flex items-center bg-surface-container-low p-4">
+<div class="w-12 shrink-0">
+<span class="text-3xl font-headline font-black text-on-surface-variant/20 italic">02</span>
+</div>
+<div class="w-16 h-16 shrink-0 mr-4 overflow-hidden rounded-lg">
+<img class="w-full h-full object-cover" data-alt="cinematic abstract film still from a classic science fiction movie with cold blue lighting and geometric shapes" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB4zIqX2MKtrGDnCWFNdX4r-RyOjrU7n-suCeDH3F8kXiHG_vrGFyLZhgitGSoz5tkoEoixKTSQhlTn_lJ0ccCb9HVHUtCVzkSRlFEyZnoCyDQERe9naI-xUlFiWAKq93x00nJvkNbzkEowwipAbn9QV6O14sy-U6RmenLXUCII0xOPkTi8R5RVzTNSH34jsihZJDyAjOkWS3-WSSs2DtBD4ZRKb4zB3rfiQ0iDyjeajEhwWFkdxB16wLWPWgqwFg_DrfyYrIgL0Oc"/>
+</div>
+<div class="flex-grow">
+<h3 class="font-headline font-bold text-lg leading-tight uppercase tracking-tight">The Godfather</h3>
+<p class="text-sm text-on-surface-variant/60 font-body uppercase tracking-tighter">1972 • Francis Ford Coppola</p>
+<div class="flex items-center mt-1 gap-4">
+<span class="text-xs font-bold text-primary/70 tracking-widest uppercase">ELO 1798</span>
+<span class="bg-surface-container-highest px-2 py-0.5 text-[10px] text-on-surface-variant rounded-sm font-bold tracking-widest uppercase">38 BATTLES</span>
+</div>
+</div>
+</div>
+<!-- Rank 3 -->
+<div class="flex items-center bg-surface-container-low p-4">
+<div class="w-12 shrink-0">
+<span class="text-3xl font-headline font-black text-on-surface-variant/20 italic">03</span>
+</div>
+<div class="w-16 h-16 shrink-0 mr-4 overflow-hidden rounded-lg">
+<img class="w-full h-full object-cover" data-alt="dramatic film production scene with studio lights and silhouette of camera gear in a foggy environment" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBOOlndDxIr34Okb93UdBg1HM3zzAjvpXHDTRnvN7mWQqrmYzylti6ZkQ7IwCIB5FVfYN49uDq_jB-kbhQkJCwv-kAwFT7SRcnXiuf1-qosRGbvfMK6FWl9qGbsIl2w_JLfHIo9CRJZ_d_X5wQwZWGuTFEFyB-eyqT5F8esWut9AS3V6aeufGQPef9diahG7EJ8qoy4nczDM-aYFqiKSMHu042M3syhWXRrQc3rxCJWFihlf8_Zpr_AeocLTBhimHc_VqgUsd_g02k"/>
+</div>
+<div class="flex-grow">
+<h3 class="font-headline font-bold text-lg leading-tight uppercase tracking-tight">Parasite</h3>
+<p class="text-sm text-on-surface-variant/60 font-body uppercase tracking-tighter">2019 • Bong Joon-ho</p>
+<div class="flex items-center mt-1 gap-4">
+<span class="text-xs font-bold text-primary/70 tracking-widest uppercase">ELO 1754</span>
+<span class="bg-surface-container-highest px-2 py-0.5 text-[10px] text-on-surface-variant rounded-sm font-bold tracking-widest uppercase">51 BATTLES</span>
+</div>
+</div>
+</div>
+<!-- Rank 4 -->
+<div class="flex items-center bg-surface-container-low p-4">
+<div class="w-12 shrink-0">
+<span class="text-3xl font-headline font-black text-on-surface-variant/20 italic">04</span>
+</div>
+<div class="w-16 h-16 shrink-0 mr-4 overflow-hidden rounded-lg">
+<img class="w-full h-full object-cover" data-alt="vibrant neon lights of a futuristic city street reflecting in rain water puddles at night" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAhPXheYGq0C7ZA5Q7ff8ZBdNBd3Qe1HeteB4Mqgjk_AWR5gvYMPCmviCnA-kzUn_s7ph1Hx4q5trir4t-0nqWz5PliA8uafMUrsbJud6VROFxOJ38042bCdQIyzT41YcXLjEMl88fAxvuST_4uXQoowvVl2o-QAwLziNjr49Io9rZClfD-jDFrNdPEyO46DJPBZZaKCR3jZhJj9nPtpdNzQwZbO6Ffs9C3sl2ce_Tga512TnxWMISH3amEE1e8lnKOi-iqPM3Gmv4"/>
+</div>
+<div class="flex-grow">
+<h3 class="font-headline font-bold text-lg leading-tight uppercase tracking-tight">Mulholland Drive</h3>
+<p class="text-sm text-on-surface-variant/60 font-body uppercase tracking-tighter">2001 • David Lynch</p>
+<div class="flex items-center mt-1 gap-4">
+<span class="text-xs font-bold text-primary/70 tracking-widest uppercase">ELO 1721</span>
+<span class="bg-surface-container-highest px-2 py-0.5 text-[10px] text-on-surface-variant rounded-sm font-bold tracking-widest uppercase">29 BATTLES</span>
+</div>
+</div>
+</div>
+<!-- Rank 5 -->
+<div class="flex items-center bg-surface-container-low p-4">
+<div class="w-12 shrink-0">
+<span class="text-3xl font-headline font-black text-on-surface-variant/20 italic">05</span>
+</div>
+<div class="w-16 h-16 shrink-0 mr-4 overflow-hidden rounded-lg">
+<img class="w-full h-full object-cover" data-alt="vintage cinema projector lens glowing in a dark theater with dust motes dancing in the light beam" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBNbIxUuDZ5qn9b72RhtiG8y6XMpEEmWU9sRBvgg0cRRIVwecqtmoVtE1aFFAxtAHZK8Qr4hTygyKSmtBbMUe43XDzLOwR50sZroUgQjE1iE_-lKxP7lG8nfKfKMNyFFcKGjWlRg3lA-aEYdLGWvOkjrrBsv7tVpVUx_UNv6ZvLeP0x9Pu_5ELCxe8dVFmR05PFz7-TgellAnWf5DT-d9V-0s5DVTzFx0liQI2JI--UcS61c9sR8kkWWWRaWo-fDhYOTB4Axa8GIo0"/>
+</div>
+<div class="flex-grow">
+<h3 class="font-headline font-bold text-lg leading-tight uppercase tracking-tight">Heat</h3>
+<p class="text-sm text-on-surface-variant/60 font-body uppercase tracking-tighter">1995 • Michael Mann</p>
+<div class="flex items-center mt-1 gap-4">
+<span class="text-xs font-bold text-primary/70 tracking-widest uppercase">ELO 1695</span>
+<span class="bg-surface-container-highest px-2 py-0.5 text-[10px] text-on-surface-variant rounded-sm font-bold tracking-widest uppercase">18 BATTLES</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- FAB: Export to Letterboxd -->
+<div class="fixed bottom-24 right-6 z-50">
+<button class="bg-primary text-on-primary font-headline font-black text-xs tracking-widest uppercase py-4 px-6 rounded-none shadow-[0_8px_24px_rgba(232,160,32,0.3)] hover:scale-105 active:scale-95 transition-all duration-300 flex items-center gap-3">
+<span>Export to Letterboxd</span>
+<span class="material-symbols-outlined text-sm" data-icon="ios_share">ios_share</span>
+</button>
+</div>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full h-20 bg-[#0F0E0D]/70 backdrop-blur-xl border-t border-[#E8A020]/15 flex justify-around items-center px-12 pb-4 shadow-[0_-8px_32px_rgba(232,160,32,0.08)] z-50">
+<a class="flex flex-col items-center justify-center text-[#6B6760] py-2 hover:text-amber-400 active:scale-105 transition-all duration-300" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="swords">swords</span>
+<span class="font-['Manrope'] text-[10px] font-bold tracking-[0.1em] uppercase">DUEL</span>
+</a>
+<a class="flex flex-col items-center justify-center text-amber-500 py-2 border-t-2 border-amber-500 active:scale-105 transition-all duration-300" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="leaderboard" style="font-variation-settings: 'FILL' 1;">leaderboard</span>
+<span class="font-['Manrope'] text-[10px] font-bold tracking-[0.1em] uppercase">RANKINGS</span>
+</a>
+</nav>
+</body></html>

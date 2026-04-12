@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>FilmDuel - Login</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Manrope:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "secondary-fixed-dim": "#ffb59d",
+                      "tertiary-fixed": "#cae6ff",
+                      "tertiary-container": "#4ab7fc",
+                      "surface-container-lowest": "#0f0e0d",
+                      "inverse-surface": "#e6e1df",
+                      "inverse-on-surface": "#32302f",
+                      "surface-container-high": "#2b2a28",
+                      "surface-dim": "#141312",
+                      "on-primary-fixed": "#291800",
+                      "outline": "#9e8e7a",
+                      "on-tertiary-fixed": "#001e30",
+                      "on-secondary": "#5d1800",
+                      "on-secondary-container": "#ffaf96",
+                      "on-surface": "#e6e1df",
+                      "primary-fixed": "#ffddb2",
+                      "on-secondary-fixed-variant": "#842500",
+                      "surface-container": "#211f1e",
+                      "inverse-primary": "#815500",
+                      "error": "#ffb4ab",
+                      "background": "#141312",
+                      "surface-container-highest": "#363433",
+                      "primary-container": "#e8a020",
+                      "on-secondary-fixed": "#390b00",
+                      "on-error": "#690005",
+                      "primary-fixed-dim": "#ffb94c",
+                      "surface-container-low": "#1d1b1a",
+                      "surface-variant": "#363433",
+                      "on-primary-container": "#5b3b00",
+                      "on-surface-variant": "#d6c4ae",
+                      "tertiary-fixed-dim": "#8dcdff",
+                      "secondary": "#ffb59d",
+                      "primary": "#ffbe5b",
+                      "on-background": "#e6e1df",
+                      "on-primary-fixed-variant": "#624000",
+                      "surface": "#141312",
+                      "error-container": "#93000a",
+                      "surface-bright": "#3b3937",
+                      "outline-variant": "#514534",
+                      "on-primary": "#442b00",
+                      "tertiary": "#94d0ff",
+                      "on-tertiary": "#00344f",
+                      "secondary-fixed": "#ffdbd0",
+                      "on-tertiary-container": "#004668",
+                      "on-error-container": "#ffdad6",
+                      "surface-tint": "#ffb94c",
+                      "secondary-container": "#942b00",
+                      "on-tertiary-fixed-variant": "#004b70"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "fontFamily": {
+                      "headline": ["Space Grotesk"],
+                      "body": ["Manrope"],
+                      "label": ["Manrope"]
+              }
+            },
+          },
+        }
+      </script>
+<style>
+        body {
+            background-color: #0F0E0D;
+            color: #F5F0E8;
+            font-family: 'Manrope', sans-serif;
+            overflow: hidden;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .cinematic-vignette {
+            background: radial-gradient(circle, rgba(15,14,13,0) 0%, rgba(15,14,13,0.8) 100%);
+            pointer-events: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface-container-lowest flex flex-col items-center justify-center min-h-screen selection:bg-primary selection:text-on-primary px-6">
+<div class="fixed inset-0 cinematic-vignette z-10"></div>
+<div class="fixed inset-0 opacity-10 z-0">
+<div class="absolute inset-0 bg-repeat bg-center" data-alt="extreme close-up of vintage film grain texture with subtle flickering light and dust particles in a dark cinema setting" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAd8l6c1jWrIx4oiZrmYl1p1pD8D7horrNLDRt5NKTwe5I5zmDswvuDbx6cl_xGW5qRACH7tCcTPnqeN8hiBcCoWtlXFNjPfbSCodjkguqf7ohQFjzThi-BEfTp47D9Kt-QBnlhSB7GZTClZBWvQpk9y6ArOHMIt4KVyYac2OTs-1mpxIpbK8ZdC7KI1Qx-uvsKEAydrMqINszGrNUei5xyuCX-2qUvdNdFsl7ZIt46x0qnGpmIZJJDsVvqChSsg92gDConmhDPPBA'); background-size: cover;"></div>
+</div>
+<main class="relative z-20 flex flex-col items-center max-w-sm w-full">
+<div class="mb-12 flex flex-col items-center">
+<div class="w-32 h-32 mb-6 flex items-center justify-center">
+<img alt="FilmDuel Logo" class="w-full h-full object-contain filter grayscale invert brightness-0 [filter:sepia(1)_saturate(5)_hue-rotate(5deg)]" data-alt="stylized minimalist movie reel icon in vibrant amber gold color with clean architectural lines on a dark background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDekvnAgU_-HOgpDLhNJQsjAbwQCygSE8PuZZCG9cUipWvXQjmQyf9DR0yh47uTXU-eg2G88KDV2qDodyq2R38Rv843f-mCyc9QzZ7kIlHV1idAsetgu_Gv8mUlqQ3wtOZwu-1mpF17t_3wQjGxA_TV8dcUaHXdnCjBijAp_eLGhlZ2Dklyn54eqVVAaxYTqozHQVqoXuBvRJY2HGYuWvLi0OfIgdFgR6TzRQo-swgOz_8LR-zNadBoGtxGoASeXWNmKhDI--dxbSA"/>
+</div>
+<h1 class="font-headline text-5xl md:text-6xl font-black tracking-tighter uppercase text-primary text-center">
+                FilmDuel
+            </h1>
+</div>
+<div class="w-full space-y-6">
+<button class="group relative w-full bg-primary-container text-on-primary-container font-headline font-bold uppercase tracking-widest py-5 px-8 rounded-full flex items-center justify-center transition-all duration-300 active:scale-95 hover:bg-primary">
+<span class="mr-3 material-symbols-outlined" data-icon="movie_filter">movie_filter</span>
+                Sign in with Trakt
+                <div class="absolute inset-0 rounded-full bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+</button>
+<p class="text-center font-label text-[10px] tracking-[0.2em] text-[#6B6760] uppercase mt-12">
+                Rate films. Rank everything.
+            </p>
+</div>
+</main>
+<div class="fixed bottom-12 left-0 w-full z-20 flex flex-col items-center px-6 opacity-30">
+<div class="w-px h-16 bg-gradient-to-b from-transparent via-[#E8A020]/20 to-transparent"></div>
+</div>
+</body></html>

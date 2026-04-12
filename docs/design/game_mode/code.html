@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;900&amp;family=Manrope:wght@200;300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "secondary-fixed-dim": "#ffb59d",
+                    "tertiary-fixed": "#cae6ff",
+                    "tertiary-container": "#4ab7fc",
+                    "surface-container-lowest": "#0f0e0d",
+                    "inverse-surface": "#e6e1df",
+                    "inverse-on-surface": "#32302f",
+                    "surface-container-high": "#2b2a28",
+                    "surface-dim": "#141312",
+                    "on-primary-fixed": "#291800",
+                    "outline": "#9e8e7a",
+                    "on-tertiary-fixed": "#001e30",
+                    "on-secondary": "#5d1800",
+                    "on-secondary-container": "#ffaf96",
+                    "on-surface": "#e6e1df",
+                    "primary-fixed": "#ffddb2",
+                    "on-secondary-fixed-variant": "#842500",
+                    "surface-container": "#211f1e",
+                    "inverse-primary": "#815500",
+                    "error": "#ffb4ab",
+                    "background": "#141312",
+                    "surface-container-highest": "#363433",
+                    "primary-container": "#e8a020",
+                    "on-secondary-fixed": "#390b00",
+                    "on-error": "#690005",
+                    "primary-fixed-dim": "#ffb94c",
+                    "surface-container-low": "#1d1b1a",
+                    "surface-variant": "#363433",
+                    "on-primary-container": "#5b3b00",
+                    "on-surface-variant": "#d6c4ae",
+                    "tertiary-fixed-dim": "#8dcdff",
+                    "secondary": "#ffb59d",
+                    "primary": "#ffbe5b",
+                    "on-background": "#e6e1df",
+                    "on-primary-fixed-variant": "#624000",
+                    "surface": "#141312",
+                    "error-container": "#93000a",
+                    "surface-bright": "#3b3937",
+                    "outline-variant": "#514534",
+                    "on-primary": "#442b00",
+                    "tertiary": "#94d0ff",
+                    "on-tertiary": "#00344f",
+                    "secondary-fixed": "#ffdbd0",
+                    "on-tertiary-container": "#004668",
+                    "on-error-container": "#ffdad6",
+                    "surface-tint": "#ffb94c",
+                    "secondary-container": "#942b00",
+                    "on-tertiary-fixed-variant": "#004b70"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "fontFamily": {
+                    "headline": ["Space Grotesk"],
+                    "body": ["Manrope"],
+                    "label": ["Manrope"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface font-body selection:bg-primary selection:text-on-primary">
+<!-- Top App Bar (Background Content) -->
+<nav class="fixed top-0 w-full z-50 bg-[#0F0E0D] dark:bg-[#0F0E0D] flex justify-between items-center px-6 h-16 w-full">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-amber-500" data-icon="movie_filter">movie_filter</span>
+<span class="font-['Space_Grotesk'] font-bold tracking-tighter uppercase text-2xl font-black tracking-widest text-amber-500">FILM_RANK</span>
+</div>
+<div class="flex gap-6">
+<span class="material-symbols-outlined text-[#F5F0E8] hover:opacity-80 transition-transform duration-150 active:scale-95 cursor-pointer" data-icon="search">search</span>
+<span class="material-symbols-outlined text-[#F5F0E8] hover:opacity-80 transition-transform duration-150 active:scale-95 cursor-pointer" data-icon="person">person</span>
+</div>
+</nav>
+<!-- Main Canvas (Background Content) -->
+<main class="pt-24 pb-32 px-6 max-w-lg mx-auto min-h-screen">
+<header class="mb-12">
+<h2 class="font-headline text-5xl font-bold leading-none tracking-tighter uppercase mb-4">Current<br/>Duel</h2>
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 bg-secondary rounded-full"></span>
+<span class="font-label text-xs tracking-widest uppercase text-on-surface-variant">Live Matchmaking</span>
+</div>
+</header>
+<section class="space-y-8">
+<div class="relative group">
+<div class="aspect-[2/3] w-full bg-surface-container overflow-hidden">
+<img class="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-700" data-alt="cinematic close-up of a neon-lit urban street at night with deep shadows and moody atmosphere" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAdpOVHiVzn6zwG-LhKFIzGzjfd6HGQ0kTTv4fYH_2OYQkwiiy8nyMxsnWNcQWqk5ENvWePwpodrn_jxmwMbcavu_g3pOQreV-4cM6m5_LV7OPzrGzMucqkCx9RvZDMB5vxd3xeuxLBVdpklQrYEDM41ef26ONoFqqSf5nm6NXowfQxHtr9gN_Fs9nQsm4ZBaZ-wnTCgPIPXjaLI7geD7lQA-KbnFI7Kg3CJspJT7lQMlv44r6_Aec3PiJAPSbOAd0w1hKE1m1Wn0o"/>
+</div>
+<div class="absolute bottom-0 left-0 p-6 w-full bg-gradient-to-t from-background to-transparent">
+<p class="font-label text-[10px] tracking-[0.2em] text-primary mb-1">PREMIUM ENTRY</p>
+<h3 class="font-headline text-2xl font-bold tracking-tight uppercase">The Neon Demon</h3>
+</div>
+</div>
+<div class="flex justify-center py-4">
+<div class="px-6 py-2 border border-outline-variant/20 font-headline font-black text-4xl text-outline-variant/30 italic">VS</div>
+</div>
+<div class="relative group">
+<div class="aspect-[2/3] w-full bg-surface-container overflow-hidden">
+<img class="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-700" data-alt="black and white cinematic wide shot of a solitary figure walking down an empty hallway with strong shadows" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC6tikj8NQ1licsuybW47tZbeaeDgcM946AMSKqwSx77m6tvHchoeyhM0covLxDbknPIRdLxpybDANHMo-Toopx5zTOjg3wknQd8z0x15kAe1--TqSi-r7IRSvN3ZGXVNXaxd2ZhzVVq5gSquT7Q64BUesTFLJ4mFE2IZo2_hLIdAvUk3XSvzqqh2twYGMlGt0VyqTm8zn59ZxjQfAG6lrk4j0-JVDnZRuOBfge8nhHvCV9ILFAWSvGgFLVyrhBBMgrg_HrP-LLSAw"/>
+</div>
+<div class="absolute bottom-0 left-0 p-6 w-full bg-gradient-to-t from-background to-transparent">
+<p class="font-label text-[10px] tracking-[0.2em] text-primary mb-1">CULT CLASSIC</p>
+<h3 class="font-headline text-2xl font-bold tracking-tight uppercase">Stalker</h3>
+</div>
+</div>
+</section>
+</main>
+<!-- Bottom Navigation Bar (Background Content) -->
+<nav class="fixed bottom-0 left-0 w-full h-20 flex justify-around items-center px-12 pb-4 bg-[#0F0E0D]/70 backdrop-blur-xl z-40 border-t border-[#E8A020]/15 shadow-[0_-8px_32px_rgba(232,160,32,0.08)]">
+<button class="flex flex-col items-center justify-center text-amber-500 py-2 border-t-2 border-amber-500 transition-all duration-300 scale-105">
+<span class="material-symbols-outlined mb-1" data-icon="swords" style="font-variation-settings: 'FILL' 1;">swords</span>
+<span class="font-['Manrope'] text-[10px] font-bold tracking-[0.1em] uppercase">DUEL</span>
+</button>
+<button class="flex flex-col items-center justify-center text-[#6B6760] py-2 hover:text-amber-400">
+<span class="material-symbols-outlined mb-1" data-icon="leaderboard">leaderboard</span>
+<span class="font-['Manrope'] text-[10px] font-bold tracking-[0.1em] uppercase">RANKINGS</span>
+</button>
+</nav>
+<!-- Modal Backdrop -->
+<div class="fixed inset-0 bg-background/80 backdrop-blur-sm z-[60]"></div>
+<!-- Mode Selector Bottom Sheet -->
+<div class="fixed bottom-0 left-0 w-full z-[70] transition-transform duration-500 transform translate-y-0">
+<div class="max-w-xl mx-auto bg-surface-container-low rounded-t-[2rem] p-8 shadow-2xl border-t border-outline-variant/10">
+<!-- Drag Handle -->
+<div class="w-12 h-1 bg-outline-variant/30 rounded-full mx-auto mb-8"></div>
+<header class="mb-10 text-center">
+<h1 class="font-headline text-4xl font-black tracking-tighter uppercase mb-2">Game mode</h1>
+<p class="font-label text-xs tracking-widest text-on-surface-variant uppercase">Select your projection style</p>
+</header>
+<div class="space-y-4 mb-8">
+<!-- Mode Option: Discovery -->
+<button class="w-full flex items-center gap-6 p-6 bg-surface-container text-left border border-outline-variant/10 hover:border-primary/30 transition-all duration-200 group active:scale-[0.98]">
+<div class="w-14 h-14 flex items-center justify-center bg-surface-dim group-hover:bg-primary/10 transition-colors">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="explore">explore</span>
+</div>
+<div class="flex-1">
+<h3 class="font-headline text-xl font-bold tracking-tight uppercase group-hover:text-primary transition-colors">Discovery</h3>
+<p class="text-on-surface-variant text-sm font-medium">Introduce new films to your archive</p>
+</div>
+</button>
+<!-- Mode Option: Refinement (ACTIVE) -->
+<button class="w-full flex items-center gap-6 p-6 bg-surface-container text-left border-2 border-primary transition-all duration-200 relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-2">
+<span class="material-symbols-outlined text-primary text-xs" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<div class="w-14 h-14 flex items-center justify-center bg-primary/10">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="auto_fix_high">auto_fix_high</span>
+</div>
+<div class="flex-1">
+<h3 class="font-headline text-xl font-bold tracking-tight uppercase text-primary">Refinement</h3>
+<p class="text-on-surface-variant text-sm font-medium">Sharpen your rankings with precision</p>
+</div>
+</button>
+<!-- Mode Option: Playoff -->
+<div class="bg-surface-container border border-outline-variant/10 p-6 space-y-4">
+<button class="w-full flex items-center gap-6 text-left group active:scale-[0.98]">
+<div class="w-14 h-14 flex items-center justify-center bg-surface-dim group-hover:bg-primary/10 transition-colors">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="trophy">trophy</span>
+</div>
+<div class="flex-1">
+<h3 class="font-headline text-xl font-bold tracking-tight uppercase group-hover:text-primary transition-colors">Playoff</h3>
+<p class="text-on-surface-variant text-sm font-medium">Pick a genre or decade for a tournament</p>
+</div>
+</button>
+<div class="pt-4 border-t border-outline-variant/10">
+<p class="font-label text-[10px] tracking-widest text-on-surface-variant uppercase mb-3 px-1">pick your bracket</p>
+<div class="flex flex-wrap gap-2">
+<button class="px-3 py-1.5 border border-outline-variant/20 font-label text-[10px] tracking-wider uppercase hover:bg-primary hover:text-on-primary transition-colors">Horror</button>
+<button class="px-3 py-1.5 border border-outline-variant/20 font-label text-[10px] tracking-wider uppercase hover:bg-primary hover:text-on-primary transition-colors">Sci-fi</button>
+<button class="px-3 py-1.5 border border-outline-variant/20 font-label text-[10px] tracking-wider uppercase hover:bg-primary hover:text-on-primary transition-colors">90s</button>
+<button class="px-3 py-1.5 border border-outline-variant/20 font-label text-[10px] tracking-wider uppercase hover:bg-primary hover:text-on-primary transition-colors">Scorsese</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Action Button -->
+<button class="w-full py-5 bg-primary text-on-primary font-headline font-black text-lg tracking-[0.2em] uppercase hover:bg-primary-fixed transition-colors active:scale-[0.99] mb-4">
+                START DUEL
+            </button>
+</div>
+</div>
+</body></html>

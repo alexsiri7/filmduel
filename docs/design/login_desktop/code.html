@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;900&amp;family=Manrope:wght@200;300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container-lowest": "#0f0e0d",
+                    "tertiary-fixed": "#cae6ff",
+                    "tertiary-fixed-dim": "#8dcdff",
+                    "on-secondary-fixed": "#390b00",
+                    "on-primary-fixed": "#291800",
+                    "inverse-on-surface": "#32302f",
+                    "on-tertiary-container": "#004668",
+                    "tertiary-container": "#4ab7fc",
+                    "on-secondary": "#5d1800",
+                    "surface-tint": "#ffb94c",
+                    "secondary": "#ffb59d",
+                    "on-background": "#e6e1df",
+                    "surface-container-low": "#1d1b1a",
+                    "outline": "#9e8e7a",
+                    "surface-container-highest": "#363433",
+                    "primary-fixed-dim": "#ffb94c",
+                    "on-secondary-container": "#ffaf96",
+                    "error-container": "#93000a",
+                    "surface-container-high": "#2b2a28",
+                    "secondary-fixed": "#ffdbd0",
+                    "outline-variant": "#514534",
+                    "on-primary": "#442b00",
+                    "background": "#141312",
+                    "secondary-fixed-dim": "#ffb59d",
+                    "tertiary": "#94d0ff",
+                    "primary": "#ffbe5b",
+                    "on-error": "#690005",
+                    "surface-bright": "#3b3937",
+                    "error": "#ffb4ab",
+                    "on-tertiary-fixed-variant": "#004b70",
+                    "on-tertiary": "#00344f",
+                    "inverse-primary": "#815500",
+                    "primary-fixed": "#ffddb2",
+                    "on-surface": "#e6e1df",
+                    "surface-container": "#211f1e",
+                    "surface-dim": "#141312",
+                    "secondary-container": "#942b00",
+                    "surface": "#141312",
+                    "primary-container": "#e8a020",
+                    "on-tertiary-fixed": "#001e30",
+                    "inverse-surface": "#e6e1df",
+                    "on-surface-variant": "#d6c4ae",
+                    "on-secondary-fixed-variant": "#842500",
+                    "on-error-container": "#ffdad6",
+                    "on-primary-container": "#5b3b00",
+                    "on-primary-fixed-variant": "#624000",
+                    "surface-variant": "#363433"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "fontFamily": {
+                    "headline": ["Space Grotesk"],
+                    "body": ["Manrope"],
+                    "label": ["Manrope"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #0F0E0D;
+            color: #F5F0E8;
+            font-family: 'Manrope', sans-serif;
+            margin: 0;
+            overflow: hidden;
+        }
+        .cinematic-grain::before {
+            content: "";
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: url('https://grainy-gradients.vercel.app/noise.svg');
+            opacity: 0.05;
+            pointer-events: none;
+            z-index: 50;
+        }
+        .film-frame-border {
+            border: 2px solid #E8A020;
+            width: 48px;
+            height: 36px;
+            display: inline-block;
+            position: relative;
+        }
+        .film-frame-border::before, .film-frame-border::after {
+            content: '';
+            position: absolute;
+            width: 6px;
+            height: 4px;
+            background: #E8A020;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        .film-frame-border::before { top: -6px; }
+        .film-frame-border::after { bottom: -6px; }
+
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen cinematic-grain">
+<!-- Background Cinematic Texture -->
+<div class="fixed inset-0 z-0 overflow-hidden">
+<div class="absolute inset-0 bg-gradient-to-t from-[#0F0E0D] via-transparent to-transparent opacity-80 z-10"></div>
+<img class="w-full h-full object-cover grayscale contrast-125 brightness-[0.15]" data-alt="atmospheric cinematic shot of a dark empty movie theater with faint dust motes dancing in a single dim amber light beam" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCOCLjQFCvPtC7oOFYimVAnaKw2mQWw50knx_rjfNLPq-rANqH0IinPcuMJrBZ8wbzO_IYFBuJ90ivfRdjPeGYC2327PkmaWEk-KhMZg37HK4u4c3FSbaiqlkTWG6x8opI36cXwj-hi-_lDBUFqRjgOKC-pCEAWtUie2wtLwKbS79ujWmhwgZ53x14iXt-3Qef25262sKRWQk2nBhS09It5TjT4D_cM-S_RMJGC8q0HtFeydLYu8nAxQx3dqk8ZUM-l2hwGY6v67bk"/>
+</div>
+<!-- Main Content Shell (No Shell Visibility Rule Applied: Transactional Screen) -->
+<main class="relative z-20 flex flex-col items-center text-center px-6">
+<!-- Logo Mark: Two film frames facing each other -->
+<div class="flex items-center gap-4 mb-8">
+<div class="film-frame-border rotate-[-12deg] opacity-90"></div>
+<div class="film-frame-border rotate-[12deg] opacity-90"></div>
+</div>
+<!-- Wordmark -->
+<h1 class="font-headline font-black text-6xl md:text-8xl tracking-tighter text-primary-container mb-12">
+            FILMDUEL
+        </h1>
+<!-- CTA Section -->
+<div class="flex flex-col items-center gap-16">
+<button class="group flex items-center gap-4 bg-primary px-10 py-5 rounded-full font-headline font-bold text-on-primary tracking-widest uppercase transition-all duration-300 hover:scale-105 active:scale-95 shadow-[0_0_40px_rgba(232,160,32,0.2)]">
+<span class="material-symbols-outlined text-2xl" data-icon="play_arrow">play_arrow</span>
+                Sign in with Trakt
+            </button>
+<!-- Muted Footer text -->
+<div class="flex flex-col gap-2">
+<p class="font-label text-on-surface-variant/40 uppercase tracking-[0.3em] text-[10px] md:text-xs">
+                    Rate films. Rank everything.
+                </p>
+<div class="w-12 h-[1px] bg-outline-variant/20 mx-auto mt-4"></div>
+</div>
+</div>
+</main>
+<!-- Aesthetic Decorative Elements: The "Noir Projectionist" Staggered feel -->
+<div class="fixed top-12 left-12 opacity-5 hidden md:block">
+<span class="font-headline text-9xl font-black select-none">ACT I</span>
+</div>
+<div class="fixed bottom-12 right-12 opacity-5 hidden md:block">
+<span class="font-headline text-9xl font-black select-none">24FPS</span>
+</div>
+</body></html>

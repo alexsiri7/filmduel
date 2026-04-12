@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Manrope:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-fixed": "#cae6ff",
+                        "on-primary-fixed": "#291800",
+                        "on-secondary-fixed": "#390b00",
+                        "tertiary-fixed-dim": "#8dcdff",
+                        "inverse-on-surface": "#32302f",
+                        "surface-container-lowest": "#0f0e0d",
+                        "on-tertiary-container": "#004668",
+                        "on-secondary": "#5d1800",
+                        "tertiary-container": "#4ab7fc",
+                        "outline": "#9e8e7a",
+                        "surface-container-low": "#1d1b1a",
+                        "surface-tint": "#ffb94c",
+                        "on-background": "#e6e1df",
+                        "secondary": "#ffb59d",
+                        "surface-container-highest": "#363433",
+                        "surface-container-high": "#2b2a28",
+                        "secondary-fixed": "#ffdbd0",
+                        "primary-fixed-dim": "#ffb94c",
+                        "error-container": "#93000a",
+                        "on-secondary-container": "#ffaf96",
+                        "outline-variant": "#514534",
+                        "background": "#141312",
+                        "on-primary": "#442b00",
+                        "primary": "#ffbe5b",
+                        "tertiary": "#94d0ff",
+                        "secondary-fixed-dim": "#ffb59d",
+                        "surface-bright": "#3b3937",
+                        "on-error": "#690005",
+                        "inverse-primary": "#815500",
+                        "on-tertiary": "#00344f",
+                        "on-tertiary-fixed-variant": "#004b70",
+                        "on-surface": "#e6e1df",
+                        "primary-fixed": "#ffddb2",
+                        "error": "#ffb4ab",
+                        "surface-dim": "#141312",
+                        "surface-container": "#211f1e",
+                        "on-tertiary-fixed": "#001e30",
+                        "inverse-surface": "#e6e1df",
+                        "secondary-container": "#942b00",
+                        "primary-container": "#e8a020",
+                        "surface": "#141312",
+                        "on-error-container": "#ffdad6",
+                        "on-secondary-fixed-variant": "#842500",
+                        "on-surface-variant": "#d6c4ae",
+                        "on-primary-container": "#5b3b00",
+                        "surface-variant": "#363433",
+                        "on-primary-fixed-variant": "#624000"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "fontFamily": {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Manrope"],
+                        "label": ["Manrope"]
+                    }
+                },
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body { font-family: 'Manrope', sans-serif; }
+        h1, h2, h3 { font-family: 'Space Grotesk', sans-serif; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-[#0F0E0D] text-[#F5F0E8] min-h-screen selection:bg-[#E8A020] selection:text-[#0F0E0D]">
+<!-- Top Navigation Anchor -->
+<header class="bg-[#0F0E0D] dark:bg-[#0F0E0D] sticky top-0 z-50">
+<div class="flex justify-between items-center w-full px-6 py-4 max-w-screen-xl mx-auto">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-[#E8A020]" data-icon="movie_filter">movie_filter</span>
+<span class="text-2xl font-black text-[#E8A020] tracking-tighter uppercase">FILMDUEL</span>
+</div>
+<div class="flex items-center gap-6">
+<nav class="hidden md:flex gap-8">
+<a class="text-[#E8A020] font-headline font-bold text-sm uppercase tracking-widest transition-transform duration-200 hover:scale-95" href="#">Duel</a>
+<a class="text-[#6B6760] font-headline font-bold text-sm uppercase tracking-widest transition-transform duration-200 hover:scale-95 hover:text-[#E8A020]" href="#">Rankings</a>
+</nav>
+<span class="material-symbols-outlined text-[#6B6760] cursor-pointer hover:text-[#E8A020] transition-colors" data-icon="account_circle">account_circle</span>
+</div>
+</div>
+</header>
+<main class="max-w-screen-xl mx-auto px-6 pt-4 pb-32">
+<!-- Stats Bar -->
+<div class="flex justify-center mb-8">
+<div class="flex gap-8 py-2 px-6 bg-[#1d1b1a] rounded-none border-l-2 border-[#E8A020]">
+<div class="flex flex-col">
+<span class="text-[10px] font-bold uppercase tracking-[0.2em] text-[#6B6760]">VOTES CAST</span>
+<span class="text-[#F5F0E8] font-headline font-medium">1,284</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold uppercase tracking-[0.2em] text-[#6B6760]">RANK</span>
+<span class="text-[#F5F0E8] font-headline font-medium">TOP 5%</span>
+</div>
+</div>
+</div>
+<!-- Duel Canvas -->
+<div class="relative grid grid-cols-2 gap-2 md:gap-6 items-stretch min-h-[530px]">
+<!-- Film A -->
+<div class="group relative flex flex-col bg-[#1d1b1a] overflow-hidden transition-all duration-300 hover:bg-[#211f1e]">
+<div class="relative aspect-[2/3] overflow-hidden">
+<img class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-80 group-hover:opacity-100" data-alt="atmospheric cinematic shot of a neon-drenched city street at night with vintage film grain and deep shadows" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBVcpAJkYcmNfykfszIthMmFOI9HPeM8VFsHM5wsBoGeOgR2xrzI8cCULnsieeErB3i1yVe0H2hXWErUxSKLS20N0UXQQEfU7mrwdRQ7MLU2a4u27UsfzD7tG-a1UgpQFHwkaK6Lfmjdqajy-yW5iJW-ckf6qePGvyeSWw3Lt3PtIGJAt2OEFmmGLdSKiBLr0KdgM-ulGrPklQVjyBH_A533FdEpKreH0DyBNB1hKN55Uz0Qa0eXL8MJN9H_NaGxX5_6yjBmFh8lCE"/>
+<div class="absolute inset-0 bg-gradient-to-t from-[#0F0E0D] via-transparent to-transparent"></div>
+</div>
+<div class="p-4 md:p-8 mt-auto z-10">
+<div class="flex flex-wrap gap-2 mb-3">
+<span class="text-[10px] font-bold uppercase tracking-widest px-2 py-1 bg-[#E8A020]/10 text-[#E8A020] border border-[#E8A020]/20">NOIR</span>
+<span class="text-[10px] font-bold uppercase tracking-widest px-2 py-1 bg-[#F5F0E8]/5 text-[#6B6760]">1974</span>
+</div>
+<h2 class="text-3xl md:text-5xl font-bold uppercase leading-none tracking-tighter mb-2 break-words">CHINATOWN</h2>
+</div>
+</div>
+<!-- VS Badge -->
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20">
+<div class="bg-[#C04A20] text-[#F5F0E8] font-headline font-black text-xl md:text-2xl px-4 py-2 rotate-[-12deg] shadow-[0_0_40px_rgba(192,74,32,0.4)]">
+                    VS
+                </div>
+</div>
+<!-- Film B -->
+<div class="group relative flex flex-col bg-[#1d1b1a] overflow-hidden transition-all duration-300 hover:bg-[#211f1e]">
+<div class="relative aspect-[2/3] overflow-hidden">
+<img class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-80 group-hover:opacity-100" data-alt="dramatic low angle shot of a classic cinema marquee at sunset with warm orange and purple hues" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCb7R5CI-N73OOEjMN1xduhAYAoO-qadeW19BxEZ4WT3IHikjeSjLLQv0R6yOR-xQMZ1nBcFFkRV1vvSdKprec_WDhGKKzVU2z3qe3Z_KNzLIYkeLq48g9sxMLZWIS38Y1HS55zzmfcWCpwxDoFhE_evshbYcj7Zw19_ArK2-aEuxsToIQ64G2nQNvl7SYjzS_jk5ZZg3WfEet2iKSN54KLmr4ru-GEOCViXLXTQLOY4P0ji0H6Zj0O21AAeUxuzySjLThV0CJJOpA"/>
+<div class="absolute inset-0 bg-gradient-to-t from-[#0F0E0D] via-transparent to-transparent"></div>
+</div>
+<div class="p-4 md:p-8 mt-auto z-10">
+<div class="flex flex-wrap gap-2 mb-3">
+<span class="text-[10px] font-bold uppercase tracking-widest px-2 py-1 bg-[#E8A020]/10 text-[#E8A020] border border-[#E8A020]/20">CRIME</span>
+<span class="text-[10px] font-bold uppercase tracking-widest px-2 py-1 bg-[#F5F0E8]/5 text-[#6B6760]">1990</span>
+</div>
+<h2 class="text-3xl md:text-5xl font-bold uppercase leading-none tracking-tighter mb-2 break-words">GOODFELLAS</h2>
+</div>
+</div>
+</div>
+<!-- Action Section -->
+<div class="mt-12 flex flex-col items-center gap-6 max-w-2xl mx-auto">
+<button class="w-full bg-[#E8A020] text-[#442b00] py-5 px-8 font-headline font-black text-sm md:text-base uppercase tracking-[0.2em] transition-all duration-200 active:scale-95 hover:brightness-110 shadow-[0_8px_32px_rgba(232,160,32,0.15)]">
+                I've seen both — pick a winner
+            </button>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+<button class="border border-[#E8A020]/20 text-[#E8A020] py-4 px-6 font-headline font-bold text-[11px] uppercase tracking-widest transition-all hover:bg-[#E8A020]/5">
+                    Only seen CHINATOWN
+                </button>
+<button class="border border-[#E8A020]/20 text-[#E8A020] py-4 px-6 font-headline font-bold text-[11px] uppercase tracking-widest transition-all hover:bg-[#E8A020]/5">
+                    Only seen GOODFELLAS
+                </button>
+</div>
+<button class="text-[#6B6760] font-headline font-bold text-[10px] uppercase tracking-[0.3em] transition-all hover:text-[#F5F0E8]">
+                Haven't seen either
+            </button>
+</div>
+</main>
+<!-- Bottom Navigation Shell -->
+<footer class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pb-safe bg-[#0F0E0D]/70 backdrop-blur-xl shadow-[0_-8px_32px_rgba(232,160,32,0.08)]">
+<a class="flex flex-col items-center justify-center text-[#E8A020] bg-[#E8A020]/10 rounded-none px-6 py-4 border-t-2 border-[#E8A020] transition-transform duration-200 active:scale-95" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="swords" style="font-variation-settings: 'FILL' 1;">swords</span>
+<span class="text-[10px] font-bold uppercase tracking-[0.1em]">Duel</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#6B6760] px-6 py-4 transition-colors hover:text-[#F5F0E8]" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="leaderboard">leaderboard</span>
+<span class="text-[10px] font-bold uppercase tracking-[0.1em]">Rankings</span>
+</a>
+</footer>
+</body></html>

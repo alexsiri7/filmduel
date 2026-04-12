@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Manrope:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+                  "secondary-fixed-dim": "#ffb59d",
+                  "tertiary-fixed": "#cae6ff",
+                  "tertiary-container": "#4ab7fc",
+                  "surface-container-lowest": "#0f0e0d",
+                  "inverse-surface": "#e6e1df",
+                  "inverse-on-surface": "#32302f",
+                  "surface-container-high": "#2b2a28",
+                  "surface-dim": "#141312",
+                  "on-primary-fixed": "#291800",
+                  "outline": "#9e8e7a",
+                  "on-tertiary-fixed": "#001e30",
+                  "on-secondary": "#5d1800",
+                  "on-secondary-container": "#ffaf96",
+                  "on-surface": "#e6e1df",
+                  "primary-fixed": "#ffddb2",
+                  "on-secondary-fixed-variant": "#842500",
+                  "surface-container": "#211f1e",
+                  "inverse-primary": "#815500",
+                  "error": "#ffb4ab",
+                  "background": "#141312",
+                  "surface-container-highest": "#363433",
+                  "primary-container": "#e8a020",
+                  "on-secondary-fixed": "#390b00",
+                  "on-error": "#690005",
+                  "primary-fixed-dim": "#ffb94c",
+                  "surface-container-low": "#1d1b1a",
+                  "surface-variant": "#363433",
+                  "on-primary-container": "#5b3b00",
+                  "on-surface-variant": "#d6c4ae",
+                  "tertiary-fixed-dim": "#8dcdff",
+                  "secondary": "#ffb59d",
+                  "primary": "#ffbe5b",
+                  "on-background": "#e6e1df",
+                  "on-primary-fixed-variant": "#624000",
+                  "surface": "#141312",
+                  "error-container": "#93000a",
+                  "surface-bright": "#3b3937",
+                  "outline-variant": "#514534",
+                  "on-primary": "#442b00",
+                  "tertiary": "#94d0ff",
+                  "on-tertiary": "#00344f",
+                  "secondary-fixed": "#ffdbd0",
+                  "on-tertiary-container": "#004668",
+                  "on-error-container": "#ffdad6",
+                  "surface-tint": "#ffb94c",
+                  "secondary-container": "#942b00",
+                  "on-tertiary-fixed-variant": "#004b70"
+          },
+          "borderRadius": {
+                  "DEFAULT": "0.125rem",
+                  "lg": "0.25rem",
+                  "xl": "0.5rem",
+                  "full": "0.75rem"
+          },
+          "fontFamily": {
+                  "headline": ["Space Grotesk"],
+                  "body": ["Manrope"],
+                  "label": ["Manrope"]
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    .poster-gradient {
+      background: linear-gradient(180deg, rgba(15,14,13,0) 0%, rgba(15,14,13,0.4) 50%, rgba(15,14,13,0.95) 100%);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface-container-lowest text-on-surface font-body selection:bg-primary selection:text-on-primary overflow-x-hidden">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-[#0F0E0D] flex justify-between items-center px-6 h-16">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-amber-500" data-icon="movie_filter">movie_filter</span>
+<h1 class="text-2xl font-black tracking-widest text-amber-500 font-headline uppercase">FILM_RANK</h1>
+</div>
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-[#F5F0E8] hover:opacity-80 transition-opacity cursor-pointer" data-icon="search">search</span>
+<span class="material-symbols-outlined text-[#F5F0E8] hover:opacity-80 transition-opacity cursor-pointer" data-icon="account_circle">account_circle</span>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="pt-20 pb-32 px-4 min-h-screen flex flex-col max-w-5xl mx-auto">
+<!-- Stats Bar -->
+<div class="flex justify-center gap-6 mb-6">
+<div class="flex items-center gap-1.5">
+<span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant font-label">duels played</span>
+<span class="text-[10px] font-black text-primary font-label">1,248</span>
+</div>
+<div class="w-px h-3 bg-outline-variant/30 self-center"></div>
+<div class="flex items-center gap-1.5">
+<span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant font-label">films ranked</span>
+<span class="text-[10px] font-black text-primary font-label">412</span>
+</div>
+<div class="w-px h-3 bg-outline-variant/30 self-center"></div>
+<div class="flex items-center gap-1.5">
+<span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant font-label">to discover</span>
+<span class="text-[10px] font-black text-primary font-label">89</span>
+</div>
+</div>
+<!-- Duel Stage -->
+<div class="relative flex-grow flex items-stretch gap-2 mb-8 h-[486px] md:h-[530px]">
+<!-- Film Card Left -->
+<div class="relative flex-1 group cursor-pointer overflow-hidden rounded-sm transition-transform duration-300 active:scale-95">
+<img class="absolute inset-0 w-full h-full object-cover" data-alt="cinematic close-up of a neon-lit futuristic city street at night with deep shadows and moody atmosphere" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB6OCrc_CvSFp3WjuF_TLlXBnh099JlbACbbiNyu_BDCrmB0dDffMYF4pXeYUwT6RwchvUGWBbSJUh1Onyt15lFFS9mBshEcD3-3DqMWwtXRarPgIk3eqCfny2g3Eg3jtcThepf-ljDQsaNMG9LQKNBwqxebliQCB31w6sQwq-Y20Sl77DZCFNA-rRNOiREqXchuSqY4J_WFmgZDdhxtG1JFwFWp3kxRmCWZRMUH05ZkNIWzN4aFKafpak4oC3Pevokj2-9aLWCCFE"/>
+<div class="absolute inset-0 poster-gradient"></div>
+<div class="absolute top-3 left-3 flex gap-2">
+<span class="px-2 py-0.5 bg-surface-container-lowest/80 backdrop-blur-md text-[10px] font-bold tracking-wider text-primary border border-outline-variant/20">NEO-NOIR</span>
+</div>
+<div class="absolute bottom-6 left-6 right-6">
+<p class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1 font-label">1982</p>
+<h2 class="text-3xl md:text-5xl font-black font-headline leading-tight tracking-tighter text-on-surface group-hover:text-primary transition-colors">BLADE RUNNER</h2>
+</div>
+</div>
+<!-- VS Badge -->
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20">
+<div class="w-12 h-12 bg-[#C04A20] flex items-center justify-center rounded-full shadow-[0_0_20px_rgba(192,74,32,0.4)] border-4 border-surface-container-lowest">
+<span class="text-xs font-black italic tracking-tighter text-on-surface">VS</span>
+</div>
+</div>
+<!-- Film Card Right -->
+<div class="relative flex-1 group cursor-pointer overflow-hidden rounded-sm transition-transform duration-300 active:scale-95">
+<img class="absolute inset-0 w-full h-full object-cover" data-alt="atmospheric shot of a mysterious person in a trench coat standing under a flickering streetlight in rain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAoIBl3_PrDf4AT5sVmDFQ92MSHlhGCUgLPaM-2KLKAvxEloTo0cOX-IIdy4cPIHvmI5ZAAOiEgorho4t1PP4_JqNUjhhHUhDL0-YhPY6UtrtM_BnlnCGPSDF3OfxTCvmXVpW9PfbB-FWzqljVq7401tcbhG2W68N130NBC9xFCylsjSxL1oUix-nh6iwP4zC7O0M3-24SxytW6iHH0PML5y9tmXvgywDHxRcXeQ69a3S4ukCXXxXLFXwBKl6cDVYxWxwQ4VmtgtgA"/>
+<div class="absolute inset-0 poster-gradient"></div>
+<div class="absolute top-3 right-3 flex gap-2">
+<span class="px-2 py-0.5 bg-surface-container-lowest/80 backdrop-blur-md text-[10px] font-bold tracking-wider text-primary border border-outline-variant/20">THRILLER</span>
+</div>
+<div class="absolute bottom-6 left-6 right-6 text-right">
+<p class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1 font-label">1995</p>
+<h2 class="text-3xl md:text-5xl font-black font-headline leading-tight tracking-tighter text-on-surface group-hover:text-primary transition-colors">SE7EN</h2>
+</div>
+</div>
+</div>
+<!-- Actions -->
+<div class="flex flex-col gap-3 w-full max-w-md mx-auto">
+<button class="w-full py-4 bg-primary text-on-primary font-headline font-black uppercase tracking-widest text-sm transition-all hover:scale-[1.02] active:scale-95">
+        I've seen both — pick a winner
+      </button>
+<div class="grid grid-cols-1 gap-2">
+<button class="w-full py-3 border border-outline-variant/30 text-on-surface-variant font-label font-bold uppercase tracking-widest text-[10px] hover:bg-surface-container-low transition-colors">
+          Only seen Blade Runner
+        </button>
+<button class="w-full py-3 border border-outline-variant/30 text-on-surface-variant font-label font-bold uppercase tracking-widest text-[10px] hover:bg-surface-container-low transition-colors">
+          Only seen Se7en
+        </button>
+<button class="w-full py-3 border border-outline-variant/10 text-outline font-label font-bold uppercase tracking-widest text-[10px] hover:text-on-surface transition-colors">
+          Haven't seen either
+        </button>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full h-20 flex justify-around items-center px-12 pb-4 bg-[#0F0E0D]/70 backdrop-blur-xl border-t border-[#E8A020]/15 z-50 shadow-[0_-8px_32px_rgba(232,160,32,0.08)]">
+<!-- DUEL (Active) -->
+<a class="flex flex-col items-center justify-center text-amber-500 py-2 border-t-2 border-amber-500 h-full transition-all duration-300 scale-105" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="swords" style="font-variation-settings: 'FILL' 1;">swords</span>
+<span class="font-['Manrope'] text-[10px] font-bold tracking-[0.1em] uppercase">DUEL</span>
+</a>
+<!-- RANKINGS (Inactive) -->
+<a class="flex flex-col items-center justify-center text-[#6B6760] py-2 h-full hover:text-amber-400 transition-colors" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="leaderboard">leaderboard</span>
+<span class="font-['Manrope'] text-[10px] font-bold tracking-[0.1em] uppercase">RANKINGS</span>
+</a>
+</nav>
+</body></html>

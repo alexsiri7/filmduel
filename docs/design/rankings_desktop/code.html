@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;800;900&amp;family=Manrope:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-lowest": "#0f0e0d",
+                        "tertiary-fixed": "#cae6ff",
+                        "tertiary-fixed-dim": "#8dcdff",
+                        "on-secondary-fixed": "#390b00",
+                        "on-primary-fixed": "#291800",
+                        "inverse-on-surface": "#32302f",
+                        "on-tertiary-container": "#004668",
+                        "tertiary-container": "#4ab7fc",
+                        "on-secondary": "#5d1800",
+                        "surface-tint": "#ffb94c",
+                        "secondary": "#ffb59d",
+                        "on-background": "#e6e1df",
+                        "surface-container-low": "#1d1b1a",
+                        "outline": "#9e8e7a",
+                        "surface-container-highest": "#363433",
+                        "primary-fixed-dim": "#ffb94c",
+                        "on-secondary-container": "#ffaf96",
+                        "error-container": "#93000a",
+                        "surface-container-high": "#2b2a28",
+                        "secondary-fixed": "#ffdbd0",
+                        "outline-variant": "#514534",
+                        "on-primary": "#442b00",
+                        "background": "#141312",
+                        "secondary-fixed-dim": "#ffb59d",
+                        "tertiary": "#94d0ff",
+                        "primary": "#ffbe5b",
+                        "on-error": "#690005",
+                        "surface-bright": "#3b3937",
+                        "error": "#ffb4ab",
+                        "on-tertiary-fixed-variant": "#004b70",
+                        "on-tertiary": "#00344f",
+                        "inverse-primary": "#815500",
+                        "primary-fixed": "#ffddb2",
+                        "on-surface": "#e6e1df",
+                        "surface-container": "#211f1e",
+                        "surface-dim": "#141312",
+                        "secondary-container": "#942b00",
+                        "surface": "#141312",
+                        "primary-container": "#e8a020",
+                        "on-tertiary-fixed": "#001e30",
+                        "inverse-surface": "#e6e1df",
+                        "on-surface-variant": "#d6c4ae",
+                        "on-secondary-fixed-variant": "#842500",
+                        "on-error-container": "#ffdad6",
+                        "on-primary-container": "#5b3b00",
+                        "on-primary-fixed-variant": "#624000",
+                        "surface-variant": "#363433"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "fontFamily": {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Manrope"],
+                        "label": ["Manrope"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #0F0E0D;
+            color: #F5F0E8;
+            font-family: 'Manrope', sans-serif;
+        }
+        .noir-gradient {
+            background: linear-gradient(180deg, rgba(15, 14, 13, 0) 0%, rgba(15, 14, 13, 1) 100%);
+        }
+        .ticket-clip {
+            clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #141312;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #2b2a28;
+        }
+    </style>
+</head>
+<body class="flex min-h-screen">
+<!-- SideNavBar -->
+<nav class="fixed left-0 top-0 h-full w-64 z-40 bg-[#141312] flex flex-col py-8 px-4 gap-8 shadow-[10px_0_30px_rgba(0,0,0,0.3)]">
+<div class="flex items-center gap-3 mb-4">
+<div class="w-10 h-10 bg-[#E8A020] flex items-center justify-center">
+<span class="material-symbols-outlined text-[#0F0E0D]" data-icon="movie_filter">movie_filter</span>
+</div>
+<div>
+<h1 class="text-[#E8A020] text-xl font-black font-['Space_Grotesk'] uppercase tracking-wider">FILMDUEL</h1>
+<p class="text-[#F5F0E8]/40 text-[10px] font-bold tracking-[0.2em] uppercase">The Noir Projectionist</p>
+</div>
+</div>
+<div class="flex flex-col gap-2">
+<a class="flex items-center gap-4 py-3 px-4 text-[#F5F0E8]/40 hover:text-[#F5F0E8] hover:bg-[#1d1b1a] transition-all hover:translate-x-1 duration-300 ease-in-out font-['Space_Grotesk'] font-bold uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined" data-icon="swords">swords</span>
+<span>Current Duel</span>
+</a>
+<!-- Active State: Global Rankings -->
+<a class="flex items-center gap-4 py-3 px-4 bg-[#E8A020] text-[#0F0E0D] rounded-none shadow-[0_0_15px_rgba(232,160,32,0.3)] transition-all duration-300 ease-in-out font-['Space_Grotesk'] font-bold uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined" data-icon="leaderboard" style="font-variation-settings: 'FILL' 1;">leaderboard</span>
+<span>Global Rankings</span>
+</a>
+<a class="flex items-center gap-4 py-3 px-4 text-[#F5F0E8]/40 hover:text-[#F5F0E8] hover:bg-[#1d1b1a] transition-all hover:translate-x-1 duration-300 ease-in-out font-['Space_Grotesk'] font-bold uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined" data-icon="movie_filter">movie_filter</span>
+<span>Film Vault</span>
+</a>
+<a class="flex items-center gap-4 py-3 px-4 text-[#F5F0E8]/40 hover:text-[#F5F0E8] hover:bg-[#1d1b1a] transition-all hover:translate-x-1 duration-300 ease-in-out font-['Space_Grotesk'] font-bold uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined" data-icon="theater_comedy">theater_comedy</span>
+<span>Cinemas</span>
+</a>
+<a class="flex items-center gap-4 py-3 px-4 text-[#F5F0E8]/40 hover:text-[#F5F0E8] hover:bg-[#1d1b1a] transition-all hover:translate-x-1 duration-300 ease-in-out font-['Space_Grotesk'] font-bold uppercase tracking-wider" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span>Profile</span>
+</a>
+</div>
+<div class="mt-auto">
+<button class="w-full bg-[#E8A020] text-[#0F0E0D] font-['Space_Grotesk'] font-black py-4 tracking-widest hover:brightness-110 active:scale-95 transition-all">
+                START DUEL
+            </button>
+</div>
+</nav>
+<!-- Main Content -->
+<main class="flex-1 ml-64 p-12 overflow-y-auto custom-scrollbar bg-[#0F0E0D]">
+<!-- Header Section -->
+<header class="mb-12">
+<h2 class="text-7xl font-headline font-black uppercase tracking-tighter text-[#F5F0E8] mb-8 leading-none">
+                Your <span class="text-[#E8A020]">rankings</span>
+</h2>
+<!-- Filter Pills -->
+<div class="flex items-center gap-3">
+<button class="px-6 py-2 bg-[#E8A020] text-[#0F0E0D] font-label font-bold uppercase text-xs tracking-widest border border-[#E8A020]">All</button>
+<button class="px-6 py-2 bg-transparent text-[#F5F0E8]/60 font-label font-bold uppercase text-xs tracking-widest border border-[#F5F0E8]/10 hover:border-[#E8A020]/40 transition-colors">Drama</button>
+<button class="px-6 py-2 bg-transparent text-[#F5F0E8]/60 font-label font-bold uppercase text-xs tracking-widest border border-[#F5F0E8]/10 hover:border-[#E8A020]/40 transition-colors">Horror</button>
+<button class="px-6 py-2 bg-transparent text-[#F5F0E8]/60 font-label font-bold uppercase text-xs tracking-widest border border-[#F5F0E8]/10 hover:border-[#E8A020]/40 transition-colors">Sci-fi</button>
+<button class="px-6 py-2 bg-transparent text-[#F5F0E8]/60 font-label font-bold uppercase text-xs tracking-widest border border-[#F5F0E8]/10 hover:border-[#E8A020]/40 transition-colors">1990s</button>
+</div>
+</header>
+<!-- Ranking Table/Grid -->
+<div class="space-y-4">
+<!-- Rank 1: Spotlight Treatment -->
+<div class="group relative flex items-center gap-8 p-6 bg-[#1d1b1a] border-l-4 border-[#E8A020] shadow-[inset_0_0_40px_rgba(232,160,32,0.05)]">
+<div class="w-20 text-center">
+<span class="text-6xl font-headline font-black text-[#E8A020] italic">01</span>
+</div>
+<div class="w-24 h-36 flex-shrink-0 relative overflow-hidden">
+<img alt="Blade Runner 2049" class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" data-alt="dramatic cinematic film poster showing a futuristic cyberpunk city with neon orange and blue lights and heavy rain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCZuaUA-VNOaDJriZyHeMZfMYGv4CHEWgDBiyFiIvsMw2VeNVZT6IB-a3oKOu8haYjDsXZNER3_NZUXL3QlBkZVUwl1rCtzFTTi7ixgWa0APMxGVNUtbVfjaYmMCibAMqAQTrcazGRbIsdicxax-WYSmKU_EJPW14ITaHouq6ky6ThTTNBVan6905QHI5z25oh_6kngiyR7rBkz4Y-oOkzcYqW7amRXjhCczo3-4IyY2FAIvX4wbbroI62rESIdWfFAOC_5pAkwqH8"/>
+</div>
+<div class="flex-1">
+<div class="flex items-baseline gap-3 mb-1">
+<h3 class="text-3xl font-headline font-bold uppercase text-[#F5F0E8]">Blade Runner 2049</h3>
+<span class="text-sm font-label text-[#F5F0E8]/40">2017</span>
+</div>
+<div class="flex gap-6">
+<div class="flex flex-col">
+<span class="text-[10px] font-label uppercase tracking-widest text-[#6B6760]">ELO Score</span>
+<span class="text-lg font-headline font-bold text-[#E8A020]">2,845</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[10px] font-label uppercase tracking-widest text-[#6B6760]">Battles</span>
+<span class="text-lg font-headline font-bold text-[#F5F0E8]">142</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[10px] font-label uppercase tracking-widest text-[#6B6760]">Win Rate</span>
+<span class="text-lg font-headline font-bold text-[#F5F0E8]">89%</span>
+</div>
+</div>
+</div>
+<div class="absolute right-8 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="bg-transparent border border-[#E8A020] text-[#E8A020] p-4 hover:bg-[#E8A020] hover:text-[#0F0E0D] transition-all">
+<span class="material-symbols-outlined" data-icon="open_in_new">open_in_new</span>
+</button>
+</div>
+</div>
+<!-- Rank 2 -->
+<div class="group relative flex items-center gap-8 p-6 bg-[#141312] border-l-4 border-transparent hover:bg-[#1d1b1a] transition-colors">
+<div class="w-20 text-center">
+<span class="text-5xl font-headline font-black text-[#F5F0E8]/20 italic group-hover:text-[#E8A020]/40 transition-colors">02</span>
+</div>
+<div class="w-20 h-28 flex-shrink-0 relative overflow-hidden">
+<img alt="The Godfather" class="w-full h-full object-cover grayscale" data-alt="vintage movie still of a man in a tuxedo sitting in a dark office with high contrast noir lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCAi0oTsHsux5ZHzubEwsuby92ucWW8pbeNKf1u5jvwlaqGHt9mDtu8uMqcVoTp5oX0-Oo9-3SV4EaQTieezJEjrBY4dqektmDjT2lOe-_ZORDHpqsQJLSeH7cDKWyv0UpI5ttlYHQU8mtXll43ncDHxauGNRO4Ihc_Efr1x4ZspCINdBLSfbjKSfu7PNp7TcdDiLlbUVwuVoBK90CchuPlj3_jdsjVv6fOak0ecz2RNewRzjhTBJJrAkVNsBGGGG9U7Y5OW1cT1B8"/>
+</div>
+<div class="flex-1">
+<div class="flex items-baseline gap-3 mb-1">
+<h3 class="text-2xl font-headline font-bold uppercase text-[#F5F0E8]">The Godfather</h3>
+<span class="text-sm font-label text-[#F5F0E8]/40">1972</span>
+</div>
+<div class="flex gap-6">
+<div class="flex flex-col">
+<span class="text-[10px] font-label uppercase tracking-widest text-[#6B6760]">ELO Score</span>
+<span class="text-md font-headline font-bold text-[#F5F0E8]/60">2,712</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[10px] font-label uppercase tracking-widest text-[#6B6760]">Battles</span>
+<span class="text-md font-headline font-bold text-[#F5F0E8]/60">98</span>
+</div>
+</div>
+</div>
+<div class="px-4">
+<span class="bg-[#211f1e] text-[#F5F0E8]/40 text-[10px] font-black py-1 px-3 tracking-tighter">ELITE</span>
+</div>
+</div>
+<!-- Rank 3 -->
+<div class="group relative flex items-center gap-8 p-6 bg-[#141312] border-l-4 border-transparent hover:bg-[#1d1b1a] transition-colors">
+<div class="w-20 text-center">
+<span class="text-5xl font-headline font-black text-[#F5F0E8]/20 italic group-hover:text-[#E8A020]/40 transition-colors">03</span>
+</div>
+<div class="w-20 h-28 flex-shrink-0 relative overflow-hidden">
+<img alt="Stalker" class="w-full h-full object-cover grayscale" data-alt="atmospheric shot of a foggy desolate landscape with overgrown industrial structures in a muted green and grey palette" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAVSWZVUICmhc1RTehPeAG3sKFiyDq4EPbsngdoxvZUBnCmxVyClUKrRJ82492sQjhxAmnA7lvFIUsE8C8kGEa1dyjcpBDHM48nyhlm-_Obo9UcgvNA1QGpHrH-rTqZvWFofBEWtRIW5sUuAGajf3c7Lcr0GzOPtxeY-94hMZy1ejEcmehzMkTnsztam88LXn_t4VhjSMEQRLFkGKbtw2LgPTpyZCKpPdO1z1Cx0slb6SUr2Ys3hupqRLwt3TjgdkDspENm2a-OXSM"/>
+</div>
+<div class="flex-1">
+<div class="flex items-baseline gap-3 mb-1">
+<h3 class="text-2xl font-headline font-bold uppercase text-[#F5F0E8]">Stalker</h3>
+<span class="text-sm font-label text-[#F5F0E8]/40">1979</span>
+</div>
+<div class="flex gap-6">
+<div class="flex flex-col">
+<span class="text-[10px] font-label uppercase tracking-widest text-[#6B6760]">ELO Score</span>
+<span class="text-md font-headline font-bold text-[#F5F0E8]/60">2,654</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[10px] font-label uppercase tracking-widest text-[#6B6760]">Battles</span>
+<span class="text-md font-headline font-bold text-[#F5F0E8]/60">112</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Rank 4 -->
+<div class="group relative flex items-center gap-8 p-6 bg-[#141312] border-l-4 border-transparent hover:bg-[#1d1b1a] transition-colors">
+<div class="w-20 text-center">
+<span class="text-5xl font-headline font-black text-[#F5F0E8]/20 italic group-hover:text-[#E8A020]/40 transition-colors">04</span>
+</div>
+<div class="w-20 h-28 flex-shrink-0 relative overflow-hidden">
+<img alt="Seven Samurai" class="w-full h-full object-cover grayscale" data-alt="black and white cinematography of samurai standing in the rain with intense expressions and high contrast silhouettes" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCma0swM5Ycdjpe5GjZ6H43frWi7nXLMppptipYDoP-pNn_bSJ3oSxH7PFpgIIpnrFPtXxPEuCtun1xKnVcUIJktHNqMRiFaDB-LzllDc4yTv8nhmfkoWhUCJeV7ouqVx_o1MCWqs-PE7IYSsU1BAdpbfxrdJEmCoJx1eP6SlHmpJukhKxdvvA-SNXnHYSY7Lm3-eYfINteUvBUXloWYSuyBbxQa9MHE7-fVwnxlEuJJKr08eyykf97q2ZYOPX6P3q5PVugViV-Ax0"/>
+</div>
+<div class="flex-1">
+<div class="flex items-baseline gap-3 mb-1">
+<h3 class="text-2xl font-headline font-bold uppercase text-[#F5F0E8]">Seven Samurai</h3>
+<span class="text-sm font-label text-[#F5F0E8]/40">1954</span>
+</div>
+<div class="flex gap-6">
+<div class="flex flex-col">
+<span class="text-[10px] font-label uppercase tracking-widest text-[#6B6760]">ELO Score</span>
+<span class="text-md font-headline font-bold text-[#F5F0E8]/60">2,590</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[10px] font-label uppercase tracking-widest text-[#6B6760]">Battles</span>
+<span class="text-md font-headline font-bold text-[#F5F0E8]/60">76</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Rank 5 -->
+<div class="group relative flex items-center gap-8 p-6 bg-[#141312] border-l-4 border-transparent hover:bg-[#1d1b1a] transition-colors">
+<div class="w-20 text-center">
+<span class="text-5xl font-headline font-black text-[#F5F0E8]/20 italic group-hover:text-[#E8A020]/40 transition-colors">05</span>
+</div>
+<div class="w-20 h-28 flex-shrink-0 relative overflow-hidden">
+<img alt="Parasite" class="w-full h-full object-cover grayscale" data-alt="modern luxury minimalist house interior at night with large windows and eerie dark shadows and warm interior lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCuBriH-beF2FgfNh90WS-7Z9y23WzqBNt8coL8_VI_7lwQJSt1mKDd2vbUY_ckBR4aJbUDV7WwzFDCp02J87n7580UBeI7_0h0XuTFSe6ASkjEfevxGcBU_usvaZwZs6vtM0OVQHZd-Uyrkqi-KCw5r0c2nRE76WXI5_E1YhimRDacrJnYbbpnR_f2jB4A3ZculjrItZLGKi9kuiDBw5Mlo1SxwEXBUemJT2QQ_JqIu8p8a_wY5EnkREGej5Hj9krzzqr5bNRsAtg"/>
+</div>
+<div class="flex-1">
+<div class="flex items-baseline gap-3 mb-1">
+<h3 class="text-2xl font-headline font-bold uppercase text-[#F5F0E8]">Parasite</h3>
+<span class="text-sm font-label text-[#F5F0E8]/40">2019</span>
+</div>
+<div class="flex gap-6">
+<div class="flex flex-col">
+<span class="text-[10px] font-label uppercase tracking-widest text-[#6B6760]">ELO Score</span>
+<span class="text-md font-headline font-bold text-[#F5F0E8]/60">2,512</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[10px] font-label uppercase tracking-widest text-[#6B6760]">Battles</span>
+<span class="text-md font-headline font-bold text-[#F5F0E8]/60">204</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Footer Spacer -->
+<div class="h-32"></div>
+</main>
+<!-- Floating Action Button -->
+<div class="fixed bottom-12 right-12 flex flex-col items-end gap-4 z-50">
+<button class="flex items-center gap-3 px-8 py-4 bg-[#E8A020] text-[#0F0E0D] font-headline font-black uppercase tracking-widest shadow-[0_10px_30px_rgba(232,160,32,0.3)] hover:scale-105 active:scale-95 transition-all group">
+<span class="material-symbols-outlined group-hover:rotate-12 transition-transform" data-icon="ios_share">ios_share</span>
+<span>Export to Letterboxd</span>
+</button>
+<!-- Quick Stats Overlay -->
+<div class="p-4 bg-[#1d1b1a]/80 backdrop-blur-md border border-[#F5F0E8]/5 w-64">
+<div class="flex justify-between items-center mb-2">
+<span class="text-[10px] font-label uppercase tracking-widest text-[#6B6760]">Total Ranked</span>
+<span class="text-sm font-headline font-bold text-[#F5F0E8]">482 Films</span>
+</div>
+<div class="w-full h-1 bg-[#211f1e]">
+<div class="w-3/4 h-full bg-[#E8A020]"></div>
+</div>
+<p class="mt-3 text-[10px] font-body text-[#F5F0E8]/40 leading-relaxed">
+                Rankings updated based on your last 1,204 duels.
+            </p>
+</div>
+</div>
+</body></html>

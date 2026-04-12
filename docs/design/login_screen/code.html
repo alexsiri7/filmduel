@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>FILMDUEL | Login</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Manrope:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary-fixed": "#cae6ff",
+                    "on-primary-fixed": "#291800",
+                    "on-secondary-fixed": "#390b00",
+                    "tertiary-fixed-dim": "#8dcdff",
+                    "inverse-on-surface": "#32302f",
+                    "surface-container-lowest": "#0f0e0d",
+                    "on-tertiary-container": "#004668",
+                    "on-secondary": "#5d1800",
+                    "tertiary-container": "#4ab7fc",
+                    "outline": "#9e8e7a",
+                    "surface-container-low": "#1d1b1a",
+                    "surface-tint": "#ffb94c",
+                    "on-background": "#e6e1df",
+                    "secondary": "#ffb59d",
+                    "surface-container-highest": "#363433",
+                    "surface-container-high": "#2b2a28",
+                    "secondary-fixed": "#ffdbd0",
+                    "primary-fixed-dim": "#ffb94c",
+                    "error-container": "#93000a",
+                    "on-secondary-container": "#ffaf96",
+                    "outline-variant": "#514534",
+                    "background": "#141312",
+                    "on-primary": "#442b00",
+                    "primary": "#ffbe5b",
+                    "tertiary": "#94d0ff",
+                    "secondary-fixed-dim": "#ffb59d",
+                    "surface-bright": "#3b3937",
+                    "on-error": "#690005",
+                    "inverse-primary": "#815500",
+                    "on-tertiary": "#00344f",
+                    "on-tertiary-fixed-variant": "#004b70",
+                    "on-surface": "#e6e1df",
+                    "primary-fixed": "#ffddb2",
+                    "error": "#ffb4ab",
+                    "surface-dim": "#141312",
+                    "surface-container": "#211f1e",
+                    "on-tertiary-fixed": "#001e30",
+                    "inverse-surface": "#e6e1df",
+                    "secondary-container": "#942b00",
+                    "primary-container": "#e8a020",
+                    "surface": "#141312",
+                    "on-error-container": "#ffdad6",
+                    "on-secondary-fixed-variant": "#842500",
+                    "on-surface-variant": "#d6c4ae",
+                    "on-primary-container": "#5b3b00",
+                    "surface-variant": "#363433",
+                    "on-primary-fixed-variant": "#624000"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "fontFamily": {
+                    "headline": ["Space Grotesk"],
+                    "body": ["Manrope"],
+                    "label": ["Manrope"]
+            }
+          },
+        },
+      }
+    </script>
+<style>body {
+    background-color: #0F0E0D;
+    color: #F5F0E8;
+    font-family: "Manrope", sans-serif;
+    overflow: hidden
+    }
+.cinematic-bg {
+    background: radial-gradient(circle at center, rgba(232, 160, 32, 0.05) 0%, rgba(15, 14, 13, 0) 70%)
+    }
+.grain {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 50;
+    opacity: 0.03;
+    background-image: url(https://lh3.googleusercontent.com/aida-public/AB6AXuCJLIsYZFOIRucYKTAOoPMUuUbxx_GG7AzTZUgj2_4CmXf8LLuruf09CA4qNYb74FKXN2TjoAPx7ZCzyzM0JvnRlzVAbEDA4WmX8Z5DymEv_liwOiqZhuumZirwfedXL9PiYAYgJ4-SQL2Mqh5iMO6vj3g9YiqoEQa5RH7tY4SbmRS2ZqWohp8ckU8U5Z2xHeAXNRL6mvhoZKQ4EuViyiDn1PDFwXI0SFp51-f_CjTjeCyA_O2I3WhGOBHcG56fFURZVv8Q9FZGLjU)
+    }
+.material-symbols-outlined {
+    font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24
+    }</style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="flex flex-col min-h-screen items-center justify-center p-6 selection:bg-primary selection:text-on-primary">
+<div class="grain"></div>
+<div class="cinematic-bg absolute inset-0 pointer-events-none"></div>
+<main class="relative z-10 flex flex-col items-center max-w-md w-full text-center">
+<div class="mb-12 flex flex-col items-center group">
+<div class="flex items-center justify-center gap-1 mb-6">
+<div class="w-16 h-20 border-2 border-primary-container flex items-center justify-center relative overflow-hidden transition-transform duration-500 group-hover:-translate-x-1">
+<span class="material-symbols-outlined text-primary-container text-4xl" data-icon="movie_filter">movie_filter</span>
+<div class="absolute inset-0 bg-primary-container/10"></div>
+</div>
+<div class="w-16 h-20 border-2 border-primary-container flex items-center justify-center relative overflow-hidden transition-transform duration-500 group-hover:translate-x-1">
+<span class="material-symbols-outlined text-primary-container text-4xl" data-icon="movie_filter">movie_filter</span>
+<div class="absolute inset-0 bg-primary-container/10"></div>
+</div>
+</div>
+<h1 class="font-headline text-6xl md:text-7xl font-bold tracking-tighter text-primary-container leading-none uppercase">
+                FILMDUEL
+            </h1>
+</div>
+<div class="w-full space-y-8">
+<button class="w-full py-5 bg-primary-container text-on-primary-container font-headline font-bold text-lg uppercase tracking-widest transition-all duration-300 hover:bg-primary-container/90 active:scale-95 flex items-center justify-center gap-3 rounded-none">
+<span class="material-symbols-outlined" data-icon="login">login</span>
+                Sign in with Trakt
+            </button>
+<div class="flex items-center justify-center gap-4 py-4">
+<div class="h-[1px] flex-1 bg-outline-variant/20"></div>
+<span class="font-label text-[10px] text-outline tracking-[0.2em] uppercase">Limited Entry</span>
+<div class="h-[1px] flex-1 bg-outline-variant/20"></div>
+</div>
+</div>
+</main>
+<footer class="mt-auto pb-12 relative z-10">
+<p class="font-label text-xs text-outline tracking-[0.15em] uppercase opacity-60">
+            Rate films. Rank everything.
+        </p>
+</footer>
+<div class="fixed top-0 left-0 w-full h-full pointer-events-none border-[12px] md:border-[32px] border-surface-container-lowest z-40 opacity-50"></div>
+<div class="hidden">
+<div data-alt="close up of a vintage 35mm film projector lens with amber light glowing from within in a dark cinematic room"></div>
+<div data-alt="monochrome cinematic grain texture over a deep black background with subtle warm light leak"></div>
+</div>
+</body></html>
