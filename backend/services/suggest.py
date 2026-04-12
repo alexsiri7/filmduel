@@ -91,17 +91,16 @@ async def _get_candidates(
     stmt = (
         select(UserMovie)
         .options(joinedload(UserMovie.movie))
+        .join(UserMovie.movie)
         .where(
             UserMovie.user_id == user_id,
             UserMovie.seen.is_(None),
+            Movie.poster_url.isnot(None),
         )
         .order_by(
-            # Prefer films with posters
-            Movie.poster_url.isnot(None).desc(),
-            # Then by community rating
+            # By community rating
             Movie.community_rating.desc().nulls_last(),
         )
-        .join(UserMovie.movie)
         .limit(CANDIDATE_LIMIT)
     )
     result = await db.execute(stmt)
