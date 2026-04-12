@@ -115,6 +115,84 @@ class UserMovie(Base):
     movie: Mapped[Movie] = relationship()
 
 
+class Tournament(Base):
+    __tablename__ = "tournaments"
+    __table_args__ = (Index("ix_tournaments_user_id", "user_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    filter_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    filter_value: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    bracket_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default="active"
+    )
+    champion_movie_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("movies.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    user: Mapped[User] = relationship()
+    champion_movie: Mapped[Optional[Movie]] = relationship(
+        foreign_keys=[champion_movie_id]
+    )
+    matches: Mapped[list[TournamentMatch]] = relationship(
+        back_populates="tournament", cascade="all, delete-orphan"
+    )
+
+
+class TournamentMatch(Base):
+    __tablename__ = "tournament_matches"
+    __table_args__ = (
+        UniqueConstraint("tournament_id", "round", "position"),
+        Index("ix_tournament_matches_tournament_id", "tournament_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tournament_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tournaments.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    round: Mapped[int] = mapped_column(Integer, nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    movie_a_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("movies.id"), nullable=True
+    )
+    movie_b_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("movies.id"), nullable=True
+    )
+    winner_movie_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("movies.id"), nullable=True
+    )
+    duel_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("duels.id"), nullable=True
+    )
+    played_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    tournament: Mapped[Tournament] = relationship(back_populates="matches")
+    movie_a: Mapped[Optional[Movie]] = relationship(foreign_keys=[movie_a_id])
+    movie_b: Mapped[Optional[Movie]] = relationship(foreign_keys=[movie_b_id])
+    winner_movie: Mapped[Optional[Movie]] = relationship(
+        foreign_keys=[winner_movie_id]
+    )
+    duel: Mapped[Optional[Duel]] = relationship()
+
+
 class Duel(Base):
     __tablename__ = "duels"
     __table_args__ = (Index("ix_duels_user_id", "user_id"),)
