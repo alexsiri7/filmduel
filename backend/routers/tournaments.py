@@ -416,39 +416,25 @@ async def submit_match_result(
     match_obj.duel_id = duel.id
     match_obj.played_at = now
 
-    # Check if current round is complete
     round_num = match_obj.round
-    round_matches_stmt = select(TournamentMatch).where(
-        TournamentMatch.tournament_id == tournament_id,
-        TournamentMatch.round == round_num,
-    )
-    round_matches = (await db.execute(round_matches_stmt)).scalars().all()
-    round_complete = all(m.winner_movie_id is not None for m in round_matches)
-
     num_rounds = _num_rounds(tournament.bracket_size)
 
-    if round_complete and round_num < num_rounds:
-        # Populate next round matches with winners
-        # Sort current round by position
-        round_matches_sorted = sorted(round_matches, key=lambda m: m.position)
-
+    # Immediately propagate winner to the next round slot
+    if round_num < num_rounds:
+        next_pos = match_obj.position // 2
         next_round_stmt = select(TournamentMatch).where(
             TournamentMatch.tournament_id == tournament_id,
             TournamentMatch.round == round_num + 1,
-        ).order_by(TournamentMatch.position)
-        next_round_matches = (await db.execute(next_round_stmt)).scalars().all()
+            TournamentMatch.position == next_pos,
+        )
+        next_match_obj = (await db.execute(next_round_stmt)).scalar_one()
+        if match_obj.position % 2 == 0:
+            next_match_obj.movie_a_id = winner_id
+        else:
+            next_match_obj.movie_b_id = winner_id
 
-        for rm in round_matches_sorted:
-            next_pos = rm.position // 2
-            next_match = next_round_matches[next_pos]
-            if rm.position % 2 == 0:
-                next_match.movie_a_id = rm.winner_movie_id
-            else:
-                next_match.movie_b_id = rm.winner_movie_id
-
-    elif round_complete and round_num == num_rounds:
-        # Final match: set champion
-        # The match we just played is the final
+    # Check if this was the final match — crown champion
+    if round_num == num_rounds:
         tournament_stmt = select(Tournament).where(Tournament.id == tournament_id)
         t = (await db.execute(tournament_stmt)).scalar_one()
         t.champion_movie_id = winner_id

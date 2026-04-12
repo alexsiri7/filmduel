@@ -124,6 +124,7 @@ export default function TournamentBracket() {
   const [playing, setPlaying] = useState(false); // match play mode
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [winnerFlash, setWinnerFlash] = useState(null); // brief flash between matches
 
   const loadTournament = useCallback(async () => {
     try {
@@ -189,13 +190,44 @@ export default function TournamentBracket() {
     return { rounds: roundsList, totalRounds: tr, nextMatch: next, champion: champ };
   }, [tournament]);
 
+  // Helper: find the next playable match from tournament data
+  function findNextPlayable(tournamentData) {
+    if (!tournamentData) return null;
+    const sorted = [...tournamentData.matches].sort((a, b) =>
+      a.round !== b.round ? a.round - b.round : a.position - b.position
+    );
+    for (const m of sorted) {
+      if (m.movie_a && m.movie_b && !m.winner_movie_id) return m;
+    }
+    return null;
+  }
+
   async function handlePick(winnerMovieId) {
     if (submitting || !nextMatch) return;
     setSubmitting(true);
     try {
+      const currentRound = nextMatch.round;
+      const winnerMovie =
+        nextMatch.movie_a.id === winnerMovieId ? nextMatch.movie_a : nextMatch.movie_b;
+
       const updated = await submitTournamentMatch(id, nextMatch.id, winnerMovieId);
-      setTournament(updated);
-      setPlaying(false);
+
+      // Determine if there is another match in this same round
+      const newNext = findNextPlayable(updated);
+      const stayInPlayMode = newNext && newNext.round === currentRound;
+
+      if (stayInPlayMode) {
+        // Show brief winner flash, then advance to next match
+        setWinnerFlash(winnerMovie);
+        setTournament(updated);
+        setTimeout(() => {
+          setWinnerFlash(null);
+        }, 600);
+      } else {
+        // Round complete (or tournament done) — return to bracket
+        setTournament(updated);
+        setPlaying(false);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -304,6 +336,21 @@ export default function TournamentBracket() {
             </p>
           )}
         </section>
+
+        {/* Winner flash overlay */}
+        {winnerFlash && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0F0E0D]/80 backdrop-blur-sm animate-fade-out">
+            <div className="text-center">
+              <p className="text-[10px] font-label uppercase tracking-[0.3em] text-[#E8A020] mb-3">
+                Winner
+              </p>
+              <h3 className="text-3xl md:text-5xl font-headline font-black uppercase tracking-tighter text-[#E8A020] leading-none">
+                {winnerFlash.title}
+              </h3>
+              <p className="text-sm text-[#F5F0E8]/40 mt-2 font-label">advances to next round</p>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -375,17 +422,24 @@ export default function TournamentBracket() {
         </div>
       )}
 
-      {/* Play Next Match Button */}
-      {nextMatch && !isCompleted && !isAbandoned && (
-        <div className="mb-8">
-          <button
-            onClick={() => setPlaying(true)}
-            className="bg-[#E8A020] text-[#0F0E0D] font-headline font-black uppercase py-4 px-8 tracking-widest text-sm hover:shadow-[0_0_30px_rgba(232,160,32,0.4)] active:scale-[0.98] transition-all"
-          >
-            Play Next Match
-          </button>
-        </div>
-      )}
+      {/* Play Round Button */}
+      {nextMatch && !isCompleted && !isAbandoned && (() => {
+        const roundMatches = rounds.find((r) => r.round === nextMatch.round)?.matches || [];
+        const remaining = roundMatches.filter((m) => !m.winner_movie_id).length;
+        const label = remaining > 1
+          ? `Play ${roundLabel(nextMatch.round, totalRounds)} (${remaining} matches)`
+          : "Play Next Match";
+        return (
+          <div className="mb-8">
+            <button
+              onClick={() => setPlaying(true)}
+              className="bg-[#E8A020] text-[#0F0E0D] font-headline font-black uppercase py-4 px-8 tracking-widest text-sm hover:shadow-[0_0_30px_rgba(232,160,32,0.4)] active:scale-[0.98] transition-all"
+            >
+              {label}
+            </button>
+          </div>
+        );
+      })()}
 
       {/* Error */}
       {error && (
@@ -476,6 +530,15 @@ export default function TournamentBracket() {
         @keyframes pulse-slow {
           0%, 100% { box-shadow: 0 0 10px rgba(232,160,32,0.1); }
           50% { box-shadow: 0 0 25px rgba(232,160,32,0.25); }
+        }
+        .animate-fade-out {
+          animation: fade-in-out 600ms ease-in-out forwards;
+        }
+        @keyframes fade-in-out {
+          0% { opacity: 0; transform: scale(0.95); }
+          20% { opacity: 1; transform: scale(1); }
+          80% { opacity: 1; transform: scale(1); }
+          100% { opacity: 0; transform: scale(1.02); }
         }
       `}</style>
 
