@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchPair, submitDuel, fetchStats } from "../api";
 import MovieCard from "../components/MovieCard";
-import { cn } from "../lib/utils";
 
 const MODE = "discovery";
 
@@ -22,7 +21,7 @@ export default function Duel() {
   const [result, setResult] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [stats, setStats] = useState(null);
-  const [pickMode, setPickMode] = useState(false);
+
   const [animateKey, setAnimateKey] = useState(0);
   const [showSwipePrompt, setShowSwipePrompt] = useState(false);
   const prefetchRef = useRef(null);
@@ -44,7 +43,6 @@ export default function Duel() {
     async (usePrefetch = false) => {
       setLoading(true);
       setResult(null);
-      setPickMode(false);
       setError(null);
       try {
         let data;
@@ -92,7 +90,6 @@ export default function Duel() {
         MODE
       );
       setResult(res);
-      setPickMode(false);
       if (res.next_action === "swipe") {
         setTimeout(() => {
           setShowSwipePrompt(true);
@@ -217,19 +214,9 @@ export default function Duel() {
         {!loading && pair && (
           <>
             {/* Instruction */}
-            {pickMode ? (
-              <div className="text-center">
-                <h2 className="text-[#F5F0E8] font-body text-lg font-medium opacity-80 italic animate-pulse">
-                  Tap the film you rate higher
-                </h2>
-              </div>
-            ) : (
-              <div className="text-center">
-                <h2 className="text-[#6B6760] font-body text-lg font-medium opacity-80">
-                  Which do you prefer?
-                </h2>
-              </div>
-            )}
+            <p className="text-[10px] font-label uppercase tracking-[0.3em] text-[#6B6760]">
+              Tap the film you rate higher
+            </p>
 
             {/* Cards Container */}
             <div
@@ -242,8 +229,7 @@ export default function Duel() {
                   movie={pair.movie_a}
                   onClick={() => handleSubmit("a_wins")}
                   delta={result?.movie_a_elo_delta}
-                  clickable={pickMode}
-                  highlight={pickMode}
+                  clickable={!submitting}
                 />
               </div>
 
@@ -262,60 +248,17 @@ export default function Duel() {
                   movie={pair.movie_b}
                   onClick={() => handleSubmit("b_wins")}
                   delta={result?.movie_b_elo_delta}
-                  clickable={pickMode}
-                  highlight={pickMode}
+                  clickable={!submitting}
                 />
               </div>
             </div>
 
-            {/* Action Controls */}
-            <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-4 gap-3 md:gap-4">
-              <button
-                onClick={() => setPickMode(true)}
-                disabled={submitting || pickMode}
-                className={cn(
-                  "md:col-span-4 bg-[#ffbe5b] text-[#442b00] font-headline font-black py-5 md:py-6 uppercase tracking-[0.2em] text-base md:text-lg hover:shadow-[0_0_30px_rgba(232,160,32,0.4)] active:scale-[0.98] transition-all disabled:opacity-60",
-                  pickMode && "shadow-[0_0_30px_rgba(232,160,32,0.4)]"
-                )}
-              >
-                I've seen both — pick a winner
-              </button>
-              <button
-                onClick={() => handleSubmit("a_only")}
-                disabled={submitting}
-                className="border border-[#514534]/30 hover:border-[#E8A020]/50 hover:bg-[#1d1b1a] text-[#d6c4ae] font-label uppercase tracking-widest text-xs py-4 transition-all disabled:opacity-40"
-              >
-                <span className="hidden md:inline">Only seen </span>
-                <span className="truncate">{pair.movie_a.title}</span>
-              </button>
-              <button
-                onClick={() => handleSubmit("b_only")}
-                disabled={submitting}
-                className="border border-[#514534]/30 hover:border-[#E8A020]/50 hover:bg-[#1d1b1a] text-[#d6c4ae] font-label uppercase tracking-widest text-xs py-4 transition-all disabled:opacity-40"
-              >
-                <span className="hidden md:inline">Only seen </span>
-                <span className="truncate">{pair.movie_b.title}</span>
-              </button>
-              <button
-                onClick={() => handleSubmit("neither")}
-                disabled={submitting}
-                className="md:col-span-2 border border-[#514534]/30 hover:border-[#C04A20]/50 hover:bg-[#1d1b1a] text-[#d6c4ae] font-label uppercase tracking-widest text-xs py-4 transition-all disabled:opacity-40"
-              >
-                Haven't seen either
-              </button>
-            </div>
-
             {/* Result feedback */}
-            {result &&
-              (result.outcome === "a_wins" || result.outcome === "b_wins") ? (
+            {result && (
               <p className="text-sm text-[#E8A020] font-headline font-medium uppercase tracking-widest">
                 ELO updated! Next duel loading...
               </p>
-            ) : result ? (
-              <p className="text-sm text-[#6B6760] font-headline font-medium uppercase tracking-widest">
-                Noted! Loading next pair...
-              </p>
-            ) : null}
+            )}
           </>
         )}
       </section>
