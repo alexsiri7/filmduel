@@ -224,6 +224,26 @@ class Duel(Base):
     loser_movie: Mapped[Optional[Movie]] = relationship(foreign_keys=[loser_movie_id])
 
 
+class PoolExpansion(Base):
+    __tablename__ = "pool_expansions"
+    __table_args__ = (
+        Index("ix_pool_expansions_user_source_key", "user_id", "source", "source_key"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    source: Mapped[str] = mapped_column(Text, nullable=False)
+    source_key: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    films_added: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    ran_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+
 class SwipeResult(Base):
     __tablename__ = "swipe_results"
     __table_args__ = (Index("ix_swipe_results_user_id", "user_id"),)

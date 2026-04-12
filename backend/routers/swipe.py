@@ -6,7 +6,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +14,7 @@ from backend.db import get_db
 from backend.db_models import Movie, SwipeResult, User, UserMovie
 from backend.routers.auth import get_current_user
 from backend.schemas import SwipeCardSchema, SwipeResponse, SwipeSubmit
+from backend.services.expand import expand_pool
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +149,7 @@ async def get_swipe_cards(
 @router.post("/results", response_model=SwipeResponse)
 async def submit_swipe_results(
     body: SwipeSubmit,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -199,5 +201,16 @@ async def submit_swipe_results(
     total_seen = (await db.execute(total_seen_stmt)).scalar() or 0
 
     next_action = "duel" if total_seen >= 2 else "swipe"
+
+    # Check if pool needs expansion
+    unknown_stmt = (
+        select(func.count())
+        .select_from(UserMovie)
+        .where(UserMovie.user_id == uid, UserMovie.seen.is_(None))
+    )
+    unknown_count = (await db.execute(unknown_stmt)).scalar() or 0
+
+    if unknown_count < 50:
+        background_tasks.add_task(expand_pool, uid)
 
     return SwipeResponse(seen_count=seen_count, unseen_count=unseen_count, next_action=next_action)
