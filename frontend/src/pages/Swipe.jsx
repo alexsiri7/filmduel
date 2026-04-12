@@ -20,9 +20,14 @@ export default function Swipe() {
     setCurrentIndex(0);
     setResults([]);
     setSummary(null);
+    setCardKey(0);
     try {
       const data = await fetchSwipeCards();
-      setCards(data || []);
+      if (!data || data.length === 0) {
+        setCards([]);
+      } else {
+        setCards(data);
+      }
     } catch (err) {
       setError(err.message);
       setCards([]);
