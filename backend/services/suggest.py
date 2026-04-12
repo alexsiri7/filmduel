@@ -165,7 +165,7 @@ async def _call_llm(taste_profile: dict, candidates: list[dict]) -> list[dict]:
         )
     )
 
-    text_content = await chat_completion(system_prompt, user_message)
+    text_content = await chat_completion(system_prompt, user_message, max_tokens=1500)
     parsed = parse_json_response(text_content)
     return parsed["picks"]
 
