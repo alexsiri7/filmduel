@@ -9,7 +9,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -130,6 +130,31 @@ async def _load_tournament(
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────
+
+
+@router.get("/genres", response_model=list[str])
+async def get_available_genres(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return distinct genres from user's seen films for tournament filtering."""
+    uid = current_user.id
+    stmt = (
+        select(func.unnest(Movie.genres).label("genre"))
+        .select_from(UserMovie)
+        .join(Movie, UserMovie.movie_id == Movie.id)
+        .where(
+            UserMovie.user_id == uid,
+            UserMovie.seen.is_(True),
+            UserMovie.battles >= 1,
+            UserMovie.elo.isnot(None),
+            Movie.genres.isnot(None),
+        )
+        .distinct()
+        .order_by("genre")
+    )
+    result = await db.execute(stmt)
+    return [row[0] for row in result.all()]
 
 
 @router.post("", response_model=TournamentSchema)

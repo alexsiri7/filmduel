@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { getTournaments, createTournament, getRankings } from "../api";
+import { getTournaments, createTournament, getTournamentGenres } from "../api";
 
 const BRACKET_SIZES = [8, 16, 32, 64];
 const DECADES = ["1970s", "1980s", "1990s", "2000s", "2010s", "2020s"];
@@ -37,14 +37,9 @@ export default function Tournaments() {
 
   async function handleOpenCreate() {
     setShowCreate(true);
-    // Fetch genres from rankings
     try {
-      const data = await getRankings(200);
-      const genreSet = new Set();
-      data.rankings.forEach((r) => {
-        (r.movie.genres || []).forEach((g) => genreSet.add(g));
-      });
-      setAvailableGenres([...genreSet].sort());
+      const genres = await getTournamentGenres();
+      setAvailableGenres(genres);
     } catch (err) {
       console.error("Failed to load genres:", err);
     }
