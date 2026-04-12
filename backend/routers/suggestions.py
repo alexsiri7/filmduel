@@ -117,7 +117,7 @@ async def get_suggestions(
     try:
         new_suggestions = await _create_suggestions(uid, db)
         if not new_suggestions:
-            return SuggestionsResponse(suggestions=[], status="not_enough_films")
+            return SuggestionsResponse(suggestions=[], status="no_candidates")
         return SuggestionsResponse(
             suggestions=[_build_suggestion_schema(s) for s in new_suggestions],
             status="ready",
