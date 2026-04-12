@@ -1,29 +1,57 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --color-background: oklch(0.145 0 0);
-  --color-foreground: oklch(0.985 0 0);
-  --color-card: oklch(0.205 0 0);
-  --color-card-foreground: oklch(0.985 0 0);
-  --color-primary: oklch(0.7 0.18 250);
-  --color-primary-foreground: oklch(0.985 0 0);
-  --color-secondary: oklch(0.269 0 0);
-  --color-secondary-foreground: oklch(0.985 0 0);
-  --color-muted: oklch(0.269 0 0);
-  --color-muted-foreground: oklch(0.708 0 0);
-  --color-accent: oklch(0.269 0 0);
-  --color-accent-foreground: oklch(0.985 0 0);
-  --color-destructive: oklch(0.55 0.2 27);
-  --color-destructive-foreground: oklch(0.985 0 0);
-  --color-border: oklch(0.35 0 0);
-  --color-ring: oklch(0.7 0.18 250);
-  --color-positive: oklch(0.65 0.2 145);
-  --color-negative: oklch(0.55 0.2 27);
-  --radius: 0.625rem;
+  --color-background: #0F0E0D;
+  --color-foreground: #F5F0E8;
+  --color-card: #211f1e;
+  --color-card-foreground: #F5F0E8;
+  --color-primary: #ffbe5b;
+  --color-primary-foreground: #442b00;
+  --color-primary-container: #e8a020;
+  --color-secondary: #942b00;
+  --color-secondary-foreground: #ffb59d;
+  --color-muted: #1d1b1a;
+  --color-muted-foreground: #6B6760;
+  --color-accent: #1d1b1a;
+  --color-accent-foreground: #F5F0E8;
+  --color-destructive: #93000a;
+  --color-destructive-foreground: #ffdad6;
+  --color-border: #514534;
+  --color-ring: #E8A020;
+  --color-positive: #E8A020;
+  --color-negative: #C04A20;
+  --color-surface-dim: #141312;
+  --color-surface-container: #211f1e;
+  --color-surface-container-low: #1d1b1a;
+  --color-surface-bright: #3b3937;
+  --color-surface-container-high: #2b2a28;
+  --color-on-surface-variant: #d6c4ae;
+  --color-outline-variant: #514534;
+  --radius: 0rem;
+  --font-headline: 'Space Grotesk', sans-serif;
+  --font-body: 'Manrope', sans-serif;
 }
 
 body {
-  background-color: var(--color-background);
-  color: var(--color-foreground);
-  font-family: system-ui, -apple-system, sans-serif;
+  background-color: #0F0E0D;
+  color: #F5F0E8;
+  font-family: 'Manrope', sans-serif;
+  margin: 0;
+}
+
+.font-headline {
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.font-body {
+  font-family: 'Manrope', sans-serif;
+}
+
+.font-label {
+  font-family: 'Manrope', sans-serif;
+}
+
+.noir-gradient {
+  background: linear-gradient(0deg, rgba(15,14,13,1) 0%, rgba(15,14,13,0) 60%);
 }

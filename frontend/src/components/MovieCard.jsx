@@ -1,5 +1,3 @@
-import { Card, CardContent } from "./ui/card";
-import { Badge } from "./ui/badge";
 import { cn } from "../lib/utils";
 
 export default function MovieCard({
@@ -17,14 +15,15 @@ export default function MovieCard({
   const genres = (movie.genres || []).slice(0, 2);
 
   return (
-    <Card
+    <div
       className={cn(
-        "w-full overflow-hidden transition-all duration-200",
-        compact ? "max-w-[200px]" : "max-w-[280px]",
+        "relative w-full overflow-hidden transition-all duration-500 group",
+        compact ? "max-w-[200px]" : "max-w-[340px]",
         clickable &&
-          "cursor-pointer hover:scale-[1.03] hover:shadow-xl hover:shadow-primary/20 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-[0.98]",
+          "cursor-pointer hover:scale-[1.02] active:scale-95",
         !clickable && "cursor-default",
-        highlight && "ring-2 ring-primary shadow-lg shadow-primary/20"
+        highlight &&
+          "border-2 border-[#E8A020] shadow-[0_0_30px_rgba(232,160,32,0.15)]"
       )}
       onClick={clickable ? onClick : undefined}
       role={clickable ? "button" : undefined}
@@ -40,9 +39,13 @@ export default function MovieCard({
           : undefined
       }
     >
-      <div className="aspect-[2/3] overflow-hidden bg-secondary relative">
+      {/* Poster image */}
+      <div className="aspect-[2/3] overflow-hidden bg-[#1d1b1a] relative">
         <img
-          className="w-full h-full object-cover"
+          className={cn(
+            "w-full h-full object-cover transition-all duration-700",
+            clickable && "group-hover:scale-110"
+          )}
           src={posterSrc}
           alt={`${movie.title} poster`}
           loading="lazy"
@@ -51,56 +54,61 @@ export default function MovieCard({
               "https://via.placeholder.com/300x450/1a1a2e/666?text=No+Poster";
           }}
         />
-        {clickable && (
-          <div className="absolute inset-0 bg-primary/0 hover:bg-primary/10 transition-colors" />
-        )}
-      </div>
-      <CardContent className="p-3 space-y-1.5">
-        <h3 className="font-semibold text-sm leading-tight line-clamp-2">
-          {movie.title}
-        </h3>
-        <div className="flex items-center gap-2">
-          {movie.year && (
-            <span className="text-xs text-muted-foreground">{movie.year}</span>
-          )}
-          {genres.map((g) => (
-            <Badge
-              key={g}
-              variant="secondary"
-              className="text-[10px] px-1.5 py-0"
-            >
-              {g}
-            </Badge>
-          ))}
-        </div>
-        {/* ELO + battles for ranked movies */}
-        {movie.elo != null && (
-          <div className="flex items-center justify-between pt-0.5">
-            <span className="text-xs font-mono font-semibold text-primary">
-              {movie.elo} ELO
+        {/* Noir gradient overlay */}
+        <div className="absolute inset-0 noir-gradient" />
+
+        {/* Pick winner label when highlighted */}
+        {highlight && (
+          <div className="absolute -top-0 left-1/2 -translate-x-1/2 z-20">
+            <span className="bg-[#E8A020] text-[#442b00] px-4 py-1 font-headline font-bold text-[10px] uppercase tracking-tighter">
+              Pick winner
             </span>
-            {movie.battles != null && (
-              <span className="text-[10px] text-muted-foreground">
-                {movie.battles} battles
+          </div>
+        )}
+
+        {/* Genre badges */}
+        {genres.length > 0 && (
+          <div className="absolute top-6 left-6 flex gap-2">
+            {genres.map((g) => (
+              <span
+                key={g}
+                className="bg-[#0F0E0D]/80 backdrop-blur-md px-3 py-1 text-[10px] font-label font-bold uppercase tracking-widest border border-[#E8A020]/20 text-[#E8A020]"
+              >
+                {g}
               </span>
+            ))}
+          </div>
+        )}
+
+        {/* Overlay title content */}
+        <div className="absolute bottom-6 left-6 right-6">
+          {movie.year && (
+            <p className="text-xs font-label uppercase tracking-[0.3em] text-[#d6c4ae]/80 mb-2">
+              {movie.year}
+            </p>
+          )}
+          <h2 className="text-2xl md:text-3xl font-headline font-black uppercase tracking-tighter text-[#F5F0E8] leading-none">
+            {movie.title}
+          </h2>
+        </div>
+      </div>
+
+      {/* ELO delta after duel */}
+      {delta !== undefined && delta !== null && (
+        <div className="absolute top-4 right-4 z-10">
+          <span
+            className={cn(
+              "text-lg font-black font-headline px-3 py-1",
+              delta >= 0
+                ? "bg-[#E8A020] text-[#442b00]"
+                : "bg-[#C04A20] text-[#F5F0E8]"
             )}
-          </div>
-        )}
-        {/* ELO delta after duel */}
-        {delta !== undefined && delta !== null && (
-          <div className="pt-0.5">
-            <span
-              className={cn(
-                "text-sm font-bold font-mono",
-                delta >= 0 ? "text-positive" : "text-negative"
-              )}
-            >
-              {delta >= 0 ? "+" : ""}
-              {delta}
-            </span>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          >
+            {delta >= 0 ? "+" : ""}
+            {delta}
+          </span>
+        </div>
+      )}
+    </div>
   );
 }
