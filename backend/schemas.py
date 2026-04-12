@@ -70,6 +70,7 @@ class RankedMovie(BaseModel):
     movie: MovieSchema
     elo: int = 1000
     battles: int = 0
+    trakt_rating: Optional[int] = None  # computed from ELO (1-10 scale)
 
 
 class RankingsResponse(BaseModel):

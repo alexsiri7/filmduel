@@ -151,6 +151,20 @@ export default function Rankings() {
                     </div>
                     <div className="flex flex-col">
                       <span className="text-[10px] font-label uppercase tracking-widest text-[#6B6760]">
+                        Rating
+                      </span>
+                      <span
+                        className={`font-headline font-bold ${
+                          isFirst
+                            ? "text-lg text-[#F5F0E8]"
+                            : "text-md text-[#F5F0E8]/60"
+                        }`}
+                      >
+                        {r.trakt_rating != null ? `${r.trakt_rating}/10` : "—"}
+                      </span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-label uppercase tracking-widest text-[#6B6760]">
                         Battles
                       </span>
                       <span
@@ -163,6 +177,28 @@ export default function Rankings() {
                         {r.battles}
                       </span>
                     </div>
+                  </div>
+                  <div className="flex gap-3 mt-1">
+                    {r.movie.trakt_id && (
+                      <a
+                        href={`https://trakt.tv/search/trakt/${r.movie.trakt_id}?id_type=movie`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] font-label uppercase tracking-widest text-[#F5F0E8]/30 hover:text-[#E8A020] transition-colors"
+                      >
+                        Trakt
+                      </a>
+                    )}
+                    {r.movie.imdb_id && (
+                      <a
+                        href={`https://www.imdb.com/title/${r.movie.imdb_id}/`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] font-label uppercase tracking-widest text-[#F5F0E8]/30 hover:text-[#E8A020] transition-colors"
+                      >
+                        IMDB
+                      </a>
+                    )}
                   </div>
                 </div>
               </div>

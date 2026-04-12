@@ -13,6 +13,7 @@ from backend.db import get_db
 from backend.db_models import User, UserMovie
 from backend.schemas import MovieSchema, RankedMovie, RankingsResponse, StatsResponse
 from backend.routers.auth import get_current_user
+from backend.services.elo import elo_to_trakt_rating
 from backend.services.rankings import (
     export_rankings_csv,
     get_user_rankings,
@@ -39,6 +40,7 @@ def _build_ranked_movie(um: UserMovie, rank: int) -> RankedMovie:
         ),
         elo=um.elo,
         battles=um.battles,
+        trakt_rating=elo_to_trakt_rating(um.elo),
     )
 
 
