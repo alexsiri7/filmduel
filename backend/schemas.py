@@ -127,6 +127,7 @@ class TournamentMatchSchema(BaseModel):
     movie_a: Optional[MovieSchema] = None
     movie_b: Optional[MovieSchema] = None
     winner_movie_id: Optional[str] = None
+    is_bye: bool = False
     played_at: Optional[datetime] = None
 
 

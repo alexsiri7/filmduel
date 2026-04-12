@@ -180,6 +180,7 @@ class TournamentMatch(Base):
     duel_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("duels.id"), nullable=True
     )
+    is_bye: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     played_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
