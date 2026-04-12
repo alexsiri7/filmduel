@@ -136,6 +136,7 @@ class Duel(Base):
     winner_elo_after: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     loser_elo_after: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     mode: Mapped[str] = mapped_column(Text, nullable=False, server_default="discovery")
+    pair_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

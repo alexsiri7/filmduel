@@ -77,6 +77,14 @@ async def submit_duel(
     um_a = await get_or_create_user_movie(movie_a_id)
     um_b = await get_or_create_user_movie(movie_b_id)
 
+    # Compute pair_type before battles are incremented
+    if um_a.battles >= 1 and um_b.battles >= 1:
+        pair_type = "ranked_vs_ranked"
+    elif um_a.battles == 0 or um_b.battles == 0:
+        pair_type = "ranked_vs_unranked"
+    else:
+        pair_type = "unknown"
+
     new_elo_a: int | None = um_a.elo
     new_elo_b: int | None = um_b.elo
     delta_a = 0
@@ -156,6 +164,7 @@ async def submit_duel(
         winner_elo_after=w_elo_after,
         loser_elo_after=l_elo_after,
         mode=mode,
+        pair_type=pair_type,
     )
     db.add(duel)
 
