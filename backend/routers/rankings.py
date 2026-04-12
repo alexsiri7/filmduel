@@ -2,20 +2,22 @@
 
 from __future__ import annotations
 
-import csv
 import io
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
 
 from backend.db import get_db
-from backend.db_models import Movie, User, UserMovie
+from backend.db_models import User, UserMovie
 from backend.schemas import MovieSchema, RankedMovie, RankingsResponse, StatsResponse
 from backend.routers.auth import get_current_user
+from backend.services.rankings import (
+    export_rankings_csv,
+    get_user_rankings,
+    get_user_stats,
+)
 
 router = APIRouter(prefix="/api/rankings", tags=["rankings"])
 
@@ -50,47 +52,13 @@ async def get_rankings(
     decade: Optional[str] = Query(default=None),
 ):
     """Return the user's ranked movies sorted by ELO descending."""
-    uid = current_user.id
-    needs_movie_join = genre is not None or decade is not None
-
-    # Only show movies the user has actually seen and battled
-    stmt = (
-        select(UserMovie)
-        .options(joinedload(UserMovie.movie))
-        .where(UserMovie.user_id == uid, UserMovie.seen.is_(True), UserMovie.battles > 0)
+    user_movies, total = await get_user_rankings(
+        db, current_user.id, genre=genre, decade=decade, limit=limit, offset=offset
     )
-    count_stmt = (
-        select(func.count())
-        .select_from(UserMovie)
-        .where(UserMovie.user_id == uid, UserMovie.seen.is_(True), UserMovie.battles > 0)
-    )
-
-    if needs_movie_join:
-        stmt = stmt.join(Movie, UserMovie.movie_id == Movie.id)
-        count_stmt = count_stmt.join(Movie, UserMovie.movie_id == Movie.id)
-
-    if genre:
-        stmt = stmt.where(Movie.genres.any(genre))
-        count_stmt = count_stmt.where(Movie.genres.any(genre))
-
-    if decade:
-        decade_start = int(decade.rstrip("s"))
-        stmt = stmt.where(Movie.year >= decade_start, Movie.year <= decade_start + 9)
-        count_stmt = count_stmt.where(Movie.year >= decade_start, Movie.year <= decade_start + 9)
-
-    stmt = stmt.order_by(UserMovie.elo.desc()).offset(offset).limit(limit)
-
-    result = await db.execute(stmt)
-    user_movies = result.unique().scalars().all()
-
-    count_result = await db.execute(count_stmt)
-    total = count_result.scalar() or 0
-
     rankings = [
         _build_ranked_movie(um, rank=offset + i + 1)
         for i, um in enumerate(user_movies)
     ]
-
     return RankingsResponse(rankings=rankings, total=total)
 
 
@@ -100,46 +68,26 @@ async def get_stats(
     db: AsyncSession = Depends(get_db),
 ):
     """Return aggregate stats for the user's rankings."""
-    uid = current_user.id
+    stats = await get_user_stats(db, current_user.id)
 
-    stmt = (
-        select(UserMovie)
-        .options(joinedload(UserMovie.movie))
-        .where(UserMovie.user_id == uid, UserMovie.seen.is_(True), UserMovie.battles > 0)
-        .order_by(UserMovie.elo.desc())
-    )
-    result = await db.execute(stmt)
-    user_movies = result.unique().scalars().all()
-
-    # Count unseen movies in user's pool
-    unseen_stmt = (
-        select(func.count())
-        .select_from(UserMovie)
-        .where(UserMovie.user_id == uid, UserMovie.seen.is_(False))
-    )
-    unseen_result = await db.execute(unseen_stmt)
-    unseen_count = unseen_result.scalar() or 0
-
-    if not user_movies:
+    if stats["highest_rated"] is None:
         return StatsResponse(
-            total_duels=0,
-            total_movies_ranked=0,
-            unseen_count=unseen_count,
-            average_elo=0.0,
+            total_duels=stats["total_duels"],
+            total_movies_ranked=stats["total_movies_ranked"],
+            unseen_count=stats["unseen_count"],
+            average_elo=stats["average_elo"],
         )
 
-    total_battles = sum(um.battles for um in user_movies)
-    total_duels = total_battles // 2  # each duel increments two movies
-    elos = [um.elo for um in user_movies]
-
-    highest = _build_ranked_movie(user_movies[0], rank=1)
-    lowest = _build_ranked_movie(user_movies[-1], rank=len(user_movies))
+    highest = _build_ranked_movie(stats["highest_rated"], rank=1)
+    lowest = _build_ranked_movie(
+        stats["lowest_rated"], rank=stats["total_movies_ranked"]
+    )
 
     return StatsResponse(
-        total_duels=total_duels,
-        total_movies_ranked=len(user_movies),
-        unseen_count=unseen_count,
-        average_elo=round(sum(elos) / len(elos), 2),
+        total_duels=stats["total_duels"],
+        total_movies_ranked=stats["total_movies_ranked"],
+        unseen_count=stats["unseen_count"],
+        average_elo=stats["average_elo"],
         highest_rated=highest,
         lowest_rated=lowest,
     )
@@ -151,35 +99,8 @@ async def export_csv(
     db: AsyncSession = Depends(get_db),
 ):
     """Export rankings as a Letterboxd-compatible CSV."""
-    uid = current_user.id
-
-    stmt = (
-        select(UserMovie)
-        .options(joinedload(UserMovie.movie))
-        .where(UserMovie.user_id == uid, UserMovie.seen.is_(True), UserMovie.battles > 0)
-        .order_by(UserMovie.elo.desc())
-    )
-    result = await db.execute(stmt)
-    user_movies = result.unique().scalars().all()
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-    # Letterboxd CSV format
-    writer.writerow(["Position", "Title", "Year", "imdbID", "Rating10"])
-
-    for i, um in enumerate(user_movies):
-        movie = um.movie
-        # Map ELO to Trakt 1-10 scale per PRD formula
-        trakt_rating = max(1, min(10, round((um.elo - 600) * 9 / 800) + 1))
-        writer.writerow([
-            i + 1,
-            movie.title,
-            movie.year or "",
-            movie.imdb_id or "",
-            trakt_rating,
-        ])
-
-    output.seek(0)
+    csv_content = await export_rankings_csv(db, current_user.id)
+    output = io.StringIO(csv_content)
     return StreamingResponse(
         output,
         media_type="text/csv",
