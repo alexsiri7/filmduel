@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import get_settings
-from backend.routers import auth, movies, duels, rankings
+from backend.routers import auth, movies, duels, rankings, swipe
 
 settings = get_settings()
 
@@ -38,6 +38,7 @@ app.include_router(auth.router)
 app.include_router(movies.router)
 app.include_router(duels.router)
 app.include_router(rankings.router)
+app.include_router(swipe.router)
 
 
 @app.get("/health")

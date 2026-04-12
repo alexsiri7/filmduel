@@ -4,6 +4,7 @@ import Nav from "./components/Nav";
 import Login from "./pages/Login";
 import Duel from "./pages/Duel";
 import Rankings from "./pages/Rankings";
+import Swipe from "./pages/Swipe";
 
 function ProtectedRoute({ children }) {
   const [status, setStatus] = useState("loading");
@@ -57,6 +58,14 @@ export default function App() {
             }
           />
           <Route
+            path="/swipe"
+            element={
+              <ProtectedRoute>
+                <Swipe />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/rankings"
             element={
               <ProtectedRoute>
@@ -77,6 +86,16 @@ export default function App() {
           }`}
         >
           <span className="text-[10px] font-bold uppercase tracking-[0.1em] font-headline">Duel</span>
+        </a>
+        <a
+          href="/swipe"
+          className={`flex flex-col items-center justify-center px-6 py-2 transition-colors ${
+            location.pathname === "/swipe"
+              ? "text-[#E8A020] border-t-2 border-[#E8A020] bg-[#E8A020]/10"
+              : "text-[#6B6760] hover:text-[#F5F0E8]"
+          }`}
+        >
+          <span className="text-[10px] font-bold uppercase tracking-[0.1em] font-headline">Swipe</span>
         </a>
         <a
           href="/rankings"

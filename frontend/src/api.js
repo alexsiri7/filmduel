@@ -39,4 +39,13 @@ export function getRankings(limit = 50, offset = 0) {
 export function fetchStats() { return request("/api/rankings/stats"); }
 export const getStats = fetchStats;
 
+export function fetchSwipeCards() { return request("/api/swipe/cards"); }
+
+export function submitSwipeResults(results) {
+  return request("/api/swipe/results", {
+    method: "POST",
+    body: JSON.stringify({ results }),
+  });
+}
+
 export function logout() { return request("/auth/logout", { method: "POST" }); }

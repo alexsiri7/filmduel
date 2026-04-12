@@ -61,6 +61,7 @@ class DuelResult(BaseModel):
     outcome: DuelOutcome
     movie_a_elo_delta: int
     movie_b_elo_delta: int
+    next_action: str = "duel"
 
 
 class RankedMovie(BaseModel):
@@ -73,6 +74,30 @@ class RankedMovie(BaseModel):
 class RankingsResponse(BaseModel):
     rankings: list[RankedMovie]
     total: int
+
+
+class SwipeCardSchema(BaseModel):
+    id: str
+    trakt_id: int
+    title: str
+    year: Optional[int] = None
+    genres: list[str] = []
+    poster_url: Optional[str] = None
+    community_rating: Optional[float] = None
+
+
+class SwipeResultItem(BaseModel):
+    movie_id: str
+    seen: bool
+
+
+class SwipeSubmit(BaseModel):
+    results: list[SwipeResultItem]
+
+
+class SwipeResponse(BaseModel):
+    seen_count: int
+    unseen_count: int
 
 
 class StatsResponse(BaseModel):

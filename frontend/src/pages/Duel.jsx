@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { fetchPair, submitDuel, fetchStats } from "../api";
 import MovieCard from "../components/MovieCard";
 import { cn } from "../lib/utils";
@@ -14,6 +15,7 @@ function SkeletonCard() {
 }
 
 export default function Duel() {
+  const navigate = useNavigate();
   const [pair, setPair] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -22,6 +24,7 @@ export default function Duel() {
   const [stats, setStats] = useState(null);
   const [pickMode, setPickMode] = useState(false);
   const [animateKey, setAnimateKey] = useState(0);
+  const [showSwipePrompt, setShowSwipePrompt] = useState(false);
   const prefetchRef = useRef(null);
 
   const loadStats = useCallback(async () => {
@@ -83,10 +86,16 @@ export default function Duel() {
       );
       setResult(res);
       setPickMode(false);
-      setTimeout(() => {
-        loadPair(true);
-        loadStats();
-      }, 900);
+      if (res.next_action === "swipe") {
+        setTimeout(() => {
+          setShowSwipePrompt(true);
+        }, 900);
+      } else {
+        setTimeout(() => {
+          loadPair(true);
+          loadStats();
+        }, 900);
+      }
     } catch (err) {
       console.error("Failed to submit duel:", err);
     } finally {
@@ -116,7 +125,42 @@ export default function Duel() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#141312]">
+    <div className="min-h-screen flex flex-col bg-[#141312] relative">
+      {/* Swipe interstitial overlay */}
+      {showSwipePrompt && (
+        <div className="absolute inset-0 z-50 bg-[#0F0E0D]/95 backdrop-blur-xl flex flex-col items-center justify-center gap-8 p-12">
+          <div className="text-center space-y-4">
+            <p className="text-[10px] font-label uppercase tracking-[0.3em] text-[#d6c4ae]/60">
+              Running low on films
+            </p>
+            <h2 className="text-3xl md:text-4xl font-headline font-black uppercase tracking-tighter text-[#F5F0E8]">
+              Time to discover more films
+            </h2>
+            <p className="text-[#6B6760] font-body text-lg max-w-md">
+              Swipe through 10 films to classify them as seen or unseen, then come back for more duels.
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 w-full max-w-xs">
+            <button
+              onClick={() => navigate("/swipe")}
+              className="bg-[#E8A020] text-[#0F0E0D] font-headline font-black py-5 uppercase tracking-[0.2em] text-base hover:shadow-[0_0_30px_rgba(232,160,32,0.4)] active:scale-[0.98] transition-all"
+            >
+              Swipe 10 Films
+            </button>
+            <button
+              onClick={() => {
+                setShowSwipePrompt(false);
+                loadPair(true);
+                loadStats();
+              }}
+              className="border border-[#514534]/30 hover:border-[#E8A020]/50 hover:bg-[#1d1b1a] text-[#d6c4ae] font-headline font-bold uppercase tracking-widest text-xs py-4 transition-all"
+            >
+              Keep Dueling
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Top Stats Bar */}
       <header className="h-20 px-6 md:px-12 flex justify-between items-center bg-[#0F0E0D]/70 backdrop-blur-xl border-b border-[#E8A020]/10 sticky top-0 z-30">
         <div className="flex gap-6 md:gap-12">
