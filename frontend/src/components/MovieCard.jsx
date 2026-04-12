@@ -7,6 +7,7 @@ export default function MovieCard({
   highlight,
   clickable = false,
   compact = false,
+  chosen, // "winner" | "loser" | undefined
 }) {
   const posterSrc = movie.poster_url
     ? movie.poster_url
@@ -23,7 +24,10 @@ export default function MovieCard({
           "cursor-pointer hover:scale-[1.02] active:scale-95",
         !clickable && "cursor-default",
         highlight &&
-          "border-2 border-[#E8A020] shadow-[0_0_30px_rgba(232,160,32,0.15)]"
+          "border-2 border-[#E8A020] shadow-[0_0_30px_rgba(232,160,32,0.15)]",
+        chosen === "winner" &&
+          "border-2 border-[#E8A020] shadow-[0_0_40px_rgba(232,160,32,0.35)] scale-[1.03] animate-winner-pulse",
+        chosen === "loser" && "opacity-40 scale-[0.97]"
       )}
       onClick={clickable ? onClick : undefined}
       role={clickable ? "button" : undefined}
@@ -66,6 +70,15 @@ export default function MovieCard({
           </div>
         )}
 
+        {/* Winner label after duel */}
+        {chosen === "winner" && (
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20">
+            <span className="bg-[#E8A020] text-[#442b00] px-5 py-2 font-headline font-black text-lg uppercase tracking-wider shadow-[0_0_30px_rgba(232,160,32,0.5)]">
+              Winner
+            </span>
+          </div>
+        )}
+
         {/* Genre badges */}
         {genres.length > 0 && (
           <div className="absolute top-6 left-6 flex gap-2">
@@ -81,13 +94,13 @@ export default function MovieCard({
         )}
 
         {/* Overlay title content */}
-        <div className="absolute bottom-6 left-6 right-6">
+        <div className={cn("absolute left-4 right-4", compact ? "bottom-3" : "bottom-6 left-6 right-6")}>
           {movie.year && (
-            <p className="text-xs font-label uppercase tracking-[0.3em] text-[#d6c4ae]/80 mb-2">
+            <p className={cn("font-label uppercase text-[#d6c4ae]/80", compact ? "text-[9px] tracking-[0.2em] mb-1" : "text-xs tracking-[0.3em] mb-2")}>
               {movie.year}
             </p>
           )}
-          <h2 className="text-2xl md:text-3xl font-headline font-black uppercase tracking-tighter text-[#F5F0E8] leading-none">
+          <h2 className={cn("font-headline font-black uppercase tracking-tighter text-[#F5F0E8] leading-none", compact ? "text-base" : "text-2xl md:text-3xl")}>
             {movie.title}
           </h2>
         </div>

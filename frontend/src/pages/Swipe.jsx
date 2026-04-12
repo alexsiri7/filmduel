@@ -68,6 +68,17 @@ export default function Swipe() {
     handleSwipe(seen);
   };
 
+  // Summary screen — auto-continue if need more seen films
+  // NOTE: This useEffect MUST be before any early returns to satisfy React's rules of hooks
+  useEffect(() => {
+    if (summary && summary.next_action === "swipe") {
+      const timer = setTimeout(() => {
+        loadCards();
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [summary, loadCards]);
+
   // Loading state
   if (loading) {
     return (
@@ -93,16 +104,6 @@ export default function Swipe() {
       </div>
     );
   }
-
-  // Summary screen — auto-continue if need more seen films
-  useEffect(() => {
-    if (summary && summary.next_action === "swipe") {
-      const timer = setTimeout(() => {
-        loadCards();
-      }, 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [summary, loadCards]);
 
   if (summary) {
     const needMore = summary.next_action === "swipe";
