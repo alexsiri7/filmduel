@@ -96,6 +96,7 @@ export default function Swipe() {
 
   // Summary screen
   if (summary) {
+    const needMore = summary.next_action === "swipe";
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-8 p-12 bg-[#0F0E0D]">
         <div className="text-center space-y-4">
@@ -106,23 +107,36 @@ export default function Swipe() {
             You've seen {summary.seen_count} of these films
           </h2>
           <p className="text-[#6B6760] font-body text-lg">
-            {summary.unseen_count} new discoveries added to your pool
+            {needMore
+              ? "Need a few more seen films before you can duel. Keep swiping!"
+              : `${summary.unseen_count} new discoveries added to your pool`}
           </p>
         </div>
 
         <div className="flex flex-col gap-3 w-full max-w-xs">
-          <button
-            onClick={() => navigate("/")}
-            className="bg-[#E8A020] text-[#0F0E0D] font-headline font-black py-5 uppercase tracking-[0.2em] text-base hover:shadow-[0_0_30px_rgba(232,160,32,0.4)] active:scale-[0.98] transition-all"
-          >
-            Start Dueling
-          </button>
-          <button
-            onClick={loadCards}
-            className="border border-[#514534]/30 hover:border-[#E8A020]/50 hover:bg-[#1d1b1a] text-[#d6c4ae] font-headline font-bold uppercase tracking-widest text-xs py-4 transition-all"
-          >
-            Swipe More
-          </button>
+          {needMore ? (
+            <button
+              onClick={loadCards}
+              className="bg-[#E8A020] text-[#0F0E0D] font-headline font-black py-5 uppercase tracking-[0.2em] text-base hover:shadow-[0_0_30px_rgba(232,160,32,0.4)] active:scale-[0.98] transition-all"
+            >
+              Swipe More Films
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={() => navigate("/")}
+                className="bg-[#E8A020] text-[#0F0E0D] font-headline font-black py-5 uppercase tracking-[0.2em] text-base hover:shadow-[0_0_30px_rgba(232,160,32,0.4)] active:scale-[0.98] transition-all"
+              >
+                Start Dueling
+              </button>
+              <button
+                onClick={loadCards}
+                className="border border-[#514534]/30 hover:border-[#E8A020]/50 hover:bg-[#1d1b1a] text-[#d6c4ae] font-headline font-bold uppercase tracking-widest text-xs py-4 transition-all"
+              >
+                Swipe More
+              </button>
+            </>
+          )}
         </div>
       </div>
     );

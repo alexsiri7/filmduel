@@ -172,4 +172,22 @@ async def submit_swipe_results(
         else:
             unseen_count += 1
 
-    return SwipeResponse(seen_count=seen_count, unseen_count=unseen_count)
+    # Check if user has enough seen films to duel
+    seen_unranked_stmt = (
+        select(func.count())
+        .select_from(UserMovie)
+        .where(UserMovie.user_id == uid, UserMovie.seen.is_(True), UserMovie.battles == 0)
+    )
+    seen_unranked = (await db.execute(seen_unranked_stmt)).scalar() or 0
+
+    # Also count total seen (ranked + unranked) — need at least 2 to duel
+    total_seen_stmt = (
+        select(func.count())
+        .select_from(UserMovie)
+        .where(UserMovie.user_id == uid, UserMovie.seen.is_(True))
+    )
+    total_seen = (await db.execute(total_seen_stmt)).scalar() or 0
+
+    next_action = "duel" if total_seen >= 2 else "swipe"
+
+    return SwipeResponse(seen_count=seen_count, unseen_count=unseen_count, next_action=next_action)

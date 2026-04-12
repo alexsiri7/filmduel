@@ -98,6 +98,7 @@ class SwipeSubmit(BaseModel):
 class SwipeResponse(BaseModel):
     seen_count: int
     unseen_count: int
+    next_action: str = "duel"  # "duel" or "swipe" — whether user has enough seen films
 
 
 class StatsResponse(BaseModel):
