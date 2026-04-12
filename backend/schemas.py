@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class UserResponse(BaseModel):
@@ -115,7 +115,7 @@ class StatsResponse(BaseModel):
 
 
 class TournamentCreate(BaseModel):
-    name: str
+    name: str = Field(default="", max_length=100)
     filter_type: Optional[str] = None
     filter_value: Optional[str] = None
     bracket_size: Literal[8, 16, 32, 64]
