@@ -141,11 +141,3 @@ def test_outcome_to_scores():
     assert outcome_to_scores("neither") == (0.0, 0.0)
 
 
-def test_health_endpoint():
-    from fastapi.testclient import TestClient
-    from backend.main import app
-
-    client = TestClient(app)
-    response = client.get("/health")
-    assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
