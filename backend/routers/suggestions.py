@@ -123,7 +123,7 @@ async def get_suggestions(
             status="ready",
         )
     except ValueError as e:
-        # ANTHROPIC_API_KEY not configured
+        # LLM_API_KEY not configured
         raise HTTPException(status_code=503, detail=str(e))
     except Exception:
         logger.exception("Failed to generate suggestions for user %s", uid)

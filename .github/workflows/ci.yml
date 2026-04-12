@@ -12,6 +12,7 @@ jobs:
     env:
       SECRET_KEY: "ci-test-key-not-for-production"
       DATABASE_URL: "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
+      LLM_API_KEY: "test-key-not-for-production"
     steps:
       - uses: actions/checkout@v4
 

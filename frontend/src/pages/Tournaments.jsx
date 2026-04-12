@@ -20,6 +20,7 @@ export default function Tournaments() {
   const [filterValue, setFilterValue] = useState("");
   const [availableGenres, setAvailableGenres] = useState([]);
   const [poolCount, setPoolCount] = useState(null);
+  const [aiCurated, setAiCurated] = useState(false);
 
   useEffect(() => {
     loadTournaments();
@@ -57,13 +58,14 @@ export default function Tournaments() {
   }
 
   async function handleCreate() {
-    if (!name.trim()) return;
+    if (!aiCurated && !name.trim()) return;
     setCreating(true);
     setError(null);
     try {
       const filterType = filterMode === "all" ? null : filterMode;
       const fv = filterMode === "all" ? null : filterValue;
-      const t = await createTournament(name.trim(), bracketSize, filterType, fv);
+      const tournamentName = name.trim() || "AI Tournament";
+      const t = await createTournament(tournamentName, bracketSize, filterType, fv, aiCurated);
       navigate(`/tournaments/${t.id}`);
     } catch (err) {
       setError(err.message);
@@ -118,6 +120,40 @@ export default function Tournaments() {
               placeholder="Horror Showdown"
               className="w-full max-w-md bg-[#0F0E0D] border border-[#F5F0E8]/10 text-[#F5F0E8] font-body px-4 py-3 placeholder:text-[#6B6760]/50 focus:border-[#E8A020]/50 focus:outline-none transition-colors"
             />
+          </div>
+
+          {/* Mode: Standard vs AI-Curated */}
+          <div className="mb-6">
+            <label className="text-[10px] font-label uppercase tracking-[0.3em] text-[#6B6760] block mb-2">
+              Curation Mode
+            </label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setAiCurated(false)}
+                className={
+                  !aiCurated
+                    ? "px-6 py-2 bg-[#E8A020] text-[#0F0E0D] font-label font-bold uppercase text-xs tracking-widest border border-[#E8A020]"
+                    : "px-6 py-2 bg-transparent text-[#F5F0E8]/60 font-label font-bold uppercase text-xs tracking-widest border border-[#F5F0E8]/10 hover:border-[#E8A020]/40 transition-colors"
+                }
+              >
+                Standard
+              </button>
+              <button
+                onClick={() => setAiCurated(true)}
+                className={
+                  aiCurated
+                    ? "px-6 py-2 bg-[#E8A020] text-[#0F0E0D] font-label font-bold uppercase text-xs tracking-widest border border-[#E8A020]"
+                    : "px-6 py-2 bg-transparent text-[#F5F0E8]/60 font-label font-bold uppercase text-xs tracking-widest border border-[#F5F0E8]/10 hover:border-[#E8A020]/40 transition-colors"
+                }
+              >
+                AI-Curated
+              </button>
+            </div>
+            {aiCurated && (
+              <p className="mt-2 text-sm font-body text-[#E8A020]/70">
+                AI will select films and create a themed bracket
+              </p>
+            )}
           </div>
 
           {/* Bracket Size */}
@@ -234,10 +270,10 @@ export default function Tournaments() {
           <div className="flex gap-3">
             <button
               onClick={handleCreate}
-              disabled={creating || !name.trim() || (filterMode !== "all" && !filterValue)}
+              disabled={creating || (!aiCurated && !name.trim()) || (filterMode !== "all" && !filterValue)}
               className="bg-[#E8A020] text-[#0F0E0D] font-headline font-black uppercase py-4 px-8 tracking-widest text-sm hover:shadow-[0_0_30px_rgba(232,160,32,0.4)] active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {creating ? "Creating..." : "Create & Seed"}
+              {creating ? (aiCurated ? "Curating your bracket..." : "Creating...") : "Create & Seed"}
             </button>
             <button
               onClick={() => {
