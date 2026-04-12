@@ -57,6 +57,8 @@ export default function Duel() {
         }
         setPair(data);
         setAnimateKey((k) => k + 1);
+        // Eagerly preload the next pair while user considers this one
+        prefetchNext();
       } catch (err) {
         console.error("Failed to load movie pair:", err);
         setError(err.message);
