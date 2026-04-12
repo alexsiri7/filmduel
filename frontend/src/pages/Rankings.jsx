@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getRankings, fetchStats } from "../api";
+import { getRankings, fetchStats, syncTrakt } from "../api";
 
 const GENRE_FILTERS = ["All", "Drama", "Horror", "Sci-fi", "Thriller", "Comedy"];
 
@@ -9,6 +9,7 @@ export default function Rankings() {
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState("All");
   const [total, setTotal] = useState(0);
+  const [syncState, setSyncState] = useState("idle"); // idle | syncing | done | error
 
   useEffect(() => {
     async function load() {
@@ -45,9 +46,55 @@ export default function Rankings() {
     <div className="min-h-screen bg-[#0F0E0D] p-6 md:p-12 pb-32">
       {/* Header */}
       <header className="mb-12">
-        <h2 className="text-5xl md:text-7xl font-headline font-black uppercase tracking-tighter text-[#F5F0E8] mb-8 leading-none">
-          Your <span className="text-[#E8A020]">rankings</span>
-        </h2>
+        <div className="flex items-start justify-between mb-8 gap-4">
+          <h2 className="text-5xl md:text-7xl font-headline font-black uppercase tracking-tighter text-[#F5F0E8] leading-none">
+            Your <span className="text-[#E8A020]">rankings</span>
+          </h2>
+          <button
+            onClick={async () => {
+              if (syncState === "syncing") return;
+              setSyncState("syncing");
+              try {
+                const result = await syncTrakt();
+                setSyncState("done");
+                if (result?.new_movies > 0) {
+                  // Reload rankings to reflect new data
+                  const genre = activeFilter === "All" ? null : activeFilter;
+                  const [rankData, statsData] = await Promise.all([
+                    getRankings(50, 0, genre),
+                    fetchStats(),
+                  ]);
+                  setRankings(rankData.rankings);
+                  setTotal(rankData.total);
+                  setStats(statsData);
+                }
+                setTimeout(() => setSyncState("idle"), 3000);
+              } catch (err) {
+                console.error("Sync failed:", err);
+                setSyncState("error");
+                setTimeout(() => setSyncState("idle"), 3000);
+              }
+            }}
+            disabled={syncState === "syncing"}
+            className={`shrink-0 mt-2 px-4 py-2 font-label font-bold uppercase text-xs tracking-widest border transition-all ${
+              syncState === "syncing"
+                ? "border-[#E8A020]/30 text-[#E8A020]/50 cursor-wait"
+                : syncState === "done"
+                ? "border-green-500/50 text-green-400"
+                : syncState === "error"
+                ? "border-red-500/50 text-red-400"
+                : "border-[#F5F0E8]/10 text-[#F5F0E8]/60 hover:border-[#E8A020]/40 hover:text-[#E8A020]"
+            }`}
+          >
+            {syncState === "syncing"
+              ? "Syncing..."
+              : syncState === "done"
+              ? "Synced!"
+              : syncState === "error"
+              ? "Failed"
+              : "Sync Trakt"}
+          </button>
+        </div>
 
         {/* Filter Pills */}
         <div className="flex items-center gap-3 flex-wrap">

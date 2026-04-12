@@ -53,6 +53,8 @@ export function submitSwipeResults(results) {
 
 export function logout() { return request("/auth/logout", { method: "POST" }); }
 
+export function syncTrakt() { return request("/api/sync", { method: "POST" }); }
+
 // ── Tournaments ──────────────────────────────────────────────────────
 
 export function getTournaments() {
