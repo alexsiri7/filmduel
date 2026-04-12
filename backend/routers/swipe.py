@@ -200,7 +200,7 @@ async def submit_swipe_results(
     )
     total_seen = (await db.execute(total_seen_stmt)).scalar() or 0
 
-    next_action = "duel" if total_seen >= 2 else "swipe"
+    next_action = "duel" if (total_seen >= 10 and seen_unranked >= 3) else "swipe"
 
     # Check if pool needs expansion
     unknown_stmt = (
