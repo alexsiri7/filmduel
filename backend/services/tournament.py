@@ -227,15 +227,20 @@ async def record_match_winner(
     bracket_size: int,
     match_id: uuid.UUID,
     winner_id: uuid.UUID,
+    loser_id: uuid.UUID,
+    user_id: uuid.UUID,
 ) -> None:
-    """Fast path: set winner, propagate to next round, detect champion.
+    """Record match result: set winner, propagate, ELO update, duel record.
 
-    Only bracket-structural DB writes — no ELO, no duel records.
+    All on the caller's session — no background tasks, no connection pool issues.
+    Frontend does optimistic updates so the user doesn't wait.
     """
     now = datetime.now(timezone.utc)
 
-    match_stmt = select(TournamentMatch).where(TournamentMatch.id == match_id)
-    match_obj = (await db.execute(match_stmt)).scalar_one()
+    # Mark winner + propagate
+    match_obj = (await db.execute(
+        select(TournamentMatch).where(TournamentMatch.id == match_id)
+    )).scalar_one()
     match_obj.winner_movie_id = winner_id
     match_obj.played_at = now
 
@@ -264,58 +269,39 @@ async def record_match_winner(
         t.status = "completed"
         t.completed_at = now
 
+    # ELO update + duel record (same session, 2 extra queries)
+    um_w = (await db.execute(
+        select(UserMovie).where(UserMovie.user_id == user_id, UserMovie.movie_id == winner_id)
+    )).scalar_one()
+    um_l = (await db.execute(
+        select(UserMovie).where(UserMovie.user_id == user_id, UserMovie.movie_id == loser_id)
+    )).scalar_one()
+
+    w_elo = um_w.elo if um_w.elo is not None else get_initial_elo(um_w.seeded_elo)
+    l_elo = um_l.elo if um_l.elo is not None else get_initial_elo(um_l.seeded_elo)
+    new_w, new_l = update_elo(w_elo, l_elo, um_w.battles, um_l.battles)
+
+    um_w.elo = new_w
+    um_l.elo = new_l
+    um_w.battles += 1
+    um_l.battles += 1
+    um_w.last_dueled_at = now
+    um_l.last_dueled_at = now
+    um_w.updated_at = now
+    um_l.updated_at = now
+
+    duel = Duel(
+        user_id=user_id,
+        winner_movie_id=winner_id,
+        loser_movie_id=loser_id,
+        winner_elo_before=w_elo,
+        loser_elo_before=l_elo,
+        winner_elo_after=new_w,
+        loser_elo_after=new_l,
+        mode="tournament",
+    )
+    db.add(duel)
     await db.flush()
 
-
-async def record_match_elo(
-    user_id: uuid.UUID,
-    match_id: uuid.UUID,
-    winner_id: uuid.UUID,
-    loser_id: uuid.UUID,
-) -> None:
-    """Background: ELO update + duel record creation. Owns its own DB session."""
-    from backend.db import async_session_factory
-
-    try:
-        async with async_session_factory() as db:
-            um_w = (await db.execute(
-                select(UserMovie).where(UserMovie.user_id == user_id, UserMovie.movie_id == winner_id)
-            )).scalar_one()
-            um_l = (await db.execute(
-                select(UserMovie).where(UserMovie.user_id == user_id, UserMovie.movie_id == loser_id)
-            )).scalar_one()
-
-            w_elo = um_w.elo if um_w.elo is not None else get_initial_elo(um_w.seeded_elo)
-            l_elo = um_l.elo if um_l.elo is not None else get_initial_elo(um_l.seeded_elo)
-            new_w, new_l = update_elo(w_elo, l_elo, um_w.battles, um_l.battles)
-
-            now = datetime.now(timezone.utc)
-            um_w.elo = new_w
-            um_l.elo = new_l
-            um_w.battles += 1
-            um_l.battles += 1
-            um_w.last_dueled_at = now
-            um_l.last_dueled_at = now
-            um_w.updated_at = now
-            um_l.updated_at = now
-
-            duel = Duel(
-                user_id=user_id,
-                winner_movie_id=winner_id,
-                loser_movie_id=loser_id,
-                winner_elo_before=w_elo,
-                loser_elo_before=l_elo,
-                winner_elo_after=new_w,
-                loser_elo_after=new_l,
-                mode="tournament",
-            )
-            db.add(duel)
-
-            match_obj = (await db.execute(
-                select(TournamentMatch).where(TournamentMatch.id == match_id)
-            )).scalar_one()
-            match_obj.duel_id = duel.id
-
-            await db.commit()
-    except Exception:
-        logger.exception("Background ELO update failed for match %s", match_id)
+    match_obj.duel_id = duel.id
+    await db.flush()
