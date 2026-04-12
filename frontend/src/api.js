@@ -60,6 +60,13 @@ export function getTournamentGenres() {
   return request("/api/tournaments/genres");
 }
 
+export function getTournamentPoolCount(filterType, filterValue) {
+  const params = new URLSearchParams();
+  if (filterType) params.set("filter_type", filterType);
+  if (filterValue) params.set("filter_value", filterValue);
+  return request(`/api/tournaments/pool-count?${params}`);
+}
+
 export function createTournament(name, bracketSize, filterType, filterValue) {
   return request("/api/tournaments", {
     method: "POST",

@@ -44,14 +44,17 @@ function PosterThumb({ movie, isWinner, isLoser }) {
 /** Single match card in the bracket */
 function BracketMatch({ match, isNext, totalRounds, onClick }) {
   const played = !!match.winner_movie_id;
+  const isBye = match.is_bye;
   const aWins = played && match.winner_movie_id === match.movie_a?.id;
   const bWins = played && match.winner_movie_id === match.movie_b?.id;
 
   return (
     <div
-      onClick={isNext && !played ? onClick : undefined}
+      onClick={isNext && !played && !isBye ? onClick : undefined}
       className={`relative bg-[#1d1b1a] border transition-all w-full ${
-        isNext && !played
+        isBye
+          ? "border-[#F5F0E8]/5 opacity-50"
+          : isNext && !played
           ? "border-[#E8A020]/60 shadow-[0_0_20px_rgba(232,160,32,0.15)] cursor-pointer hover:border-[#E8A020] animate-pulse-slow"
           : played
           ? "border-[#F5F0E8]/5"
@@ -61,17 +64,19 @@ function BracketMatch({ match, isNext, totalRounds, onClick }) {
       {/* Movie A */}
       <div
         className={`flex items-center gap-2 px-2 py-1.5 border-b border-[#F5F0E8]/5 ${
-          aWins ? "bg-[#E8A020]/10" : ""
+          aWins && !isBye ? "bg-[#E8A020]/10" : ""
         }`}
       >
         <PosterThumb
           movie={match.movie_a}
-          isWinner={aWins}
-          isLoser={bWins}
+          isWinner={aWins && !isBye}
+          isLoser={bWins && !isBye}
         />
         <span
           className={`text-[11px] font-headline font-bold uppercase tracking-tight truncate ${
-            aWins
+            isBye
+              ? "text-[#F5F0E8]/50"
+              : aWins
               ? "text-[#E8A020]"
               : bWins
               ? "text-[#F5F0E8]/30"
@@ -84,28 +89,39 @@ function BracketMatch({ match, isNext, totalRounds, onClick }) {
       {/* Movie B */}
       <div
         className={`flex items-center gap-2 px-2 py-1.5 ${
-          bWins ? "bg-[#E8A020]/10" : ""
+          bWins && !isBye ? "bg-[#E8A020]/10" : ""
         }`}
       >
-        <PosterThumb
-          movie={match.movie_b}
-          isWinner={bWins}
-          isLoser={aWins}
-        />
-        <span
-          className={`text-[11px] font-headline font-bold uppercase tracking-tight truncate ${
-            bWins
-              ? "text-[#E8A020]"
-              : aWins
-              ? "text-[#F5F0E8]/30"
-              : "text-[#F5F0E8]/70"
-          }`}
-        >
-          {match.movie_b?.title || "TBD"}
-        </span>
+        {isBye ? (
+          <>
+            <div className="w-8 h-12 bg-[#1d1b1a] shrink-0 border border-[#F5F0E8]/5" />
+            <span className="text-[11px] font-headline font-bold uppercase tracking-tight text-[#6B6760]">
+              BYE
+            </span>
+          </>
+        ) : (
+          <>
+            <PosterThumb
+              movie={match.movie_b}
+              isWinner={bWins}
+              isLoser={aWins}
+            />
+            <span
+              className={`text-[11px] font-headline font-bold uppercase tracking-tight truncate ${
+                bWins
+                  ? "text-[#E8A020]"
+                  : aWins
+                  ? "text-[#F5F0E8]/30"
+                  : "text-[#F5F0E8]/70"
+              }`}
+            >
+              {match.movie_b?.title || "TBD"}
+            </span>
+          </>
+        )}
       </div>
       {/* Next match indicator */}
-      {isNext && !played && (
+      {isNext && !played && !isBye && (
         <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-10">
           <span className="bg-[#E8A020] text-[#0F0E0D] px-2 py-0.5 text-[8px] font-headline font-black uppercase tracking-wider">
             Next

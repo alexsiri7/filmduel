@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { getTournaments, createTournament, getTournamentGenres } from "../api";
+import { getTournaments, createTournament, getTournamentGenres, getTournamentPoolCount } from "../api";
 
 const BRACKET_SIZES = [8, 16, 32, 64];
 const DECADES = ["1970s", "1980s", "1990s", "2000s", "2010s", "2020s"];
@@ -19,6 +19,7 @@ export default function Tournaments() {
   const [filterMode, setFilterMode] = useState("all"); // all | genre | decade
   const [filterValue, setFilterValue] = useState("");
   const [availableGenres, setAvailableGenres] = useState([]);
+  const [poolCount, setPoolCount] = useState(null);
 
   useEffect(() => {
     loadTournaments();
@@ -34,6 +35,16 @@ export default function Tournaments() {
       setLoading(false);
     }
   }
+
+  // Fetch pool count whenever filter changes
+  useEffect(() => {
+    if (!showCreate) return;
+    const filterType = filterMode === "all" ? null : filterMode;
+    const fv = filterMode === "all" ? null : filterValue;
+    getTournamentPoolCount(filterType, fv)
+      .then((data) => setPoolCount(data.count))
+      .catch(() => setPoolCount(null));
+  }, [showCreate, filterMode, filterValue]);
 
   async function handleOpenCreate() {
     setShowCreate(true);
@@ -129,6 +140,19 @@ export default function Tournaments() {
                 </button>
               ))}
             </div>
+            {poolCount !== null && (
+              <p className="mt-2 text-sm font-body text-[#F5F0E8]/50">
+                {poolCount >= bracketSize ? (
+                  <>{poolCount} ranked films available</>
+                ) : poolCount >= 4 ? (
+                  <>{poolCount} films + {bracketSize - poolCount} byes</>
+                ) : (
+                  <span className="text-[#C04A20]">
+                    Only {poolCount} ranked films — need at least 4
+                  </span>
+                )}
+              </p>
+            )}
           </div>
 
           {/* Filter Mode */}

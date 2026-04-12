@@ -84,6 +84,7 @@ def _match_schema(m: TournamentMatch) -> TournamentMatchSchema:
         movie_a=_movie_schema(m.movie_a),
         movie_b=_movie_schema(m.movie_b),
         winner_movie_id=str(m.winner_movie_id) if m.winner_movie_id else None,
+        is_bye=m.is_bye,
         played_at=m.played_at,
     )
 
@@ -157,6 +158,48 @@ async def get_available_genres(
     return [row[0] for row in result.all()]
 
 
+@router.get("/pool-count")
+async def get_pool_count(
+    filter_type: Optional[str] = None,
+    filter_value: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return number of ranked films matching the given filter."""
+    uid = current_user.id
+    stmt = (
+        select(UserMovie)
+        .options(joinedload(UserMovie.movie))
+        .where(
+            UserMovie.user_id == uid,
+            UserMovie.seen.is_(True),
+            UserMovie.battles >= 1,
+            UserMovie.elo.isnot(None),
+        )
+    )
+    result = await db.execute(stmt)
+    user_movies = result.unique().scalars().all()
+
+    if filter_type == "genre" and filter_value:
+        genre_lower = filter_value.lower()
+        user_movies = [
+            um for um in user_movies
+            if um.movie.genres and any(g.lower() == genre_lower for g in um.movie.genres)
+        ]
+    elif filter_type == "decade" and filter_value:
+        decade_str = filter_value.rstrip("s")
+        try:
+            decade_start = int(decade_str)
+        except ValueError:
+            return {"count": 0}
+        user_movies = [
+            um for um in user_movies
+            if um.movie.year and decade_start <= um.movie.year <= decade_start + 9
+        ]
+
+    return {"count": len(user_movies)}
+
+
 @router.post("", response_model=TournamentSchema)
 async def create_tournament(
     body: TournamentCreate,
@@ -199,16 +242,23 @@ async def create_tournament(
             if um.movie.year and decade_start <= um.movie.year <= decade_start + 9
         ]
 
-    # 3. Validate enough films
-    if len(user_movies) < body.bracket_size:
+    # 3. Validate enough films (minimum 4, max bracket = 4x pool)
+    if len(user_movies) < 4:
         raise HTTPException(
             status_code=400,
-            detail=f"Not enough ranked films. Need {body.bracket_size}, have {len(user_movies)}.",
+            detail="Need at least 4 ranked films",
+        )
+    if body.bracket_size > len(user_movies) * 4:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Bracket too large. Max {len(user_movies) * 4} for {len(user_movies)} films",
         )
 
-    # 4. Sort by ELO descending, take top bracket_size
+    # 4. Sort by ELO descending, take top films (up to bracket_size)
     user_movies.sort(key=lambda um: um.elo or 0, reverse=True)
-    seeded_films = user_movies[: body.bracket_size]
+    actual_films = min(len(user_movies), body.bracket_size)
+    seeded_films = user_movies[:actual_films]
+    num_byes = body.bracket_size - actual_films
 
     # 5. Generate seeded bracket pairings
     pairings = generate_seeded_bracket(body.bracket_size)
@@ -225,18 +275,55 @@ async def create_tournament(
     db.add(tournament)
     await db.flush()
 
-    # 7. Create round 1 matches with seeded pairings
+    # 7. Create round 1 matches with seeded pairings (including byes)
     num_rounds = _num_rounds(body.bracket_size)
-    round1_matches = body.bracket_size // 2
+    now = datetime.now(timezone.utc)
 
     for position, (seed_a, seed_b) in enumerate(pairings):
-        match = TournamentMatch(
-            tournament_id=tournament.id,
-            round=1,
-            position=position,
-            movie_a_id=seeded_films[seed_a - 1].movie_id,
-            movie_b_id=seeded_films[seed_b - 1].movie_id,
-        )
+        # Seeds beyond actual_films have no film — that side is a bye
+        has_a = seed_a <= actual_films
+        has_b = seed_b <= actual_films
+
+        if has_a and has_b:
+            # Normal match — both films present
+            match = TournamentMatch(
+                tournament_id=tournament.id,
+                round=1,
+                position=position,
+                movie_a_id=seeded_films[seed_a - 1].movie_id,
+                movie_b_id=seeded_films[seed_b - 1].movie_id,
+            )
+        elif has_a and not has_b:
+            # Bye: seed_a advances automatically
+            match = TournamentMatch(
+                tournament_id=tournament.id,
+                round=1,
+                position=position,
+                movie_a_id=seeded_films[seed_a - 1].movie_id,
+                movie_b_id=None,
+                winner_movie_id=seeded_films[seed_a - 1].movie_id,
+                is_bye=True,
+                played_at=now,
+            )
+        elif has_b and not has_a:
+            # Bye: seed_b advances automatically
+            match = TournamentMatch(
+                tournament_id=tournament.id,
+                round=1,
+                position=position,
+                movie_a_id=seeded_films[seed_b - 1].movie_id,
+                movie_b_id=None,
+                winner_movie_id=seeded_films[seed_b - 1].movie_id,
+                is_bye=True,
+                played_at=now,
+            )
+        else:
+            # Both seeds missing — shouldn't happen with valid bracket sizes
+            match = TournamentMatch(
+                tournament_id=tournament.id,
+                round=1,
+                position=position,
+            )
         db.add(match)
 
     # 8. Create empty matches for subsequent rounds
@@ -251,6 +338,35 @@ async def create_tournament(
             db.add(match)
 
     await db.flush()
+
+    # 9. Propagate bye winners to round 2 slots
+    if num_byes > 0:
+        # Re-fetch round 1 matches to propagate winners
+        r1_stmt = (
+            select(TournamentMatch)
+            .where(
+                TournamentMatch.tournament_id == tournament.id,
+                TournamentMatch.round == 1,
+                TournamentMatch.is_bye.is_(True),
+            )
+        )
+        r1_result = await db.execute(r1_stmt)
+        bye_matches = r1_result.scalars().all()
+
+        for bye_match in bye_matches:
+            next_pos = bye_match.position // 2
+            next_round_stmt = select(TournamentMatch).where(
+                TournamentMatch.tournament_id == tournament.id,
+                TournamentMatch.round == 2,
+                TournamentMatch.position == next_pos,
+            )
+            next_match_obj = (await db.execute(next_round_stmt)).scalar_one()
+            if bye_match.position % 2 == 0:
+                next_match_obj.movie_a_id = bye_match.winner_movie_id
+            else:
+                next_match_obj.movie_b_id = bye_match.winner_movie_id
+
+        await db.flush()
 
     # Reload the tournament with all relationships
     tournament = await _load_tournament(tournament.id, uid, db)
