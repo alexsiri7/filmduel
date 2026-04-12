@@ -123,3 +123,7 @@ export function dismissSuggestion(id) {
 export function addToWatchlist(id) {
   return request(`/api/suggestions/${id}/watchlist`, { method: "POST" });
 }
+
+export function markSuggestionSeen(id) {
+  return request(`/api/suggestions/${id}/seen`, { method: "POST" });
+}
