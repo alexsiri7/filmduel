@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import io
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
@@ -12,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from backend.db import get_db
-from backend.db_models import User, UserMovie
+from backend.db_models import Movie, User, UserMovie
 from backend.schemas import MovieSchema, RankedMovie, RankingsResponse, StatsResponse
 from backend.routers.auth import get_current_user
 
@@ -32,6 +33,7 @@ def _build_ranked_movie(um: UserMovie, rank: int) -> RankedMovie:
             year=movie.year,
             poster_url=movie.poster_url,
             overview=movie.overview,
+            genres=movie.genres,
         ),
         elo=um.elo,
         battles=um.battles,
@@ -44,28 +46,43 @@ async def get_rankings(
     db: AsyncSession = Depends(get_db),
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
+    genre: Optional[str] = Query(default=None),
+    decade: Optional[str] = Query(default=None),
 ):
     """Return the user's ranked movies sorted by ELO descending."""
     uid = current_user.id
+    needs_movie_join = genre is not None or decade is not None
 
     # Only show movies the user has actually seen and battled
     stmt = (
         select(UserMovie)
         .options(joinedload(UserMovie.movie))
         .where(UserMovie.user_id == uid, UserMovie.seen.is_(True), UserMovie.battles > 0)
-        .order_by(UserMovie.elo.desc())
-        .offset(offset)
-        .limit(limit)
     )
-    result = await db.execute(stmt)
-    user_movies = result.unique().scalars().all()
-
-    # Count total
     count_stmt = (
         select(func.count())
         .select_from(UserMovie)
         .where(UserMovie.user_id == uid, UserMovie.seen.is_(True), UserMovie.battles > 0)
     )
+
+    if needs_movie_join:
+        stmt = stmt.join(Movie, UserMovie.movie_id == Movie.id)
+        count_stmt = count_stmt.join(Movie, UserMovie.movie_id == Movie.id)
+
+    if genre:
+        stmt = stmt.where(Movie.genres.any(genre))
+        count_stmt = count_stmt.where(Movie.genres.any(genre))
+
+    if decade:
+        decade_start = int(decade.rstrip("s"))
+        stmt = stmt.where(Movie.year >= decade_start, Movie.year <= decade_start + 9)
+        count_stmt = count_stmt.where(Movie.year >= decade_start, Movie.year <= decade_start + 9)
+
+    stmt = stmt.order_by(UserMovie.elo.desc()).offset(offset).limit(limit)
+
+    result = await db.execute(stmt)
+    user_movies = result.unique().scalars().all()
+
     count_result = await db.execute(count_stmt)
     total = count_result.scalar() or 0
 
