@@ -13,9 +13,13 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import logging
+
 from backend.db_models import Duel, UserMovie
 from backend.schemas import DuelOutcome, DuelResult
 from backend.services.elo import get_initial_elo, update_elo
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -124,6 +128,11 @@ async def process_duel(
         um_a.updated_at = now
         um_b.updated_at = now
 
+    logger.info(
+        "duel_processed user_id=%s outcome=%s pair_type=%s elo_delta_a=%+d elo_delta_b=%+d",
+        user_id, outcome, pair_type, delta_a, delta_b,
+    )
+
     # ── Duel record ─────────────────────────────────────────────────
     winner_id = loser_id = None
     w_elo_before = l_elo_before = w_elo_after = l_elo_after = None
@@ -166,6 +175,8 @@ async def process_duel(
     total_seen = total_seen_result.scalar_one()
 
     next_action = "swipe" if (seen_unranked < 3 or total_seen < 10) else "duel"
+
+    logger.info("duel_next_action user_id=%s next_action=%s seen_unranked=%d", user_id, next_action, seen_unranked)
 
     return ProcessDuelResult(
         api_result=DuelResult(

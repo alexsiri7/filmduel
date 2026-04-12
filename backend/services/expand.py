@@ -71,6 +71,7 @@ async def _expand_pool_inner(user_id: uuid.UUID, media_type: str = "movie") -> i
             added = await _expand_from_recommendations(
                 db, user_id, user, settings, recent_keys, now, media_type
             )
+            logger.info("expand_source user_id=%s source=trakt_recommendations added=%d", user_id, added)
             total_added += added
 
         # Source B: TMDB similar films from top-ranked items (movies only)
@@ -78,6 +79,7 @@ async def _expand_pool_inner(user_id: uuid.UUID, media_type: str = "movie") -> i
             added = await _expand_from_similar(
                 db, user_id, settings, recent_keys, now
             )
+            logger.info("expand_source user_id=%s source=tmdb_similar added=%d", user_id, added)
             total_added += added
 
         # Source C: Trakt anticipated
@@ -85,6 +87,7 @@ async def _expand_pool_inner(user_id: uuid.UUID, media_type: str = "movie") -> i
             added = await _expand_from_anticipated(
                 db, user_id, user, settings, recent_keys, now, media_type
             )
+            logger.info("expand_source user_id=%s source=anticipated added=%d", user_id, added)
             total_added += added
 
         # Source D: Deeper popular pages
@@ -92,6 +95,7 @@ async def _expand_pool_inner(user_id: uuid.UUID, media_type: str = "movie") -> i
             added = await _expand_from_popular_pages(
                 db, user_id, user, settings, recent_keys, now, media_type
             )
+            logger.info("expand_source user_id=%s source=popular_pages added=%d", user_id, added)
             total_added += added
 
         await db.commit()

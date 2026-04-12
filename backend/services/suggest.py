@@ -181,9 +181,19 @@ async def generate_suggestions(
     """
     taste_profile = await _build_taste_profile(user_id, db, media_type)
     if taste_profile is None:
+        logger.info("suggest_skip user_id=%s reason=insufficient_ranked (need %d)", user_id, MIN_RANKED)
         return []
 
+    top_genre = next(iter(taste_profile["genre_affinities"]), None)
+    logger.info(
+        "suggest_taste_profile user_id=%s num_ranked=%d top_genre=%s",
+        user_id, taste_profile["total_ranked"], top_genre,
+    )
+
     candidates = await _get_candidates(user_id, db, media_type)
+    logger.info("suggest_candidates user_id=%s candidate_count=%d", user_id, len(candidates))
+
+
     if len(candidates) < NUM_PICKS:
         logger.warning(
             "User %s has only %d candidate films, need at least %d",
@@ -195,6 +205,7 @@ async def generate_suggestions(
     trakt_to_movie = {c["trakt_id"]: c["movie_id"] for c in candidates}
 
     picks = await _call_llm(taste_profile, candidates)
+    logger.info("suggest_llm_response user_id=%s picks_returned=%d", user_id, len(picks))
 
     # Validate and map picks
     results = []

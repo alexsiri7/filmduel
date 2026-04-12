@@ -174,6 +174,11 @@ async def create_tournament_bracket(
     num_rounds = _num_rounds(bracket_size)
     now = datetime.now(timezone.utc)
 
+    logger.info(
+        "bracket_created tournament_id=%s bracket_size=%d num_films=%d num_byes=%d num_rounds=%d",
+        tournament_id, bracket_size, actual_films, num_byes, num_rounds,
+    )
+
     # Round 1 matches with seeded pairings (including byes)
     for position, (seed_a, seed_b) in enumerate(pairings):
         has_a = seed_a <= actual_films
@@ -303,6 +308,11 @@ async def record_match_winner(
     match_obj.winner_movie_id = winner_id
     match_obj.played_at = now
 
+    logger.info(
+        "match_result tournament_id=%s match_id=%s winner=%s round=%d",
+        tournament_id, match_id, winner_id, match_obj.round,
+    )
+
     round_num = match_obj.round
     num_rounds = _num_rounds(bracket_size)
 
@@ -327,6 +337,7 @@ async def record_match_winner(
         t.champion_movie_id = winner_id
         t.status = "completed"
         t.completed_at = now
+        logger.info("champion_crowned tournament_id=%s champion=%s", tournament_id, winner_id)
 
     # ELO update + duel record (same session, 2 extra queries)
     um_w = (await db.execute(
