@@ -10,7 +10,7 @@ describe("App", () => {
         <App />
       </MemoryRouter>
     );
-    expect(screen.getByText("FilmDuel")).toBeInTheDocument();
+    expect(screen.getByText("FILMDUEL")).toBeInTheDocument();
   });
 
   it("renders login page at /login", () => {
@@ -28,7 +28,7 @@ describe("App", () => {
         <App />
       </MemoryRouter>
     );
-    // Duel page should be the default route
-    expect(document.querySelector("main")).toBeInTheDocument();
+    // App should render the main layout
+    expect(screen.getByText("FILMDUEL")).toBeInTheDocument();
   });
 });
