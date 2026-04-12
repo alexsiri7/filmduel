@@ -100,3 +100,21 @@ export function submitTournamentMatch(tournamentId, matchId, winnerMovieId) {
 export function abandonTournament(id) {
   return request(`/api/tournaments/${id}`, { method: "DELETE" });
 }
+
+// ── Suggestions ─────────────────────────────────────────────────────
+
+export function getSuggestions() {
+  return request("/api/suggestions");
+}
+
+export function regenerateSuggestions() {
+  return request("/api/suggestions/regenerate", { method: "POST" });
+}
+
+export function dismissSuggestion(id) {
+  return request(`/api/suggestions/${id}/dismiss`, { method: "POST" });
+}
+
+export function addToWatchlist(id) {
+  return request(`/api/suggestions/${id}/watchlist`, { method: "POST" });
+}

@@ -245,6 +245,42 @@ class PoolExpansion(Base):
     )
 
 
+class Suggestion(Base):
+    __tablename__ = "suggestions"
+    __table_args__ = (
+        Index("ix_suggestions_user_id", "user_id"),
+        Index(
+            "ix_suggestions_user_active",
+            "user_id",
+            "dismissed_at",
+            postgresql_where="dismissed_at IS NULL",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    movie_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("movies.id", ondelete="CASCADE"), nullable=False
+    )
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    generated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    dismissed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    added_to_watchlist_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    user: Mapped[User] = relationship()
+    movie: Mapped[Movie] = relationship()
+
+
 class SwipeResult(Base):
     __tablename__ = "swipe_results"
     __table_args__ = (Index("ix_swipe_results_user_id", "user_id"),)

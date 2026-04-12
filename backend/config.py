@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     # TMDB for poster images
     TMDB_API_KEY: str = ""
 
+    # Anthropic (for AI suggestions)
+    ANTHROPIC_API_KEY: str = ""
+
     # Sentry
     SENTRY_DSN: str = ""
 

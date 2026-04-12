@@ -5,6 +5,7 @@ const navItems = [
   { path: "/", label: "Current Duel", icon: "swords" },
   { path: "/swipe", label: "Swipe", icon: "swipe" },
   { path: "/rankings", label: "Rankings", icon: "leaderboard" },
+  { path: "/suggestions", label: "Watch Next", icon: "suggest" },
   { path: "/tournaments", label: "Tournaments", icon: "bracket" },
 ];
 
