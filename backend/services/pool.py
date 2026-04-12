@@ -88,6 +88,8 @@ async def populate_movie_pool(user: User, db: AsyncSession) -> None:
     # Upsert movies into the movies table
     for movie_data in movie_pool.values():
         ids = movie_data.get("ids", {})
+        trakt_rating = movie_data.get("rating", 0)
+        community_rating = round(trakt_rating * 10, 1) if trakt_rating else None
         stmt = insert(Movie.__table__).values(
             trakt_id=ids["trakt"],
             imdb_id=ids.get("imdb"),
@@ -97,6 +99,7 @@ async def populate_movie_pool(user: User, db: AsyncSession) -> None:
             genres=movie_data.get("genres"),
             overview=movie_data.get("overview"),
             runtime=movie_data.get("runtime"),
+            community_rating=community_rating,
             cached_at=now,
         ).on_conflict_do_update(
             index_elements=["trakt_id"],
@@ -108,6 +111,7 @@ async def populate_movie_pool(user: User, db: AsyncSession) -> None:
                 "genres": movie_data.get("genres"),
                 "overview": movie_data.get("overview"),
                 "runtime": movie_data.get("runtime"),
+                "community_rating": community_rating,
                 "cached_at": now,
             },
         )

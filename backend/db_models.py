@@ -12,6 +12,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     Text,
     UniqueConstraint,
 )
@@ -62,6 +63,7 @@ class Movie(Base):
     overview: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     runtime: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     poster_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    community_rating: Mapped[Optional[float]] = mapped_column(Numeric(4, 1), nullable=True)
     cached_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
@@ -78,6 +80,13 @@ class UserMovie(Base):
             "user_id",
             "elo",
             postgresql_where="elo IS NOT NULL",
+        ),
+        Index(
+            "ix_user_movies_user_seen_battles",
+            "user_id",
+            "seen",
+            "battles",
+            postgresql_where="seen = true",
         ),
     )
 
@@ -134,3 +143,22 @@ class Duel(Base):
     user: Mapped[User] = relationship(back_populates="duels")
     winner_movie: Mapped[Optional[Movie]] = relationship(foreign_keys=[winner_movie_id])
     loser_movie: Mapped[Optional[Movie]] = relationship(foreign_keys=[loser_movie_id])
+
+
+class SwipeResult(Base):
+    __tablename__ = "swipe_results"
+    __table_args__ = (Index("ix_swipe_results_user_id", "user_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    movie_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("movies.id", ondelete="CASCADE"), nullable=False
+    )
+    seen: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
