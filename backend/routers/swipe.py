@@ -60,7 +60,7 @@ async def get_swipe_cards(
     result = await db.execute(median_stmt)
     median_elo = result.scalar_one_or_none()
 
-    # Base query: unknown films for this user
+    # Base query: unknown films for this user (must have poster)
     base = (
         select(
             Movie.id,
@@ -72,7 +72,7 @@ async def get_swipe_cards(
             Movie.community_rating,
         )
         .join(UserMovie, UserMovie.movie_id == Movie.id)
-        .where(UserMovie.user_id == uid, UserMovie.seen.is_(None))
+        .where(UserMovie.user_id == uid, UserMovie.seen.is_(None), Movie.poster_url.isnot(None))
     )
 
     if median_elo is None:
