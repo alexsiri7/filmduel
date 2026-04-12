@@ -1,9 +1,9 @@
-"""Shared LLM client for AI features (uses OpenRouter/Requesty API)."""
+"""Shared LLM client for AI features (uses LiteLLM with Requesty/OpenRouter)."""
 
 import json
 import logging
+import os
 
-import httpx
 from backend.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -14,7 +14,7 @@ async def chat_completion(
     user_message: str,
     max_tokens: int = 500,
 ) -> str:
-    """Call the LLM via OpenRouter-compatible API. Returns the text response."""
+    """Call the LLM via LiteLLM. Returns the text response."""
     settings = get_settings()
     if not settings.LLM_API_KEY:
         raise ValueError(
@@ -22,26 +22,23 @@ async def chat_completion(
             "Set it in your environment or .env file to enable AI features."
         )
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.post(
-            f"{settings.LLM_BASE_URL}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {settings.LLM_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": settings.LLM_MODEL,
-                "max_tokens": max_tokens,
-                "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user_message},
-                ],
-            },
-        )
-        resp.raise_for_status()
+    # LiteLLM uses env vars for API keys — set them before the call
+    os.environ["OPENROUTER_API_KEY"] = settings.LLM_API_KEY
 
-    data = resp.json()
-    return data["choices"][0]["message"]["content"]
+    # Import here to avoid import-time side effects from litellm
+    from litellm import acompletion
+
+    response = await acompletion(
+        model=settings.LLM_MODEL,
+        max_tokens=max_tokens,
+        api_base=settings.LLM_BASE_URL,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user_message},
+        ],
+    )
+
+    return response.choices[0].message.content
 
 
 def parse_json_response(text: str) -> dict:

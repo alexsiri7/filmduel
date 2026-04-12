@@ -10,3 +10,4 @@ greenlet>=3.0.0
 PyJWT>=2.8.0
 python-multipart>=0.0.6
 sentry-sdk[fastapi]>=2.0.0
+litellm>=1.40.0
