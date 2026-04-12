@@ -137,3 +137,14 @@ class TraktClient:
                 },
             )
             resp.raise_for_status()
+
+    async def add_to_watchlist(self, trakt_id: int) -> None:
+        """Add a movie to the user's Trakt watchlist."""
+        async with self._client() as client:
+            resp = await client.post(
+                "/sync/watchlist",
+                json={
+                    "movies": [{"ids": {"trakt": trakt_id}}]
+                },
+            )
+            resp.raise_for_status()
