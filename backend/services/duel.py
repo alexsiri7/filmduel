@@ -159,7 +159,15 @@ async def process_duel(
     )
     seen_unranked_result = await db.execute(seen_unranked_stmt)
     seen_unranked = seen_unranked_result.scalar_one()
-    next_action = "swipe" if seen_unranked < 3 else "duel"
+
+    total_seen_stmt = select(func.count()).where(
+        UserMovie.user_id == user_id,
+        UserMovie.seen.is_(True),
+    )
+    total_seen_result = await db.execute(total_seen_stmt)
+    total_seen = total_seen_result.scalar_one()
+
+    next_action = "swipe" if (seen_unranked < 3 or total_seen < 10) else "duel"
 
     return ProcessDuelResult(
         api_result=DuelResult(
