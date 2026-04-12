@@ -75,10 +75,20 @@ async def get_swipe_cards(
     )
 
     if median_elo is None:
-        # No ranked films yet — random selection
-        stmt = base.order_by(func.random()).limit(10)
+        # No ranked films yet — prioritize popular/trending (high community_rating)
+        stmt = base.where(Movie.community_rating.isnot(None)).order_by(
+            Movie.community_rating.desc(), func.random()
+        ).limit(10)
         result = await db.execute(stmt)
         rows = result.all()
+        # Backfill with random if not enough rated films
+        if len(rows) < 10:
+            seen_ids = [r.id for r in rows]
+            backfill = base.order_by(func.random()).limit(10 - len(rows))
+            if seen_ids:
+                backfill = backfill.where(Movie.id.notin_(seen_ids))
+            result = await db.execute(backfill)
+            rows.extend(result.all())
     else:
         # Band-weighted selection: 60% target, 20% above, 20% below
         band_idx = _elo_to_band_index(int(median_elo))
