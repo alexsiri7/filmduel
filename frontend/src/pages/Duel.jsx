@@ -85,32 +85,28 @@ export default function Duel() {
     loadStats();
   }, [loadPair, loadStats]);
 
-  const handleSubmit = async (outcome) => {
+  const handleSubmit = (outcome) => {
     if (!pair || submitting) return;
     setSubmitting(true);
-    try {
-      const res = await submitDuel(
-        pair.movie_a.id,
-        pair.movie_b.id,
-        outcome,
-        MODE
-      );
-      setResult(res);
-      if (res.next_action === "swipe") {
-        setTimeout(() => {
+    setResult({ outcome });
+
+    // Fire-and-forget: submit duel in background, don't block the UI
+    submitDuel(pair.movie_a.id, pair.movie_b.id, outcome, MODE)
+      .then((res) => {
+        // Check if we need to swipe — handle asynchronously
+        if (res.next_action === "swipe") {
           setShowSwipePrompt(true);
-        }, 900);
-      } else {
-        setTimeout(() => {
-          loadPair(true);
-          loadStats();
-        }, 900);
-      }
-    } catch (err) {
-      console.error("Failed to submit duel:", err);
-    } finally {
+        }
+        // Stats update in background
+        loadStats();
+      })
+      .catch((err) => console.error("Failed to submit duel:", err));
+
+    // Immediately show winner flash for 600ms, then load next pair from prefetch
+    setTimeout(() => {
       setSubmitting(false);
-    }
+      loadPair(true);
+    }, 600);
   };
 
   // Pool empty / error state
@@ -234,7 +230,6 @@ export default function Duel() {
                 <MovieCard
                   movie={pair.movie_a}
                   onClick={() => handleSubmit("a_wins")}
-                  delta={result?.movie_a_elo_delta}
                   clickable={!submitting && !result}
                   compact={windowWidth < 768}
                   chosen={result ? (result.outcome === "a_wins" ? "winner" : "loser") : undefined}
@@ -255,7 +250,6 @@ export default function Duel() {
                 <MovieCard
                   movie={pair.movie_b}
                   onClick={() => handleSubmit("b_wins")}
-                  delta={result?.movie_b_elo_delta}
                   clickable={!submitting && !result}
                   compact={windowWidth < 768}
                   chosen={result ? (result.outcome === "b_wins" ? "winner" : "loser") : undefined}
@@ -263,12 +257,7 @@ export default function Duel() {
               </div>
             </div>
 
-            {/* Result feedback */}
-            {result && (
-              <p className="text-sm text-[#E8A020] font-headline font-medium uppercase tracking-widest animate-pulse">
-                Next duel loading...
-              </p>
-            )}
+            {/* Result feedback — brief winner flash before next pair */}
           </>
         )}
       </section>
