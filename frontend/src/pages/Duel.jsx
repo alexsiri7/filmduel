@@ -224,7 +224,7 @@ export default function Duel() {
               className="w-full max-w-7xl flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6 relative"
             >
               {/* Left Film Card */}
-              <div className="flex-1 w-full max-w-[500px] shadow-2xl">
+              <div className="flex-1 w-full max-w-[500px] shadow-2xl flex justify-end">
                 <MovieCard
                   movie={pair.movie_a}
                   onClick={() => handleSubmit("a_wins")}
@@ -234,7 +234,7 @@ export default function Duel() {
               </div>
 
               {/* VS Badge */}
-              <div className="z-20 relative md:-mx-8 my-2 md:my-0">
+              <div className="z-20 relative md:-mx-8 my-2 md:my-0 shrink-0">
                 <div className="w-16 h-16 md:w-20 md:h-20 bg-[#942b00] flex items-center justify-center rounded-none shadow-[0_0_40px_rgba(148,43,0,0.4)] border-2 border-[#ffb59d]/20 rotate-45">
                   <span className="font-headline font-black text-xl md:text-2xl text-[#ffb59d] -rotate-45 italic tracking-tighter">
                     VS
@@ -243,7 +243,7 @@ export default function Duel() {
               </div>
 
               {/* Right Film Card */}
-              <div className="flex-1 w-full max-w-[500px] shadow-2xl">
+              <div className="flex-1 w-full max-w-[500px] shadow-2xl flex justify-start">
                 <MovieCard
                   movie={pair.movie_b}
                   onClick={() => handleSubmit("b_wins")}
