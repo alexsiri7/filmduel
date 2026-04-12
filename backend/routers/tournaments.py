@@ -5,8 +5,10 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
+
+from backend.rate_limit import limiter
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -159,7 +161,9 @@ async def get_pool_count(
 
 
 @router.post("", response_model=TournamentSchema)
+@limiter.limit("10/minute")
 async def create_tournament(
+    request: Request,
     body: TournamentCreate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -231,8 +235,10 @@ async def create_tournament(
 
 
 @router.post("/{tournament_id}/regenerate", response_model=TournamentSchema)
+@limiter.limit("10/minute")
 async def regenerate_tournament(
     tournament_id: uuid.UUID,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

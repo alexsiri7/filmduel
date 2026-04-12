@@ -6,12 +6,13 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db import get_db
 from backend.db_models import Movie, SwipeResult, User, UserMovie
+from backend.rate_limit import limiter
 from backend.routers.auth import get_current_user
 from backend.schemas import MediaType, SwipeCardSchema, SwipeResponse, SwipeSubmit
 from backend.services.expand import expand_pool
@@ -45,7 +46,9 @@ def _community_rating_range(band_index: int) -> tuple[float, float]:
 
 
 @router.get("/cards", response_model=list[SwipeCardSchema])
+@limiter.limit("20/minute")
 async def get_swipe_cards(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     media_type: MediaType = Query(default="movie"),
@@ -158,7 +161,9 @@ async def get_swipe_cards(
 
 
 @router.post("/results", response_model=SwipeResponse)
+@limiter.limit("20/minute")
 async def submit_swipe_results(
+    request: Request,
     body: SwipeSubmit,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),

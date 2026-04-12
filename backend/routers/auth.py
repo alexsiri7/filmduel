@@ -12,6 +12,8 @@ from urllib.parse import urlencode
 
 import jwt
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
+
+from backend.rate_limit import limiter
 from fastapi.responses import RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -165,7 +167,8 @@ OAUTH_STATE_COOKIE = "filmduel_oauth_state"
 
 
 @router.get("/auth/login")
-async def login(settings: Settings = Depends(get_settings)):
+@limiter.limit("10/minute")
+async def login(request: Request, settings: Settings = Depends(get_settings)):
     """Redirect the user to Trakt's OAuth authorization page."""
     state = secrets.token_urlsafe(32)
     params = urlencode(
@@ -189,6 +192,7 @@ async def login(settings: Settings = Depends(get_settings)):
 
 
 @router.get("/auth/callback")
+@limiter.limit("10/minute")
 async def callback(
     code: str,
     request: Request,
@@ -258,7 +262,8 @@ async def callback(
 
 
 @router.post("/auth/logout")
-async def logout():
+@limiter.limit("10/minute")
+async def logout(request: Request):
     """Clear the session cookie."""
     response = Response(status_code=204)
     response.delete_cookie(COOKIE_NAME)

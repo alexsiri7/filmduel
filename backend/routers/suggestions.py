@@ -6,13 +6,14 @@ import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from backend.config import get_settings
 from backend.db import get_db
+from backend.rate_limit import limiter
 from backend.db_models import Movie, Suggestion, User, UserMovie
 from backend.routers.auth import get_current_user
 from backend.schemas import MediaType, MovieSchema, SuggestionSchema, SuggestionsResponse
@@ -95,7 +96,9 @@ async def _create_suggestions(
 
 
 @router.get("", response_model=SuggestionsResponse)
+@limiter.limit("10/minute")
 async def get_suggestions(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     media_type: MediaType = Query(default="movie"),
@@ -141,7 +144,9 @@ async def get_suggestions(
 
 
 @router.post("/regenerate", response_model=SuggestionsResponse)
+@limiter.limit("3/minute")
 async def regenerate_suggestions(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     media_type: MediaType = Query(default="movie"),
