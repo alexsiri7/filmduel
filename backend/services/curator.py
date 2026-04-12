@@ -72,7 +72,7 @@ async def curate_tournament(
     )
 
     try:
-        text_content = await chat_completion(system_prompt, user_prompt)
+        text_content = await chat_completion(system_prompt, user_prompt, max_tokens=2000)
     except ValueError as exc:
         # LLM_API_KEY not configured
         raise HTTPException(
