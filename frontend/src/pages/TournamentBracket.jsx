@@ -224,6 +224,7 @@ export default function TournamentBracket() {
     setSubmitting(true);
 
     const currentRound = nextMatch.round;
+    const matchId = nextMatch.id;
     const winnerMovie =
       nextMatch.movie_a.id === winnerMovieId ? nextMatch.movie_a : nextMatch.movie_b;
 
@@ -231,23 +232,20 @@ export default function TournamentBracket() {
     setWinnerFlash(winnerMovie);
 
     // Fire API in background — don't block the UI
-    submitTournamentMatch(id, nextMatch.id, winnerMovieId)
+    submitTournamentMatch(id, matchId, winnerMovieId)
       .then((updated) => {
-        const newNext = findNextPlayable(updated);
-        const stayInPlayMode = newNext && newNext.round === currentRound;
-
-        // Update bracket state when response arrives
         setTournament(updated);
-        if (!stayInPlayMode) {
+        const newNext = findNextPlayable(updated);
+        if (!newNext || newNext.round !== currentRound) {
           setPlaying(false);
         }
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setSubmitting(false));
+      .catch((err) => setError(err.message));
 
-    // Clear winner flash after 600ms (next match renders from updated state)
+    // Re-enable interaction after flash — don't wait for API
     setTimeout(() => {
       setWinnerFlash(null);
+      setSubmitting(false);
     }, 600);
   }
 
