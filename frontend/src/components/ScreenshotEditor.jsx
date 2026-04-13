@@ -23,6 +23,7 @@ export default function ScreenshotEditor({ imageDataUrl, onSave, onCancel }) {
   const [textInput, setTextInput] = useState(null);
   const [textValue, setTextValue] = useState("");
   const [displayScale, setDisplayScale] = useState(1);
+  const [loadError, setLoadError] = useState(null);
 
   const toCanvasCoords = useCallback(
     (e) => {
@@ -124,6 +125,10 @@ export default function ScreenshotEditor({ imageDataUrl, onSave, onCancel }) {
 
       drawAll();
     };
+    img.onerror = () => {
+      console.error("ScreenshotEditor: failed to load image");
+      setLoadError("Failed to load screenshot. Please try a different image.");
+    };
     img.src = imageDataUrl;
   }, [imageDataUrl]);
 
@@ -220,7 +225,10 @@ export default function ScreenshotEditor({ imageDataUrl, onSave, onCancel }) {
   }, [textValue, textInput]);
 
   const handleTextBlur = useCallback(() => {
-    // Prevent blur race when text input was just created
+    // Guard against spurious blur that fires immediately after mount in some browsers.
+    // When the floating text <input> is created and .focus() is called, certain browsers
+    // emit a blur event within the same frame. 200 ms absorbs that without affecting
+    // intentional blur (user clicks elsewhere).
     if (Date.now() - textInputCreatedAt.current < 200) return;
     commitText();
   }, [commitText]);
@@ -243,13 +251,21 @@ export default function ScreenshotEditor({ imageDataUrl, onSave, onCancel }) {
   };
 
   const handleSave = () => {
-    // Commit any pending text
-    if (textInput && textValue.trim()) {
-      commitText();
-    }
     const canvas = canvasRef.current;
     if (!canvas) return;
-    drawAll();
+    drawAll(); // draws all committed annotations
+    // Draw pending text directly to canvas before export — state update is not synchronous
+    if (textInput && textValue.trim()) {
+      const ctx = canvas.getContext("2d");
+      drawAnnotation(ctx, {
+        tool: "text",
+        startX: textInput.x,
+        startY: textInput.y,
+        endX: textInput.x,
+        endY: textInput.y,
+        text: textValue,
+      });
+    }
     const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
     onSave(dataUrl);
   };
@@ -306,6 +322,17 @@ export default function ScreenshotEditor({ imageDataUrl, onSave, onCancel }) {
 
       {/* Canvas area */}
       <div ref={containerRef} className="flex-1 flex items-center justify-center overflow-hidden p-1">
+        {loadError ? (
+          <div className="flex flex-col items-center justify-center gap-4">
+            <p className="text-[#C04A20] font-body text-sm">{loadError}</p>
+            <button
+              onClick={onCancel}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-headline font-bold uppercase tracking-wider text-[#F5F0E8]/60 hover:text-[#F5F0E8] transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        ) : (
         <div className="relative">
           <canvas
             ref={canvasRef}
@@ -335,6 +362,7 @@ export default function ScreenshotEditor({ imageDataUrl, onSave, onCancel }) {
             />
           )}
         </div>
+        )}
       </div>
     </div>
   );

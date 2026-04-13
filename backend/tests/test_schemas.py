@@ -260,3 +260,15 @@ class TestResponseModels:
         pr = MoviePairResponse(movie_a=ma, movie_b=mb)
         assert pr.next_pair_token is None
         assert pr.movie_a.title == "A"
+
+    def test_feedback_report_response(self):
+        from datetime import datetime, timezone
+
+        from backend.schemas import FeedbackReportResponse
+
+        r = FeedbackReportResponse(
+            id="550e8400-e29b-41d4-a716-446655440000",
+            created_at=datetime.now(timezone.utc),
+        )
+        assert r.id == "550e8400-e29b-41d4-a716-446655440000"
+        assert isinstance(r.created_at, datetime)

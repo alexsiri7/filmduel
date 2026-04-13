@@ -41,7 +41,8 @@ export default function ReportIssueModal({ onClose }) {
     setSubmitting(true);
     setError(null);
     try {
-      await submitFeedback(title, description, editedScreenshotDataUrl || screenshotDataUrl);
+      const result = await submitFeedback(title, description, editedScreenshotDataUrl || screenshotDataUrl);
+      if (result === null) return; // 401 redirect in progress
       setSuccess(true);
       setTimeout(onClose, 1500);
     } catch (err) {
