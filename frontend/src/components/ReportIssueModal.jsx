@@ -5,7 +5,6 @@ import ScreenshotEditor from "./ScreenshotEditor";
 export default function ReportIssueModal({ onClose }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [screenshotFile, setScreenshotFile] = useState(null);
   const [screenshotDataUrl, setScreenshotDataUrl] = useState(null);
   const [editedScreenshotDataUrl, setEditedScreenshotDataUrl] = useState(null);
   const [showEditor, setShowEditor] = useState(false);
@@ -17,7 +16,6 @@ export default function ReportIssueModal({ onClose }) {
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setScreenshotFile(file);
     setEditedScreenshotDataUrl(null);
     const reader = new FileReader();
     reader.onload = (ev) => setScreenshotDataUrl(ev.target.result);
@@ -25,7 +23,6 @@ export default function ReportIssueModal({ onClose }) {
   };
 
   const handleRemoveScreenshot = () => {
-    setScreenshotFile(null);
     setScreenshotDataUrl(null);
     setEditedScreenshotDataUrl(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
