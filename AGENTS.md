@@ -1,5 +1,54 @@
 # Agent Instructions
 
+## Infrastructure & Deployment
+
+This project is deployed on **Railway**.
+
+### Railway CLI
+
+The `railway` CLI is installed at `/home/asiri/.local/bin/railway`. Use it to check deploy status, view logs, and manage services.
+
+```bash
+# Check latest deployment status
+railway logs --service web --environment production --num 50
+
+# View deploy history
+railway deployment list --service web --environment production
+
+# Trigger a redeploy
+railway up --service web --environment production
+
+# Check service status
+railway status
+```
+
+### Project Details
+
+| Key | Value |
+|-----|-------|
+| Project | filmduel |
+| Project ID | f69eb9d2-62ab-429e-8d39-6934633dd865 |
+| Service | web |
+| Service ID | 26232202-7816-459f-a927-66301cc176a8 |
+| Environment | production |
+| URL | https://filmduel.up.railway.app |
+| Health check | /health |
+| Builder | Dockerfile |
+
+### Deploy Flow
+
+1. PR merged to `main`
+2. Railway auto-deploys from GitHub (connected repo)
+3. Dockerfile builds → health check at `/health` → traffic switches
+
+### Troubleshooting Deploys
+
+When a deploy fails:
+1. Check build logs: `railway logs --service web --environment production --num 100`
+2. Check if the Dockerfile builds locally: `docker build -t filmduel .`
+3. Check Railway dashboard: `railway open`
+4. Common issues: missing env vars, Alembic migration failures, health check timeout
+
 This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
 
 ## Quick Reference
