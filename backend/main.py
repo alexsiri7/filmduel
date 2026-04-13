@@ -63,13 +63,17 @@ async def health():
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
-if STATIC_DIR.is_dir():
+if (STATIC_DIR / "assets").is_dir():
     app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
 
-    @app.get("/{full_path:path}")
-    async def spa_fallback(full_path: str):
-        """Serve the SPA index.html for any non-API route."""
-        file_path = (STATIC_DIR / full_path).resolve()
-        if file_path.is_file() and str(file_path).startswith(str(STATIC_DIR.resolve())):
-            return FileResponse(file_path)
-        return FileResponse(STATIC_DIR / "index.html")
+
+@app.get("/{full_path:path}")
+async def spa_fallback(full_path: str):
+    """Serve the SPA index.html for any non-API route."""
+    if not STATIC_DIR.is_dir():
+        from fastapi.responses import JSONResponse
+        return JSONResponse({"detail": "Frontend not available"}, status_code=503)
+    file_path = (STATIC_DIR / full_path).resolve()
+    if file_path.is_file() and str(file_path).startswith(str(STATIC_DIR.resolve())):
+        return FileResponse(file_path)
+    return FileResponse(STATIC_DIR / "index.html")
