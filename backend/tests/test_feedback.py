@@ -91,7 +91,7 @@ class TestSubmitFeedback:
         assert report.description == "Details"
 
     def test_accepts_screenshot_within_size_limit(self, client):
-        small_image = b"FAKEJPEG" * 100  # well under 5 MB
+        small_image = b'\xff\xd8\xff' + b'\x00' * 100  # valid JPEG magic bytes
         response = self._post(client, screenshot=io.BytesIO(small_image))
         assert response.status_code == 201
 
@@ -111,12 +111,14 @@ class TestSubmitFeedback:
         assert "image" in response.json()["detail"].lower()
 
     def test_screenshot_stored_as_base64_data_url_with_correct_mime(self, client):
-        response = self._post(client, screenshot=io.BytesIO(b"FAKEJPEGDATA"), content_type="image/jpeg")
+        jpeg_data = b'\xff\xd8\xff' + b'\x00' * 10  # valid JPEG magic bytes
+        response = self._post(client, screenshot=io.BytesIO(jpeg_data), content_type="image/jpeg")
         report = response._created_reports[0]
         assert report.screenshot_data.startswith("data:image/jpeg;base64,")
 
     def test_png_screenshot_stored_with_png_mime(self, client):
-        response = self._post(client, screenshot=io.BytesIO(b"FAKEPNGDATA"), content_type="image/png")
+        png_data = b'\x89PNG\r\n\x1a\n' + b'\x00' * 10  # valid PNG magic bytes
+        response = self._post(client, screenshot=io.BytesIO(png_data), content_type="image/png")
         report = response._created_reports[0]
         assert report.screenshot_data.startswith("data:image/png;base64,")
 

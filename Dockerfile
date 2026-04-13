@@ -13,9 +13,13 @@ WORKDIR /app
 COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
+RUN useradd --create-home --shell /bin/bash appuser
+
 COPY alembic.ini ./
 COPY backend/ ./backend/
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
+
+USER appuser
 
 EXPOSE ${PORT:-8080}
 CMD ["sh", "-c", "alembic upgrade head && uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8080}"]

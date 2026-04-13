@@ -44,18 +44,30 @@ class TestCreateJWT:
     def test_round_trip_decode(self):
         user_id = "550e8400-e29b-41d4-a716-446655440000"
         token = create_jwt(user_id, SETTINGS)
-        payload = pyjwt.decode(token, SETTINGS.SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        payload = pyjwt.decode(
+            token, SETTINGS.SECRET_KEY, algorithms=[JWT_ALGORITHM],
+            issuer="filmduel", audience="filmduel",
+        )
         assert payload["sub"] == user_id
+        assert payload["iss"] == "filmduel"
+        assert payload["aud"] == "filmduel"
+        assert "jti" in payload
 
     def test_payload_has_exp_and_iat(self):
         token = create_jwt("user-1", SETTINGS)
-        payload = pyjwt.decode(token, SETTINGS.SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        payload = pyjwt.decode(
+            token, SETTINGS.SECRET_KEY, algorithms=[JWT_ALGORITHM],
+            issuer="filmduel", audience="filmduel",
+        )
         assert "exp" in payload
         assert "iat" in payload
 
     def test_expiry_is_in_future(self):
         token = create_jwt("user-1", SETTINGS)
-        payload = pyjwt.decode(token, SETTINGS.SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        payload = pyjwt.decode(
+            token, SETTINGS.SECRET_KEY, algorithms=[JWT_ALGORITHM],
+            issuer="filmduel", audience="filmduel",
+        )
         exp = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
         now = datetime.now(timezone.utc)
         # Should expire roughly JWT_EXPIRY_HOURS from now (allow 5 min tolerance)
@@ -105,6 +117,8 @@ class TestGetCurrentUserId:
         # Create a token that expired an hour ago
         payload = {
             "sub": "user-1",
+            "iss": "filmduel",
+            "aud": "filmduel",
             "exp": datetime.now(timezone.utc) - timedelta(hours=1),
             "iat": datetime.now(timezone.utc) - timedelta(hours=2),
         }
@@ -138,6 +152,8 @@ class TestGetCurrentUserId:
         """Token without 'sub' claim should raise 401 (KeyError caught as InvalidTokenError)."""
         monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
         payload = {
+            "iss": "filmduel",
+            "aud": "filmduel",
             "exp": datetime.now(timezone.utc) + timedelta(hours=1),
             "iat": datetime.now(timezone.utc),
             # no "sub"
