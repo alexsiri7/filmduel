@@ -18,7 +18,7 @@ function SkeletonCard() {
   );
 }
 
-export default function Suggestions() {
+export default function Suggestions({ mediaType = "movie" }) {
   const [suggestions, setSuggestions] = useState([]);
   const [status, setStatus] = useState("loading");
   const [regenerating, setRegenerating] = useState(false);
@@ -28,7 +28,7 @@ export default function Suggestions() {
     setStatus("loading");
     setError(null);
     try {
-      const data = await getSuggestions();
+      const data = await getSuggestions(mediaType);
       setSuggestions(data.suggestions);
       setStatus(data.status);
     } catch (err) {
@@ -38,13 +38,13 @@ export default function Suggestions() {
     }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [mediaType]);
 
   async function handleRegenerate() {
     setRegenerating(true);
     setError(null);
     try {
-      const data = await regenerateSuggestions();
+      const data = await regenerateSuggestions(mediaType);
       setSuggestions(data.suggestions);
       setStatus(data.status);
     } catch (err) {
@@ -294,7 +294,7 @@ export default function Suggestions() {
                 )}
                 {s.movie.trakt_id && (
                   <a
-                    href={`https://trakt.tv/search/trakt/${s.movie.trakt_id}?id_type=movie`}
+                    href={`https://trakt.tv/search/trakt/${s.movie.trakt_id}?id_type=${s.movie.media_type === "show" ? "show" : "movie"}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-[10px] font-label uppercase tracking-widest text-[#F5F0E8]/30 hover:text-[#E8A020] transition-colors"

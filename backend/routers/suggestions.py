@@ -6,7 +6,7 @@ import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -15,7 +15,7 @@ from backend.config import get_settings
 from backend.db import get_db
 from backend.db_models import Movie, Suggestion, User, UserMovie
 from backend.routers.auth import get_current_user
-from backend.schemas import MovieSchema, SuggestionSchema, SuggestionsResponse
+from backend.schemas import MediaType, MovieSchema, SuggestionSchema, SuggestionsResponse
 from backend.services.suggest import generate_suggestions, has_enough_ranked
 from backend.services.trakt import TraktClient
 
@@ -40,6 +40,7 @@ def _build_suggestion_schema(s: Suggestion) -> SuggestionSchema:
             year=m.year,
             poster_url=m.poster_url,
             overview=m.overview,
+            media_type=m.media_type,
         ),
         reason=s.reason,
         generated_at=s.generated_at,
@@ -49,9 +50,9 @@ def _build_suggestion_schema(s: Suggestion) -> SuggestionSchema:
 
 
 async def _get_active_suggestions(
-    user_id: uuid.UUID, db: AsyncSession
+    user_id: uuid.UUID, db: AsyncSession, media_type: str = "movie"
 ) -> list[Suggestion]:
-    """Get non-dismissed suggestions for a user."""
+    """Get non-dismissed suggestions for a user, filtered by media_type."""
     stmt = (
         select(Suggestion)
         .options(joinedload(Suggestion.movie))
@@ -60,6 +61,7 @@ async def _get_active_suggestions(
             Suggestion.user_id == user_id,
             Suggestion.dismissed_at.is_(None),
             Movie.poster_url.isnot(None),
+            Movie.media_type == media_type,
         )
         .order_by(Suggestion.generated_at.desc())
     )
@@ -68,10 +70,10 @@ async def _get_active_suggestions(
 
 
 async def _create_suggestions(
-    user_id: uuid.UUID, db: AsyncSession
+    user_id: uuid.UUID, db: AsyncSession, media_type: str = "movie"
 ) -> list[Suggestion]:
     """Generate new suggestions via AI and persist them."""
-    picks = await generate_suggestions(user_id, db)
+    picks = await generate_suggestions(user_id, db, media_type=media_type)
     if not picks:
         return []
 
@@ -89,23 +91,24 @@ async def _create_suggestions(
     await db.flush()
 
     # Reload with movie relationships
-    return await _get_active_suggestions(user_id, db)
+    return await _get_active_suggestions(user_id, db, media_type)
 
 
 @router.get("", response_model=SuggestionsResponse)
 async def get_suggestions(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    media_type: MediaType = Query(default="movie"),
 ):
     """Return current suggestions. Generate if stale (>24h) or missing."""
     uid = current_user.id
 
     # Check if user has enough ranked films
-    if not await has_enough_ranked(uid, db):
+    if not await has_enough_ranked(uid, db, media_type=media_type):
         return SuggestionsResponse(suggestions=[], status="not_enough_films")
 
     # Check existing non-dismissed suggestions
-    active = await _get_active_suggestions(uid, db)
+    active = await _get_active_suggestions(uid, db, media_type)
 
     if active:
         # Check freshness
@@ -119,7 +122,7 @@ async def get_suggestions(
 
     # Stale or none — generate new
     try:
-        new_suggestions = await _create_suggestions(uid, db)
+        new_suggestions = await _create_suggestions(uid, db, media_type)
         if not new_suggestions:
             return SuggestionsResponse(suggestions=[], status="no_candidates")
         return SuggestionsResponse(
@@ -141,11 +144,12 @@ async def get_suggestions(
 async def regenerate_suggestions(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    media_type: MediaType = Query(default="movie"),
 ):
     """Force regeneration. Rate-limited: 3 per day."""
     uid = current_user.id
 
-    if not await has_enough_ranked(uid, db):
+    if not await has_enough_ranked(uid, db, media_type=media_type):
         return SuggestionsResponse(suggestions=[], status="not_enough_films")
 
     # Count regenerations in last 24h (by counting distinct generated_at timestamps)
@@ -167,13 +171,13 @@ async def regenerate_suggestions(
         )
 
     # Dismiss all existing suggestions
-    active = await _get_active_suggestions(uid, db)
+    active = await _get_active_suggestions(uid, db, media_type)
     now = datetime.now(timezone.utc)
     for s in active:
         s.dismissed_at = now
 
     try:
-        new_suggestions = await _create_suggestions(uid, db)
+        new_suggestions = await _create_suggestions(uid, db, media_type)
         if not new_suggestions:
             return SuggestionsResponse(suggestions=[], status="not_enough_films")
         return SuggestionsResponse(

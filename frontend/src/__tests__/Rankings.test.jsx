@@ -120,7 +120,7 @@ describe("Rankings", () => {
       expect(exportLink).toBeInTheDocument();
       expect(exportLink.closest("a")).toHaveAttribute(
         "href",
-        "/api/rankings/export/csv"
+        "/api/rankings/export/csv?media_type=movie"
       );
     });
   });

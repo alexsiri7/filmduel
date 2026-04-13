@@ -1,4 +1,4 @@
-"""Background pool expansion — fetch more movies when the swipe pool runs low."""
+"""Background pool expansion — fetch more movies/shows when the swipe pool runs low."""
 
 from __future__ import annotations
 
@@ -25,20 +25,20 @@ EXPANSION_COOLDOWN = timedelta(days=7)
 TARGET_ADDED = 100
 
 
-async def expand_pool(user_id: uuid.UUID) -> int:
-    """Expand a user's movie pool. Returns count of films added.
+async def expand_pool(user_id: uuid.UUID, media_type: str = "movie") -> int:
+    """Expand a user's movie/show pool. Returns count of films added.
 
     Runs in a background task with its own DB session.
     """
     try:
-        return await _expand_pool_inner(user_id)
+        return await _expand_pool_inner(user_id, media_type)
     except Exception:
         logger.exception("Pool expansion failed for user %s", user_id)
         sentry_sdk.capture_exception()
         return 0
 
 
-async def _expand_pool_inner(user_id: uuid.UUID) -> int:
+async def _expand_pool_inner(user_id: uuid.UUID, media_type: str = "movie") -> int:
     settings = get_settings()
     total_added = 0
 
@@ -68,28 +68,28 @@ async def _expand_pool_inner(user_id: uuid.UUID) -> int:
         # Source A: Trakt personalized recommendations (highest quality)
         if total_added < TARGET_ADDED:
             added = await _expand_from_recommendations(
-                db, user_id, user, settings, recent_keys, now
+                db, user_id, user, settings, recent_keys, now, media_type
             )
             total_added += added
 
-        # Source B: TMDB similar films from top-ranked movies
-        if total_added < TARGET_ADDED:
+        # Source B: TMDB similar films from top-ranked items (movies only)
+        if total_added < TARGET_ADDED and media_type == "movie":
             added = await _expand_from_similar(
                 db, user_id, settings, recent_keys, now
             )
             total_added += added
 
         # Source C: Trakt anticipated
-        if total_added < TARGET_ADDED and ("anticipated", None) not in recent_keys:
+        if total_added < TARGET_ADDED and ("anticipated", media_type) not in recent_keys:
             added = await _expand_from_anticipated(
-                db, user_id, user, settings, recent_keys, now
+                db, user_id, user, settings, recent_keys, now, media_type
             )
             total_added += added
 
         # Source D: Deeper popular pages
         if total_added < TARGET_ADDED:
             added = await _expand_from_popular_pages(
-                db, user_id, user, settings, recent_keys, now
+                db, user_id, user, settings, recent_keys, now, media_type
             )
             total_added += added
 
@@ -113,9 +113,11 @@ async def _expand_from_recommendations(
     settings,
     recent_keys: set[tuple[str, str | None]],
     now: datetime,
+    media_type: str = "movie",
 ) -> int:
     """Source A: Trakt personalized recommendations."""
-    if ("trakt_recommendations", "default") in recent_keys:
+    source_key = f"{media_type}_default"
+    if ("trakt_recommendations", source_key) in recent_keys:
         return 0
 
     client = TraktClient(
@@ -123,21 +125,24 @@ async def _expand_from_recommendations(
         access_token=user.trakt_access_token,
     )
     try:
-        recs = await client.get_recommendations(limit=100)
+        if media_type == "show":
+            recs = await client.get_recommendations_shows(limit=100)
+        else:
+            recs = await client.get_recommendations(limit=100)
     except Exception:
-        logger.exception("Failed to fetch Trakt recommendations")
+        logger.exception("Failed to fetch Trakt recommendations (%s)", media_type)
         return 0
 
     added = 0
-    for movie in recs:
-        ok = await _upsert_film_from_trakt(db, user_id, movie, now)
+    for item in recs:
+        ok = await _upsert_film_from_trakt(db, user_id, item, now, media_type)
         if ok:
             added += 1
 
     db.add(PoolExpansion(
         user_id=user_id,
         source="trakt_recommendations",
-        source_key="default",
+        source_key=source_key,
         films_added=added,
         ran_at=now,
     ))
@@ -211,36 +216,39 @@ async def _expand_from_anticipated(
     settings,
     recent_keys: set[tuple[str, str | None]],
     now: datetime,
+    media_type: str = "movie",
 ) -> int:
-    """Source B: Trakt anticipated movies."""
+    """Source C: Trakt anticipated movies/shows."""
     client = TraktClient(
         client_id=settings.TRAKT_CLIENT_ID,
         access_token=user.trakt_access_token,
     )
+    endpoint = "/shows/anticipated" if media_type == "show" else "/movies/anticipated"
+    item_key = "show" if media_type == "show" else "movie"
     try:
         async with client._client() as http:
             resp = await http.get(
-                "/movies/anticipated",
+                endpoint,
                 params={"limit": 100, "extended": "full"},
                 timeout=15.0,
             )
             resp.raise_for_status()
             items = resp.json()
     except Exception:
-        logger.exception("Failed to fetch anticipated movies")
+        logger.exception("Failed to fetch anticipated %ss", media_type)
         return 0
 
     added = 0
     for item in items:
-        movie_data = item.get("movie", item)
-        ok = await _upsert_film_from_trakt(db, user_id, movie_data, now)
+        data = item.get(item_key, item)
+        ok = await _upsert_film_from_trakt(db, user_id, data, now, media_type)
         if ok:
             added += 1
 
     db.add(PoolExpansion(
         user_id=user_id,
         source="anticipated",
-        source_key=None,
+        source_key=media_type,
         films_added=added,
         ran_at=now,
     ))
@@ -255,40 +263,43 @@ async def _expand_from_popular_pages(
     settings,
     recent_keys: set[tuple[str, str | None]],
     now: datetime,
+    media_type: str = "movie",
 ) -> int:
-    """Source C: Deeper pages of Trakt popular movies."""
+    """Source D: Deeper pages of Trakt popular movies/shows."""
     client = TraktClient(
         client_id=settings.TRAKT_CLIENT_ID,
         access_token=user.trakt_access_token,
     )
+    endpoint = "/shows/popular" if media_type == "show" else "/movies/popular"
+    source = f"popular_page_N_{media_type}"
     total = 0
     for page in range(2, 6):
         source_key = str(page)
-        if ("popular_page_N", source_key) in recent_keys:
+        if (source, source_key) in recent_keys:
             continue
 
         try:
             async with client._client() as http:
                 resp = await http.get(
-                    "/movies/popular",
+                    endpoint,
                     params={"page": page, "limit": 100, "extended": "full"},
                     timeout=15.0,
                 )
                 resp.raise_for_status()
-                movies = resp.json()
+                items = resp.json()
         except Exception:
-            logger.exception("Failed to fetch popular page %d", page)
+            logger.exception("Failed to fetch popular %s page %d", media_type, page)
             continue
 
         added = 0
-        for movie_data in movies:
-            ok = await _upsert_film_from_trakt(db, user_id, movie_data, now)
+        for item_data in items:
+            ok = await _upsert_film_from_trakt(db, user_id, item_data, now, media_type)
             if ok:
                 added += 1
 
         db.add(PoolExpansion(
             user_id=user_id,
-            source="popular_page_N",
+            source=source,
             source_key=source_key,
             films_added=added,
             ran_at=now,
@@ -307,8 +318,9 @@ async def _upsert_film_from_trakt(
     user_id: uuid.UUID,
     movie_data: dict,
     now: datetime,
+    media_type: str = "movie",
 ) -> bool:
-    """Upsert a Trakt movie dict into movies + user_movies. Returns True if new user_movie created."""
+    """Upsert a Trakt movie/show dict into movies + user_movies. Returns True if new user_movie created."""
     ids = movie_data.get("ids", {})
     trakt_id = ids.get("trakt")
     if not trakt_id:
@@ -319,6 +331,7 @@ async def _upsert_film_from_trakt(
 
     stmt = insert(Movie.__table__).values(
         trakt_id=trakt_id,
+        media_type=media_type,
         imdb_id=ids.get("imdb"),
         tmdb_id=ids.get("tmdb"),
         title=movie_data.get("title", "Unknown"),
@@ -329,7 +342,7 @@ async def _upsert_film_from_trakt(
         community_rating=community_rating,
         cached_at=now,
     ).on_conflict_do_update(
-        index_elements=["trakt_id"],
+        index_elements=["trakt_id", "media_type"],
         set_={
             "imdb_id": ids.get("imdb"),
             "tmdb_id": ids.get("tmdb"),
@@ -345,15 +358,13 @@ async def _upsert_film_from_trakt(
     await db.execute(stmt)
     await db.flush()
 
-    # Get movie UUID
     result = await db.execute(
-        select(Movie.id).where(Movie.trakt_id == trakt_id)
+        select(Movie.id).where(Movie.trakt_id == trakt_id, Movie.media_type == media_type)
     )
     movie_uuid = result.scalar_one_or_none()
     if not movie_uuid:
         return False
 
-    # Insert user_movie only if not exists (seen=None = unknown)
     um_stmt = insert(UserMovie.__table__).values(
         user_id=user_id,
         movie_id=movie_uuid,
@@ -407,9 +418,10 @@ async def _upsert_film_from_tmdb(
     if not trakt_id:
         return False
 
-    # Upsert the movie
+    # Upsert the movie (TMDB expansion is movies-only, so media_type="movie")
     stmt = insert(Movie.__table__).values(
         trakt_id=trakt_id,
+        media_type="movie",
         tmdb_id=tmdb_id,
         title=film.get("title", "Unknown"),
         year=film.get("year"),
@@ -417,7 +429,7 @@ async def _upsert_film_from_tmdb(
         overview=film.get("overview"),
         cached_at=now,
     ).on_conflict_do_update(
-        index_elements=["trakt_id"],
+        index_elements=["trakt_id", "media_type"],
         set_={
             "tmdb_id": tmdb_id,
             "title": film.get("title", "Unknown"),
@@ -431,7 +443,7 @@ async def _upsert_film_from_tmdb(
     await db.flush()
 
     movie_result = await db.execute(
-        select(Movie.id).where(Movie.trakt_id == trakt_id)
+        select(Movie.id).where(Movie.trakt_id == trakt_id, Movie.media_type == "movie")
     )
     movie_uuid = movie_result.scalar_one_or_none()
     if not movie_uuid:

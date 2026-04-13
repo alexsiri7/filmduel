@@ -56,7 +56,7 @@ describe("api", () => {
       mockFetchOk({ movie_a: {}, movie_b: {} });
       await fetchPair("discovery");
       expect(fetch).toHaveBeenCalledWith(
-        "/api/movies/pair?mode=discovery",
+        "/api/movies/pair?mode=discovery&media_type=movie",
         expect.objectContaining({
           credentials: "include",
           headers: expect.objectContaining({ "Content-Type": "application/json" }),
@@ -68,7 +68,7 @@ describe("api", () => {
       mockFetchOk({ movie_a: {}, movie_b: {} });
       await fetchPair("discovery", "abc123");
       expect(fetch).toHaveBeenCalledWith(
-        "/api/movies/pair?mode=discovery&last_pair_token=abc123",
+        "/api/movies/pair?mode=discovery&media_type=movie&last_pair_token=abc123",
         expect.any(Object)
       );
     });
@@ -100,7 +100,7 @@ describe("api", () => {
       mockFetchOk([{ id: 1, title: "Test" }]);
       await fetchSwipeCards();
       expect(fetch).toHaveBeenCalledWith(
-        "/api/swipe/cards",
+        "/api/swipe/cards?media_type=movie",
         expect.objectContaining({ credentials: "include" })
       );
     });
@@ -116,7 +116,7 @@ describe("api", () => {
       mockFetchOk({ seen_count: 1, unseen_count: 1 });
       await submitSwipeResults(results);
       expect(fetch).toHaveBeenCalledWith(
-        "/api/swipe/results",
+        "/api/swipe/results?media_type=movie",
         expect.objectContaining({
           method: "POST",
           body: JSON.stringify({ results }),

@@ -5,7 +5,7 @@ import { getTournaments, createTournament, getTournamentGenres, getTournamentPoo
 const BRACKET_SIZES = [8, 16, 32, 64];
 const DECADES = ["1970s", "1980s", "1990s", "2000s", "2010s", "2020s"];
 
-export default function Tournaments() {
+export default function Tournaments({ mediaType = "movie" }) {
   const navigate = useNavigate();
   const [tournaments, setTournaments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -42,15 +42,15 @@ export default function Tournaments() {
     if (!showCreate) return;
     const filterType = filterMode === "all" ? null : filterMode;
     const fv = filterMode === "all" ? null : filterValue;
-    getTournamentPoolCount(filterType, fv)
+    getTournamentPoolCount(filterType, fv, mediaType)
       .then((data) => setPoolCount(data.count))
       .catch(() => setPoolCount(null));
-  }, [showCreate, filterMode, filterValue]);
+  }, [showCreate, filterMode, filterValue, mediaType]);
 
   async function handleOpenCreate() {
     setShowCreate(true);
     try {
-      const genres = await getTournamentGenres();
+      const genres = await getTournamentGenres(mediaType);
       setAvailableGenres(genres);
     } catch (err) {
       console.error("Failed to load genres:", err);
@@ -65,7 +65,7 @@ export default function Tournaments() {
       const filterType = filterMode === "all" ? null : filterMode;
       const fv = filterMode === "all" ? null : filterValue;
       const tournamentName = name.trim() || "AI Tournament";
-      const t = await createTournament(tournamentName, bracketSize, filterType, fv, aiCurated);
+      const t = await createTournament(tournamentName, bracketSize, filterType, fv, aiCurated, mediaType);
       navigate(`/tournaments/${t.id}`);
     } catch (err) {
       setError(err.message);

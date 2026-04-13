@@ -44,6 +44,26 @@ TMDB_GENRE_MAP: dict[int, str] = {
 }
 
 
+async def fetch_tv_poster_url(tmdb_id: int) -> str | None:
+    """Fetch poster URL from TMDB API for a TV show. Returns full URL or None."""
+    settings = get_settings()
+    if not settings.TMDB_API_KEY or not tmdb_id:
+        return None
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            f"https://api.themoviedb.org/3/tv/{tmdb_id}",
+            params={"api_key": settings.TMDB_API_KEY},
+        )
+        if resp.status_code != 200:
+            logger.warning("TMDB TV API returned %d for tmdb_id=%d", resp.status_code, tmdb_id)
+            return None
+        data = resp.json()
+        poster_path = data.get("poster_path")
+        if poster_path:
+            return f"https://image.tmdb.org/t/p/w500{poster_path}"
+        return None
+
+
 async def fetch_similar_films(tmdb_id: int, api_key: str) -> list[dict]:
     """Fetch recommended films from TMDB for a given movie.
 
@@ -87,24 +107,27 @@ async def fetch_similar_films(tmdb_id: int, api_key: str) -> list[dict]:
 
 
 async def backfill_posters(db: AsyncSession) -> None:
-    """Fetch poster URLs for movies that have tmdb_id but no poster_url."""
+    """Fetch poster URLs for movies/shows that have tmdb_id but no poster_url."""
     stmt = (
         select(Movie)
         .where(Movie.tmdb_id.isnot(None), Movie.poster_url.is_(None))
         .limit(50)
     )
     result = await db.execute(stmt)
-    movies = result.scalars().all()
+    items = result.scalars().all()
 
-    if not movies:
+    if not items:
         return
 
-    logger.info("Backfilling posters for %d movies", len(movies))
+    logger.info("Backfilling posters for %d items", len(items))
     filled = 0
-    for movie in movies:
-        url = await fetch_poster_url(movie.tmdb_id)
+    for item in items:
+        if item.media_type == "show":
+            url = await fetch_tv_poster_url(item.tmdb_id)
+        else:
+            url = await fetch_poster_url(item.tmdb_id)
         if url:
-            movie.poster_url = url
+            item.poster_url = url
             filled += 1
 
     if filled:
