@@ -183,3 +183,11 @@ class SuggestionSchema(BaseModel):
 class SuggestionsResponse(BaseModel):
     suggestions: list[SuggestionSchema]
     status: str = "ready"  # "ready" | "generating" | "not_enough_films"
+
+
+# ── Feedback schemas ──────────────────────────────────────────────
+
+
+class FeedbackReportResponse(BaseModel):
+    id: str
+    created_at: datetime

@@ -7,6 +7,7 @@ import {
   getRankings,
   getMe,
   logout,
+  submitFeedback,
 } from "../api";
 
 describe("api", () => {
@@ -148,6 +149,50 @@ describe("api", () => {
         json: () => Promise.reject(new Error("not json")),
       });
       await expect(getRankings()).rejects.toThrow("Request failed");
+    });
+  });
+
+  // submitFeedback
+  describe("submitFeedback", () => {
+    it("posts to /api/feedback", async () => {
+      mockFetchOk({ id: "abc-123", created_at: "2026-04-13T00:00:00Z" }, 201);
+      const result = await submitFeedback("Bug title", "Description here");
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/feedback",
+        expect.objectContaining({ method: "POST", credentials: "include" })
+      );
+      expect(result.id).toBe("abc-123");
+    });
+
+    it("throws on non-ok response", async () => {
+      mockFetchError(500, "Server error");
+      await expect(submitFeedback("t", "d")).rejects.toThrow("Server error");
+    });
+
+    it("redirects to /login on 401", async () => {
+      mockFetch401();
+      await submitFeedback("t", "d");
+      expect(window.location.href).toBe("/login");
+    });
+
+    it("appends screenshot blob when screenshotDataUrl is provided", async () => {
+      const mockBlob = new Blob(["imgdata"], { type: "image/jpeg" });
+      // First call: the data URL fetch → blob
+      fetch
+        .mockResolvedValueOnce({ blob: () => Promise.resolve(mockBlob) })
+        // Second call: /api/feedback POST → success
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 201,
+          json: () => Promise.resolve({ id: "xyz", created_at: "2026-04-13T00:00:00Z" }),
+        });
+
+      await submitFeedback("Title", "Desc", "data:image/jpeg;base64,FAKE");
+
+      const [, secondCallArgs] = fetch.mock.calls;
+      expect(secondCallArgs[0]).toBe("/api/feedback");
+      const body = secondCallArgs[1].body;
+      expect(body.get("screenshot")).toBeInstanceOf(Blob);
     });
   });
 
