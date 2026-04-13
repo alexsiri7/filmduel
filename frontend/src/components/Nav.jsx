@@ -11,7 +11,7 @@ const navItems = [
   { path: "/tournaments", label: "Tournaments", icon: "bracket" },
 ];
 
-export default function Nav() {
+export default function Nav({ mediaType, setMediaType }) {
   const location = useLocation();
   const [showFeedback, setShowFeedback] = useState(false);
 
@@ -35,6 +35,30 @@ export default function Nav() {
             The Noir Projectionist
           </p>
         </div>
+      </div>
+
+      {/* Media type toggle */}
+      <div className="flex bg-[#0F0E0D] rounded-sm p-1 gap-1 mx-2">
+        <button
+          onClick={() => setMediaType("movie")}
+          className={`flex-1 py-2 text-xs font-headline font-bold uppercase tracking-widest transition-colors rounded-sm ${
+            mediaType === "movie"
+              ? "bg-[#E8A020] text-[#0F0E0D]"
+              : "text-[#F5F0E8]/40 hover:text-[#F5F0E8]/60"
+          }`}
+        >
+          Movies
+        </button>
+        <button
+          onClick={() => setMediaType("show")}
+          className={`flex-1 py-2 text-xs font-headline font-bold uppercase tracking-widest transition-colors rounded-sm ${
+            mediaType === "show"
+              ? "bg-[#E8A020] text-[#0F0E0D]"
+              : "text-[#F5F0E8]/40 hover:text-[#F5F0E8]/60"
+          }`}
+        >
+          Shows
+        </button>
       </div>
 
       {/* Nav items */}

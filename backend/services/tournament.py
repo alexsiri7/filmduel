@@ -58,6 +58,7 @@ async def get_filtered_ranked_films(
     user_id: uuid.UUID,
     filter_type: Optional[str] = None,
     filter_value: Optional[str] = None,
+    media_type: str = "movie",
 ) -> list[UserMovie]:
     """Query ranked films with optional genre/decade filtering.
 
@@ -66,14 +67,18 @@ async def get_filtered_ranked_films(
     """
     from sqlalchemy.orm import joinedload
 
+    from backend.db_models import Movie
+
     stmt = (
         select(UserMovie)
         .options(joinedload(UserMovie.movie))
+        .join(Movie, UserMovie.movie_id == Movie.id)
         .where(
             UserMovie.user_id == user_id,
             UserMovie.seen.is_(True),
             UserMovie.battles >= 1,
             UserMovie.elo.isnot(None),
+            Movie.media_type == media_type,
         )
     )
     result = await db.execute(stmt)

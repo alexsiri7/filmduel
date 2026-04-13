@@ -32,10 +32,11 @@ async def get_user_rankings(
     decade: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
+    media_type: str = "movie",
 ) -> tuple[list[UserMovie], int]:
     """Return (ranked user_movies with loaded movies, total count).
 
-    Filters: seen=True, battles>0, optional genre, optional decade.
+    Filters: seen=True, battles>0, media_type, optional genre, optional decade.
     Ordered by ELO descending.
     """
     base_filters = [
@@ -44,21 +45,19 @@ async def get_user_rankings(
         UserMovie.battles > 0,
     ]
 
+    # Always join Movie for media_type filter
     stmt = (
         select(UserMovie)
         .options(joinedload(UserMovie.movie))
-        .where(*base_filters)
+        .join(Movie, UserMovie.movie_id == Movie.id)
+        .where(*base_filters, Movie.media_type == media_type)
     )
     count_stmt = (
         select(func.count())
         .select_from(UserMovie)
-        .where(*base_filters)
+        .join(Movie, UserMovie.movie_id == Movie.id)
+        .where(*base_filters, Movie.media_type == media_type)
     )
-
-    needs_movie_join = genre is not None or decade is not None
-    if needs_movie_join:
-        stmt = stmt.join(Movie, UserMovie.movie_id == Movie.id)
-        count_stmt = count_stmt.join(Movie, UserMovie.movie_id == Movie.id)
 
     if genre:
         stmt = stmt.where(Movie.genres.any(genre))
@@ -80,7 +79,7 @@ async def get_user_rankings(
     return user_movies, total
 
 
-async def get_user_stats(db: AsyncSession, user_id: uuid.UUID) -> dict:
+async def get_user_stats(db: AsyncSession, user_id: uuid.UUID, media_type: str = "movie") -> dict:
     """Return aggregate stats for the user's rankings.
 
     Returns dict with keys: total_duels, total_movies_ranked, unseen_count,
@@ -89,10 +88,12 @@ async def get_user_stats(db: AsyncSession, user_id: uuid.UUID) -> dict:
     stmt = (
         select(UserMovie)
         .options(joinedload(UserMovie.movie))
+        .join(Movie, UserMovie.movie_id == Movie.id)
         .where(
             UserMovie.user_id == user_id,
             UserMovie.seen.is_(True),
             UserMovie.battles > 0,
+            Movie.media_type == media_type,
         )
         .order_by(UserMovie.elo.desc())
     )
@@ -102,7 +103,8 @@ async def get_user_stats(db: AsyncSession, user_id: uuid.UUID) -> dict:
     unseen_stmt = (
         select(func.count())
         .select_from(UserMovie)
-        .where(UserMovie.user_id == user_id, UserMovie.seen.is_(False))
+        .join(Movie, UserMovie.movie_id == Movie.id)
+        .where(UserMovie.user_id == user_id, UserMovie.seen.is_(False), Movie.media_type == media_type)
     )
     unseen_result = await db.execute(unseen_stmt)
     unseen_count = unseen_result.scalar() or 0
@@ -130,15 +132,17 @@ async def get_user_stats(db: AsyncSession, user_id: uuid.UUID) -> dict:
     }
 
 
-async def export_rankings_csv(db: AsyncSession, user_id: uuid.UUID) -> str:
+async def export_rankings_csv(db: AsyncSession, user_id: uuid.UUID, media_type: str = "movie") -> str:
     """Return CSV string content for Letterboxd export."""
     stmt = (
         select(UserMovie)
         .options(joinedload(UserMovie.movie))
+        .join(Movie, UserMovie.movie_id == Movie.id)
         .where(
             UserMovie.user_id == user_id,
             UserMovie.seen.is_(True),
             UserMovie.battles > 0,
+            Movie.media_type == media_type,
         )
         .order_by(UserMovie.elo.desc())
     )

@@ -35,18 +35,21 @@ async def _sync_ratings_background(
         access_token = result.scalar_one_or_none()
         if not access_token:
             return
-        movies_stmt = select(Movie.id, Movie.trakt_id).where(
+        movies_stmt = select(Movie.id, Movie.trakt_id, Movie.media_type).where(
             Movie.id.in_([movie_a_id, movie_b_id])
         )
         result = await session.execute(movies_stmt)
-        trakt_map = {row.id: row.trakt_id for row in result.all()}
+        rows = result.all()
+        trakt_map = {row.id: row.trakt_id for row in rows}
+        # Both movies in a duel are the same media_type
+        media_type = rows[0].media_type if rows else "movie"
     movie_ratings = []
     if movie_a_id in trakt_map:
         movie_ratings.append((trakt_map[movie_a_id], new_elo_a))
     if movie_b_id in trakt_map:
         movie_ratings.append((trakt_map[movie_b_id], new_elo_b))
     if movie_ratings:
-        await sync_post_duel(access_token, movie_ratings)
+        await sync_post_duel(access_token, movie_ratings, media_type)
 
 
 @router.post("", response_model=DuelResult)

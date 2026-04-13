@@ -88,6 +88,7 @@ def _user_movie_to_schema(um: UserMovie) -> MovieWithStateSchema:
         poster_url=movie.poster_url,
         overview=movie.overview,
         genres=movie.genres,
+        media_type=movie.media_type,
         seen=um.seen,
         elo=um.elo,
         battles=um.battles,
@@ -119,6 +120,7 @@ def _decode_pair_token(token: str) -> set[str] | None:
 async def get_movie_pair(
     mode: str = Query(default="discovery"),
     last_pair_token: Optional[str] = Query(default=None),
+    media_type: str = Query(default="movie"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -133,7 +135,7 @@ async def get_movie_pair(
     if last_pair_token:
         last_pair_ids = _decode_pair_token(last_pair_token)
 
-    pair = await _select_pair(db, uid, last_pair_ids)
+    pair = await _select_pair(db, uid, last_pair_ids, media_type)
 
     movie_a, movie_b = pair
     schema_a = _user_movie_to_schema(movie_a)
@@ -156,6 +158,7 @@ async def _select_pair(
     db: AsyncSession,
     uid,
     last_pair_ids: set[str] | None,
+    media_type: str = "movie",
 ) -> tuple[UserMovie, UserMovie]:
     """Select a duel pair from seen films with quality band matching.
 
@@ -165,13 +168,15 @@ async def _select_pair(
     4. For ranked-vs-ranked: 70% close matches, 30% wide matches.
     """
 
-    # All seen films
+    # All seen films of the requested media_type
     seen_stmt = (
         select(UserMovie)
         .options(joinedload(UserMovie.movie))
+        .join(Movie, UserMovie.movie_id == Movie.id)
         .where(
             UserMovie.user_id == uid,
             UserMovie.seen.is_(True),
+            Movie.media_type == media_type,
         )
     )
     seen_result = await db.execute(seen_stmt)

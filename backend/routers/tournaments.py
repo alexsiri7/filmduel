@@ -49,6 +49,7 @@ def _movie_schema(movie: Optional[Movie]) -> Optional[MovieSchema]:
         year=movie.year,
         poster_url=movie.poster_url,
         overview=movie.overview,
+        media_type=movie.media_type,
     )
 
 
@@ -116,6 +117,7 @@ async def _load_tournament(
 async def get_available_genres(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    media_type: str = "movie",
 ):
     """Return distinct genres from user's seen films for tournament filtering."""
     stmt = (
@@ -128,6 +130,7 @@ async def get_available_genres(
             UserMovie.battles >= 1,
             UserMovie.elo.isnot(None),
             Movie.genres.isnot(None),
+            Movie.media_type == media_type,
         )
         .distinct()
         .order_by("genre")
@@ -140,13 +143,14 @@ async def get_available_genres(
 async def get_pool_count(
     filter_type: Optional[str] = None,
     filter_value: Optional[str] = None,
+    media_type: str = "movie",
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Return number of ranked films matching the given filter."""
     try:
         user_movies = await get_filtered_ranked_films(
-            db, current_user.id, filter_type, filter_value,
+            db, current_user.id, filter_type, filter_value, media_type=media_type,
         )
     except ValueError:
         return {"count": 0}
@@ -164,7 +168,7 @@ async def create_tournament(
 
     try:
         user_movies = await get_filtered_ranked_films(
-            db, uid, body.filter_type, body.filter_value,
+            db, uid, body.filter_type, body.filter_value, media_type=body.media_type,
         )
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid decade format")

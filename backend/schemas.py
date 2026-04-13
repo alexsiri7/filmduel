@@ -15,6 +15,9 @@ class UserResponse(BaseModel):
     created_at: datetime
 
 
+MediaType = Literal["movie", "show"]
+
+
 class MovieSchema(BaseModel):
     id: str
     trakt_id: int
@@ -25,6 +28,7 @@ class MovieSchema(BaseModel):
     poster_url: Optional[str] = None
     overview: Optional[str] = None
     genres: Optional[list[str]] = None
+    media_type: str = "movie"
 
 
 class MovieWithStateSchema(MovieSchema):
@@ -121,6 +125,7 @@ class TournamentCreate(BaseModel):
     filter_value: Optional[str] = None
     bracket_size: Literal[8, 16, 32, 64]
     ai_curated: bool = False
+    media_type: str = "movie"
 
 
 class TournamentMatchSchema(BaseModel):

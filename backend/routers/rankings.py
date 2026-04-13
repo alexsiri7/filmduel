@@ -37,6 +37,7 @@ def _build_ranked_movie(um: UserMovie, rank: int) -> RankedMovie:
             poster_url=movie.poster_url,
             overview=movie.overview,
             genres=movie.genres,
+            media_type=movie.media_type,
         ),
         elo=um.elo,
         battles=um.battles,
@@ -52,10 +53,12 @@ async def get_rankings(
     offset: int = Query(default=0, ge=0),
     genre: Optional[str] = Query(default=None),
     decade: Optional[str] = Query(default=None),
+    media_type: str = Query(default="movie"),
 ):
-    """Return the user's ranked movies sorted by ELO descending."""
+    """Return the user's ranked movies/shows sorted by ELO descending."""
     user_movies, total = await get_user_rankings(
-        db, current_user.id, genre=genre, decade=decade, limit=limit, offset=offset
+        db, current_user.id, genre=genre, decade=decade, limit=limit, offset=offset,
+        media_type=media_type,
     )
     rankings = [
         _build_ranked_movie(um, rank=offset + i + 1)
@@ -68,9 +71,10 @@ async def get_rankings(
 async def get_stats(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    media_type: str = Query(default="movie"),
 ):
     """Return aggregate stats for the user's rankings."""
-    stats = await get_user_stats(db, current_user.id)
+    stats = await get_user_stats(db, current_user.id, media_type=media_type)
 
     if stats["highest_rated"] is None:
         return StatsResponse(
@@ -99,9 +103,10 @@ async def get_stats(
 async def export_csv(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    media_type: str = Query(default="movie"),
 ):
     """Export rankings as a Letterboxd-compatible CSV."""
-    csv_content = await export_rankings_csv(db, current_user.id)
+    csv_content = await export_rankings_csv(db, current_user.id, media_type=media_type)
     output = io.StringIO(csv_content)
     return StreamingResponse(
         output,

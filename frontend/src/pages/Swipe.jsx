@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { fetchSwipeCards, submitSwipeResults } from "../api";
 import SwipeCard from "../components/SwipeCard";
 
-export default function Swipe() {
+export default function Swipe({ mediaType = "movie" }) {
   const navigate = useNavigate();
   const [cards, setCards] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -22,7 +22,7 @@ export default function Swipe() {
     setSummary(null);
     setCardKey(0);
     try {
-      const data = await fetchSwipeCards();
+      const data = await fetchSwipeCards(mediaType);
       if (!data || data.length === 0) {
         setCards([]);
       } else {
@@ -34,7 +34,7 @@ export default function Swipe() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [mediaType]);
 
   useEffect(() => {
     loadCards();
@@ -51,7 +51,7 @@ export default function Swipe() {
       if (currentIndex + 1 >= cards.length) {
         // All cards done, submit
         setSubmitting(true);
-        submitSwipeResults(newResults)
+        submitSwipeResults(newResults, mediaType)
           .then((res) => {
             setSummary(res);
           })

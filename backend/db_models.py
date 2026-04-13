@@ -50,11 +50,17 @@ class User(Base):
 
 class Movie(Base):
     __tablename__ = "movies"
+    __table_args__ = (
+        UniqueConstraint("trakt_id", "media_type", name="uq_movies_trakt_id_media_type"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    trakt_id: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
+    trakt_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    media_type: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default="movie", index=True
+    )
     imdb_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     tmdb_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     title: Mapped[str] = mapped_column(Text, nullable=False)

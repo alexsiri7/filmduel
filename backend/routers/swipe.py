@@ -48,19 +48,25 @@ def _community_rating_range(band_index: int) -> tuple[float, float]:
 async def get_swipe_cards(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    media_type: str = "movie",
 ):
     """Return up to 10 unknown films for a swipe session, weighted by community rating band."""
     uid = current_user.id
 
-    # Find user's median ELO to determine taste band
-    median_stmt = select(func.percentile_cont(0.5).within_group(UserMovie.elo)).where(
-        UserMovie.user_id == uid,
-        UserMovie.elo.is_not(None),
+    # Find user's median ELO to determine taste band (scoped to media_type)
+    median_stmt = (
+        select(func.percentile_cont(0.5).within_group(UserMovie.elo))
+        .join(Movie, UserMovie.movie_id == Movie.id)
+        .where(
+            UserMovie.user_id == uid,
+            UserMovie.elo.is_not(None),
+            Movie.media_type == media_type,
+        )
     )
     result = await db.execute(median_stmt)
     median_elo = result.scalar_one_or_none()
 
-    # Base query: unknown films for this user (must have poster)
+    # Base query: unknown films for this user (must have poster), filtered by media_type
     base = (
         select(
             Movie.id,
@@ -72,7 +78,12 @@ async def get_swipe_cards(
             Movie.community_rating,
         )
         .join(UserMovie, UserMovie.movie_id == Movie.id)
-        .where(UserMovie.user_id == uid, UserMovie.seen.is_(None), Movie.poster_url.isnot(None))
+        .where(
+            UserMovie.user_id == uid,
+            UserMovie.seen.is_(None),
+            Movie.poster_url.isnot(None),
+            Movie.media_type == media_type,
+        )
     )
 
     if median_elo is None:
@@ -152,6 +163,7 @@ async def submit_swipe_results(
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    media_type: str = "movie",
 ):
     """Submit all swipe results at once — bulk update seen status."""
     uid = current_user.id
@@ -211,6 +223,6 @@ async def submit_swipe_results(
     unknown_count = (await db.execute(unknown_stmt)).scalar() or 0
 
     if unknown_count < 50:
-        background_tasks.add_task(expand_pool, uid)
+        background_tasks.add_task(expand_pool, uid, media_type)
 
     return SwipeResponse(seen_count=seen_count, unseen_count=unseen_count, next_action=next_action)

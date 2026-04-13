@@ -25,18 +25,19 @@ CANDIDATE_LIMIT = 50
 
 
 async def _build_taste_profile(
-    user_id: uuid.UUID, db: AsyncSession
+    user_id: uuid.UUID, db: AsyncSession, media_type: str = "movie"
 ) -> dict | None:
     """Return taste profile dict, or None if the user has < MIN_RANKED films."""
-    # Ranked films: seen=true, battles>=1, elo not null
     ranked_stmt = (
         select(UserMovie)
         .options(joinedload(UserMovie.movie))
+        .join(Movie, UserMovie.movie_id == Movie.id)
         .where(
             UserMovie.user_id == user_id,
             UserMovie.seen.is_(True),
             UserMovie.battles >= 1,
             UserMovie.elo.isnot(None),
+            Movie.media_type == media_type,
         )
         .order_by(UserMovie.elo.desc())
     )
@@ -84,10 +85,9 @@ async def _build_taste_profile(
 
 
 async def _get_candidates(
-    user_id: uuid.UUID, db: AsyncSession
+    user_id: uuid.UUID, db: AsyncSession, media_type: str = "movie"
 ) -> list[dict]:
     """Get 40-60 unknown films (seen=NULL) as candidates, preferring ones with posters."""
-    # Films where user has no user_movie row OR seen is NULL
     stmt = (
         select(UserMovie)
         .options(joinedload(UserMovie.movie))
@@ -96,6 +96,7 @@ async def _get_candidates(
             UserMovie.user_id == user_id,
             UserMovie.seen.is_(None),
             Movie.poster_url.isnot(None),
+            Movie.media_type == media_type,
         )
         .order_by(
             # By community rating
@@ -170,7 +171,7 @@ async def _call_llm(taste_profile: dict, candidates: list[dict]) -> list[dict]:
 
 
 async def generate_suggestions(
-    user_id: uuid.UUID, db: AsyncSession
+    user_id: uuid.UUID, db: AsyncSession, media_type: str = "movie"
 ) -> list[dict]:
     """Generate 6 personalized film suggestions.
 
@@ -178,11 +179,11 @@ async def generate_suggestions(
     Raises ValueError if LLM_API_KEY is not set.
     Returns empty list if user has < MIN_RANKED films (caller should check taste_profile).
     """
-    taste_profile = await _build_taste_profile(user_id, db)
+    taste_profile = await _build_taste_profile(user_id, db, media_type)
     if taste_profile is None:
         return []
 
-    candidates = await _get_candidates(user_id, db)
+    candidates = await _get_candidates(user_id, db, media_type)
     if len(candidates) < NUM_PICKS:
         logger.warning(
             "User %s has only %d candidate films, need at least %d",
@@ -211,16 +212,18 @@ async def generate_suggestions(
     return results
 
 
-async def has_enough_ranked(user_id: uuid.UUID, db: AsyncSession) -> bool:
-    """Check if user has at least MIN_RANKED ranked films."""
+async def has_enough_ranked(user_id: uuid.UUID, db: AsyncSession, media_type: str = "movie") -> bool:
+    """Check if user has at least MIN_RANKED ranked films of the given type."""
     count_stmt = (
         select(func.count())
         .select_from(UserMovie)
+        .join(Movie, UserMovie.movie_id == Movie.id)
         .where(
             UserMovie.user_id == user_id,
             UserMovie.seen.is_(True),
             UserMovie.battles >= 1,
             UserMovie.elo.isnot(None),
+            Movie.media_type == media_type,
         )
     )
     result = await db.execute(count_stmt)

@@ -13,7 +13,7 @@ function SkeletonCard() {
   );
 }
 
-export default function Duel() {
+export default function Duel({ mediaType = "movie" }) {
   const navigate = useNavigate();
   const [pair, setPair] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -35,16 +35,16 @@ export default function Duel() {
 
   const loadStats = useCallback(async () => {
     try {
-      const data = await fetchStats();
+      const data = await fetchStats(mediaType);
       setStats(data);
     } catch (err) {
       console.error("Failed to load stats:", err);
     }
-  }, []);
+  }, [mediaType]);
 
   const prefetchNext = useCallback(() => {
-    prefetchRef.current = fetchPair(MODE).catch(() => null);
-  }, []);
+    prefetchRef.current = fetchPair(MODE, null, mediaType).catch(() => null);
+  }, [mediaType]);
 
   const loadPair = useCallback(
     async (usePrefetch = false) => {
@@ -58,7 +58,7 @@ export default function Duel() {
           prefetchRef.current = null;
         }
         if (!data) {
-          data = await fetchPair(MODE);
+          data = await fetchPair(MODE, null, mediaType);
         }
         setPair(data);
         setAnimateKey((k) => k + 1);
@@ -77,10 +77,11 @@ export default function Duel() {
         setLoading(false);
       }
     },
-    []
+    [mediaType]
   );
 
   useEffect(() => {
+    prefetchRef.current = null;
     loadPair();
     loadStats();
   }, [loadPair, loadStats]);
