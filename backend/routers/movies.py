@@ -13,7 +13,7 @@ from sqlalchemy.orm import joinedload
 
 from backend.db import get_db
 from backend.db_models import Movie, User, UserMovie
-from backend.schemas import MovieWithStateSchema, MoviePairResponse
+from backend.schemas import MediaType, MovieWithStateSchema, MoviePairResponse
 from backend.routers.auth import get_current_user
 
 router = APIRouter(prefix="/api/movies", tags=["movies"])
@@ -120,7 +120,7 @@ def _decode_pair_token(token: str) -> set[str] | None:
 async def get_movie_pair(
     mode: str = Query(default="discovery"),
     last_pair_token: Optional[str] = Query(default=None),
-    media_type: str = Query(default="movie"),
+    media_type: MediaType = Query(default="movie"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

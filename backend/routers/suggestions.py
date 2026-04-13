@@ -6,7 +6,7 @@ import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -15,7 +15,7 @@ from backend.config import get_settings
 from backend.db import get_db
 from backend.db_models import Movie, Suggestion, User, UserMovie
 from backend.routers.auth import get_current_user
-from backend.schemas import MovieSchema, SuggestionSchema, SuggestionsResponse
+from backend.schemas import MediaType, MovieSchema, SuggestionSchema, SuggestionsResponse
 from backend.services.suggest import generate_suggestions, has_enough_ranked
 from backend.services.trakt import TraktClient
 
@@ -98,7 +98,7 @@ async def _create_suggestions(
 async def get_suggestions(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    media_type: str = "movie",
+    media_type: MediaType = Query(default="movie"),
 ):
     """Return current suggestions. Generate if stale (>24h) or missing."""
     uid = current_user.id
@@ -144,7 +144,7 @@ async def get_suggestions(
 async def regenerate_suggestions(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    media_type: str = "movie",
+    media_type: MediaType = Query(default="movie"),
 ):
     """Force regeneration. Rate-limited: 3 per day."""
     uid = current_user.id

@@ -1,6 +1,6 @@
 # FilmDuel
 
-Rank your movies through head-to-head duels. Powered by ELO ratings, Trakt integration, and TMDB posters.
+Rank your movies and TV shows through head-to-head duels. Powered by ELO ratings, Trakt integration, and TMDB posters.
 
 ## Stack
 

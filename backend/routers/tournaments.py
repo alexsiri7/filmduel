@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +15,7 @@ from backend.db import get_db
 from backend.db_models import Movie, Tournament, TournamentMatch, User, UserMovie
 from backend.routers.auth import get_current_user
 from backend.schemas import (
+    MediaType,
     MovieSchema,
     TournamentCreate,
     TournamentListItem,
@@ -117,7 +118,7 @@ async def _load_tournament(
 async def get_available_genres(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    media_type: str = "movie",
+    media_type: MediaType = Query(default="movie"),
 ):
     """Return distinct genres from user's seen films for tournament filtering."""
     stmt = (
@@ -143,7 +144,7 @@ async def get_available_genres(
 async def get_pool_count(
     filter_type: Optional[str] = None,
     filter_value: Optional[str] = None,
-    media_type: str = "movie",
+    media_type: MediaType = Query(default="movie"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

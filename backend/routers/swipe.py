@@ -6,14 +6,14 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db import get_db
 from backend.db_models import Movie, SwipeResult, User, UserMovie
 from backend.routers.auth import get_current_user
-from backend.schemas import SwipeCardSchema, SwipeResponse, SwipeSubmit
+from backend.schemas import MediaType, SwipeCardSchema, SwipeResponse, SwipeSubmit
 from backend.services.expand import expand_pool
 
 logger = logging.getLogger(__name__)
@@ -48,7 +48,7 @@ def _community_rating_range(band_index: int) -> tuple[float, float]:
 async def get_swipe_cards(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    media_type: str = "movie",
+    media_type: MediaType = Query(default="movie"),
 ):
     """Return up to 10 unknown films for a swipe session, weighted by community rating band."""
     uid = current_user.id
@@ -163,7 +163,7 @@ async def submit_swipe_results(
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    media_type: str = "movie",
+    media_type: MediaType = Query(default="movie"),
 ):
     """Submit all swipe results at once — bulk update seen status."""
     uid = current_user.id
@@ -196,11 +196,12 @@ async def submit_swipe_results(
         else:
             unseen_count += 1
 
-    # Check if user has enough seen films to duel
+    # Check if user has enough seen films to duel (scoped by media_type)
     seen_unranked_stmt = (
         select(func.count())
         .select_from(UserMovie)
-        .where(UserMovie.user_id == uid, UserMovie.seen.is_(True), UserMovie.battles == 0)
+        .join(Movie, UserMovie.movie_id == Movie.id)
+        .where(UserMovie.user_id == uid, UserMovie.seen.is_(True), UserMovie.battles == 0, Movie.media_type == media_type)
     )
     seen_unranked = (await db.execute(seen_unranked_stmt)).scalar() or 0
 
@@ -208,17 +209,19 @@ async def submit_swipe_results(
     total_seen_stmt = (
         select(func.count())
         .select_from(UserMovie)
-        .where(UserMovie.user_id == uid, UserMovie.seen.is_(True))
+        .join(Movie, UserMovie.movie_id == Movie.id)
+        .where(UserMovie.user_id == uid, UserMovie.seen.is_(True), Movie.media_type == media_type)
     )
     total_seen = (await db.execute(total_seen_stmt)).scalar() or 0
 
     next_action = "duel" if (total_seen >= 10 and seen_unranked >= 3) else "swipe"
 
-    # Check if pool needs expansion
+    # Check if pool needs expansion (scoped by media_type)
     unknown_stmt = (
         select(func.count())
         .select_from(UserMovie)
-        .where(UserMovie.user_id == uid, UserMovie.seen.is_(None))
+        .join(Movie, UserMovie.movie_id == Movie.id)
+        .where(UserMovie.user_id == uid, UserMovie.seen.is_(None), Movie.media_type == media_type)
     )
     unknown_count = (await db.execute(unknown_stmt)).scalar() or 0
 

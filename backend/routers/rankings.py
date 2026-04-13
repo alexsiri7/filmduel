@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db import get_db
 from backend.db_models import User, UserMovie
-from backend.schemas import MovieSchema, RankedMovie, RankingsResponse, StatsResponse
+from backend.schemas import MediaType, MovieSchema, RankedMovie, RankingsResponse, StatsResponse
 from backend.routers.auth import get_current_user
 from backend.services.elo import elo_to_trakt_rating
 from backend.services.rankings import (
@@ -53,7 +53,7 @@ async def get_rankings(
     offset: int = Query(default=0, ge=0),
     genre: Optional[str] = Query(default=None),
     decade: Optional[str] = Query(default=None),
-    media_type: str = Query(default="movie"),
+    media_type: MediaType = Query(default="movie"),
 ):
     """Return the user's ranked movies/shows sorted by ELO descending."""
     user_movies, total = await get_user_rankings(
@@ -71,7 +71,7 @@ async def get_rankings(
 async def get_stats(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    media_type: str = Query(default="movie"),
+    media_type: MediaType = Query(default="movie"),
 ):
     """Return aggregate stats for the user's rankings."""
     stats = await get_user_stats(db, current_user.id, media_type=media_type)
@@ -103,7 +103,7 @@ async def get_stats(
 async def export_csv(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    media_type: str = Query(default="movie"),
+    media_type: MediaType = Query(default="movie"),
 ):
     """Export rankings as a Letterboxd-compatible CSV."""
     csv_content = await export_rankings_csv(db, current_user.id, media_type=media_type)

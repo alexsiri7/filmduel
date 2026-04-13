@@ -1,4 +1,4 @@
-"""Background pool expansion — fetch more movies when the swipe pool runs low."""
+"""Background pool expansion — fetch more movies/shows when the swipe pool runs low."""
 
 from __future__ import annotations
 
@@ -80,7 +80,7 @@ async def _expand_pool_inner(user_id: uuid.UUID, media_type: str = "movie") -> i
             total_added += added
 
         # Source C: Trakt anticipated
-        if total_added < TARGET_ADDED and ("anticipated", None) not in recent_keys:
+        if total_added < TARGET_ADDED and ("anticipated", media_type) not in recent_keys:
             added = await _expand_from_anticipated(
                 db, user_id, user, settings, recent_keys, now, media_type
             )
@@ -218,7 +218,7 @@ async def _expand_from_anticipated(
     now: datetime,
     media_type: str = "movie",
 ) -> int:
-    """Source B: Trakt anticipated movies/shows."""
+    """Source C: Trakt anticipated movies/shows."""
     client = TraktClient(
         client_id=settings.TRAKT_CLIENT_ID,
         access_token=user.trakt_access_token,
@@ -265,7 +265,7 @@ async def _expand_from_popular_pages(
     now: datetime,
     media_type: str = "movie",
 ) -> int:
-    """Source C: Deeper pages of Trakt popular movies/shows."""
+    """Source D: Deeper pages of Trakt popular movies/shows."""
     client = TraktClient(
         client_id=settings.TRAKT_CLIENT_ID,
         access_token=user.trakt_access_token,
