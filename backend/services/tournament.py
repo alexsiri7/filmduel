@@ -237,10 +237,12 @@ async def record_match_winner(
     """
     now = datetime.now(timezone.utc)
 
-    # Mark winner + propagate
+    # Mark winner + propagate (lock row to prevent double-submit)
     match_obj = (await db.execute(
-        select(TournamentMatch).where(TournamentMatch.id == match_id)
+        select(TournamentMatch).where(TournamentMatch.id == match_id).with_for_update()
     )).scalar_one()
+    if match_obj.winner_movie_id is not None:
+        raise ValueError("Match already played")
     match_obj.winner_movie_id = winner_id
     match_obj.played_at = now
 
@@ -271,10 +273,14 @@ async def record_match_winner(
 
     # ELO update + duel record (same session, 2 extra queries)
     um_w = (await db.execute(
-        select(UserMovie).where(UserMovie.user_id == user_id, UserMovie.movie_id == winner_id)
+        select(UserMovie).where(
+            UserMovie.user_id == user_id, UserMovie.movie_id == winner_id
+        ).with_for_update()
     )).scalar_one()
     um_l = (await db.execute(
-        select(UserMovie).where(UserMovie.user_id == user_id, UserMovie.movie_id == loser_id)
+        select(UserMovie).where(
+            UserMovie.user_id == user_id, UserMovie.movie_id == loser_id
+        ).with_for_update()
     )).scalar_one()
 
     w_elo = um_w.elo if um_w.elo is not None else get_initial_elo(um_w.seeded_elo)

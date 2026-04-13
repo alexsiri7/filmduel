@@ -20,6 +20,25 @@ router = APIRouter(prefix="/api/feedback", tags=["feedback"])
 MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024  # 5 MB
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 
+# Magic bytes for allowed image types
+_IMAGE_SIGNATURES = {
+    b'\x89PNG\r\n\x1a\n': "image/png",
+    b'\xff\xd8\xff': "image/jpeg",
+    b'GIF87a': "image/gif",
+    b'GIF89a': "image/gif",
+    b'RIFF': "image/webp",  # WebP starts with RIFF....WEBP
+}
+
+
+def _detect_image_type(data: bytes) -> str | None:
+    """Detect image type from magic bytes. Returns MIME type or None."""
+    for sig, mime in _IMAGE_SIGNATURES.items():
+        if data[:len(sig)] == sig:
+            if mime == "image/webp" and data[8:12] != b'WEBP':
+                continue
+            return mime
+    return None
+
 
 @router.post("", response_model=FeedbackReportResponse, status_code=201)
 async def submit_feedback(
@@ -31,17 +50,17 @@ async def submit_feedback(
 ):
     screenshot_data = None
     if screenshot and screenshot.filename:
-        if screenshot.content_type not in ALLOWED_IMAGE_TYPES:
-            raise HTTPException(
-                status_code=415,
-                detail="Screenshot must be an image (JPEG, PNG, GIF, or WebP)",
-            )
         raw = await screenshot.read(MAX_SCREENSHOT_BYTES + 1)
         if len(raw) > MAX_SCREENSHOT_BYTES:
             raise HTTPException(
                 status_code=413, detail="Screenshot too large (max 5 MB)"
             )
-        mime = screenshot.content_type
+        mime = _detect_image_type(raw)
+        if not mime:
+            raise HTTPException(
+                status_code=415,
+                detail="Screenshot must be a valid image (JPEG, PNG, GIF, or WebP)",
+            )
         screenshot_data = f"data:{mime};base64," + base64.b64encode(raw).decode()
 
     report = FeedbackReport(
