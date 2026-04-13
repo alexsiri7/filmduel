@@ -21,9 +21,9 @@ from backend.schemas import (
     TournamentMatchSchema,
     TournamentSchema,
 )
-from backend.services.curator import curate_tournament
 from backend.services.tournament import (
     create_tournament_bracket,
+    curate_and_select_films,
     generate_seeded_bracket,
     get_filtered_ranked_films,
     record_match_winner,
@@ -184,42 +184,16 @@ async def create_tournament(
     ai_llm_response = None
 
     if body.ai_curated:
-        candidate_pool = user_movies[: body.bracket_size * 3]
-        candidates = [
-            {
-                "id": str(um.movie_id),
-                "title": um.movie.title,
-                "year": um.movie.year,
-                "genres": um.movie.genres or [],
-                "elo": um.elo,
-                "battles": um.battles,
-            }
-            for um in candidate_pool
-        ]
-
-        filter_context = ""
-        if body.filter_type and body.filter_value:
-            filter_context = f"{body.filter_type}: {body.filter_value}"
-
-        llm_result = await curate_tournament(
-            candidates=candidates,
-            bracket_size=body.bracket_size,
-            filter_context=filter_context,
-            theme_hint=body.name.strip() if body.name else "",
-        )
-
-        candidate_ids = {str(um.movie_id) for um in candidate_pool}
-        invalid_ids = set(llm_result["film_ids"]) - candidate_ids
-        if invalid_ids:
-            raise HTTPException(
-                status_code=500,
-                detail=f"AI selected films not in candidate pool: {invalid_ids}",
+        try:
+            seeded_films, llm_result = await curate_and_select_films(
+                user_movies=user_movies,
+                bracket_size=body.bracket_size,
+                filter_type=body.filter_type,
+                filter_value=body.filter_value,
+                theme_hint=body.name.strip() if body.name else "",
             )
-
-        film_id_set = set(llm_result["film_ids"])
-        selected_ums = [um for um in candidate_pool if str(um.movie_id) in film_id_set]
-        selected_ums.sort(key=lambda um: um.elo or 0, reverse=True)
-        seeded_films = selected_ums
+        except ValueError as e:
+            raise HTTPException(status_code=500, detail=str(e))
 
         ai_name = llm_result["name"]
         ai_tagline = llm_result.get("tagline")
@@ -284,43 +258,17 @@ async def regenerate_tournament(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid decade format")
 
-    candidate_pool = user_movies[: tournament.bracket_size * 3]
-    candidates = [
-        {
-            "id": str(um.movie_id),
-            "title": um.movie.title,
-            "year": um.movie.year,
-            "genres": um.movie.genres or [],
-            "elo": um.elo,
-            "battles": um.battles,
-        }
-        for um in candidate_pool
-    ]
-
-    filter_context = ""
-    if tournament.filter_type and tournament.filter_value:
-        filter_context = f"{tournament.filter_type}: {tournament.filter_value}"
-
-    # Use original name as theme hint for regeneration
     original_hint = tournament.llm_response.get("_theme_hint", "") if tournament.llm_response else ""
-    llm_result = await curate_tournament(
-        candidates=candidates,
-        bracket_size=tournament.bracket_size,
-        filter_context=filter_context,
-        theme_hint=original_hint,
-    )
-
-    candidate_ids = {str(um.movie_id) for um in candidate_pool}
-    invalid_ids = set(llm_result["film_ids"]) - candidate_ids
-    if invalid_ids:
-        raise HTTPException(
-            status_code=500,
-            detail=f"AI selected films not in candidate pool: {invalid_ids}",
+    try:
+        selected_ums, llm_result = await curate_and_select_films(
+            user_movies=user_movies,
+            bracket_size=tournament.bracket_size,
+            filter_type=tournament.filter_type,
+            filter_value=tournament.filter_value,
+            theme_hint=original_hint,
         )
-
-    film_id_set = set(llm_result["film_ids"])
-    selected_ums = [um for um in candidate_pool if str(um.movie_id) in film_id_set]
-    selected_ums.sort(key=lambda um: um.elo or 0, reverse=True)
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
     # Delete existing matches
     from sqlalchemy import delete

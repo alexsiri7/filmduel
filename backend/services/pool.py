@@ -19,6 +19,30 @@ logger = logging.getLogger(__name__)
 SYNC_COOLDOWN = timedelta(hours=1)
 
 
+def build_movie_upsert(movie_data: dict, now: datetime):
+    """Build a PostgreSQL INSERT...ON CONFLICT upsert for a Trakt movie dict."""
+    ids = movie_data.get("ids", {})
+    trakt_rating = movie_data.get("rating", 0)
+    community_rating = round(trakt_rating * 10, 1) if trakt_rating else None
+    values = dict(
+        trakt_id=ids["trakt"],
+        imdb_id=ids.get("imdb"),
+        tmdb_id=ids.get("tmdb"),
+        title=movie_data.get("title", "Unknown"),
+        year=movie_data.get("year"),
+        genres=movie_data.get("genres"),
+        overview=movie_data.get("overview"),
+        runtime=movie_data.get("runtime"),
+        community_rating=community_rating,
+        cached_at=now,
+    )
+    stmt = insert(Movie.__table__).values(**values).on_conflict_do_update(
+        index_elements=["trakt_id"],
+        set_={k: v for k, v in values.items() if k != "trakt_id"},
+    )
+    return stmt
+
+
 async def populate_movie_pool(user: User, db: AsyncSession) -> None:
     """Fetch movies from Trakt and populate the user's movie pool.
 
@@ -92,34 +116,7 @@ async def populate_movie_pool(user: User, db: AsyncSession) -> None:
 
     # Upsert movies into the movies table
     for movie_data in movie_pool.values():
-        ids = movie_data.get("ids", {})
-        trakt_rating = movie_data.get("rating", 0)
-        community_rating = round(trakt_rating * 10, 1) if trakt_rating else None
-        stmt = insert(Movie.__table__).values(
-            trakt_id=ids["trakt"],
-            imdb_id=ids.get("imdb"),
-            tmdb_id=ids.get("tmdb"),
-            title=movie_data.get("title", "Unknown"),
-            year=movie_data.get("year"),
-            genres=movie_data.get("genres"),
-            overview=movie_data.get("overview"),
-            runtime=movie_data.get("runtime"),
-            community_rating=community_rating,
-            cached_at=now,
-        ).on_conflict_do_update(
-            index_elements=["trakt_id"],
-            set_={
-                "imdb_id": ids.get("imdb"),
-                "tmdb_id": ids.get("tmdb"),
-                "title": movie_data.get("title", "Unknown"),
-                "year": movie_data.get("year"),
-                "genres": movie_data.get("genres"),
-                "overview": movie_data.get("overview"),
-                "runtime": movie_data.get("runtime"),
-                "community_rating": community_rating,
-                "cached_at": now,
-            },
-        )
+        stmt = build_movie_upsert(movie_data, now)
         await db.execute(stmt)
 
     await db.flush()

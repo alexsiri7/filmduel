@@ -5,7 +5,6 @@ from backend.services.elo import (
     expected_score,
     get_initial_elo,
     k_factor,
-    outcome_to_scores,
     trakt_rating_to_seeded_elo,
     update_elo,
 )
@@ -130,14 +129,4 @@ def test_get_initial_elo_with_seed():
 
 def test_get_initial_elo_without_seed():
     assert get_initial_elo(None) == 1000
-
-
-# --- outcome_to_scores ---
-
-
-def test_outcome_to_scores():
-    assert outcome_to_scores("a_wins") == (1.0, 0.0)
-    assert outcome_to_scores("b_wins") == (0.0, 1.0)
-    assert outcome_to_scores("neither") == (0.0, 0.0)
-
 

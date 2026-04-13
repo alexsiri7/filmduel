@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.config import get_settings
 from backend.db import async_session_factory
 from backend.db_models import Movie, PoolExpansion, User, UserMovie
+from backend.services.pool import build_movie_upsert
 from backend.services.tmdb import backfill_posters, fetch_similar_films
 from backend.services.trakt import TraktClient
 
@@ -314,35 +315,7 @@ async def _upsert_film_from_trakt(
     if not trakt_id:
         return False
 
-    trakt_rating = movie_data.get("rating", 0)
-    community_rating = round(trakt_rating * 10, 1) if trakt_rating else None
-
-    stmt = insert(Movie.__table__).values(
-        trakt_id=trakt_id,
-        imdb_id=ids.get("imdb"),
-        tmdb_id=ids.get("tmdb"),
-        title=movie_data.get("title", "Unknown"),
-        year=movie_data.get("year"),
-        genres=movie_data.get("genres"),
-        overview=movie_data.get("overview"),
-        runtime=movie_data.get("runtime"),
-        community_rating=community_rating,
-        cached_at=now,
-    ).on_conflict_do_update(
-        index_elements=["trakt_id"],
-        set_={
-            "imdb_id": ids.get("imdb"),
-            "tmdb_id": ids.get("tmdb"),
-            "title": movie_data.get("title", "Unknown"),
-            "year": movie_data.get("year"),
-            "genres": movie_data.get("genres"),
-            "overview": movie_data.get("overview"),
-            "runtime": movie_data.get("runtime"),
-            "community_rating": community_rating,
-            "cached_at": now,
-        },
-    )
-    await db.execute(stmt)
+    await db.execute(build_movie_upsert(movie_data, now))
     await db.flush()
 
     # Get movie UUID

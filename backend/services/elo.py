@@ -77,23 +77,3 @@ def get_initial_elo(seeded_elo: int | None) -> int:
     otherwise falls back to the default 1000.
     """
     return seeded_elo if seeded_elo is not None else DEFAULT_ELO
-
-
-def outcome_to_scores(outcome: str) -> tuple[float, float]:
-    """Convert a duel outcome string to (score_a, score_b).
-
-    Outcomes:
-        a_wins  -> (1.0, 0.0)
-        b_wins  -> (0.0, 1.0)
-        a_only  -> (1.0, 0.0)  A seen, B not
-        b_only  -> (0.0, 1.0)  B seen, A not
-        neither -> (0.0, 0.0)  Both unseen, no ELO change
-    """
-    mapping = {
-        "a_wins": (1.0, 0.0),
-        "b_wins": (0.0, 1.0),
-        "a_only": (1.0, 0.0),
-        "b_only": (0.0, 1.0),
-        "neither": (0.0, 0.0),
-    }
-    return mapping[outcome]
