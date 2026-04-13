@@ -129,3 +129,27 @@ export function addToWatchlist(id) {
 export function markSuggestionSeen(id) {
   return request(`/api/suggestions/${id}/seen`, { method: "POST" });
 }
+
+// ── Feedback ────────────────────────────────────────────────────────
+
+export async function submitFeedback(title, description, screenshotDataUrl = null) {
+  const formData = new FormData();
+  formData.append("title", title);
+  formData.append("description", description);
+  if (screenshotDataUrl) {
+    const res = await fetch(screenshotDataUrl);
+    const blob = await res.blob();
+    formData.append("screenshot", blob, "screenshot.jpg");
+  }
+  const response = await fetch("/api/feedback", {
+    method: "POST",
+    credentials: "include",
+    body: formData,
+  });
+  if (response.status === 401) { window.location.href = "/login"; return null; }
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: "Request failed" }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
+  return response.json();
+}

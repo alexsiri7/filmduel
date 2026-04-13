@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { logout } from "../api";
+import ReportIssueModal from "./ReportIssueModal";
 
 const navItems = [
   { path: "/", label: "Current Duel", icon: "swords" },
@@ -11,6 +13,7 @@ const navItems = [
 
 export default function Nav() {
   const location = useLocation();
+  const [showFeedback, setShowFeedback] = useState(false);
 
   const handleLogout = async () => {
     await logout();
@@ -65,14 +68,12 @@ export default function Nav() {
         >
           START DUEL
         </Link>
-        <a
-          href="https://github.com/alexsiri7/filmduel/issues/new?labels=feedback&title=Feedback:+&body=Describe+the+issue+or+suggestion..."
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          onClick={() => setShowFeedback(true)}
           className="block w-full text-center text-[#F5F0E8]/30 hover:text-[#E8A020]/70 font-headline font-bold uppercase text-xs tracking-widest py-2 transition-colors"
         >
           Report Issue
-        </a>
+        </button>
         <button
           onClick={handleLogout}
           className="w-full text-[#F5F0E8]/30 hover:text-[#F5F0E8]/60 font-headline font-bold uppercase text-xs tracking-widest py-2 transition-colors"
@@ -80,6 +81,7 @@ export default function Nav() {
           Sign Out
         </button>
       </div>
+      {showFeedback && <ReportIssueModal onClose={() => setShowFeedback(false)} />}
     </aside>
   );
 }

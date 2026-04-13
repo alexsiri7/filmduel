@@ -56,14 +56,16 @@ describe("Nav", () => {
     expect(swipeLink.className).not.toContain("bg-[#E8A020]");
   });
 
-  it("Report Issue link points to GitHub issues", () => {
+  it("Report Issue is a button (not a link)", () => {
     renderNav();
-    const reportLink = screen.getByText("Report Issue").closest("a");
-    expect(reportLink).toHaveAttribute(
-      "href",
-      expect.stringContaining("github.com/alexsiri7/filmduel/issues")
-    );
-    expect(reportLink).toHaveAttribute("target", "_blank");
+    const reportButton = screen.getByText("Report Issue");
+    expect(reportButton.tagName).toBe("BUTTON");
+  });
+
+  it("clicking Report Issue opens feedback modal", () => {
+    renderNav();
+    fireEvent.click(screen.getByText("Report Issue"));
+    expect(screen.getByPlaceholderText("Brief title of the issue")).toBeInTheDocument();
   });
 
   it("renders Sign Out button", () => {

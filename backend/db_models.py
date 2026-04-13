@@ -287,6 +287,25 @@ class Suggestion(Base):
     movie: Mapped[Movie] = relationship()
 
 
+class FeedbackReport(Base):
+    __tablename__ = "feedback_reports"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE")
+    )
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    screenshot_data: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+    user: Mapped[User] = relationship()
+
+
 class SwipeResult(Base):
     __tablename__ = "swipe_results"
     __table_args__ = (Index("ix_swipe_results_user_id", "user_id"),)
