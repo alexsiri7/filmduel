@@ -35,13 +35,16 @@ SYNC_RATE_WINDOW = 3600  # per hour (seconds)
 
 COOKIE_NAME = "filmduel_session"
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRY_HOURS = 72
+JWT_EXPIRY_HOURS = 4
 
 
 def create_jwt(user_id: str, settings: Settings) -> str:
     """Create a signed JWT for session management."""
     payload = {
         "sub": user_id,
+        "jti": secrets.token_hex(16),
+        "iss": "filmduel",
+        "aud": "filmduel",
         "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRY_HOURS),
         "iat": datetime.now(timezone.utc),
     }
@@ -55,7 +58,12 @@ def get_current_user_id(request: Request) -> str:
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        payload = jwt.decode(
+            token, settings.SECRET_KEY,
+            algorithms=[JWT_ALGORITHM],
+            issuer="filmduel",
+            audience="filmduel",
+        )
         return payload["sub"]
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Session expired")

@@ -7,6 +7,7 @@ import {
   getRankings,
   getMe,
   logout,
+  submitFeedback,
 } from "../api";
 
 describe("api", () => {
@@ -55,7 +56,7 @@ describe("api", () => {
       mockFetchOk({ movie_a: {}, movie_b: {} });
       await fetchPair("discovery");
       expect(fetch).toHaveBeenCalledWith(
-        "/api/movies/pair?mode=discovery",
+        "/api/movies/pair?mode=discovery&media_type=movie",
         expect.objectContaining({
           credentials: "include",
           headers: expect.objectContaining({ "Content-Type": "application/json" }),
@@ -67,7 +68,7 @@ describe("api", () => {
       mockFetchOk({ movie_a: {}, movie_b: {} });
       await fetchPair("discovery", "abc123");
       expect(fetch).toHaveBeenCalledWith(
-        "/api/movies/pair?mode=discovery&last_pair_token=abc123",
+        "/api/movies/pair?mode=discovery&media_type=movie&last_pair_token=abc123",
         expect.any(Object)
       );
     });
@@ -99,7 +100,7 @@ describe("api", () => {
       mockFetchOk([{ id: 1, title: "Test" }]);
       await fetchSwipeCards();
       expect(fetch).toHaveBeenCalledWith(
-        "/api/swipe/cards",
+        "/api/swipe/cards?media_type=movie",
         expect.objectContaining({ credentials: "include" })
       );
     });
@@ -115,7 +116,7 @@ describe("api", () => {
       mockFetchOk({ seen_count: 1, unseen_count: 1 });
       await submitSwipeResults(results);
       expect(fetch).toHaveBeenCalledWith(
-        "/api/swipe/results",
+        "/api/swipe/results?media_type=movie",
         expect.objectContaining({
           method: "POST",
           body: JSON.stringify({ results }),
@@ -148,6 +149,50 @@ describe("api", () => {
         json: () => Promise.reject(new Error("not json")),
       });
       await expect(getRankings()).rejects.toThrow("Request failed");
+    });
+  });
+
+  // submitFeedback
+  describe("submitFeedback", () => {
+    it("posts to /api/feedback", async () => {
+      mockFetchOk({ id: "abc-123", created_at: "2026-04-13T00:00:00Z" }, 201);
+      const result = await submitFeedback("Bug title", "Description here");
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/feedback",
+        expect.objectContaining({ method: "POST", credentials: "include" })
+      );
+      expect(result.id).toBe("abc-123");
+    });
+
+    it("throws on non-ok response", async () => {
+      mockFetchError(500, "Server error");
+      await expect(submitFeedback("t", "d")).rejects.toThrow("Server error");
+    });
+
+    it("redirects to /login on 401", async () => {
+      mockFetch401();
+      await submitFeedback("t", "d");
+      expect(window.location.href).toBe("/login");
+    });
+
+    it("appends screenshot blob when screenshotDataUrl is provided", async () => {
+      const mockBlob = new Blob(["imgdata"], { type: "image/jpeg" });
+      // First call: the data URL fetch → blob
+      fetch
+        .mockResolvedValueOnce({ blob: () => Promise.resolve(mockBlob) })
+        // Second call: /api/feedback POST → success
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 201,
+          json: () => Promise.resolve({ id: "xyz", created_at: "2026-04-13T00:00:00Z" }),
+        });
+
+      await submitFeedback("Title", "Desc", "data:image/jpeg;base64,FAKE");
+
+      const [, secondCallArgs] = fetch.mock.calls;
+      expect(secondCallArgs[0]).toBe("/api/feedback");
+      const body = secondCallArgs[1].body;
+      expect(body.get("screenshot")).toBeInstanceOf(Blob);
     });
   });
 

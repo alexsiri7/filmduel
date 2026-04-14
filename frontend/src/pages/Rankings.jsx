@@ -3,7 +3,7 @@ import { getRankings, fetchStats, syncTrakt } from "../api";
 
 const GENRE_FILTERS = ["All", "Drama", "Horror", "Sci-fi", "Thriller", "Comedy"];
 
-export default function Rankings() {
+export default function Rankings({ mediaType = "movie" }) {
   const [rankings, setRankings] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -17,8 +17,8 @@ export default function Rankings() {
       try {
         const genre = activeFilter === "All" ? null : activeFilter;
         const [rankData, statsData] = await Promise.all([
-          getRankings(50, 0, genre),
-          fetchStats(),
+          getRankings(50, 0, genre, null, mediaType),
+          fetchStats(mediaType),
         ]);
         setRankings(rankData.rankings);
         setTotal(rankData.total);
@@ -30,7 +30,7 @@ export default function Rankings() {
       }
     }
     load();
-  }, [activeFilter]);
+  }, [activeFilter, mediaType]);
 
   if (loading) {
     return (
@@ -61,8 +61,8 @@ export default function Rankings() {
                   // Reload rankings to reflect new data
                   const genre = activeFilter === "All" ? null : activeFilter;
                   const [rankData, statsData] = await Promise.all([
-                    getRankings(50, 0, genre),
-                    fetchStats(),
+                    getRankings(50, 0, genre, null, mediaType),
+                    fetchStats(mediaType),
                   ]);
                   setRankings(rankData.rankings);
                   setTotal(rankData.total);
@@ -228,7 +228,7 @@ export default function Rankings() {
                   <div className="flex gap-3 mt-1">
                     {r.movie.trakt_id && (
                       <a
-                        href={`https://trakt.tv/search/trakt/${r.movie.trakt_id}?id_type=movie`}
+                        href={`https://trakt.tv/search/trakt/${r.movie.trakt_id}?id_type=${r.movie.media_type === "show" ? "show" : "movie"}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-[10px] font-label uppercase tracking-widest text-[#F5F0E8]/30 hover:text-[#E8A020] transition-colors"
@@ -257,7 +257,7 @@ export default function Rankings() {
       {/* Floating Export Button */}
       <div className="fixed bottom-20 md:bottom-12 right-6 md:right-12 flex flex-col items-end gap-4 z-50">
         <a
-          href="/api/rankings/export/csv"
+          href={`/api/rankings/export/csv?media_type=${mediaType}`}
           download
           className="flex items-center gap-3 px-6 md:px-8 py-4 bg-[#E8A020] text-[#0F0E0D] font-headline font-black uppercase tracking-widest text-sm shadow-[0_10px_30px_rgba(232,160,32,0.3)] hover:scale-105 active:scale-95 transition-all"
         >

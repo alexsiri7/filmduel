@@ -19,11 +19,14 @@ from backend.services.trakt import TraktClient
 logger = logging.getLogger(__name__)
 
 
-async def _rate_with_retry(client: TraktClient, trakt_id: int, rating: int) -> None:
+async def _rate_with_retry(client: TraktClient, trakt_id: int, rating: int, media_type: str = "movie") -> None:
     """Submit a single rating to Trakt, retrying once on 5xx."""
     for attempt in range(2):
         try:
-            await client.rate_movie(trakt_id, rating)
+            if media_type == "show":
+                await client.rate_show(trakt_id, rating)
+            else:
+                await client.rate_movie(trakt_id, rating)
             return
         except httpx.HTTPStatusError as exc:
             status = exc.response.status_code
@@ -44,18 +47,20 @@ async def _rate_with_retry(client: TraktClient, trakt_id: int, rating: int) -> N
 async def sync_post_duel(
     access_token: str,
     movie_ratings: list[tuple[int, int]],
+    media_type: str = "movie",
 ) -> None:
-    """Fire-and-forget: sync two specific movie ratings to Trakt after a duel.
+    """Fire-and-forget: sync two specific movie/show ratings to Trakt after a duel.
 
     Args:
         access_token: User's current Trakt access token.
         movie_ratings: List of (trakt_id, elo) pairs to sync.
+        media_type: "movie" or "show".
     """
     settings = get_settings()
     client = TraktClient(client_id=settings.TRAKT_CLIENT_ID, access_token=access_token)
     for trakt_id, elo in movie_ratings:
         rating = elo_to_trakt_rating(elo)
-        await _rate_with_retry(client, trakt_id, rating)
+        await _rate_with_retry(client, trakt_id, rating, media_type)
 
 
 async def sync_ratings_to_trakt(
@@ -91,7 +96,10 @@ async def sync_ratings_to_trakt(
     for um in user_movies:
         trakt_rating = elo_to_trakt_rating(um.elo)
         try:
-            await client.rate_movie(um.movie.trakt_id, trakt_rating)
+            if um.movie.media_type == "show":
+                await client.rate_show(um.movie.trakt_id, trakt_rating)
+            else:
+                await client.rate_movie(um.movie.trakt_id, trakt_rating)
             synced += 1
         except Exception:
             logger.exception(

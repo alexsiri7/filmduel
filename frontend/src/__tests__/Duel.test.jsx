@@ -48,7 +48,7 @@ function setupFetch(overrides = {}) {
         json: () => Promise.resolve(overrides.pair ?? fakePair),
       });
     }
-    if (url === "/api/rankings/stats") {
+    if (url.includes("/api/rankings/stats")) {
       return Promise.resolve({
         ok: true,
         status: 200,

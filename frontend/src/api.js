@@ -19,8 +19,8 @@ async function request(path, options = {}) {
 
 export function getMe() { return request("/api/me"); }
 
-export function fetchPair(mode = "discovery", lastPairToken = null) {
-  const params = new URLSearchParams({ mode });
+export function fetchPair(mode = "discovery", lastPairToken = null, mediaType = "movie") {
+  const params = new URLSearchParams({ mode, media_type: mediaType });
   if (lastPairToken) params.set("last_pair_token", lastPairToken);
   return request(`/api/movies/pair?${params}`);
 }
@@ -32,20 +32,24 @@ export function submitDuel(movieAId, movieBId, outcome, mode = "discovery") {
   });
 }
 
-export function getRankings(limit = 50, offset = 0, genre = null, decade = null) {
-  const params = new URLSearchParams({ limit, offset });
+export function getRankings(limit = 50, offset = 0, genre = null, decade = null, mediaType = "movie") {
+  const params = new URLSearchParams({ limit, offset, media_type: mediaType });
   if (genre) params.set("genre", genre);
   if (decade) params.set("decade", decade);
   return request(`/api/rankings?${params}`);
 }
 
-export function fetchStats() { return request("/api/rankings/stats"); }
+export function fetchStats(mediaType = "movie") {
+  return request(`/api/rankings/stats?media_type=${mediaType}`);
+}
 export const getStats = fetchStats;
 
-export function fetchSwipeCards() { return request("/api/swipe/cards"); }
+export function fetchSwipeCards(mediaType = "movie") {
+  return request(`/api/swipe/cards?media_type=${mediaType}`);
+}
 
-export function submitSwipeResults(results) {
-  return request("/api/swipe/results", {
+export function submitSwipeResults(results, mediaType = "movie") {
+  return request(`/api/swipe/results?media_type=${mediaType}`, {
     method: "POST",
     body: JSON.stringify({ results }),
   });
@@ -61,18 +65,18 @@ export function getTournaments() {
   return request("/api/tournaments");
 }
 
-export function getTournamentGenres() {
-  return request("/api/tournaments/genres");
+export function getTournamentGenres(mediaType = "movie") {
+  return request(`/api/tournaments/genres?media_type=${mediaType}`);
 }
 
-export function getTournamentPoolCount(filterType, filterValue) {
-  const params = new URLSearchParams();
+export function getTournamentPoolCount(filterType, filterValue, mediaType = "movie") {
+  const params = new URLSearchParams({ media_type: mediaType });
   if (filterType) params.set("filter_type", filterType);
   if (filterValue) params.set("filter_value", filterValue);
   return request(`/api/tournaments/pool-count?${params}`);
 }
 
-export function createTournament(name, bracketSize, filterType, filterValue, aiCurated = false) {
+export function createTournament(name, bracketSize, filterType, filterValue, aiCurated = false, mediaType = "movie") {
   return request("/api/tournaments", {
     method: "POST",
     body: JSON.stringify({
@@ -81,6 +85,7 @@ export function createTournament(name, bracketSize, filterType, filterValue, aiC
       filter_type: filterType || null,
       filter_value: filterValue || null,
       ai_curated: aiCurated,
+      media_type: mediaType,
     }),
   });
 }
@@ -110,12 +115,12 @@ export function regenerateTournament(id) {
 
 // ── Suggestions ─────────────────────────────────────────────────────
 
-export function getSuggestions() {
-  return request("/api/suggestions");
+export function getSuggestions(mediaType = "movie") {
+  return request(`/api/suggestions?media_type=${mediaType}`);
 }
 
-export function regenerateSuggestions() {
-  return request("/api/suggestions/regenerate", { method: "POST" });
+export function regenerateSuggestions(mediaType = "movie") {
+  return request(`/api/suggestions/regenerate?media_type=${mediaType}`, { method: "POST" });
 }
 
 export function dismissSuggestion(id) {
@@ -128,4 +133,28 @@ export function addToWatchlist(id) {
 
 export function markSuggestionSeen(id) {
   return request(`/api/suggestions/${id}/seen`, { method: "POST" });
+}
+
+// ── Feedback ────────────────────────────────────────────────────────
+
+export async function submitFeedback(title, description, screenshotDataUrl = null) {
+  const formData = new FormData();
+  formData.append("title", title);
+  formData.append("description", description);
+  if (screenshotDataUrl) {
+    const res = await fetch(screenshotDataUrl);
+    const blob = await res.blob();
+    formData.append("screenshot", blob, "screenshot.jpg");
+  }
+  const response = await fetch("/api/feedback", {
+    method: "POST",
+    credentials: "include",
+    body: formData,
+  });
+  if (response.status === 401) { window.location.href = "/login"; return null; }
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: "Request failed" }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
+  return response.json();
 }

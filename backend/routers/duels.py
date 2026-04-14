@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,24 +29,30 @@ async def _sync_ratings_background(
     new_elo_b: int,
 ) -> None:
     """Fire-and-forget Trakt rating sync after a duel with a winner."""
-    async with async_session_factory() as session:
-        user_stmt = select(User.trakt_access_token).where(User.id == user_id)
-        result = await session.execute(user_stmt)
-        access_token = result.scalar_one_or_none()
-        if not access_token:
-            return
-        movies_stmt = select(Movie.id, Movie.trakt_id).where(
-            Movie.id.in_([movie_a_id, movie_b_id])
-        )
-        result = await session.execute(movies_stmt)
-        trakt_map = {row.id: row.trakt_id for row in result.all()}
-    movie_ratings = []
-    if movie_a_id in trakt_map:
-        movie_ratings.append((trakt_map[movie_a_id], new_elo_a))
-    if movie_b_id in trakt_map:
-        movie_ratings.append((trakt_map[movie_b_id], new_elo_b))
-    if movie_ratings:
-        await sync_post_duel(access_token, movie_ratings)
+    try:
+        async with async_session_factory() as session:
+            user_stmt = select(User.trakt_access_token).where(User.id == user_id)
+            result = await session.execute(user_stmt)
+            access_token = result.scalar_one_or_none()
+            if not access_token:
+                return
+            movies_stmt = select(Movie.id, Movie.trakt_id, Movie.media_type).where(
+                Movie.id.in_([movie_a_id, movie_b_id])
+            )
+            result = await session.execute(movies_stmt)
+            rows = result.all()
+            trakt_map = {row.id: row.trakt_id for row in rows}
+            # Both movies in a duel are the same media_type
+            media_type = rows[0].media_type if rows else "movie"
+        movie_ratings = []
+        if movie_a_id in trakt_map:
+            movie_ratings.append((trakt_map[movie_a_id], new_elo_a))
+        if movie_b_id in trakt_map:
+            movie_ratings.append((trakt_map[movie_b_id], new_elo_b))
+        if movie_ratings:
+            await sync_post_duel(access_token, movie_ratings, media_type)
+    except Exception:
+        logger.exception("Background rating sync failed for user %s", user_id)
 
 
 @router.post("", response_model=DuelResult)
@@ -61,6 +67,23 @@ async def submit_duel(
     movie_b_id = uuid.UUID(body.movie_b_id)
     outcome = body.outcome.value
     mode = body.mode
+
+    # Prevent self-duels
+    if movie_a_id == movie_b_id:
+        raise HTTPException(status_code=400, detail="Cannot duel a movie against itself")
+
+    # For competitive outcomes, verify both movies are in the user's seen pool
+    if outcome in ("a_wins", "b_wins"):
+        from backend.db_models import UserMovie
+        for mid in (movie_a_id, movie_b_id):
+            stmt = select(UserMovie).where(
+                UserMovie.user_id == uid,
+                UserMovie.movie_id == mid,
+                UserMovie.seen.is_(True),
+            )
+            um_check = await db.execute(stmt)
+            if not um_check.scalar_one_or_none():
+                raise HTTPException(status_code=400, detail="Movie not in your seen pool")
 
     result = await process_duel(db, uid, movie_a_id, movie_b_id, outcome, mode)
 

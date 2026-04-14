@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db import get_db
 from backend.db_models import User, UserMovie
-from backend.schemas import MovieWithStateSchema, MoviePairResponse
+from backend.schemas import MediaType, MovieWithStateSchema, MoviePairResponse
 from backend.routers.auth import get_current_user
 from backend.services.pair_selection import select_pair
 
@@ -34,6 +34,7 @@ def _user_movie_to_schema(um: UserMovie) -> MovieWithStateSchema:
         poster_url=movie.poster_url,
         overview=movie.overview,
         genres=movie.genres,
+        media_type=movie.media_type,
         seen=um.seen,
         elo=um.elo,
         battles=um.battles,
@@ -65,6 +66,7 @@ def _decode_pair_token(token: str) -> set[str] | None:
 async def get_movie_pair(
     mode: str = Query(default="discovery"),
     last_pair_token: Optional[str] = Query(default=None),
+    media_type: MediaType = Query(default="movie"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -80,7 +82,7 @@ async def get_movie_pair(
         last_pair_ids = _decode_pair_token(last_pair_token)
 
     try:
-        pair = await select_pair(db, uid, last_pair_ids)
+        pair = await select_pair(db, uid, last_pair_ids, media_type)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

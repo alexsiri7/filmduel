@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from backend.db_models import UserMovie
+from backend.db_models import Movie, UserMovie
 
 # ---------------------------------------------------------------------------
 # Quality band helpers
@@ -72,6 +72,7 @@ async def select_pair(
     db: AsyncSession,
     uid,
     last_pair_ids: set[str] | None,
+    media_type: str = "movie",
 ) -> tuple[UserMovie, UserMovie]:
     """Select a duel pair from seen films with quality band matching.
 
@@ -83,13 +84,15 @@ async def select_pair(
     Raises ValueError if fewer than 2 seen films exist.
     """
 
-    # All seen films
+    # All seen films of the requested media_type
     seen_stmt = (
         select(UserMovie)
         .options(joinedload(UserMovie.movie))
+        .join(Movie, UserMovie.movie_id == Movie.id)
         .where(
             UserMovie.user_id == uid,
             UserMovie.seen.is_(True),
+            Movie.media_type == media_type,
         )
     )
     seen_result = await db.execute(seen_stmt)

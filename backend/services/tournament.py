@@ -110,6 +110,7 @@ async def get_filtered_ranked_films(
     user_id: uuid.UUID,
     filter_type: Optional[str] = None,
     filter_value: Optional[str] = None,
+    media_type: str = "movie",
 ) -> list[UserMovie]:
     """Query ranked films with optional genre/decade filtering.
 
@@ -118,14 +119,18 @@ async def get_filtered_ranked_films(
     """
     from sqlalchemy.orm import joinedload
 
+    from backend.db_models import Movie
+
     stmt = (
         select(UserMovie)
         .options(joinedload(UserMovie.movie))
+        .join(Movie, UserMovie.movie_id == Movie.id)
         .where(
             UserMovie.user_id == user_id,
             UserMovie.seen.is_(True),
             UserMovie.battles >= 1,
             UserMovie.elo.isnot(None),
+            Movie.media_type == media_type,
         )
     )
     result = await db.execute(stmt)
@@ -289,10 +294,12 @@ async def record_match_winner(
     """
     now = datetime.now(timezone.utc)
 
-    # Mark winner + propagate
+    # Mark winner + propagate (lock row to prevent double-submit)
     match_obj = (await db.execute(
-        select(TournamentMatch).where(TournamentMatch.id == match_id)
+        select(TournamentMatch).where(TournamentMatch.id == match_id).with_for_update()
     )).scalar_one()
+    if match_obj.winner_movie_id is not None:
+        raise ValueError("Match already played")
     match_obj.winner_movie_id = winner_id
     match_obj.played_at = now
 
@@ -323,10 +330,14 @@ async def record_match_winner(
 
     # ELO update + duel record (same session, 2 extra queries)
     um_w = (await db.execute(
-        select(UserMovie).where(UserMovie.user_id == user_id, UserMovie.movie_id == winner_id)
+        select(UserMovie).where(
+            UserMovie.user_id == user_id, UserMovie.movie_id == winner_id
+        ).with_for_update()
     )).scalar_one()
     um_l = (await db.execute(
-        select(UserMovie).where(UserMovie.user_id == user_id, UserMovie.movie_id == loser_id)
+        select(UserMovie).where(
+            UserMovie.user_id == user_id, UserMovie.movie_id == loser_id
+        ).with_for_update()
     )).scalar_one()
 
     w_elo = um_w.elo if um_w.elo is not None else get_initial_elo(um_w.seeded_elo)

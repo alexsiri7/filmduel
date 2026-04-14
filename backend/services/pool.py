@@ -19,13 +19,14 @@ logger = logging.getLogger(__name__)
 SYNC_COOLDOWN = timedelta(hours=1)
 
 
-def build_movie_upsert(movie_data: dict, now: datetime):
+def build_movie_upsert(movie_data: dict, now: datetime, media_type: str = "movie"):
     """Build a PostgreSQL INSERT...ON CONFLICT upsert for a Trakt movie dict."""
     ids = movie_data.get("ids", {})
     trakt_rating = movie_data.get("rating", 0)
     community_rating = round(trakt_rating * 10, 1) if trakt_rating else None
     values = dict(
         trakt_id=ids["trakt"],
+        media_type=media_type,
         imdb_id=ids.get("imdb"),
         tmdb_id=ids.get("tmdb"),
         title=movie_data.get("title", "Unknown"),
@@ -36,15 +37,16 @@ def build_movie_upsert(movie_data: dict, now: datetime):
         community_rating=community_rating,
         cached_at=now,
     )
+    update_set = {k: v for k, v in values.items() if k not in ("trakt_id", "media_type")}
     stmt = insert(Movie.__table__).values(**values).on_conflict_do_update(
-        index_elements=["trakt_id"],
-        set_={k: v for k, v in values.items() if k != "trakt_id"},
+        index_elements=["trakt_id", "media_type"],
+        set_=update_set,
     )
     return stmt
 
 
 async def populate_movie_pool(user: User, db: AsyncSession) -> None:
-    """Fetch movies from Trakt and populate the user's movie pool.
+    """Fetch movies and shows from Trakt and populate the user's pool.
 
     Called on login/session start. Throttled to once per hour.
     """
@@ -62,7 +64,7 @@ async def populate_movie_pool(user: User, db: AsyncSession) -> None:
         access_token=user.trakt_access_token,
     )
 
-    # Fetch all sources (serial to respect Trakt rate limits, graceful on failure)
+    # ── Movies ──────────────────────────────────────────────────────
     try:
         popular = await client.get_popular(limit=100)
     except Exception:
@@ -89,13 +91,10 @@ async def populate_movie_pool(user: User, db: AsyncSession) -> None:
         logger.exception("Failed to fetch ratings for %s", user.trakt_user_id)
         ratings_list = []
 
-    # Build ratings lookup: trakt_id -> rating (1-10)
     ratings_by_trakt_id: dict[int, int] = {
         r["trakt_id"]: r["rating"] for r in ratings_list
     }
 
-    # Collect all unique movies, tracking their source
-    # movie_data keyed by trakt_id -> (movie_dict, seen)
     movie_pool: dict[int, dict] = {}
     seen_trakt_ids: set[int] = set()
 
@@ -110,27 +109,98 @@ async def populate_movie_pool(user: User, db: AsyncSession) -> None:
         if trakt_id not in movie_pool:
             movie_pool[trakt_id] = movie
 
-    if not movie_pool:
-        logger.info("No movies fetched for %s", user.trakt_username)
+    await _upsert_pool(db, user, movie_pool, seen_trakt_ids, ratings_by_trakt_id, "movie", now)
+
+    # ── TV Shows ────────────────────────────────────────────────────
+    try:
+        popular_shows = await client.get_popular_shows(limit=100)
+    except Exception:
+        logger.exception("Failed to fetch popular shows")
+        popular_shows = []
+    try:
+        trending_shows = await client.get_trending_shows(limit=100)
+    except Exception:
+        logger.exception("Failed to fetch trending shows")
+        trending_shows = []
+    try:
+        recommended_shows = await client.get_recommendations_shows(limit=100)
+    except Exception:
+        logger.exception("Failed to fetch show recommendations")
+        recommended_shows = []
+    try:
+        watched_shows = await client.get_user_watched_shows(user.trakt_user_id)
+    except Exception:
+        logger.exception("Failed to fetch watched shows for %s", user.trakt_user_id)
+        watched_shows = []
+    try:
+        show_ratings_list = await client.get_user_ratings_shows(user.trakt_user_id)
+    except Exception:
+        logger.exception("Failed to fetch show ratings for %s", user.trakt_user_id)
+        show_ratings_list = []
+
+    show_ratings_by_trakt_id: dict[int, int] = {
+        r["trakt_id"]: r["rating"] for r in show_ratings_list
+    }
+
+    show_pool: dict[int, dict] = {}
+    seen_show_trakt_ids: set[int] = set()
+
+    for show in popular_shows + trending_shows + recommended_shows:
+        trakt_id = show["ids"]["trakt"]
+        if trakt_id not in show_pool:
+            show_pool[trakt_id] = show
+
+    for show in watched_shows:
+        trakt_id = show["ids"]["trakt"]
+        seen_show_trakt_ids.add(trakt_id)
+        if trakt_id not in show_pool:
+            show_pool[trakt_id] = show
+
+    await _upsert_pool(db, user, show_pool, seen_show_trakt_ids, show_ratings_by_trakt_id, "show", now)
+
+    # Update last_seen_at
+    user.last_seen_at = now
+    await db.flush()
+
+    logger.info(
+        "Pool sync complete for %s: %d movies + %d shows imported",
+        user.trakt_username,
+        len(movie_pool),
+        len(show_pool),
+    )
+
+
+async def _upsert_pool(
+    db: AsyncSession,
+    user: User,
+    pool: dict[int, dict],
+    seen_trakt_ids: set[int],
+    ratings_by_trakt_id: dict[int, int],
+    media_type: str,
+    now: datetime,
+) -> None:
+    """Upsert a pool of movies or shows into the DB."""
+    if not pool:
         return
 
-    # Upsert movies into the movies table
-    for movie_data in movie_pool.values():
-        stmt = build_movie_upsert(movie_data, now)
+    # Upsert movies/shows into the movies table
+    for item_data in pool.values():
+        stmt = build_movie_upsert(item_data, now, media_type)
         await db.execute(stmt)
 
     await db.flush()
 
-    # Fetch all movie rows we just upserted to get their UUIDs
-    trakt_ids = list(movie_pool.keys())
+    trakt_ids = list(pool.keys())
     result = await db.execute(
-        select(Movie.id, Movie.trakt_id).where(Movie.trakt_id.in_(trakt_ids))
+        select(Movie.id, Movie.trakt_id).where(
+            Movie.trakt_id.in_(trakt_ids),
+            Movie.media_type == media_type,
+        )
     )
-    movie_uuid_map: dict[int, str] = {row.trakt_id: row.id for row in result.all()}
+    uuid_map: dict[int, str] = {row.trakt_id: row.id for row in result.all()}
 
-    # Upsert user_movies
-    for trakt_id, movie_data in movie_pool.items():
-        movie_uuid = movie_uuid_map.get(trakt_id)
+    for trakt_id, item_data in pool.items():
+        movie_uuid = uuid_map.get(trakt_id)
         if not movie_uuid:
             continue
 
@@ -150,9 +220,7 @@ async def populate_movie_pool(user: User, db: AsyncSession) -> None:
         ).on_conflict_do_update(
             index_elements=["user_id", "movie_id"],
             set_={
-                # Update seen if we now know they watched it
                 "seen": seen if seen is True else UserMovie.__table__.c.seen,
-                # Update seeded_elo and rating if we have new data
                 "seeded_elo": seeded_elo
                 if seeded_elo is not None
                 else UserMovie.__table__.c.seeded_elo,
@@ -164,12 +232,4 @@ async def populate_movie_pool(user: User, db: AsyncSession) -> None:
         )
         await db.execute(stmt)
 
-    # Update last_seen_at
-    user.last_seen_at = now
     await db.flush()
-
-    logger.info(
-        "Pool sync complete for %s: %d movies imported",
-        user.trakt_username,
-        len(movie_pool),
-    )

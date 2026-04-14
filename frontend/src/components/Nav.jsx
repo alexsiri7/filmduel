@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { logout } from "../api";
+import ReportIssueModal from "./ReportIssueModal";
 
 const navItems = [
   { path: "/", label: "Current Duel", icon: "swords" },
@@ -9,8 +11,9 @@ const navItems = [
   { path: "/tournaments", label: "Tournaments", icon: "bracket" },
 ];
 
-export default function Nav() {
+export default function Nav({ mediaType, setMediaType }) {
   const location = useLocation();
+  const [showFeedback, setShowFeedback] = useState(false);
 
   const handleLogout = async () => {
     await logout();
@@ -32,6 +35,30 @@ export default function Nav() {
             The Noir Projectionist
           </p>
         </div>
+      </div>
+
+      {/* Media type toggle */}
+      <div className="flex bg-[#0F0E0D] rounded-sm p-1 gap-1 mx-2">
+        <button
+          onClick={() => setMediaType("movie")}
+          className={`flex-1 py-2 text-xs font-headline font-bold uppercase tracking-widest transition-colors rounded-sm ${
+            mediaType === "movie"
+              ? "bg-[#E8A020] text-[#0F0E0D]"
+              : "text-[#F5F0E8]/40 hover:text-[#F5F0E8]/60"
+          }`}
+        >
+          Movies
+        </button>
+        <button
+          onClick={() => setMediaType("show")}
+          className={`flex-1 py-2 text-xs font-headline font-bold uppercase tracking-widest transition-colors rounded-sm ${
+            mediaType === "show"
+              ? "bg-[#E8A020] text-[#0F0E0D]"
+              : "text-[#F5F0E8]/40 hover:text-[#F5F0E8]/60"
+          }`}
+        >
+          Shows
+        </button>
       </div>
 
       {/* Nav items */}
@@ -65,14 +92,12 @@ export default function Nav() {
         >
           START DUEL
         </Link>
-        <a
-          href="https://github.com/alexsiri7/filmduel/issues/new?labels=feedback&title=Feedback:+&body=Describe+the+issue+or+suggestion..."
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          onClick={() => setShowFeedback(true)}
           className="block w-full text-center text-[#F5F0E8]/30 hover:text-[#E8A020]/70 font-headline font-bold uppercase text-xs tracking-widest py-2 transition-colors"
         >
           Report Issue
-        </a>
+        </button>
         <button
           onClick={handleLogout}
           className="w-full text-[#F5F0E8]/30 hover:text-[#F5F0E8]/60 font-headline font-bold uppercase text-xs tracking-widest py-2 transition-colors"
@@ -80,6 +105,7 @@ export default function Nav() {
           Sign Out
         </button>
       </div>
+      {showFeedback && <ReportIssueModal onClose={() => setShowFeedback(false)} />}
     </aside>
   );
 }
