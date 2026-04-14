@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from backend.routers.movies import (
+from backend.services.pair_selection import (
     BAND_ORDER,
     _band_filtered_candidates,
     _film_band,

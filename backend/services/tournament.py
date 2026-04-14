@@ -12,9 +12,61 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db_models import Duel, Tournament, TournamentMatch, UserMovie
+from backend.services.curator import curate_tournament
 from backend.services.elo import get_initial_elo, update_elo
 
 logger = logging.getLogger(__name__)
+
+
+# ── AI curation orchestration ────────────────────────────────────────
+
+
+async def curate_and_select_films(
+    user_movies: list[UserMovie],
+    bracket_size: int,
+    filter_type: Optional[str],
+    filter_value: Optional[str],
+    theme_hint: str,
+) -> tuple[list[UserMovie], dict]:
+    """Build candidates, call LLM curation, validate and return selected films.
+
+    Returns (selected_user_movies_sorted_by_elo, llm_result_dict).
+    Raises ValueError if LLM returns IDs not in the candidate pool.
+    """
+    candidate_pool = user_movies[:bracket_size * 3]
+    candidates = [
+        {
+            "id": str(um.movie_id),
+            "title": um.movie.title,
+            "year": um.movie.year,
+            "genres": um.movie.genres or [],
+            "elo": um.elo,
+            "battles": um.battles,
+        }
+        for um in candidate_pool
+    ]
+
+    filter_context = ""
+    if filter_type and filter_value:
+        filter_context = f"{filter_type}: {filter_value}"
+
+    llm_result = await curate_tournament(
+        candidates=candidates,
+        bracket_size=bracket_size,
+        filter_context=filter_context,
+        theme_hint=theme_hint,
+    )
+
+    candidate_ids = {str(um.movie_id) for um in candidate_pool}
+    invalid_ids = set(llm_result["film_ids"]) - candidate_ids
+    if invalid_ids:
+        raise ValueError(f"AI selected films not in candidate pool: {invalid_ids}")
+
+    film_id_set = set(llm_result["film_ids"])
+    selected_ums = [um for um in candidate_pool if str(um.movie_id) in film_id_set]
+    selected_ums.sort(key=lambda um: um.elo or 0, reverse=True)
+
+    return selected_ums, llm_result
 
 
 # ── Pure helpers ──────────────────────────────────────────────────────

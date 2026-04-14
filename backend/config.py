@@ -33,10 +33,6 @@ class Settings(BaseSettings):
     # Sentry
     SENTRY_DSN: str = ""
 
-    # ELO defaults
-    ELO_K_FACTOR: int = 32
-    ELO_DEFAULT_RATING: int = 1000
-
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

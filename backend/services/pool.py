@@ -19,6 +19,32 @@ logger = logging.getLogger(__name__)
 SYNC_COOLDOWN = timedelta(hours=1)
 
 
+def build_movie_upsert(movie_data: dict, now: datetime, media_type: str = "movie"):
+    """Build a PostgreSQL INSERT...ON CONFLICT upsert for a Trakt movie dict."""
+    ids = movie_data.get("ids", {})
+    trakt_rating = movie_data.get("rating", 0)
+    community_rating = round(trakt_rating * 10, 1) if trakt_rating else None
+    values = dict(
+        trakt_id=ids["trakt"],
+        media_type=media_type,
+        imdb_id=ids.get("imdb"),
+        tmdb_id=ids.get("tmdb"),
+        title=movie_data.get("title", "Unknown"),
+        year=movie_data.get("year"),
+        genres=movie_data.get("genres"),
+        overview=movie_data.get("overview"),
+        runtime=movie_data.get("runtime"),
+        community_rating=community_rating,
+        cached_at=now,
+    )
+    update_set = {k: v for k, v in values.items() if k not in ("trakt_id", "media_type")}
+    stmt = insert(Movie.__table__).values(**values).on_conflict_do_update(
+        index_elements=["trakt_id", "media_type"],
+        set_=update_set,
+    )
+    return stmt
+
+
 async def populate_movie_pool(user: User, db: AsyncSession) -> None:
     """Fetch movies and shows from Trakt and populate the user's pool.
 
@@ -157,36 +183,9 @@ async def _upsert_pool(
     if not pool:
         return
 
+    # Upsert movies/shows into the movies table
     for item_data in pool.values():
-        ids = item_data.get("ids", {})
-        trakt_rating = item_data.get("rating", 0)
-        community_rating = round(trakt_rating * 10, 1) if trakt_rating else None
-        stmt = insert(Movie.__table__).values(
-            trakt_id=ids["trakt"],
-            media_type=media_type,
-            imdb_id=ids.get("imdb"),
-            tmdb_id=ids.get("tmdb"),
-            title=item_data.get("title", "Unknown"),
-            year=item_data.get("year"),
-            genres=item_data.get("genres"),
-            overview=item_data.get("overview"),
-            runtime=item_data.get("runtime"),
-            community_rating=community_rating,
-            cached_at=now,
-        ).on_conflict_do_update(
-            index_elements=["trakt_id", "media_type"],
-            set_={
-                "imdb_id": ids.get("imdb"),
-                "tmdb_id": ids.get("tmdb"),
-                "title": item_data.get("title", "Unknown"),
-                "year": item_data.get("year"),
-                "genres": item_data.get("genres"),
-                "overview": item_data.get("overview"),
-                "runtime": item_data.get("runtime"),
-                "community_rating": community_rating,
-                "cached_at": now,
-            },
-        )
+        stmt = build_movie_upsert(item_data, now, media_type)
         await db.execute(stmt)
 
     await db.flush()
