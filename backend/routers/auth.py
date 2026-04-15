@@ -64,7 +64,10 @@ def get_current_user_id(request: Request) -> str:
             issuer="filmduel",
             audience="filmduel",
         )
-        return payload["sub"]
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid session — missing subject")
+        return user_id
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Session expired")
     except jwt.InvalidTokenError:

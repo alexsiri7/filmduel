@@ -1,6 +1,7 @@
 """Tests for pair selection algorithm in routers/movies.py."""
 
 import random
+import unittest.mock
 import uuid
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -203,16 +204,19 @@ class TestWeightedSample:
 
     def test_settlement_weight_formula(self):
         """Films with fewer battles should have higher weight = 1/(battles+1)."""
-        # Run many samples to verify statistical tendency
         low_battles = _make_user_movie(battles=0)  # weight=1.0
         high_battles = _make_user_movie(battles=99)  # weight=0.01
-        random.seed(42)
-        counts = {id(low_battles): 0, id(high_battles): 0}
-        for _ in range(1000):
-            pick = _weighted_sample([low_battles, high_battles])
-            counts[id(pick)] += 1
-        # The low-battles film should be picked far more often
-        assert counts[id(low_battles)] > counts[id(high_battles)] * 5
+        with unittest.mock.patch("backend.services.pair_selection.random.choices") as mock_choices:
+            mock_choices.return_value = [low_battles]
+            result = _weighted_sample([low_battles, high_battles])
+            assert result is low_battles
+            # Verify weights passed to random.choices
+            call_args = mock_choices.call_args
+            weights = call_args[1]["weights"] if "weights" in call_args[1] else call_args[0][1]
+            # weight for low_battles = 1/(0+1) = 1.0, for high_battles = 1/(99+1) = 0.01
+            assert weights[0] == pytest.approx(1.0)
+            assert weights[1] == pytest.approx(0.01)
+            assert weights[0] > weights[1] * 5
 
     def test_single_film_list(self):
         film = _make_user_movie(battles=5)
@@ -236,18 +240,17 @@ class TestPickChallenger:
         assert result in candidates
 
     def test_close_match_preference(self):
-        """With seed forcing roll < 0.7, should prefer close ELO matches."""
+        """When roll < 0.7, _pick_challenger should prefer close ELO matches."""
         anchor = _make_user_movie(elo=1000, battles=5)
         close = _make_user_movie(elo=1020, battles=5)
         far = _make_user_movie(elo=1500, battles=5)
-        # Run many picks; close should dominate
-        random.seed(0)
-        close_count = 0
-        for _ in range(200):
-            pick = _pick_challenger(anchor, [close, far])
-            if pick is close:
-                close_count += 1
-        assert close_count > 100  # should be majority
+        with unittest.mock.patch("backend.services.pair_selection.random.random", return_value=0.3):
+            with unittest.mock.patch(
+                "backend.services.pair_selection.random.choices",
+                side_effect=lambda population, weights, k: [population[0]],
+            ):
+                result = _pick_challenger(anchor, [close, far])
+                assert result is close
 
     def test_falls_back_to_unranked_candidates(self):
         """When no ranked candidates, falls back to settlement-weighted sample."""

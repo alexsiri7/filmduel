@@ -149,7 +149,7 @@ class TestGetCurrentUserId:
         assert exc_info.value.status_code == 401
 
     def test_token_missing_sub_raises_401(self, monkeypatch):
-        """Token without 'sub' claim should raise 401 (KeyError caught as InvalidTokenError)."""
+        """Token without 'sub' claim should raise 401."""
         monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
         payload = {
             "iss": "filmduel",
@@ -160,8 +160,7 @@ class TestGetCurrentUserId:
         }
         token = pyjwt.encode(payload, SETTINGS.SECRET_KEY, algorithm=JWT_ALGORITHM)
         request = _make_request({COOKIE_NAME: token})
-        # The code does payload["sub"] which will KeyError — but since
-        # that's not caught as jwt error, it will bubble up.
-        # Let's verify the behavior:
-        with pytest.raises((HTTPException, KeyError)):
+        with pytest.raises(HTTPException) as exc_info:
             get_current_user_id(request)
+        assert exc_info.value.status_code == 401
+        assert "missing subject" in exc_info.value.detail.lower()

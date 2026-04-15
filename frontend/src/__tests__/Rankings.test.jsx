@@ -143,13 +143,20 @@ describe("Rankings", () => {
   });
 
   it("shows loading state initially", () => {
-    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    const controller = new AbortController();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise((_, reject) => {
+        controller.signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+      }))
+    );
     render(
       <MemoryRouter>
         <Rankings />
       </MemoryRouter>
     );
     expect(screen.getByText("Loading rankings...")).toBeInTheDocument();
+    controller.abort();
   });
 
   it("renders genre filter pills", async () => {
