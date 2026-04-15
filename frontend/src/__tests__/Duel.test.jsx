@@ -72,9 +72,19 @@ describe("Duel", () => {
     vi.stubGlobal("fetch", setupFetch());
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("shows loading skeleton initially", () => {
-    // fetch never resolves so we see loading
-    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    // Use AbortController so the pending fetch can be cleaned up
+    const controller = new AbortController();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise((_, reject) => {
+        controller.signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+      }))
+    );
     render(
       <MemoryRouter>
         <Duel />
@@ -83,6 +93,7 @@ describe("Duel", () => {
     // Skeleton has animate-pulse divs
     const pulseElements = document.querySelectorAll(".animate-pulse");
     expect(pulseElements.length).toBeGreaterThan(0);
+    controller.abort();
   });
 
   it("renders two movie cards when pair loads", async () => {
@@ -195,6 +206,7 @@ describe("Duel", () => {
   });
 
   it("shows swipe interstitial when next_action is swipe", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     const mockFetch = setupFetch({
       duelResult: { movie_a_elo_delta: 12, movie_b_elo_delta: -12, next_action: "swipe" },
     });
@@ -216,14 +228,13 @@ describe("Duel", () => {
     );
     fireEvent.click(alienButton);
 
-    // The swipe prompt appears after a 900ms setTimeout
-    await waitFor(
-      () => {
-        expect(screen.getByText("Time to discover more films")).toBeInTheDocument();
-        expect(screen.getByText("Swipe 10 Films")).toBeInTheDocument();
-      },
-      { timeout: 3000 }
-    );
+    // Advance past the 600ms winner flash timeout
+    await vi.advanceTimersByTimeAsync(700);
+
+    await waitFor(() => {
+      expect(screen.getByText("Time to discover more films")).toBeInTheDocument();
+      expect(screen.getByText("Swipe 10 Films")).toBeInTheDocument();
+    });
   });
 
   it("prefetches next pair on load", async () => {

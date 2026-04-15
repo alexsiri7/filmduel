@@ -74,10 +74,7 @@ describe("Nav", () => {
   });
 
   it("Sign Out button calls logout API", async () => {
-    // Mock window.location for redirect
-    const originalLocation = window.location;
-    delete window.location;
-    window.location = { href: "" };
+    vi.stubGlobal("location", { href: "" });
 
     renderNav();
     fireEvent.click(screen.getByText("Sign Out"));
@@ -89,7 +86,7 @@ describe("Nav", () => {
       );
     });
 
-    window.location = originalLocation;
+    vi.unstubAllGlobals();
   });
 
   it("renders START DUEL button", () => {

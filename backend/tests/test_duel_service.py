@@ -32,6 +32,39 @@ def _make_user_movie(
     return um
 
 
+def _make_fake_execute(um_a: MagicMock, um_b: MagicMock, seen_unranked: int = 5, total_seen: int = 20):
+    """Build a fake db.execute that dispatches by SQL statement content, not call order."""
+    returned_a = False
+    returned_b = False
+
+    async def fake_execute(stmt):
+        nonlocal returned_a, returned_b
+        result = MagicMock()
+        stmt_str = str(stmt)
+        # Count queries (contain 'count')
+        if "count" in stmt_str.lower():
+            # Distinguish seen_unranked (battles == 0) from total_seen
+            if "battles" in stmt_str.lower() or (not returned_a and "count" in stmt_str.lower()):
+                result.scalar_one.return_value = seen_unranked
+            else:
+                result.scalar_one.return_value = total_seen
+            return result
+        # UserMovie select queries — return um_a first, then um_b
+        if not returned_a:
+            returned_a = True
+            result.scalar_one_or_none.return_value = um_a
+            return result
+        if not returned_b:
+            returned_b = True
+            result.scalar_one_or_none.return_value = um_b
+            return result
+        # Fallback for any additional queries
+        result.scalar_one.return_value = seen_unranked
+        return result
+
+    return fake_execute
+
+
 # ---------------------------------------------------------------------------
 # get_or_create_user_movie
 # ---------------------------------------------------------------------------
@@ -90,26 +123,8 @@ async def test_process_duel_a_wins_elo():
     um_a = _make_user_movie(uid, mid_a, elo=1000, battles=5)
     um_b = _make_user_movie(uid, mid_b, elo=1000, battles=5)
 
-    call_count = 0
-
-    async def fake_execute(stmt):
-        nonlocal call_count
-        call_count += 1
-        result = MagicMock()
-        # First two calls: get_or_create for um_a and um_b
-        if call_count == 1:
-            result.scalar_one_or_none.return_value = um_a
-            return result
-        elif call_count == 2:
-            result.scalar_one_or_none.return_value = um_b
-            return result
-        else:
-            # seen_unranked count query
-            result.scalar_one.return_value = 5
-            return result
-
     db = AsyncMock()
-    db.execute = fake_execute
+    db.execute = _make_fake_execute(um_a, um_b)
 
     result = await process_duel(db, uid, mid_a, mid_b, "a_wins", "discovery")
 
@@ -136,24 +151,8 @@ async def test_process_duel_b_wins_elo():
     um_a = _make_user_movie(uid, mid_a, elo=1000, battles=5)
     um_b = _make_user_movie(uid, mid_b, elo=1000, battles=5)
 
-    call_count = 0
-
-    async def fake_execute(stmt):
-        nonlocal call_count
-        call_count += 1
-        result = MagicMock()
-        if call_count == 1:
-            result.scalar_one_or_none.return_value = um_a
-            return result
-        elif call_count == 2:
-            result.scalar_one_or_none.return_value = um_b
-            return result
-        else:
-            result.scalar_one.return_value = 5
-            return result
-
     db = AsyncMock()
-    db.execute = fake_execute
+    db.execute = _make_fake_execute(um_a, um_b)
 
     result = await process_duel(db, uid, mid_a, mid_b, "b_wins", "discovery")
 
@@ -178,24 +177,8 @@ async def test_process_duel_creates_duel_record():
     um_a = _make_user_movie(uid, mid_a, elo=1000, battles=3)
     um_b = _make_user_movie(uid, mid_b, elo=1000, battles=3)
 
-    call_count = 0
-
-    async def fake_execute(stmt):
-        nonlocal call_count
-        call_count += 1
-        result = MagicMock()
-        if call_count == 1:
-            result.scalar_one_or_none.return_value = um_a
-            return result
-        elif call_count == 2:
-            result.scalar_one_or_none.return_value = um_b
-            return result
-        else:
-            result.scalar_one.return_value = 5
-            return result
-
     db = AsyncMock()
-    db.execute = fake_execute
+    db.execute = _make_fake_execute(um_a, um_b)
 
     await process_duel(db, uid, mid_a, mid_b, "a_wins", "ranked")
 
@@ -232,25 +215,8 @@ async def test_next_action_swipe_when_few_seen_unranked():
     um_a = _make_user_movie(uid, mid_a, elo=1000, battles=2)
     um_b = _make_user_movie(uid, mid_b, elo=1000, battles=2)
 
-    call_count = 0
-
-    async def fake_execute(stmt):
-        nonlocal call_count
-        call_count += 1
-        result = MagicMock()
-        if call_count == 1:
-            result.scalar_one_or_none.return_value = um_a
-            return result
-        elif call_count == 2:
-            result.scalar_one_or_none.return_value = um_b
-            return result
-        else:
-            # Return seen_unranked count of 2 (< 3)
-            result.scalar_one.return_value = 2
-            return result
-
     db = AsyncMock()
-    db.execute = fake_execute
+    db.execute = _make_fake_execute(um_a, um_b, seen_unranked=2, total_seen=20)
 
     result = await process_duel(db, uid, mid_a, mid_b, "a_wins", "discovery")
     assert result.api_result.next_action == "swipe"
@@ -266,24 +232,8 @@ async def test_next_action_duel_when_enough_seen_unranked():
     um_a = _make_user_movie(uid, mid_a, elo=1000, battles=2)
     um_b = _make_user_movie(uid, mid_b, elo=1000, battles=2)
 
-    call_count = 0
-
-    async def fake_execute(stmt):
-        nonlocal call_count
-        call_count += 1
-        result = MagicMock()
-        if call_count == 1:
-            result.scalar_one_or_none.return_value = um_a
-            return result
-        elif call_count == 2:
-            result.scalar_one_or_none.return_value = um_b
-            return result
-        else:
-            result.scalar_one.return_value = 10
-            return result
-
     db = AsyncMock()
-    db.execute = fake_execute
+    db.execute = _make_fake_execute(um_a, um_b, seen_unranked=10, total_seen=20)
 
     result = await process_duel(db, uid, mid_a, mid_b, "a_wins", "discovery")
     assert result.api_result.next_action == "duel"
@@ -304,24 +254,8 @@ async def test_process_duel_uses_seeded_elo_when_no_elo():
     um_a = _make_user_movie(uid, mid_a, elo=None, seeded_elo=1200, battles=0)
     um_b = _make_user_movie(uid, mid_b, elo=None, seeded_elo=800, battles=0)
 
-    call_count = 0
-
-    async def fake_execute(stmt):
-        nonlocal call_count
-        call_count += 1
-        result = MagicMock()
-        if call_count == 1:
-            result.scalar_one_or_none.return_value = um_a
-            return result
-        elif call_count == 2:
-            result.scalar_one_or_none.return_value = um_b
-            return result
-        else:
-            result.scalar_one.return_value = 5
-            return result
-
     db = AsyncMock()
-    db.execute = fake_execute
+    db.execute = _make_fake_execute(um_a, um_b)
 
     result = await process_duel(db, uid, mid_a, mid_b, "a_wins", "discovery")
 
@@ -331,3 +265,143 @@ async def test_process_duel_uses_seeded_elo_when_no_elo():
     # ELO values should be based on seeded_elo, not default 1000
     assert result.new_elo_a > 1200
     assert result.new_elo_b < 800
+
+
+# ---------------------------------------------------------------------------
+# process_duel — a_only outcome
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_process_duel_a_only_skips_elo():
+    """a_only marks A as seen, B as unseen, no ELO change."""
+    uid = uuid.uuid4()
+    mid_a = uuid.uuid4()
+    mid_b = uuid.uuid4()
+
+    um_a = _make_user_movie(uid, mid_a, elo=1000, battles=5, seen=None)
+    um_b = _make_user_movie(uid, mid_b, elo=1000, battles=5, seen=None)
+
+    db = AsyncMock()
+    db.execute = _make_fake_execute(um_a, um_b)
+
+    result = await process_duel(db, uid, mid_a, mid_b, "a_only", "discovery")
+
+    assert result.api_result.movie_a_elo_delta == 0
+    assert result.api_result.movie_b_elo_delta == 0
+    assert um_a.seen is True
+    assert um_b.seen is False
+    # Battles should NOT be incremented for non-competitive outcomes
+    assert um_a.battles == 5
+    assert um_b.battles == 5
+
+
+# ---------------------------------------------------------------------------
+# process_duel — b_only outcome
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_process_duel_b_only_skips_elo():
+    """b_only marks B as seen, A as unseen, no ELO change."""
+    uid = uuid.uuid4()
+    mid_a = uuid.uuid4()
+    mid_b = uuid.uuid4()
+
+    um_a = _make_user_movie(uid, mid_a, elo=1000, battles=5, seen=None)
+    um_b = _make_user_movie(uid, mid_b, elo=1000, battles=5, seen=None)
+
+    db = AsyncMock()
+    db.execute = _make_fake_execute(um_a, um_b)
+
+    result = await process_duel(db, uid, mid_a, mid_b, "b_only", "discovery")
+
+    assert result.api_result.movie_a_elo_delta == 0
+    assert result.api_result.movie_b_elo_delta == 0
+    assert um_a.seen is False
+    assert um_b.seen is True
+    assert um_a.battles == 5
+    assert um_b.battles == 5
+
+
+# ---------------------------------------------------------------------------
+# process_duel — neither outcome
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_process_duel_neither_skips_elo():
+    """neither marks both as unseen, no ELO change."""
+    uid = uuid.uuid4()
+    mid_a = uuid.uuid4()
+    mid_b = uuid.uuid4()
+
+    um_a = _make_user_movie(uid, mid_a, elo=1000, battles=5, seen=None)
+    um_b = _make_user_movie(uid, mid_b, elo=1000, battles=5, seen=None)
+
+    db = AsyncMock()
+    db.execute = _make_fake_execute(um_a, um_b)
+
+    result = await process_duel(db, uid, mid_a, mid_b, "neither", "discovery")
+
+    assert result.api_result.movie_a_elo_delta == 0
+    assert result.api_result.movie_b_elo_delta == 0
+    assert um_a.seen is False
+    assert um_b.seen is False
+
+
+# ---------------------------------------------------------------------------
+# process_duel — pair_type classification
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_pair_type_ranked_vs_ranked():
+    """Both films with battles >= 1 should produce pair_type='ranked_vs_ranked'."""
+    uid = uuid.uuid4()
+    mid_a = uuid.uuid4()
+    mid_b = uuid.uuid4()
+
+    um_a = _make_user_movie(uid, mid_a, elo=1000, battles=3)
+    um_b = _make_user_movie(uid, mid_b, elo=1000, battles=5)
+
+    db = AsyncMock()
+    db.execute = _make_fake_execute(um_a, um_b)
+
+    await process_duel(db, uid, mid_a, mid_b, "a_wins", "ranked")
+
+    from backend.db_models import Duel
+
+    duel_adds = [
+        call.args[0]
+        for call in db.add.call_args_list
+        if isinstance(call.args[0], Duel)
+    ]
+    assert len(duel_adds) == 1
+    assert duel_adds[0].pair_type == "ranked_vs_ranked"
+
+
+@pytest.mark.asyncio
+async def test_pair_type_ranked_vs_unranked():
+    """One film with battles=0 should produce pair_type='ranked_vs_unranked'."""
+    uid = uuid.uuid4()
+    mid_a = uuid.uuid4()
+    mid_b = uuid.uuid4()
+
+    um_a = _make_user_movie(uid, mid_a, elo=1000, battles=3)
+    um_b = _make_user_movie(uid, mid_b, elo=None, battles=0)
+
+    db = AsyncMock()
+    db.execute = _make_fake_execute(um_a, um_b)
+
+    await process_duel(db, uid, mid_a, mid_b, "a_wins", "discovery")
+
+    from backend.db_models import Duel
+
+    duel_adds = [
+        call.args[0]
+        for call in db.add.call_args_list
+        if isinstance(call.args[0], Duel)
+    ]
+    assert len(duel_adds) == 1
+    assert duel_adds[0].pair_type == "ranked_vs_unranked"

@@ -45,14 +45,20 @@ describe("App", () => {
   });
 
   it("shows loading state while checking auth", () => {
-    // fetch never resolves
-    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    const controller = new AbortController();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise((_, reject) => {
+        controller.signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+      }))
+    );
     render(
       <MemoryRouter initialEntries={["/"]}>
         <App />
       </MemoryRouter>
     );
     expect(screen.getByText("Loading...")).toBeInTheDocument();
+    controller.abort();
   });
 
   it("redirects to /login when unauthenticated", async () => {
