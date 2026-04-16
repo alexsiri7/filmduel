@@ -36,7 +36,7 @@ function PosterThumb({ movie, isWinner, isLoser }) {
         }}
       />
       {isWinner && (
-        <div className="absolute inset-0 border border-[#E8A020]/60" />
+        <div className="absolute inset-0 border border-primary-container/60" />
       )}
     </div>
   );
@@ -56,7 +56,7 @@ function BracketMatch({ match, isNext, totalRounds, onClick }) {
         isBye
           ? "border-[#F5F0E8]/5 opacity-50"
           : isNext && !played
-          ? "border-[#E8A020]/60 shadow-[0_0_20px_rgba(232,160,32,0.15)] cursor-pointer hover:border-[#E8A020] animate-pulse-slow"
+          ? "border-primary-container/60 shadow-accent-sm cursor-pointer hover:border-primary-container animate-pulse-slow"
           : played
           ? "border-[#F5F0E8]/5"
           : "border-[#F5F0E8]/5 opacity-60"
@@ -65,7 +65,7 @@ function BracketMatch({ match, isNext, totalRounds, onClick }) {
       {/* Movie A */}
       <div
         className={`flex items-center gap-2 px-2 py-1.5 border-b border-[#F5F0E8]/5 ${
-          aWins && !isBye ? "bg-[#E8A020]/10" : ""
+          aWins && !isBye ? "bg-primary-container/10" : ""
         }`}
       >
         <PosterThumb
@@ -78,7 +78,7 @@ function BracketMatch({ match, isNext, totalRounds, onClick }) {
             isBye
               ? "text-[#F5F0E8]/50"
               : aWins
-              ? "text-[#E8A020]"
+              ? "text-primary-container"
               : bWins
               ? "text-[#F5F0E8]/30"
               : "text-[#F5F0E8]/70"
@@ -90,7 +90,7 @@ function BracketMatch({ match, isNext, totalRounds, onClick }) {
       {/* Movie B */}
       <div
         className={`flex items-center gap-2 px-2 py-1.5 ${
-          bWins && !isBye ? "bg-[#E8A020]/10" : ""
+          bWins && !isBye ? "bg-primary-container/10" : ""
         }`}
       >
         {isBye ? (
@@ -110,7 +110,7 @@ function BracketMatch({ match, isNext, totalRounds, onClick }) {
             <span
               className={`text-[11px] font-headline font-bold uppercase tracking-tight truncate ${
                 bWins
-                  ? "text-[#E8A020]"
+                  ? "text-primary-container"
                   : aWins
                   ? "text-[#F5F0E8]/30"
                   : "text-[#F5F0E8]/70"
@@ -124,7 +124,7 @@ function BracketMatch({ match, isNext, totalRounds, onClick }) {
       {/* Next match indicator */}
       {isNext && !played && !isBye && (
         <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-10">
-          <span className="bg-[#E8A020] text-[#0F0E0D] px-2 py-0.5 text-[8px] font-headline font-black uppercase tracking-wider">
+          <span className="bg-primary-container text-[#0F0E0D] px-2 py-0.5 text-[8px] font-headline font-black uppercase tracking-wider">
             Next
           </span>
         </div>
@@ -327,7 +327,7 @@ export default function TournamentBracket({ mediaType = "movie" }) {
         <p className="text-[#C04A20] font-body text-lg">{error}</p>
         <button
           onClick={() => navigate("/tournaments")}
-          className="border border-[#514534]/30 hover:border-[#E8A020]/50 hover:bg-[#1d1b1a] text-[#d6c4ae] font-headline font-bold uppercase tracking-widest text-xs py-4 px-8 transition-all"
+          className="border border-[#514534]/30 hover:border-primary-container/50 hover:bg-[#1d1b1a] text-[#d6c4ae] font-headline font-bold uppercase tracking-widest text-xs py-4 px-8 transition-all"
         >
           Back to Tournaments
         </button>
@@ -344,7 +344,7 @@ export default function TournamentBracket({ mediaType = "movie" }) {
     return (
       <div className="min-h-screen flex flex-col bg-[#0F0E0D] relative">
         {/* Context header */}
-        <header className="h-16 px-6 md:px-12 flex justify-between items-center bg-[#0F0E0D]/70 backdrop-blur-xl border-b border-[#E8A020]/10 sticky top-0 z-30">
+        <header className="h-16 px-6 md:px-12 flex justify-between items-center bg-[#0F0E0D]/70 backdrop-blur-xl border-b border-primary-container/10 sticky top-0 z-30">
           <div className="flex items-center gap-4">
             <button
               onClick={() => setPlaying(false)}
@@ -354,7 +354,7 @@ export default function TournamentBracket({ mediaType = "movie" }) {
             </button>
           </div>
           <div className="text-center">
-            <span className="text-[10px] font-label uppercase tracking-[0.3em] text-[#E8A020]">
+            <span className="text-[10px] font-label uppercase tracking-[0.3em] text-primary-container">
               {roundLabel(nextMatch.round, totalRounds)} — Match {matchIndex + 1} of {totalInRound}
             </span>
           </div>
@@ -397,7 +397,7 @@ export default function TournamentBracket({ mediaType = "movie" }) {
           </div>
 
           {submitting && (
-            <p className="text-sm text-[#E8A020] font-headline font-medium uppercase tracking-widest animate-pulse">
+            <p className="text-sm text-primary-container font-headline font-medium uppercase tracking-widest animate-pulse">
               Submitting...
             </p>
           )}
@@ -407,10 +407,10 @@ export default function TournamentBracket({ mediaType = "movie" }) {
         {winnerFlash && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0F0E0D]/80 backdrop-blur-sm animate-fade-out">
             <div className="text-center">
-              <p className="text-[10px] font-label uppercase tracking-[0.3em] text-[#E8A020] mb-3">
+              <p className="text-[10px] font-label uppercase tracking-[0.3em] text-primary-container mb-3">
                 Winner
               </p>
-              <h3 className="text-3xl md:text-5xl font-headline font-black uppercase tracking-tighter text-[#E8A020] leading-none">
+              <h3 className="text-3xl md:text-5xl font-headline font-black uppercase tracking-tighter text-primary-container leading-none">
                 {winnerFlash.title}
               </h3>
               <p className="text-sm text-[#F5F0E8]/40 mt-2 font-label">advances to next round</p>
@@ -442,7 +442,7 @@ export default function TournamentBracket({ mediaType = "movie" }) {
           {tournament.name}
         </h2>
         {tournament.tagline && (
-          <p className="text-lg md:text-xl font-body text-[#E8A020]/80 italic mb-2">
+          <p className="text-lg md:text-xl font-body text-primary-container/80 italic mb-2">
             {tournament.tagline}
           </p>
         )}
@@ -457,7 +457,7 @@ export default function TournamentBracket({ mediaType = "movie" }) {
           </span>
           <span
             className={`text-[10px] font-label uppercase tracking-[0.3em] ${
-              isCompleted ? "text-[#E8A020]" : isAbandoned ? "text-[#C04A20]" : "text-[#6B6760]"
+              isCompleted ? "text-primary-container" : isAbandoned ? "text-[#C04A20]" : "text-[#6B6760]"
             }`}
           >
             {tournament.status}
@@ -472,7 +472,7 @@ export default function TournamentBracket({ mediaType = "movie" }) {
 
       {/* Champion Banner */}
       {isCompleted && champion && (
-        <div className="mb-10 bg-[#1d1b1a] border-l-4 border-[#E8A020] p-6 md:p-8 flex items-center gap-6 shadow-[inset_0_0_60px_rgba(232,160,32,0.05)]">
+        <div className="mb-10 bg-[#1d1b1a] border-l-4 border-primary-container p-6 md:p-8 flex items-center gap-6 shadow-accent-inset">
           <div className="w-20 h-28 md:w-28 md:h-40 shrink-0 overflow-hidden relative">
             {champion.poster_url && (
               <img
@@ -485,10 +485,10 @@ export default function TournamentBracket({ mediaType = "movie" }) {
           </div>
           <div>
             <span className="text-3xl md:text-4xl mb-2 block">&#127942;</span>
-            <p className="text-[10px] font-label uppercase tracking-[0.3em] text-[#E8A020] mb-1">
+            <p className="text-[10px] font-label uppercase tracking-[0.3em] text-primary-container mb-1">
               Champion
             </p>
-            <h3 className="text-2xl md:text-4xl font-headline font-black uppercase tracking-tighter text-[#E8A020] leading-none">
+            <h3 className="text-2xl md:text-4xl font-headline font-black uppercase tracking-tighter text-primary-container leading-none">
               {champion.title}
             </h3>
             {champion.year && (
@@ -509,7 +509,7 @@ export default function TournamentBracket({ mediaType = "movie" }) {
           <div className="mb-8 flex items-center gap-4 flex-wrap">
             <button
               onClick={() => setPlaying(true)}
-              className="bg-[#E8A020] text-[#0F0E0D] font-headline font-black uppercase py-4 px-8 tracking-widest text-sm hover:shadow-[0_0_30px_rgba(232,160,32,0.4)] active:scale-[0.98] transition-all"
+              className="bg-primary-container text-[#0F0E0D] font-headline font-black uppercase py-4 px-8 tracking-widest text-sm hover:shadow-accent-md active:scale-[0.98] transition-all"
             >
               {label}
             </button>
@@ -517,7 +517,7 @@ export default function TournamentBracket({ mediaType = "movie" }) {
               <button
                 onClick={handleRegenerate}
                 disabled={regenerating}
-                className="border border-[#E8A020]/30 text-[#E8A020] font-headline font-bold uppercase py-4 px-6 tracking-widest text-xs hover:bg-[#E8A020]/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                className="border border-primary-container/30 text-primary-container font-headline font-bold uppercase py-4 px-6 tracking-widest text-xs hover:bg-primary-container/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {regenerating ? "Regenerating..." : "Regenerate"}
               </button>
@@ -570,8 +570,8 @@ export default function TournamentBracket({ mediaType = "movie" }) {
 
           {/* Champion column */}
           <div className="min-w-[140px] md:min-w-[160px]">
-            <div className="mb-4 pb-2 border-b border-[#E8A020]/30">
-              <span className="text-[10px] font-label uppercase tracking-[0.3em] text-[#E8A020]">
+            <div className="mb-4 pb-2 border-b border-primary-container/30">
+              <span className="text-[10px] font-label uppercase tracking-[0.3em] text-primary-container">
                 Champion
               </span>
             </div>
@@ -582,11 +582,11 @@ export default function TournamentBracket({ mediaType = "movie" }) {
               }}
             >
               {champion ? (
-                <div className="bg-[#1d1b1a] border border-[#E8A020]/40 p-3 shadow-[0_0_20px_rgba(232,160,32,0.1)]">
+                <div className="bg-[#1d1b1a] border border-primary-container/40 p-3 shadow-accent-sm">
                   <div className="flex items-center gap-2">
                     <PosterThumb movie={champion} isWinner />
                     <div className="min-w-0">
-                      <span className="text-[11px] font-headline font-bold uppercase tracking-tight text-[#E8A020] truncate block">
+                      <span className="text-[11px] font-headline font-bold uppercase tracking-tight text-primary-container truncate block">
                         {champion.title}
                       </span>
                       <span className="text-[9px] text-[#F5F0E8]/40">
@@ -606,26 +606,6 @@ export default function TournamentBracket({ mediaType = "movie" }) {
           </div>
         </div>
       </div>
-
-      {/* Bracket connector lines via CSS (visual hint) */}
-      <style>{`
-        .animate-pulse-slow {
-          animation: pulse-slow 2s ease-in-out infinite;
-        }
-        @keyframes pulse-slow {
-          0%, 100% { box-shadow: 0 0 10px rgba(232,160,32,0.1); }
-          50% { box-shadow: 0 0 25px rgba(232,160,32,0.25); }
-        }
-        .animate-fade-out {
-          animation: fade-in-out 600ms ease-in-out forwards;
-        }
-        @keyframes fade-in-out {
-          0% { opacity: 0; transform: scale(0.95); }
-          20% { opacity: 1; transform: scale(1); }
-          80% { opacity: 1; transform: scale(1); }
-          100% { opacity: 0; transform: scale(1.02); }
-        }
-      `}</style>
 
       {/* Abandon button */}
       {!isCompleted && !isAbandoned && (

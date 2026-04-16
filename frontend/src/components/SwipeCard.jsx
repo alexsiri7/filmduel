@@ -109,7 +109,7 @@ export default function SwipeCard({ movie, onSwipe }) {
 
         {/* Community rating badge */}
         {movie.community_rating && (
-          <div className="absolute top-4 right-4 bg-[#E8A020] text-[#0F0E0D] font-headline font-black text-sm px-3 py-1">
+          <div className="absolute top-4 right-4 bg-primary-container text-[#0F0E0D] font-headline font-black text-sm px-3 py-1">
             {movie.community_rating.toFixed(0)}
           </div>
         )}
@@ -121,7 +121,7 @@ export default function SwipeCard({ movie, onSwipe }) {
               {genres.map((g) => (
                 <span
                   key={g}
-                  className="bg-[#0F0E0D]/80 backdrop-blur-md px-3 py-1 text-[10px] font-label font-bold uppercase tracking-widest border border-[#E8A020]/20 text-[#E8A020]"
+                  className="bg-[#0F0E0D]/80 backdrop-blur-md px-3 py-1 text-[10px] font-label font-bold uppercase tracking-widest border border-primary-container/20 text-primary-container"
                 >
                   {g}
                 </span>

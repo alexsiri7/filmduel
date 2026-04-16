@@ -282,7 +282,7 @@ export default function ScreenshotEditor({ imageDataUrl, onSave, onCancel }) {
               onClick={() => setTool(t.id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-headline font-bold uppercase tracking-wider transition-colors ${
                 tool === t.id
-                  ? "bg-[#E8A020] text-[#0F0E0D]"
+                  ? "bg-primary-container text-[#0F0E0D]"
                   : "text-[#F5F0E8]/60 hover:text-[#F5F0E8]"
               }`}
             >
@@ -305,7 +305,7 @@ export default function ScreenshotEditor({ imageDataUrl, onSave, onCancel }) {
 
         <button
           onClick={handleSave}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-headline font-bold uppercase tracking-wider bg-[#E8A020] text-[#0F0E0D] hover:bg-[#E8A020]/80 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-headline font-bold uppercase tracking-wider bg-primary-container text-[#0F0E0D] hover:bg-primary-container/80 transition-colors"
         >
           <Check size={14} />
           Done

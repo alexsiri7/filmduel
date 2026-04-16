@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { getTournaments, createTournament, getTournamentGenres, getTournamentPoolCount } from "../api";
-import { mediaLabel } from "../lib/utils";
+import { mediaLabel, mediaLabelCap } from "../lib/utils";
 
 const BRACKET_SIZES = [8, 16, 32, 64];
 const DECADES = ["1970s", "1980s", "1990s", "2000s", "2010s", "2020s"];
@@ -91,12 +91,12 @@ export default function Tournaments({ mediaType = "movie" }) {
       {/* Header */}
       <header className="mb-12 flex items-start justify-between gap-4 flex-wrap">
         <h2 className="text-5xl md:text-7xl font-headline font-black uppercase tracking-tighter text-[#F5F0E8] leading-none">
-          Tour<span className="text-[#E8A020]">naments</span>
+          Tour<span className="text-primary-container">naments</span>
         </h2>
         {!showCreate && (
           <button
             onClick={handleOpenCreate}
-            className="bg-[#E8A020] text-[#0F0E0D] font-headline font-black uppercase py-4 px-8 tracking-widest text-sm hover:shadow-[0_0_30px_rgba(232,160,32,0.4)] active:scale-[0.98] transition-all shrink-0"
+            className="bg-primary-container text-[#0F0E0D] font-headline font-black uppercase py-4 px-8 tracking-widest text-sm hover:shadow-accent-md active:scale-[0.98] transition-all shrink-0"
           >
             Create Tournament
           </button>
@@ -105,7 +105,7 @@ export default function Tournaments({ mediaType = "movie" }) {
 
       {/* Create Form */}
       {showCreate && (
-        <div className="mb-12 bg-[#1d1b1a] p-6 md:p-8 border-l-4 border-[#E8A020]">
+        <div className="mb-12 bg-[#1d1b1a] p-6 md:p-8 border-l-4 border-primary-container">
           <h3 className="text-2xl font-headline font-black uppercase tracking-tight text-[#F5F0E8] mb-6">
             New Tournament
           </h3>
@@ -120,7 +120,7 @@ export default function Tournaments({ mediaType = "movie" }) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Horror Showdown"
-              className="w-full max-w-md bg-[#0F0E0D] border border-[#F5F0E8]/10 text-[#F5F0E8] font-body px-4 py-3 placeholder:text-[#6B6760]/50 focus:border-[#E8A020]/50 focus:outline-none transition-colors"
+              className="w-full max-w-md bg-[#0F0E0D] border border-[#F5F0E8]/10 text-[#F5F0E8] font-body px-4 py-3 placeholder:text-[#6B6760]/50 focus:border-primary-container/50 focus:outline-none transition-colors"
             />
           </div>
 
@@ -134,8 +134,8 @@ export default function Tournaments({ mediaType = "movie" }) {
                 onClick={() => setAiCurated(false)}
                 className={
                   !aiCurated
-                    ? "px-6 py-2 bg-[#E8A020] text-[#0F0E0D] font-label font-bold uppercase text-xs tracking-widest border border-[#E8A020]"
-                    : "px-6 py-2 bg-transparent text-[#F5F0E8]/60 font-label font-bold uppercase text-xs tracking-widest border border-[#F5F0E8]/10 hover:border-[#E8A020]/40 transition-colors"
+                    ? "px-6 py-2 bg-primary-container text-[#0F0E0D] font-label font-bold uppercase text-xs tracking-widest border border-primary-container"
+                    : "px-6 py-2 bg-transparent text-[#F5F0E8]/60 font-label font-bold uppercase text-xs tracking-widest border border-[#F5F0E8]/10 hover:border-primary-container/40 transition-colors"
                 }
               >
                 Standard
@@ -144,15 +144,15 @@ export default function Tournaments({ mediaType = "movie" }) {
                 onClick={() => setAiCurated(true)}
                 className={
                   aiCurated
-                    ? "px-6 py-2 bg-[#E8A020] text-[#0F0E0D] font-label font-bold uppercase text-xs tracking-widest border border-[#E8A020]"
-                    : "px-6 py-2 bg-transparent text-[#F5F0E8]/60 font-label font-bold uppercase text-xs tracking-widest border border-[#F5F0E8]/10 hover:border-[#E8A020]/40 transition-colors"
+                    ? "px-6 py-2 bg-primary-container text-[#0F0E0D] font-label font-bold uppercase text-xs tracking-widest border border-primary-container"
+                    : "px-6 py-2 bg-transparent text-[#F5F0E8]/60 font-label font-bold uppercase text-xs tracking-widest border border-[#F5F0E8]/10 hover:border-primary-container/40 transition-colors"
                 }
               >
                 AI-Curated
               </button>
             </div>
             {aiCurated && (
-              <p className="mt-2 text-sm font-body text-[#E8A020]/70">
+              <p className="mt-2 text-sm font-body text-primary-container/70">
                 {`AI will select ${label}s and create a themed bracket`}
               </p>
             )}
@@ -170,8 +170,8 @@ export default function Tournaments({ mediaType = "movie" }) {
                   onClick={() => setBracketSize(size)}
                   className={
                     bracketSize === size
-                      ? "px-6 py-2 bg-[#E8A020] text-[#0F0E0D] font-label font-bold uppercase text-xs tracking-widest border border-[#E8A020]"
-                      : "px-6 py-2 bg-transparent text-[#F5F0E8]/60 font-label font-bold uppercase text-xs tracking-widest border border-[#F5F0E8]/10 hover:border-[#E8A020]/40 transition-colors"
+                      ? "px-6 py-2 bg-primary-container text-[#0F0E0D] font-label font-bold uppercase text-xs tracking-widest border border-primary-container"
+                      : "px-6 py-2 bg-transparent text-[#F5F0E8]/60 font-label font-bold uppercase text-xs tracking-widest border border-[#F5F0E8]/10 hover:border-primary-container/40 transition-colors"
                   }
                 >
                   {size}
@@ -196,11 +196,11 @@ export default function Tournaments({ mediaType = "movie" }) {
           {/* Filter Mode */}
           <div className="mb-6">
             <label className="text-[10px] font-label uppercase tracking-[0.3em] text-[#6B6760] block mb-2">
-              Filter Films
+              {`Filter ${mediaLabelCap(mediaType)}s`}
             </label>
             <div className="flex gap-2 mb-4">
               {[
-                { key: "all", label: "All Films" },
+                { key: "all", label: `All ${mediaLabelCap(mediaType)}s` },
                 { key: "genre", label: "By Genre" },
                 { key: "decade", label: "By Decade" },
               ].map((opt) => (
@@ -212,8 +212,8 @@ export default function Tournaments({ mediaType = "movie" }) {
                   }}
                   className={
                     filterMode === opt.key
-                      ? "px-6 py-2 bg-[#E8A020] text-[#0F0E0D] font-label font-bold uppercase text-xs tracking-widest border border-[#E8A020]"
-                      : "px-6 py-2 bg-transparent text-[#F5F0E8]/60 font-label font-bold uppercase text-xs tracking-widest border border-[#F5F0E8]/10 hover:border-[#E8A020]/40 transition-colors"
+                      ? "px-6 py-2 bg-primary-container text-[#0F0E0D] font-label font-bold uppercase text-xs tracking-widest border border-primary-container"
+                      : "px-6 py-2 bg-transparent text-[#F5F0E8]/60 font-label font-bold uppercase text-xs tracking-widest border border-[#F5F0E8]/10 hover:border-primary-container/40 transition-colors"
                   }
                 >
                   {opt.label}
@@ -230,8 +230,8 @@ export default function Tournaments({ mediaType = "movie" }) {
                     onClick={() => setFilterValue(g)}
                     className={
                       filterValue === g
-                        ? "px-4 py-1.5 bg-[#E8A020] text-[#0F0E0D] font-label font-bold uppercase text-[10px] tracking-widest border border-[#E8A020]"
-                        : "px-4 py-1.5 bg-transparent text-[#F5F0E8]/60 font-label font-bold uppercase text-[10px] tracking-widest border border-[#F5F0E8]/10 hover:border-[#E8A020]/40 transition-colors"
+                        ? "px-4 py-1.5 bg-primary-container text-[#0F0E0D] font-label font-bold uppercase text-[10px] tracking-widest border border-primary-container"
+                        : "px-4 py-1.5 bg-transparent text-[#F5F0E8]/60 font-label font-bold uppercase text-[10px] tracking-widest border border-[#F5F0E8]/10 hover:border-primary-container/40 transition-colors"
                     }
                   >
                     {g}
@@ -252,8 +252,8 @@ export default function Tournaments({ mediaType = "movie" }) {
                     onClick={() => setFilterValue(d)}
                     className={
                       filterValue === d
-                        ? "px-4 py-1.5 bg-[#E8A020] text-[#0F0E0D] font-label font-bold uppercase text-[10px] tracking-widest border border-[#E8A020]"
-                        : "px-4 py-1.5 bg-transparent text-[#F5F0E8]/60 font-label font-bold uppercase text-[10px] tracking-widest border border-[#F5F0E8]/10 hover:border-[#E8A020]/40 transition-colors"
+                        ? "px-4 py-1.5 bg-primary-container text-[#0F0E0D] font-label font-bold uppercase text-[10px] tracking-widest border border-primary-container"
+                        : "px-4 py-1.5 bg-transparent text-[#F5F0E8]/60 font-label font-bold uppercase text-[10px] tracking-widest border border-[#F5F0E8]/10 hover:border-primary-container/40 transition-colors"
                     }
                   >
                     {d}
@@ -273,7 +273,7 @@ export default function Tournaments({ mediaType = "movie" }) {
             <button
               onClick={handleCreate}
               disabled={creating || (!aiCurated && !name.trim()) || (filterMode !== "all" && !filterValue)}
-              className="bg-[#E8A020] text-[#0F0E0D] font-headline font-black uppercase py-4 px-8 tracking-widest text-sm hover:shadow-[0_0_30px_rgba(232,160,32,0.4)] active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              className="bg-primary-container text-[#0F0E0D] font-headline font-black uppercase py-4 px-8 tracking-widest text-sm hover:shadow-accent-md active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {creating ? (aiCurated ? "Curating your bracket..." : "Creating...") : "Create & Seed"}
             </button>
@@ -282,7 +282,7 @@ export default function Tournaments({ mediaType = "movie" }) {
                 setShowCreate(false);
                 setError(null);
               }}
-              className="border border-[#F5F0E8]/10 hover:border-[#E8A020]/40 text-[#F5F0E8]/60 font-headline font-bold uppercase py-4 px-8 tracking-widest text-xs transition-colors"
+              className="border border-[#F5F0E8]/10 hover:border-primary-container/40 text-[#F5F0E8]/60 font-headline font-bold uppercase py-4 px-8 tracking-widest text-xs transition-colors"
             >
               Cancel
             </button>
@@ -305,9 +305,9 @@ export default function Tournaments({ mediaType = "movie" }) {
                 key={t.id}
                 className={`group relative flex items-center gap-4 md:gap-8 p-4 md:p-6 transition-colors ${
                   isActive
-                    ? "bg-[#1d1b1a] border-l-4 border-[#E8A020] shadow-[inset_0_0_40px_rgba(232,160,32,0.05)]"
+                    ? "bg-[#1d1b1a] border-l-4 border-primary-container shadow-accent-inset"
                     : isCompleted
-                    ? "bg-[#141312] border-l-4 border-[#E8A020]/40 hover:bg-[#1d1b1a]"
+                    ? "bg-[#141312] border-l-4 border-primary-container/40 hover:bg-[#1d1b1a]"
                     : "bg-[#141312] border-l-4 border-transparent hover:bg-[#1d1b1a] opacity-50"
                 }`}
               >
@@ -329,7 +329,7 @@ export default function Tournaments({ mediaType = "movie" }) {
                       <span
                         className={`font-headline font-bold text-sm uppercase ${
                           isActive
-                            ? "text-[#E8A020]"
+                            ? "text-primary-container"
                             : isCompleted
                             ? "text-[#F5F0E8]/60"
                             : "text-[#6B6760]"
@@ -353,7 +353,7 @@ export default function Tournaments({ mediaType = "movie" }) {
                 {isActive && (
                   <button
                     onClick={() => navigate(`/tournaments/${t.id}`)}
-                    className="bg-[#E8A020] text-[#0F0E0D] font-headline font-black uppercase py-3 px-6 tracking-widest text-xs hover:shadow-[0_0_20px_rgba(232,160,32,0.3)] active:scale-[0.98] transition-all shrink-0"
+                    className="bg-primary-container text-[#0F0E0D] font-headline font-black uppercase py-3 px-6 tracking-widest text-xs hover:shadow-accent-sm active:scale-[0.98] transition-all shrink-0"
                   >
                     Continue
                   </button>
@@ -361,7 +361,7 @@ export default function Tournaments({ mediaType = "movie" }) {
                 {isCompleted && (
                   <button
                     onClick={() => navigate(`/tournaments/${t.id}`)}
-                    className="border border-[#E8A020]/30 text-[#E8A020] font-headline font-bold uppercase py-3 px-6 tracking-widest text-xs hover:bg-[#E8A020]/10 transition-all shrink-0"
+                    className="border border-primary-container/30 text-primary-container font-headline font-bold uppercase py-3 px-6 tracking-widest text-xs hover:bg-primary-container/10 transition-all shrink-0"
                   >
                     View Bracket
                   </button>

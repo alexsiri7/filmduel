@@ -61,14 +61,14 @@ export default function ReportIssueModal({ onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-[#0F0E0D]/95 backdrop-blur-xl flex items-center justify-center p-6">
-      <div className="bg-[#1d1b1a] border-l-4 border-[#E8A020] p-8 w-full max-w-lg">
+      <div className="bg-[#1d1b1a] border-l-4 border-primary-container p-8 w-full max-w-lg">
         <h2 className="font-headline font-black uppercase text-[#F5F0E8] text-xl mb-6">
           Report Issue
         </h2>
 
         {success ? (
           <div className="text-center py-8">
-            <p className="text-[#E8A020] font-headline font-bold text-lg">
+            <p className="text-primary-container font-headline font-bold text-lg">
               Thank you for your feedback!
             </p>
             <p className="text-[#F5F0E8]/50 text-sm mt-2">This window will close shortly.</p>
@@ -85,7 +85,7 @@ export default function ReportIssueModal({ onClose }) {
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Brief title of the issue"
-                  className="w-full bg-[#0F0E0D] border border-[#F5F0E8]/10 text-[#F5F0E8] font-body px-4 py-3 placeholder:text-[#6B6760]/50 focus:border-[#E8A020]/50 focus:outline-none transition-colors"
+                  className="w-full bg-[#0F0E0D] border border-[#F5F0E8]/10 text-[#F5F0E8] font-body px-4 py-3 placeholder:text-[#6B6760]/50 focus:border-primary-container/50 focus:outline-none transition-colors"
                 />
               </div>
 
@@ -98,7 +98,7 @@ export default function ReportIssueModal({ onClose }) {
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Describe the issue or suggestion..."
                   rows={4}
-                  className="w-full bg-[#0F0E0D] border border-[#F5F0E8]/10 text-[#F5F0E8] font-body px-4 py-3 placeholder:text-[#6B6760]/50 focus:border-[#E8A020]/50 focus:outline-none transition-colors resize-none"
+                  className="w-full bg-[#0F0E0D] border border-[#F5F0E8]/10 text-[#F5F0E8] font-body px-4 py-3 placeholder:text-[#6B6760]/50 focus:border-primary-container/50 focus:outline-none transition-colors resize-none"
                 />
               </div>
 
@@ -121,7 +121,7 @@ export default function ReportIssueModal({ onClose }) {
                     <div className="flex gap-2">
                       <button
                         onClick={() => setShowEditor(true)}
-                        className="text-[#E8A020] text-xs font-headline font-bold uppercase tracking-wider hover:text-[#E8A020]/80 transition-colors"
+                        className="text-primary-container text-xs font-headline font-bold uppercase tracking-wider hover:text-primary-container/80 transition-colors"
                       >
                         Edit Screenshot
                       </button>
@@ -136,7 +136,7 @@ export default function ReportIssueModal({ onClose }) {
                 ) : (
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="text-[#F5F0E8]/40 text-xs font-headline font-bold uppercase tracking-wider hover:text-[#E8A020]/70 transition-colors"
+                    className="text-[#F5F0E8]/40 text-xs font-headline font-bold uppercase tracking-wider hover:text-primary-container/70 transition-colors"
                   >
                     Attach Screenshot
                   </button>
@@ -150,7 +150,7 @@ export default function ReportIssueModal({ onClose }) {
               <button
                 onClick={handleSubmit}
                 disabled={!title.trim() || !description.trim() || submitting}
-                className="bg-[#E8A020] text-[#0F0E0D] font-headline font-black uppercase px-6 py-3 tracking-widest text-sm hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
+                className="bg-primary-container text-[#0F0E0D] font-headline font-black uppercase px-6 py-3 tracking-widest text-sm hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
                 {submitting ? "Submitting..." : "Submit"}
               </button>

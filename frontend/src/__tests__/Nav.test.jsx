@@ -38,22 +38,22 @@ describe("Nav", () => {
     expect(screen.getByText("Rankings")).toBeInTheDocument();
   });
 
-  it("active nav item (Current Duel) has amber bg styling on /", () => {
+  it("active nav item (Current Duel) has accent bg styling on /", () => {
     renderNav("/");
     const duelLink = screen.getByText("Current Duel").closest("a");
-    expect(duelLink.className).toContain("bg-[#E8A020]");
+    expect(duelLink.className).toContain("bg-primary-container");
   });
 
-  it("active nav item (Rankings) has amber styling on /rankings", () => {
+  it("active nav item (Rankings) has accent styling on /rankings", () => {
     renderNav("/rankings");
     const rankingsLink = screen.getByText("Rankings").closest("a");
-    expect(rankingsLink.className).toContain("bg-[#E8A020]");
+    expect(rankingsLink.className).toContain("bg-primary-container");
   });
 
-  it("inactive nav item does NOT have amber bg", () => {
+  it("inactive nav item does NOT have accent bg", () => {
     renderNav("/");
     const swipeLink = screen.getByText("Swipe").closest("a");
-    expect(swipeLink.className).not.toContain("bg-[#E8A020]");
+    expect(swipeLink.className).not.toContain("bg-primary-container");
   });
 
   it("Report Issue is a button (not a link)", () => {

@@ -36,10 +36,17 @@
 .show-mode {
   --color-primary: #5bbfff;
   --color-primary-container: #2096E8;
+  --color-primary-foreground: #002b44;
   --color-positive: #2096E8;
   --color-ring: #2096E8;
   --color-negative: #C04A20;
 }
+
+.shadow-accent-sm { box-shadow: 0 0 15px color-mix(in srgb, var(--color-primary-container) 30%, transparent); }
+.shadow-accent-md { box-shadow: 0 0 30px color-mix(in srgb, var(--color-primary-container) 30%, transparent); }
+.shadow-accent-lg { box-shadow: 0 0 40px color-mix(in srgb, var(--color-primary-container) 40%, transparent); }
+.shadow-accent-inset { box-shadow: inset 0 0 40px color-mix(in srgb, var(--color-primary-container) 5%, transparent); }
+.shadow-accent-bottom-nav { box-shadow: 0 -8px 32px color-mix(in srgb, var(--color-primary-container) 8%, transparent); }
 
 body {
   background-color: #0F0E0D;
@@ -65,11 +72,31 @@ body {
 }
 
 @keyframes winner-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(232, 160, 32, 0.6); }
-  50% { box-shadow: 0 0 40px 8px rgba(232, 160, 32, 0.35); }
-  100% { box-shadow: 0 0 20px 2px rgba(232, 160, 32, 0.2); }
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-primary-container) 60%, transparent); }
+  50% { box-shadow: 0 0 40px 8px color-mix(in srgb, var(--color-primary-container) 35%, transparent); }
+  100% { box-shadow: 0 0 20px 2px color-mix(in srgb, var(--color-primary-container) 20%, transparent); }
 }
 
 .animate-winner-pulse {
   animation: winner-pulse 0.6s ease-out;
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-slow {
+  0%, 100% { box-shadow: 0 0 10px color-mix(in srgb, var(--color-primary-container) 10%, transparent); }
+  50% { box-shadow: 0 0 25px color-mix(in srgb, var(--color-primary-container) 25%, transparent); }
+}
+
+.animate-fade-out {
+  animation: fade-in-out 600ms ease-in-out forwards;
+}
+
+@keyframes fade-in-out {
+  0% { opacity: 0; transform: scale(0.95); }
+  20% { opacity: 1; transform: scale(1); }
+  80% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.02); }
 }
