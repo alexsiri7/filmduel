@@ -24,9 +24,9 @@ export default function MovieCard({
           "cursor-pointer hover:scale-[1.02] active:scale-95",
         !clickable && "cursor-default",
         highlight &&
-          "border-2 border-[#E8A020] shadow-[0_0_30px_rgba(232,160,32,0.15)]",
+          "border-2 border-primary-container shadow-accent-md",
         chosen === "winner" &&
-          "border-2 border-[#E8A020] shadow-[0_0_40px_rgba(232,160,32,0.35)] scale-[1.03] animate-winner-pulse",
+          "border-2 border-primary-container shadow-accent-lg scale-[1.03] animate-winner-pulse",
         chosen === "loser" && "opacity-40 scale-[0.97]"
       )}
       onClick={clickable ? onClick : undefined}
@@ -64,7 +64,7 @@ export default function MovieCard({
         {/* Pick winner label when highlighted */}
         {highlight && (
           <div className="absolute -top-0 left-1/2 -translate-x-1/2 z-20">
-            <span className="bg-[#E8A020] text-[#442b00] px-4 py-1 font-headline font-bold text-[10px] uppercase tracking-tighter">
+            <span className="bg-primary-container text-primary-foreground px-4 py-1 font-headline font-bold text-[10px] uppercase tracking-tighter">
               Pick winner
             </span>
           </div>
@@ -73,7 +73,7 @@ export default function MovieCard({
         {/* Winner label after duel */}
         {chosen === "winner" && (
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20">
-            <span className="bg-[#E8A020] text-[#442b00] px-5 py-2 font-headline font-black text-lg uppercase tracking-wider shadow-[0_0_30px_rgba(232,160,32,0.5)]">
+            <span className="bg-primary-container text-primary-foreground px-5 py-2 font-headline font-black text-lg uppercase tracking-wider shadow-accent-md">
               Winner
             </span>
           </div>
@@ -85,7 +85,7 @@ export default function MovieCard({
             {genres.map((g) => (
               <span
                 key={g}
-                className="bg-[#0F0E0D]/80 backdrop-blur-md px-3 py-1 text-[10px] font-label font-bold uppercase tracking-widest border border-[#E8A020]/20 text-[#E8A020]"
+                className="bg-[#0F0E0D]/80 backdrop-blur-md px-3 py-1 text-[10px] font-label font-bold uppercase tracking-widest border border-primary-container/20 text-primary-container"
               >
                 {g}
               </span>
@@ -113,7 +113,7 @@ export default function MovieCard({
             className={cn(
               "text-lg font-black font-headline px-3 py-1",
               delta >= 0
-                ? "bg-[#E8A020] text-[#442b00]"
+                ? "bg-primary-container text-primary-foreground"
                 : "bg-[#C04A20] text-[#F5F0E8]"
             )}
           >

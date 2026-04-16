@@ -116,14 +116,14 @@ export default function App() {
         </Routes>
       </main>
       {/* Mobile bottom nav */}
-      <nav className="fixed bottom-0 left-0 w-full z-50 flex flex-col items-center bg-[#0F0E0D]/80 backdrop-blur-xl md:hidden shadow-[0_-8px_32px_rgba(232,160,32,0.08)]">
+      <nav className="fixed bottom-0 left-0 w-full z-50 flex flex-col items-center bg-[#0F0E0D]/80 backdrop-blur-xl md:hidden shadow-accent-bottom-nav">
         {/* Media type toggle */}
         <div className="flex w-full justify-center gap-1 px-4 pt-2 pb-1">
           <button
             onClick={() => setMediaType("movie")}
             className={`flex-1 py-1 text-[10px] font-bold uppercase tracking-[0.1em] font-headline rounded-sm transition-colors ${
               mediaType === "movie"
-                ? "bg-[#E8A020] text-[#0F0E0D]"
+                ? "bg-primary-container text-[#0F0E0D]"
                 : "text-[#F5F0E8]/40 hover:text-[#F5F0E8]/60"
             }`}
           >
@@ -133,7 +133,7 @@ export default function App() {
             onClick={() => setMediaType("show")}
             className={`flex-1 py-1 text-[10px] font-bold uppercase tracking-[0.1em] font-headline rounded-sm transition-colors ${
               mediaType === "show"
-                ? "bg-[#E8A020] text-[#0F0E0D]"
+                ? "bg-primary-container text-[#0F0E0D]"
                 : "text-[#F5F0E8]/40 hover:text-[#F5F0E8]/60"
             }`}
           >
@@ -145,7 +145,7 @@ export default function App() {
             href="/"
             className={`flex flex-col items-center justify-center px-6 py-2 transition-colors ${
               location.pathname === "/"
-                ? "text-[#E8A020] border-t-2 border-[#E8A020] bg-[#E8A020]/10"
+                ? "text-primary-container border-t-2 border-primary-container bg-primary-container/10"
                 : "text-[#6B6760] hover:text-[#F5F0E8]"
             }`}
           >
@@ -155,7 +155,7 @@ export default function App() {
             href="/swipe"
             className={`flex flex-col items-center justify-center px-6 py-2 transition-colors ${
               location.pathname === "/swipe"
-                ? "text-[#E8A020] border-t-2 border-[#E8A020] bg-[#E8A020]/10"
+                ? "text-primary-container border-t-2 border-primary-container bg-primary-container/10"
                 : "text-[#6B6760] hover:text-[#F5F0E8]"
             }`}
           >
@@ -165,7 +165,7 @@ export default function App() {
             href="/rankings"
             className={`flex flex-col items-center justify-center px-6 py-2 transition-colors ${
               location.pathname === "/rankings"
-                ? "text-[#E8A020] border-t-2 border-[#E8A020] bg-[#E8A020]/10"
+                ? "text-primary-container border-t-2 border-primary-container bg-primary-container/10"
                 : "text-[#6B6760] hover:text-[#F5F0E8]"
             }`}
           >
@@ -175,7 +175,7 @@ export default function App() {
             href="/suggestions"
             className={`flex flex-col items-center justify-center px-6 py-2 transition-colors ${
               location.pathname === "/suggestions"
-                ? "text-[#E8A020] border-t-2 border-[#E8A020] bg-[#E8A020]/10"
+                ? "text-primary-container border-t-2 border-primary-container bg-primary-container/10"
                 : "text-[#6B6760] hover:text-[#F5F0E8]"
             }`}
           >
@@ -185,7 +185,7 @@ export default function App() {
             href="/tournaments"
             className={`flex flex-col items-center justify-center px-6 py-2 transition-colors ${
               location.pathname.startsWith("/tournaments")
-                ? "text-[#E8A020] border-t-2 border-[#E8A020] bg-[#E8A020]/10"
+                ? "text-primary-container border-t-2 border-primary-container bg-primary-container/10"
                 : "text-[#6B6760] hover:text-[#F5F0E8]"
             }`}
           >

@@ -28,7 +28,7 @@ export default function Nav({ mediaType, setMediaType }) {
           <img src="/logo.png" alt="FilmDuel" className="w-10 h-10 object-contain" />
         </div>
         <div>
-          <h1 className="text-[#E8A020] text-xl font-black font-headline tracking-tighter uppercase">
+          <h1 className="text-primary-container text-xl font-black font-headline tracking-tighter uppercase">
             FILMDUEL
           </h1>
           <p className="text-[#F5F0E8]/40 text-[10px] uppercase tracking-[0.2em] font-bold">
@@ -43,7 +43,7 @@ export default function Nav({ mediaType, setMediaType }) {
           onClick={() => setMediaType("movie")}
           className={`flex-1 py-2 text-xs font-headline font-bold uppercase tracking-widest transition-colors rounded-sm ${
             mediaType === "movie"
-              ? "bg-[#E8A020] text-[#0F0E0D]"
+              ? "bg-primary-container text-[#0F0E0D]"
               : "text-[#F5F0E8]/40 hover:text-[#F5F0E8]/60"
           }`}
         >
@@ -53,7 +53,7 @@ export default function Nav({ mediaType, setMediaType }) {
           onClick={() => setMediaType("show")}
           className={`flex-1 py-2 text-xs font-headline font-bold uppercase tracking-widest transition-colors rounded-sm ${
             mediaType === "show"
-              ? "bg-[#E8A020] text-[#0F0E0D]"
+              ? "bg-primary-container text-[#0F0E0D]"
               : "text-[#F5F0E8]/40 hover:text-[#F5F0E8]/60"
           }`}
         >
@@ -74,7 +74,7 @@ export default function Nav({ mediaType, setMediaType }) {
               to={item.path}
               className={
                 isActive
-                  ? "flex items-center gap-4 px-4 py-3 bg-[#E8A020] text-[#0F0E0D] rounded-none shadow-[0_0_15px_rgba(232,160,32,0.3)] font-headline font-bold uppercase tracking-wider transition-all duration-300"
+                  ? "flex items-center gap-4 px-4 py-3 bg-primary-container text-[#0F0E0D] rounded-none shadow-accent-sm font-headline font-bold uppercase tracking-wider transition-all duration-300"
                   : "flex items-center gap-4 px-4 py-3 text-[#F5F0E8]/40 hover:text-[#F5F0E8] hover:bg-[#1d1b1a] font-headline font-bold uppercase tracking-wider transition-all hover:translate-x-1 duration-300"
               }
             >
@@ -88,13 +88,13 @@ export default function Nav({ mediaType, setMediaType }) {
       <div className="px-2 space-y-3">
         <Link
           to="/"
-          className="block w-full bg-[#E8A020] text-[#0F0E0D] font-headline font-black uppercase py-4 tracking-widest text-sm text-center hover:scale-[1.02] active:scale-95 transition-all"
+          className="block w-full bg-primary-container text-[#0F0E0D] font-headline font-black uppercase py-4 tracking-widest text-sm text-center hover:scale-[1.02] active:scale-95 transition-all"
         >
           START DUEL
         </Link>
         <button
           onClick={() => setShowFeedback(true)}
-          className="block w-full text-center text-[#F5F0E8]/30 hover:text-[#E8A020]/70 font-headline font-bold uppercase text-xs tracking-widest py-2 transition-colors"
+          className="block w-full text-center text-[#F5F0E8]/30 hover:text-primary-container/70 font-headline font-bold uppercase text-xs tracking-widest py-2 transition-colors"
         >
           Report Issue
         </button>

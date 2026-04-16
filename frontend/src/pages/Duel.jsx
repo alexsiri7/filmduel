@@ -120,12 +120,12 @@ export default function Duel({ mediaType = "movie" }) {
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 p-12">
         <p className="text-[#6B6760] text-lg text-center max-w-md font-body">
           {isPoolEmpty
-            ? "Watch more movies on Trakt to get started! You need at least 2 movies in your library."
-            : "Something went wrong loading your movies."}
+            ? `Watch more ${label}s on Trakt to get started! You need at least 2 ${label}s in your library.`
+            : `Something went wrong loading your ${label}s.`}
         </p>
         <button
           onClick={() => loadPair()}
-          className="border border-[#514534]/30 hover:border-[#E8A020]/50 hover:bg-[#1d1b1a] text-[#d6c4ae] font-headline font-bold uppercase tracking-widest text-xs py-4 px-8 transition-all"
+          className="border border-[#514534]/30 hover:border-primary-container/50 hover:bg-[#1d1b1a] text-[#d6c4ae] font-headline font-bold uppercase tracking-widest text-xs py-4 px-8 transition-all"
         >
           Try Again
         </button>
@@ -152,7 +152,7 @@ export default function Duel({ mediaType = "movie" }) {
           <div className="flex flex-col gap-3 w-full max-w-xs">
             <button
               onClick={() => navigate("/swipe")}
-              className="bg-[#E8A020] text-[#0F0E0D] font-headline font-black py-5 uppercase tracking-[0.2em] text-base hover:shadow-[0_0_30px_rgba(232,160,32,0.4)] active:scale-[0.98] transition-all"
+              className="bg-primary-container text-[#0F0E0D] font-headline font-black py-5 uppercase tracking-[0.2em] text-base hover:shadow-accent-md active:scale-[0.98] transition-all"
             >
               {`Swipe 10 ${mediaLabelCap(mediaType)}s`}
             </button>
@@ -162,7 +162,7 @@ export default function Duel({ mediaType = "movie" }) {
                 loadPair(true);
                 loadStats();
               }}
-              className="border border-[#514534]/30 hover:border-[#E8A020]/50 hover:bg-[#1d1b1a] text-[#d6c4ae] font-headline font-bold uppercase tracking-widest text-xs py-4 transition-all"
+              className="border border-[#514534]/30 hover:border-primary-container/50 hover:bg-[#1d1b1a] text-[#d6c4ae] font-headline font-bold uppercase tracking-widest text-xs py-4 transition-all"
             >
               Keep Dueling
             </button>
@@ -171,7 +171,7 @@ export default function Duel({ mediaType = "movie" }) {
       )}
 
       {/* Top Stats Bar */}
-      <header className="h-20 px-6 md:px-12 flex justify-between items-center bg-[#0F0E0D]/70 backdrop-blur-xl border-b border-[#E8A020]/10 sticky top-0 z-30">
+      <header className="h-20 px-6 md:px-12 flex justify-between items-center bg-[#0F0E0D]/70 backdrop-blur-xl border-b border-primary-container/10 sticky top-0 z-30">
         <div className="flex gap-6 md:gap-12">
           {stats && (
             <>
@@ -179,7 +179,7 @@ export default function Duel({ mediaType = "movie" }) {
                 <span className="text-[10px] font-label uppercase tracking-[0.2em] text-[#d6c4ae]/60">
                   duels played
                 </span>
-                <span className="text-lg font-headline font-bold text-[#E8A020]">
+                <span className="text-lg font-headline font-bold text-primary-container">
                   {stats.total_duels?.toLocaleString()}
                 </span>
               </div>
@@ -187,7 +187,7 @@ export default function Duel({ mediaType = "movie" }) {
                 <span className="text-[10px] font-label uppercase tracking-[0.2em] text-[#d6c4ae]/60">
                   {`${label}s ranked`}
                 </span>
-                <span className="text-lg font-headline font-bold text-[#E8A020]">
+                <span className="text-lg font-headline font-bold text-primary-container">
                   {stats.total_movies_ranked?.toLocaleString()}
                 </span>
               </div>
@@ -195,7 +195,7 @@ export default function Duel({ mediaType = "movie" }) {
                 <span className="text-[10px] font-label uppercase tracking-[0.2em] text-[#d6c4ae]/60">
                   to discover
                 </span>
-                <span className="text-lg font-headline font-bold text-[#E8A020]">
+                <span className="text-lg font-headline font-bold text-primary-container">
                   {(stats.unseen_count ?? 0).toLocaleString()}
                 </span>
               </div>

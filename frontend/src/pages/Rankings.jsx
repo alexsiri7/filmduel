@@ -50,7 +50,7 @@ export default function Rankings({ mediaType = "movie" }) {
       <header className="mb-12">
         <div className="flex items-start justify-between mb-8 gap-4">
           <h2 className="text-5xl md:text-7xl font-headline font-black uppercase tracking-tighter text-[#F5F0E8] leading-none">
-            Your <span className="text-[#E8A020]">rankings</span>
+            Your <span className="text-primary-container">rankings</span>
           </h2>
           <button
             onClick={async () => {
@@ -80,12 +80,12 @@ export default function Rankings({ mediaType = "movie" }) {
             disabled={syncState === "syncing"}
             className={`shrink-0 mt-2 px-4 py-2 font-label font-bold uppercase text-xs tracking-widest border transition-all ${
               syncState === "syncing"
-                ? "border-[#E8A020]/30 text-[#E8A020]/50 cursor-wait"
+                ? "border-primary-container/30 text-primary-container/50 cursor-wait"
                 : syncState === "done"
                 ? "border-green-500/50 text-green-400"
                 : syncState === "error"
                 ? "border-red-500/50 text-red-400"
-                : "border-[#F5F0E8]/10 text-[#F5F0E8]/60 hover:border-[#E8A020]/40 hover:text-[#E8A020]"
+                : "border-[#F5F0E8]/10 text-[#F5F0E8]/60 hover:border-primary-container/40 hover:text-primary-container"
             }`}
           >
             {syncState === "syncing"
@@ -106,8 +106,8 @@ export default function Rankings({ mediaType = "movie" }) {
               onClick={() => setActiveFilter(filter)}
               className={
                 activeFilter === filter
-                  ? "px-6 py-2 bg-[#E8A020] text-[#0F0E0D] font-label font-bold uppercase text-xs tracking-widest border border-[#E8A020]"
-                  : "px-6 py-2 bg-transparent text-[#F5F0E8]/60 font-label font-bold uppercase text-xs tracking-widest border border-[#F5F0E8]/10 hover:border-[#E8A020]/40 transition-colors"
+                  ? "px-6 py-2 bg-primary-container text-[#0F0E0D] font-label font-bold uppercase text-xs tracking-widest border border-primary-container"
+                  : "px-6 py-2 bg-transparent text-[#F5F0E8]/60 font-label font-bold uppercase text-xs tracking-widest border border-[#F5F0E8]/10 hover:border-primary-container/40 transition-colors"
               }
             >
               {filter}
@@ -134,7 +134,7 @@ export default function Rankings({ mediaType = "movie" }) {
                 key={r.movie.id}
                 className={`group relative flex items-center gap-4 md:gap-8 p-4 md:p-6 transition-colors ${
                   isFirst
-                    ? "bg-[#1d1b1a] border-l-4 border-[#E8A020] shadow-[inset_0_0_40px_rgba(232,160,32,0.05)]"
+                    ? "bg-[#1d1b1a] border-l-4 border-primary-container shadow-accent-inset"
                     : "bg-[#141312] border-l-4 border-transparent hover:bg-[#1d1b1a]"
                 }`}
               >
@@ -143,8 +143,8 @@ export default function Rankings({ mediaType = "movie" }) {
                   <span
                     className={`font-headline font-black italic ${
                       isFirst
-                        ? "text-4xl md:text-6xl text-[#E8A020]"
-                        : "text-3xl md:text-5xl text-[#F5F0E8]/20 group-hover:text-[#E8A020]/40 transition-colors"
+                        ? "text-4xl md:text-6xl text-primary-container"
+                        : "text-3xl md:text-5xl text-[#F5F0E8]/20 group-hover:text-primary-container/40 transition-colors"
                     }`}
                   >
                     {rank}
@@ -191,7 +191,7 @@ export default function Rankings({ mediaType = "movie" }) {
                       <span
                         className={`font-headline font-bold ${
                           isFirst
-                            ? "text-lg text-[#E8A020]"
+                            ? "text-lg text-primary-container"
                             : "text-md text-[#F5F0E8]/60"
                         }`}
                       >
@@ -233,7 +233,7 @@ export default function Rankings({ mediaType = "movie" }) {
                         href={`https://trakt.tv/search/trakt/${r.movie.trakt_id}?id_type=${r.movie.media_type === "show" ? "show" : "movie"}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[10px] font-label uppercase tracking-widest text-[#F5F0E8]/30 hover:text-[#E8A020] transition-colors"
+                        className="text-[10px] font-label uppercase tracking-widest text-[#F5F0E8]/30 hover:text-primary-container transition-colors"
                       >
                         Trakt
                       </a>
@@ -243,7 +243,7 @@ export default function Rankings({ mediaType = "movie" }) {
                         href={`https://www.imdb.com/title/${r.movie.imdb_id}/`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[10px] font-label uppercase tracking-widest text-[#F5F0E8]/30 hover:text-[#E8A020] transition-colors"
+                        className="text-[10px] font-label uppercase tracking-widest text-[#F5F0E8]/30 hover:text-primary-container transition-colors"
                       >
                         IMDB
                       </a>
@@ -261,7 +261,7 @@ export default function Rankings({ mediaType = "movie" }) {
         <a
           href={`/api/rankings/export/csv?media_type=${mediaType}`}
           download
-          className="flex items-center gap-3 px-6 md:px-8 py-4 bg-[#E8A020] text-[#0F0E0D] font-headline font-black uppercase tracking-widest text-sm shadow-[0_10px_30px_rgba(232,160,32,0.3)] hover:scale-105 active:scale-95 transition-all"
+          className="flex items-center gap-3 px-6 md:px-8 py-4 bg-primary-container text-[#0F0E0D] font-headline font-black uppercase tracking-widest text-sm shadow-accent-md hover:scale-105 active:scale-95 transition-all"
         >
           Export to Letterboxd
         </a>
@@ -279,7 +279,7 @@ export default function Rankings({ mediaType = "movie" }) {
             </div>
             <div className="w-full h-1 bg-[#211f1e]">
               <div
-                className="h-full bg-[#E8A020]"
+                className="h-full bg-primary-container"
                 style={{
                   width: `${Math.min(
                     100,

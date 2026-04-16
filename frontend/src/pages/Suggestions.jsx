@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { getSuggestions, regenerateSuggestions, dismissSuggestion, addToWatchlist, markSuggestionSeen } from "../api";
-import { mediaLabel } from "../lib/utils";
+import { mediaLabel, mediaLabelCap } from "../lib/utils";
 
 function SkeletonCard() {
   return (
@@ -98,7 +98,7 @@ export default function Suggestions({ mediaType = "movie" }) {
       <div className="min-h-screen bg-[#0F0E0D] p-6 md:p-12 pb-32">
         <header className="mb-12">
           <h2 className="text-5xl md:text-7xl font-headline font-black uppercase tracking-tighter text-[#F5F0E8] mb-2 leading-none">
-            Watch <span className="text-[#E8A020]">Next</span>
+            Watch <span className="text-primary-container">Next</span>
           </h2>
           <p className="text-[#6B6760] font-body text-sm">AI-curated picks based on your taste</p>
         </header>
@@ -117,7 +117,7 @@ export default function Suggestions({ mediaType = "movie" }) {
       <div className="min-h-screen bg-[#0F0E0D] p-6 md:p-12 pb-32">
         <header className="mb-12">
           <h2 className="text-5xl md:text-7xl font-headline font-black uppercase tracking-tighter text-[#F5F0E8] mb-2 leading-none">
-            Watch <span className="text-[#E8A020]">Next</span>
+            Watch <span className="text-primary-container">Next</span>
           </h2>
         </header>
         <div className="max-w-md mx-auto text-center space-y-6 mt-24">
@@ -129,7 +129,7 @@ export default function Suggestions({ mediaType = "movie" }) {
           </p>
           <a
             href="/"
-            className="inline-block mt-6 px-8 py-4 bg-[#E8A020] text-[#0F0E0D] font-headline font-black uppercase tracking-widest text-sm hover:scale-[1.02] active:scale-95 transition-all"
+            className="inline-block mt-6 px-8 py-4 bg-primary-container text-[#0F0E0D] font-headline font-black uppercase tracking-widest text-sm hover:scale-[1.02] active:scale-95 transition-all"
           >
             Start Dueling
           </a>
@@ -144,7 +144,7 @@ export default function Suggestions({ mediaType = "movie" }) {
       <div className="min-h-screen bg-[#0F0E0D] p-6 md:p-12 pb-32">
         <header className="mb-12">
           <h2 className="text-5xl md:text-7xl font-headline font-black uppercase tracking-tighter text-[#F5F0E8] mb-2 leading-none">
-            Watch <span className="text-[#E8A020]">Next</span>
+            Watch <span className="text-primary-container">Next</span>
           </h2>
         </header>
         <div className="max-w-md mx-auto text-center space-y-6 mt-24">
@@ -156,9 +156,9 @@ export default function Suggestions({ mediaType = "movie" }) {
           </p>
           <a
             href="/swipe"
-            className="inline-block mt-6 px-8 py-4 bg-[#E8A020] text-[#0F0E0D] font-headline font-black uppercase tracking-widest text-sm hover:scale-[1.02] active:scale-95 transition-all"
+            className="inline-block mt-6 px-8 py-4 bg-primary-container text-[#0F0E0D] font-headline font-black uppercase tracking-widest text-sm hover:scale-[1.02] active:scale-95 transition-all"
           >
-            Swipe Films
+            {`Swipe ${mediaLabelCap(mediaType)}s`}
           </a>
         </div>
       </div>
@@ -171,14 +171,14 @@ export default function Suggestions({ mediaType = "movie" }) {
       <div className="min-h-screen bg-[#0F0E0D] p-6 md:p-12 pb-32">
         <header className="mb-12">
           <h2 className="text-5xl md:text-7xl font-headline font-black uppercase tracking-tighter text-[#F5F0E8] mb-2 leading-none">
-            Watch <span className="text-[#E8A020]">Next</span>
+            Watch <span className="text-primary-container">Next</span>
           </h2>
         </header>
         <div className="max-w-md mx-auto text-center space-y-6 mt-24">
           <p className="text-[#F5F0E8]/60 font-body">{error || "Something went wrong."}</p>
           <button
             onClick={load}
-            className="px-8 py-4 bg-[#E8A020] text-[#0F0E0D] font-headline font-black uppercase tracking-widest text-sm hover:scale-[1.02] active:scale-95 transition-all"
+            className="px-8 py-4 bg-primary-container text-[#0F0E0D] font-headline font-black uppercase tracking-widest text-sm hover:scale-[1.02] active:scale-95 transition-all"
           >
             Try Again
           </button>
@@ -193,7 +193,7 @@ export default function Suggestions({ mediaType = "movie" }) {
       <div className="min-h-screen bg-[#0F0E0D] p-6 md:p-12 pb-32">
         <header className="mb-12">
           <h2 className="text-5xl md:text-7xl font-headline font-black uppercase tracking-tighter text-[#F5F0E8] mb-2 leading-none">
-            Watch <span className="text-[#E8A020]">Next</span>
+            Watch <span className="text-primary-container">Next</span>
           </h2>
         </header>
         <div className="max-w-md mx-auto text-center space-y-6 mt-24">
@@ -206,7 +206,7 @@ export default function Suggestions({ mediaType = "movie" }) {
           <button
             onClick={handleRegenerate}
             disabled={regenerating}
-            className="px-8 py-4 bg-[#E8A020] text-[#0F0E0D] font-headline font-black uppercase tracking-widest text-sm hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
+            className="px-8 py-4 bg-primary-container text-[#0F0E0D] font-headline font-black uppercase tracking-widest text-sm hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
           >
             {regenerating ? "Generating..." : "Regenerate Suggestions"}
           </button>
@@ -224,14 +224,14 @@ export default function Suggestions({ mediaType = "movie" }) {
       <header className="mb-12 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
           <h2 className="text-5xl md:text-7xl font-headline font-black uppercase tracking-tighter text-[#F5F0E8] mb-2 leading-none">
-            Watch <span className="text-[#E8A020]">Next</span>
+            Watch <span className="text-primary-container">Next</span>
           </h2>
           <p className="text-[#6B6760] font-body text-sm">AI-curated picks based on your taste</p>
         </div>
         <button
           onClick={handleRegenerate}
           disabled={regenerating}
-          className="px-6 py-3 bg-transparent border border-[#F5F0E8]/10 text-[#F5F0E8]/60 font-headline font-bold uppercase text-xs tracking-widest hover:border-[#E8A020]/40 hover:text-[#E8A020] transition-colors disabled:opacity-50 shrink-0"
+          className="px-6 py-3 bg-transparent border border-[#F5F0E8]/10 text-[#F5F0E8]/60 font-headline font-bold uppercase text-xs tracking-widest hover:border-primary-container/40 hover:text-primary-container transition-colors disabled:opacity-50 shrink-0"
         >
           {regenerating ? "Generating..." : "Refresh"}
         </button>
@@ -247,7 +247,7 @@ export default function Suggestions({ mediaType = "movie" }) {
         {activeSuggestions.map((s) => (
           <div
             key={s.id}
-            className="group bg-[#141312] overflow-hidden transition-all hover:shadow-[0_0_30px_rgba(232,160,32,0.08)]"
+            className="group bg-[#141312] overflow-hidden transition-all hover:shadow-accent-sm"
           >
             {/* Poster */}
             <div className="relative aspect-[2/3] overflow-hidden">
@@ -287,7 +287,7 @@ export default function Suggestions({ mediaType = "movie" }) {
                     href={`https://www.imdb.com/title/${s.movie.imdb_id}/`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[10px] font-label uppercase tracking-widest text-[#F5F0E8]/30 hover:text-[#E8A020] transition-colors"
+                    className="text-[10px] font-label uppercase tracking-widest text-[#F5F0E8]/30 hover:text-primary-container transition-colors"
                   >
                     IMDB
                   </a>
@@ -297,7 +297,7 @@ export default function Suggestions({ mediaType = "movie" }) {
                     href={`https://trakt.tv/search/trakt/${s.movie.trakt_id}?id_type=${s.movie.media_type === "show" ? "show" : "movie"}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[10px] font-label uppercase tracking-widest text-[#F5F0E8]/30 hover:text-[#E8A020] transition-colors"
+                    className="text-[10px] font-label uppercase tracking-widest text-[#F5F0E8]/30 hover:text-primary-container transition-colors"
                   >
                     Trakt
                   </a>
@@ -307,20 +307,20 @@ export default function Suggestions({ mediaType = "movie" }) {
               {/* Action buttons */}
               <div className="flex gap-2">
                 {s.added_to_watchlist_at ? (
-                  <div className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-[#E8A020]/20 text-[#E8A020] font-headline font-bold uppercase text-xs tracking-widest">
+                  <div className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-primary-container/20 text-primary-container font-headline font-bold uppercase text-xs tracking-widest">
                     On Watchlist
                   </div>
                 ) : (
                   <button
                     onClick={() => handleAddToWatchlist(s.id)}
-                    className="flex-1 px-4 py-3 bg-[#E8A020] text-[#0F0E0D] font-headline font-bold uppercase text-xs tracking-widest hover:scale-[1.02] active:scale-95 transition-all"
+                    className="flex-1 px-4 py-3 bg-primary-container text-[#0F0E0D] font-headline font-bold uppercase text-xs tracking-widest hover:scale-[1.02] active:scale-95 transition-all"
                   >
                     Watchlist
                   </button>
                 )}
                 <button
                   onClick={() => handleMarkSeen(s.id)}
-                  className="px-3 py-3 border border-[#E8A020]/30 text-[#E8A020]/70 font-headline font-bold uppercase text-[10px] tracking-widest hover:bg-[#E8A020]/10 hover:text-[#E8A020] transition-colors"
+                  className="px-3 py-3 border border-primary-container/30 text-primary-container/70 font-headline font-bold uppercase text-[10px] tracking-widest hover:bg-primary-container/10 hover:text-primary-container transition-colors"
                   title={`I've seen this ${label}`}
                 >
                   Seen it
