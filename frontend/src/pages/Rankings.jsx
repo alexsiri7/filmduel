@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { getRankings, fetchStats, syncTrakt } from "../api";
-import { mediaLabel } from "../lib/utils";
+import { mediaLabel, mediaLabelCap } from "../lib/utils";
 
 const GENRE_FILTERS = ["All", "Drama", "Horror", "Sci-fi", "Thriller", "Comedy"];
 
@@ -274,7 +274,7 @@ export default function Rankings({ mediaType = "movie" }) {
                 Total Ranked
               </span>
               <span className="text-sm font-headline font-bold text-[#F5F0E8]">
-                {`${stats.total_movies_ranked} ${label.charAt(0).toUpperCase() + label.slice(1)}s`}
+                {`${stats.total_movies_ranked} ${mediaLabelCap(mediaType)}s`}
               </span>
             </div>
             <div className="w-full h-1 bg-[#211f1e]">

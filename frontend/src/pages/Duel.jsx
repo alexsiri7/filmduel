@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchPair, submitDuel, fetchStats } from "../api";
 import MovieCard from "../components/MovieCard";
-import { mediaLabel } from "../lib/utils";
+import { mediaLabel, mediaLabelCap } from "../lib/utils";
 
 const MODE = "discovery";
 
@@ -154,7 +154,7 @@ export default function Duel({ mediaType = "movie" }) {
               onClick={() => navigate("/swipe")}
               className="bg-[#E8A020] text-[#0F0E0D] font-headline font-black py-5 uppercase tracking-[0.2em] text-base hover:shadow-[0_0_30px_rgba(232,160,32,0.4)] active:scale-[0.98] transition-all"
             >
-              {`Swipe 10 ${label.charAt(0).toUpperCase() + label.slice(1)}s`}
+              {`Swipe 10 ${mediaLabelCap(mediaType)}s`}
             </button>
             <button
               onClick={() => {

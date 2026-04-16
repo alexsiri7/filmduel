@@ -8,3 +8,7 @@ export function cn(...inputs) {
 export function mediaLabel(mediaType) {
   return mediaType === "show" ? "show" : "film";
 }
+
+export function mediaLabelCap(mediaType) {
+  return mediaType === "show" ? "Show" : "Film";
+}
