@@ -33,6 +33,14 @@
   --font-body: 'Manrope', sans-serif;
 }
 
+.show-mode {
+  --color-primary: #5bbfff;
+  --color-primary-container: #2096E8;
+  --color-positive: #2096E8;
+  --color-ring: #2096E8;
+  --color-negative: #C04A20;
+}
+
 body {
   background-color: #0F0E0D;
   color: #F5F0E8;
