@@ -45,6 +45,11 @@ export default function App() {
     localStorage.setItem("filmduel_media_type", mediaType);
   }, [mediaType]);
 
+  useEffect(() => {
+    document.body.classList.toggle("show-mode", mediaType === "show");
+    return () => document.body.classList.remove("show-mode");
+  }, [mediaType]);
+
   if (isLogin) {
     return (
       <div className="min-h-screen bg-[#0F0E0D] text-[#F5F0E8]">
@@ -104,7 +109,7 @@ export default function App() {
             path="/tournaments/:id"
             element={
               <ProtectedRoute>
-                <TournamentBracket />
+                <TournamentBracket mediaType={mediaType} />
               </ProtectedRoute>
             }
           />

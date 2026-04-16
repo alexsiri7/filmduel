@@ -2,8 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchSwipeCards, submitSwipeResults } from "../api";
 import SwipeCard from "../components/SwipeCard";
+import { mediaLabel } from "../lib/utils";
 
 export default function Swipe({ mediaType = "movie" }) {
+  const label = mediaLabel(mediaType);
   const navigate = useNavigate();
   const [cards, setCards] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -89,7 +91,7 @@ export default function Swipe({ mediaType = "movie" }) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0F0E0D]">
         <div className="text-[#6B6760] font-headline uppercase tracking-widest animate-pulse">
-          Loading films...
+          {`Loading ${label}s...`}
         </div>
       </div>
     );
@@ -119,11 +121,11 @@ export default function Swipe({ mediaType = "movie" }) {
             {needMore ? "Round Complete" : "Swipe Complete"}
           </p>
           <h2 className="text-4xl md:text-5xl font-headline font-black uppercase tracking-tighter text-[#F5F0E8]">
-            You've seen {summary.seen_count} of these films
+            {`You've seen ${summary.seen_count} of these ${label}s`}
           </h2>
           <p className="text-[#6B6760] font-body text-lg">
             {needMore
-              ? "Loading more films..."
+              ? `Loading more ${label}s...`
               : `${summary.unseen_count} new discoveries added to your pool`}
           </p>
           {needMore && (
@@ -156,7 +158,7 @@ export default function Swipe({ mediaType = "movie" }) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-12 bg-[#0F0E0D]">
         <p className="text-[#6B6760] text-lg text-center max-w-md font-body">
-          No unknown films left to swipe. You've classified them all!
+          {`No unknown ${label}s left to swipe. You've classified them all!`}
         </p>
         <button
           onClick={() => navigate("/")}

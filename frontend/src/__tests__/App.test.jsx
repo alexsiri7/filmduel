@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import App from "../App";
 
 describe("App", () => {
@@ -87,6 +87,33 @@ describe("App", () => {
     // "Swipe" appears in both desktop and mobile nav
     const swipeLinks = screen.getAllByText("Swipe");
     expect(swipeLinks.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("adds show-mode class to body when mediaType is show", async () => {
+    localStorage.setItem("filmduel_media_type", "show");
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>
+    );
+    await waitFor(() => {
+      expect(document.body.classList.contains("show-mode")).toBe(true);
+    });
+    localStorage.removeItem("filmduel_media_type");
+    document.body.classList.remove("show-mode");
+  });
+
+  it("does not add show-mode class when mediaType is movie", async () => {
+    localStorage.setItem("filmduel_media_type", "movie");
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>
+    );
+    await waitFor(() => {
+      expect(document.body.classList.contains("show-mode")).toBe(false);
+    });
+    localStorage.removeItem("filmduel_media_type");
   });
 
   it("routes to /rankings correctly", async () => {

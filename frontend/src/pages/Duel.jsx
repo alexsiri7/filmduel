@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchPair, submitDuel, fetchStats } from "../api";
 import MovieCard from "../components/MovieCard";
+import { mediaLabel, mediaLabelCap } from "../lib/utils";
 
 const MODE = "discovery";
 
@@ -14,6 +15,7 @@ function SkeletonCard() {
 }
 
 export default function Duel({ mediaType = "movie" }) {
+  const label = mediaLabel(mediaType);
   const navigate = useNavigate();
   const [pair, setPair] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -138,13 +140,13 @@ export default function Duel({ mediaType = "movie" }) {
         <div className="absolute inset-0 z-50 bg-[#0F0E0D]/95 backdrop-blur-xl flex flex-col items-center justify-center gap-8 p-12">
           <div className="text-center space-y-4">
             <p className="text-[10px] font-label uppercase tracking-[0.3em] text-[#d6c4ae]/60">
-              Running low on films
+              {`Running low on ${label}s`}
             </p>
             <h2 className="text-3xl md:text-4xl font-headline font-black uppercase tracking-tighter text-[#F5F0E8]">
-              Time to discover more films
+              {`Time to discover more ${label}s`}
             </h2>
             <p className="text-[#6B6760] font-body text-lg max-w-md">
-              Swipe through 10 films to classify them as seen or unseen, then come back for more duels.
+              {`Swipe through 10 ${label}s to classify them as seen or unseen, then come back for more duels.`}
             </p>
           </div>
           <div className="flex flex-col gap-3 w-full max-w-xs">
@@ -152,7 +154,7 @@ export default function Duel({ mediaType = "movie" }) {
               onClick={() => navigate("/swipe")}
               className="bg-[#E8A020] text-[#0F0E0D] font-headline font-black py-5 uppercase tracking-[0.2em] text-base hover:shadow-[0_0_30px_rgba(232,160,32,0.4)] active:scale-[0.98] transition-all"
             >
-              Swipe 10 Films
+              {`Swipe 10 ${mediaLabelCap(mediaType)}s`}
             </button>
             <button
               onClick={() => {
@@ -183,7 +185,7 @@ export default function Duel({ mediaType = "movie" }) {
               </div>
               <div className="flex flex-col">
                 <span className="text-[10px] font-label uppercase tracking-[0.2em] text-[#d6c4ae]/60">
-                  films ranked
+                  {`${label}s ranked`}
                 </span>
                 <span className="text-lg font-headline font-bold text-[#E8A020]">
                   {stats.total_movies_ranked?.toLocaleString()}
@@ -218,7 +220,7 @@ export default function Duel({ mediaType = "movie" }) {
           <>
             {/* Instruction */}
             <p className="text-[10px] font-label uppercase tracking-[0.3em] text-[#6B6760]">
-              Tap the film you rate higher
+              {`Tap the ${label} you rate higher`}
             </p>
 
             {/* Cards Container */}

@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { getRankings, fetchStats, syncTrakt } from "../api";
+import { mediaLabel, mediaLabelCap } from "../lib/utils";
 
 const GENRE_FILTERS = ["All", "Drama", "Horror", "Sci-fi", "Thriller", "Comedy"];
 
 export default function Rankings({ mediaType = "movie" }) {
+  const label = mediaLabel(mediaType);
   const [rankings, setRankings] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -119,7 +121,7 @@ export default function Rankings({ mediaType = "movie" }) {
         <div className="p-8 text-center text-[#6B6760] bg-[#1d1b1a] font-body">
           {rankings.length === 0
             ? "No rankings yet. Start dueling to build your list!"
-            : "No films match this filter."}
+            : `No ${label}s match this filter.`}
         </div>
       ) : (
         <div className="space-y-4">
@@ -272,7 +274,7 @@ export default function Rankings({ mediaType = "movie" }) {
                 Total Ranked
               </span>
               <span className="text-sm font-headline font-bold text-[#F5F0E8]">
-                {stats.total_movies_ranked} Films
+                {`${stats.total_movies_ranked} ${mediaLabelCap(mediaType)}s`}
               </span>
             </div>
             <div className="w-full h-1 bg-[#211f1e]">

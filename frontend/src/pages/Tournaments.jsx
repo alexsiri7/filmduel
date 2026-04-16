@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { getTournaments, createTournament, getTournamentGenres, getTournamentPoolCount } from "../api";
+import { mediaLabel } from "../lib/utils";
 
 const BRACKET_SIZES = [8, 16, 32, 64];
 const DECADES = ["1970s", "1980s", "1990s", "2000s", "2010s", "2020s"];
 
 export default function Tournaments({ mediaType = "movie" }) {
+  const label = mediaLabel(mediaType);
   const navigate = useNavigate();
   const [tournaments, setTournaments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -151,7 +153,7 @@ export default function Tournaments({ mediaType = "movie" }) {
             </div>
             {aiCurated && (
               <p className="mt-2 text-sm font-body text-[#E8A020]/70">
-                AI will select films and create a themed bracket
+                {`AI will select ${label}s and create a themed bracket`}
               </p>
             )}
           </div>
@@ -179,12 +181,12 @@ export default function Tournaments({ mediaType = "movie" }) {
             {poolCount !== null && (
               <p className="mt-2 text-sm font-body text-[#F5F0E8]/50">
                 {poolCount >= bracketSize ? (
-                  <>{poolCount} ranked films available</>
+                  <>{poolCount} ranked {label}s available</>
                 ) : poolCount >= 4 ? (
-                  <>{poolCount} films + {bracketSize - poolCount} byes</>
+                  <>{poolCount} {label}s + {bracketSize - poolCount} byes</>
                 ) : (
                   <span className="text-[#C04A20]">
-                    Only {poolCount} ranked films — need at least 4
+                    Only {poolCount} ranked {label}s — need at least 4
                   </span>
                 )}
               </p>
@@ -316,7 +318,7 @@ export default function Tournaments({ mediaType = "movie" }) {
                       {t.name}
                     </h3>
                     <span className="text-sm font-label text-[#F5F0E8]/40 shrink-0 hidden sm:inline">
-                      {t.bracket_size} films
+                      {t.bracket_size} {label}s
                     </span>
                   </div>
                   <div className="flex gap-4 md:gap-6 items-center">

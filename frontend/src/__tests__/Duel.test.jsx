@@ -237,6 +237,61 @@ describe("Duel", () => {
     });
   });
 
+  it("shows 'show' instruction text in show mode", async () => {
+    vi.stubGlobal("fetch", setupFetch());
+    render(
+      <MemoryRouter>
+        <Duel mediaType="show" />
+      </MemoryRouter>
+    );
+    await waitFor(() => {
+      expect(screen.getByText("Tap the show you rate higher")).toBeInTheDocument();
+    });
+  });
+
+  it("shows 'shows ranked' stat label in show mode", async () => {
+    vi.stubGlobal("fetch", setupFetch());
+    render(
+      <MemoryRouter>
+        <Duel mediaType="show" />
+      </MemoryRouter>
+    );
+    await waitFor(() => {
+      expect(screen.getByText("shows ranked")).toBeInTheDocument();
+    });
+  });
+
+  it("shows swipe interstitial with show strings when next_action is swipe and mediaType is show", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const mockFetch = setupFetch({
+      duelResult: { movie_a_elo_delta: 12, movie_b_elo_delta: -12, next_action: "swipe" },
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    render(
+      <MemoryRouter>
+        <Duel mediaType="show" />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Alien")).toBeInTheDocument();
+    });
+
+    const buttons = screen.getAllByRole("button");
+    const alienButton = buttons.find(
+      (b) => b.textContent.includes("Alien") && !b.textContent.includes("Aliens")
+    );
+    fireEvent.click(alienButton);
+
+    await vi.advanceTimersByTimeAsync(700);
+
+    await waitFor(() => {
+      expect(screen.getByText("Time to discover more shows")).toBeInTheDocument();
+      expect(screen.getByText("Swipe 10 Shows")).toBeInTheDocument();
+    });
+  });
+
   it("prefetches next pair on load", async () => {
     const mockFetch = setupFetch();
     vi.stubGlobal("fetch", mockFetch);

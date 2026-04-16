@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { getSuggestions, regenerateSuggestions, dismissSuggestion, addToWatchlist, markSuggestionSeen } from "../api";
+import { mediaLabel } from "../lib/utils";
 
 function SkeletonCard() {
   return (
@@ -19,6 +20,7 @@ function SkeletonCard() {
 }
 
 export default function Suggestions({ mediaType = "movie" }) {
+  const label = mediaLabel(mediaType);
   const [suggestions, setSuggestions] = useState([]);
   const [status, setStatus] = useState("loading");
   const [regenerating, setRegenerating] = useState(false);
@@ -123,8 +125,7 @@ export default function Suggestions({ mediaType = "movie" }) {
             Keep dueling!
           </h3>
           <p className="text-[#6B6760] font-body leading-relaxed">
-            We need at least 20 ranked films to understand your taste and generate
-            personalized suggestions. Head to the duel page and keep ranking!
+            {`We need at least 20 ranked ${label}s to understand your taste and generate personalized suggestions. Head to the duel page and keep ranking!`}
           </p>
           <a
             href="/"
@@ -151,8 +152,7 @@ export default function Suggestions({ mediaType = "movie" }) {
             Pool expanding...
           </h3>
           <p className="text-[#6B6760] font-body leading-relaxed">
-            We're adding more films to your pool. Swipe a few rounds to classify
-            new films, then come back for personalized suggestions.
+            {`We're adding more ${label}s to your pool. Swipe a few rounds to classify new ${label}s, then come back for personalized suggestions.`}
           </p>
           <a
             href="/swipe"
@@ -321,7 +321,7 @@ export default function Suggestions({ mediaType = "movie" }) {
                 <button
                   onClick={() => handleMarkSeen(s.id)}
                   className="px-3 py-3 border border-[#E8A020]/30 text-[#E8A020]/70 font-headline font-bold uppercase text-[10px] tracking-widest hover:bg-[#E8A020]/10 hover:text-[#E8A020] transition-colors"
-                  title="I've seen this film"
+                  title={`I've seen this ${label}`}
                 >
                   Seen it
                 </button>

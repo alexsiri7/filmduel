@@ -99,7 +99,7 @@ async def select_pair(
     seen_films = list(seen_result.unique().scalars().all())
 
     if len(seen_films) < 2:
-        raise ValueError("Need more seen films to duel. Swipe to classify some movies first!")
+        raise ValueError(f"Need more seen {media_type}s to duel. Swipe to classify some {media_type}s first!")
 
     # Split into anchors (ranked, battles >= 1) and full pool
     anchor_pool = [f for f in seen_films if f.battles >= 1 and f.elo is not None]
