@@ -136,6 +136,7 @@ function BracketMatch({ match, isNext, totalRounds, onClick }) {
 export default function TournamentBracket({ mediaType = "movie" }) {
   const { id } = useParams();
   const navigate = useNavigate();
+  const label = mediaLabel(mediaType);
   const [tournament, setTournament] = useState(null);
   const [loading, setLoading] = useState(true);
   const [playing, setPlaying] = useState(false); // match play mode
@@ -363,7 +364,7 @@ export default function TournamentBracket({ mediaType = "movie" }) {
         {/* Duel arena */}
         <section className="flex-1 p-4 md:p-12 flex flex-col items-center justify-center gap-8 md:gap-12">
           <p className="text-[10px] font-label uppercase tracking-[0.3em] text-[#6B6760]">
-            {`Tap the ${mediaLabel(mediaType)} you rate higher`}
+            {`Tap the ${label} you rate higher`}
           </p>
 
           <div className="w-full max-w-7xl flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6 relative">
@@ -452,7 +453,7 @@ export default function TournamentBracket({ mediaType = "movie" }) {
         )}
         <div className="flex items-center gap-6 flex-wrap">
           <span className="text-[10px] font-label uppercase tracking-[0.3em] text-[#6B6760]">
-            {tournament.bracket_size} {mediaLabel(mediaType)}s
+            {tournament.bracket_size} {label}s
           </span>
           <span
             className={`text-[10px] font-label uppercase tracking-[0.3em] ${

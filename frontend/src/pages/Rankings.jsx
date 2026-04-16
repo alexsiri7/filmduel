@@ -121,7 +121,7 @@ export default function Rankings({ mediaType = "movie" }) {
         <div className="p-8 text-center text-[#6B6760] bg-[#1d1b1a] font-body">
           {rankings.length === 0
             ? "No rankings yet. Start dueling to build your list!"
-            : "No films match this filter."}
+            : `No ${label}s match this filter.`}
         </div>
       ) : (
         <div className="space-y-4">

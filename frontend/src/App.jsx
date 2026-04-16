@@ -47,6 +47,7 @@ export default function App() {
 
   useEffect(() => {
     document.body.classList.toggle("show-mode", mediaType === "show");
+    return () => document.body.classList.remove("show-mode");
   }, [mediaType]);
 
   if (isLogin) {

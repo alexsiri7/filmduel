@@ -61,8 +61,9 @@ Alembic migrations run automatically on container start.
 ## How It Works
 
 1. Sign in with your Trakt account
-2. Movies are pulled from Trakt popular/trending lists + your watch history
-3. You're shown two movies at a time — pick the one you prefer
-4. ELO ratings update after each duel (K=32, default 1000)
-5. View your ranked list and export as Letterboxd-compatible CSV
-6. Ratings sync back to Trakt on a 1-10 scale
+2. Toggle between **Movies** and **TV Shows** using the nav bar
+3. Content is pulled from Trakt popular/trending lists + your watch history
+4. You're shown two titles at a time — pick the one you rate higher
+5. ELO ratings update after each duel (K=32, default 1000)
+6. View your ranked list and export as Letterboxd-compatible CSV
+7. Ratings sync back to Trakt on a 1-10 scale
