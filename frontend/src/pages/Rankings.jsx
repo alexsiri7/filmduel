@@ -1,25 +1,43 @@
-import { useState, useEffect } from "react";
-import { getRankings, fetchStats, syncTrakt } from "../api";
+import { useState, useEffect, useCallback } from "react";
+import { getRankings, fetchStats, syncTrakt, getTournamentGenres } from "../api";
 import { mediaLabel, mediaLabelCap } from "../lib/utils";
 
-const GENRE_FILTERS = ["All", "Drama", "Horror", "Sci-fi", "Thriller", "Comedy"];
+const LIMIT = 50;
 
 export default function Rankings({ mediaType = "movie" }) {
   const label = mediaLabel(mediaType);
   const [rankings, setRankings] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [activeFilter, setActiveFilter] = useState("All");
   const [total, setTotal] = useState(0);
   const [syncState, setSyncState] = useState("idle"); // idle | syncing | done | error
+  const [offset, setOffset] = useState(0);
+  const [genreFilters, setGenreFilters] = useState(["All"]);
 
+  // Fetch available genres on mount
+  useEffect(() => {
+    getTournamentGenres()
+      .then((genres) => {
+        if (Array.isArray(genres) && genres.length > 0) {
+          setGenreFilters(["All", ...genres]);
+        }
+      })
+      .catch(() => {
+        // Fall back to just "All" on error
+      });
+  }, []);
+
+  // Load rankings when filter changes (reset to first page)
   useEffect(() => {
     async function load() {
       setLoading(true);
+      setOffset(0);
       try {
         const genre = activeFilter === "All" ? null : activeFilter;
         const [rankData, statsData] = await Promise.all([
-          getRankings(50, 0, genre, null, mediaType),
+          getRankings(LIMIT, 0, genre, null, mediaType),
           fetchStats(mediaType),
         ]);
         setRankings(rankData.rankings);
@@ -33,6 +51,21 @@ export default function Rankings({ mediaType = "movie" }) {
     }
     load();
   }, [activeFilter, mediaType]);
+
+  const loadMore = useCallback(async () => {
+    setLoadingMore(true);
+    try {
+      const newOffset = offset + LIMIT;
+      const genre = activeFilter === "All" ? null : activeFilter;
+      const data = await getRankings(LIMIT, newOffset, genre);
+      setRankings((prev) => [...prev, ...data.rankings]);
+      setOffset(newOffset);
+    } catch (err) {
+      console.error("Failed to load more rankings:", err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [offset, activeFilter]);
 
   if (loading) {
     return (
@@ -100,7 +133,7 @@ export default function Rankings({ mediaType = "movie" }) {
 
         {/* Filter Pills */}
         <div className="flex items-center gap-3 flex-wrap">
-          {GENRE_FILTERS.map((filter) => (
+          {genreFilters.map((filter) => (
             <button
               key={filter}
               onClick={() => setActiveFilter(filter)}
@@ -125,9 +158,12 @@ export default function Rankings({ mediaType = "movie" }) {
         </div>
       ) : (
         <div className="space-y-4">
+          <div className="text-[10px] font-label uppercase tracking-widest text-[#6B6760] mb-2">
+            Showing {rankings.length} of {total} films
+          </div>
           {rankings.map((r, idx) => {
-            const isFirst = idx === 0;
-            const rank = String(idx + 1).padStart(2, "0");
+            const isFirst = r.rank === 1;
+            const rank = String(r.rank).padStart(2, "0");
 
             return (
               <div
@@ -253,6 +289,16 @@ export default function Rankings({ mediaType = "movie" }) {
               </div>
             );
           })}
+
+          {rankings.length < total && (
+            <button
+              onClick={loadMore}
+              disabled={loadingMore}
+              className="w-full py-4 mt-4 border border-[#F5F0E8]/10 hover:border-[#E8A020]/40 text-[#F5F0E8]/40 hover:text-[#E8A020] font-headline font-bold uppercase text-xs tracking-widest transition-colors disabled:opacity-40"
+            >
+              {loadingMore ? "Loading..." : `Load More (${rankings.length} of ${total})`}
+            </button>
+          )}
         </div>
       )}
 
