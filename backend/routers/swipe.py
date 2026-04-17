@@ -55,6 +55,7 @@ async def get_swipe_cards(
 ):
     """Return up to 10 unknown films for a swipe session, weighted by community rating band."""
     uid = current_user.id
+    logger.info("swipe_cards_requested user_id=%s", uid)
 
     # Find user's median ELO to determine taste band (scoped to media_type)
     median_stmt = (
@@ -90,6 +91,7 @@ async def get_swipe_cards(
     )
 
     if median_elo is None:
+        logger.info("swipe_band_selection user_id=%s band=none (no ranked films)", uid)
         # No ranked films yet — pick randomly from rated films
         stmt = base.where(Movie.community_rating.isnot(None)).order_by(
             func.random()
@@ -107,6 +109,7 @@ async def get_swipe_cards(
     else:
         # Band-weighted selection: 60% target, 20% above, 20% below
         band_idx = _elo_to_band_index(int(median_elo))
+        logger.info("swipe_band_selection user_id=%s median_elo=%s band=%s", uid, median_elo, BANDS[band_idx][0])
 
         target_range = _community_rating_range(band_idx)
         above_idx = max(0, band_idx - 1)
@@ -140,7 +143,10 @@ async def get_swipe_cards(
             result = await db.execute(backfill_stmt)
             rows.extend(result.all())
 
+    logger.info("swipe_cards_result user_id=%s cards_returned=%d", uid, len(rows))
+
     if not rows:
+        logger.warning("swipe_cards_empty user_id=%s no_unknown_films_available", uid)
         raise HTTPException(
             status_code=404,
             detail="No unknown films available. Import more movies from Trakt.",
@@ -221,6 +227,11 @@ async def submit_swipe_results(
 
     next_action = "duel" if (total_seen >= 10 and seen_unranked >= 3) else "swipe"
 
+    logger.info(
+        "swipe_submit user_id=%s seen_count=%d unseen_count=%d next_action=%s total_seen=%d seen_unranked=%d",
+        uid, seen_count, unseen_count, next_action, total_seen, seen_unranked,
+    )
+
     # Check if pool needs expansion (scoped by media_type)
     unknown_stmt = (
         select(func.count())
@@ -231,6 +242,7 @@ async def submit_swipe_results(
     unknown_count = (await db.execute(unknown_stmt)).scalar() or 0
 
     if unknown_count < 50:
+        logger.info("swipe_pool_low user_id=%s unknown_count=%d triggering_expansion", uid, unknown_count)
         background_tasks.add_task(expand_pool, uid, media_type)
 
     return SwipeResponse(seen_count=seen_count, unseen_count=unseen_count, next_action=next_action)

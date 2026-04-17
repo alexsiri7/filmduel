@@ -6,6 +6,7 @@ import Rankings from "../pages/Rankings";
 const fakeRankings = {
   rankings: [
     {
+      rank: 1,
       movie: {
         id: 1,
         title: "Parasite",
@@ -17,6 +18,7 @@ const fakeRankings = {
       battles: 20,
     },
     {
+      rank: 2,
       movie: {
         id: 2,
         title: "Get Out",
@@ -28,6 +30,7 @@ const fakeRankings = {
       battles: 15,
     },
   ],
+  total: 2,
 };
 
 const fakeStats = {
@@ -50,6 +53,13 @@ function setupFetch(overrides = {}) {
         ok: true,
         status: 200,
         json: () => Promise.resolve(overrides.stats ?? fakeStats),
+      });
+    }
+    if (url.includes("/api/tournaments/genres")) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(overrides.genres ?? ["Drama", "Horror", "Thriller"]),
       });
     }
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) });

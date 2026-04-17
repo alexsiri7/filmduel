@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -13,6 +14,8 @@ from backend.db_models import User, UserMovie
 from backend.schemas import MediaType, MovieWithStateSchema, MoviePairResponse
 from backend.routers.auth import get_current_user
 from backend.services.pair_selection import select_pair
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/movies", tags=["movies"])
 
