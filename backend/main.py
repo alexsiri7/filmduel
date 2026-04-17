@@ -11,7 +11,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+
 from backend.config import get_settings
+from backend.rate_limit import limiter
 from backend.routers import auth, movies, duels, rankings, suggestions, swipe, tournaments, feedback
 
 logger = logging.getLogger(__name__)
@@ -26,6 +30,10 @@ if settings.SENTRY_DSN:
     )
 
 app = FastAPI(title="FilmDuel", version="0.1.0")
+
+# Rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS — origins configurable via CORS_ORIGINS env var
 app.add_middleware(
