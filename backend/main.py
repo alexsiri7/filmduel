@@ -7,6 +7,7 @@ from pathlib import Path
 
 import sentry_sdk
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -30,6 +31,18 @@ if settings.SENTRY_DSN:
     )
 
 app = FastAPI(title="FilmDuel", version="0.1.0")
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    for error in exc.errors():
+        if "must be different" in str(error.get("msg", "")):
+            return JSONResponse(
+                status_code=400,
+                content={"detail": "A movie cannot duel against itself"},
+            )
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+
 
 # Rate limiting
 app.state.limiter = limiter
