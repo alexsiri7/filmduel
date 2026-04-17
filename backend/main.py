@@ -18,6 +18,7 @@ from slowapi.errors import RateLimitExceeded
 from backend.config import get_settings
 from backend.rate_limit import limiter
 from backend.routers import auth, movies, duels, rankings, suggestions, swipe, tournaments, feedback
+from backend.schemas import SELF_DUEL_ERROR_MSG
 
 logger = logging.getLogger(__name__)
 
@@ -36,11 +37,16 @@ app = FastAPI(title="FilmDuel", version="0.1.0")
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     for error in exc.errors():
-        if "must be different" in str(error.get("msg", "")):
+        if SELF_DUEL_ERROR_MSG in str(error.get("msg", "")):
             return JSONResponse(
                 status_code=400,
                 content={"detail": "A movie cannot duel against itself"},
             )
+    logger.warning(
+        "validation_error path=%s errors=%s",
+        request.url.path,
+        exc.errors(),
+    )
     return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 

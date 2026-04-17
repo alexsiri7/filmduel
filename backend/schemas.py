@@ -61,6 +61,9 @@ class DuelMode(str, Enum):
     tournament = "tournament"
 
 
+SELF_DUEL_ERROR_MSG = "movie_a_id and movie_b_id must be different"
+
+
 class DuelSubmit(BaseModel):
     movie_a_id: UUID
     movie_b_id: UUID
@@ -70,7 +73,7 @@ class DuelSubmit(BaseModel):
     @model_validator(mode="after")
     def movies_must_differ(self):
         if self.movie_a_id == self.movie_b_id:
-            raise ValueError("movie_a_id and movie_b_id must be different")
+            raise ValueError(SELF_DUEL_ERROR_MSG)
         return self
 
 

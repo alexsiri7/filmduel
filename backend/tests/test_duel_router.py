@@ -101,6 +101,22 @@ class TestSubmitDuel:
         assert response.status_code == 400
         assert "itself" in response.json()["detail"].lower()
 
+    def test_invalid_payload_returns_422(self):
+        """A request with a missing required field should still return 422."""
+        client = TestClient(app)
+        response = client.post(
+            "/api/duels",
+            json={
+                "movie_a_id": str(uuid.uuid4()),
+                # movie_b_id intentionally omitted
+                "outcome": "a_wins",
+                "mode": "discovery",
+            },
+        )
+        assert response.status_code == 422
+        body = response.json()
+        assert "detail" in body
+
     def test_missing_auth_returns_401(self):
         """Request without authentication should return 401."""
         app.dependency_overrides.clear()
