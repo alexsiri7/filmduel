@@ -85,8 +85,8 @@ class TestSubmitDuel:
         assert body["movie_b_elo_delta"] == -15
         assert body["next_action"] == "duel"
 
-    def test_self_duel_returns_400(self):
-        """Dueling a movie against itself should return 400."""
+    def test_self_duel_returns_422(self):
+        """Dueling a movie against itself should return 422 (schema validation)."""
         same_id = str(uuid.uuid4())
         client = TestClient(app)
         response = client.post(
@@ -98,8 +98,9 @@ class TestSubmitDuel:
                 "mode": "discovery",
             },
         )
-        assert response.status_code == 400
-        assert "itself" in response.json()["detail"].lower()
+        assert response.status_code == 422
+        detail = response.json()["detail"]
+        assert any("different" in str(d).lower() for d in detail)
 
     def test_missing_auth_returns_401(self):
         """Request without authentication should return 401."""
