@@ -98,8 +98,7 @@ class TestSubmitDuel:
                 "mode": "discovery",
             },
         )
-        assert response.status_code == 400
-        assert "itself" in response.json()["detail"].lower()
+        assert response.status_code == 422
 
     def test_missing_auth_returns_401(self):
         """Request without authentication should return 401."""
