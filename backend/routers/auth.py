@@ -35,7 +35,7 @@ SYNC_RATE_WINDOW = 3600  # per hour (seconds)
 
 COOKIE_NAME = "filmduel_session"
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRY_HOURS = 4
+JWT_EXPIRY_HOURS = 24 * 30  # 30-day idle timeout; refreshed on every authenticated request (sliding session)
 
 
 def create_jwt(user_id: str, settings: Settings) -> str:
@@ -51,8 +51,20 @@ def create_jwt(user_id: str, settings: Settings) -> str:
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 
-def get_current_user_id(request: Request) -> str:
-    """Extract and verify user ID from session cookie."""
+def set_session_cookie(response: Response, user_id: str, settings: Settings) -> None:
+    """Issue a fresh session cookie for user_id."""
+    response.set_cookie(
+        COOKIE_NAME,
+        create_jwt(user_id, settings),
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=JWT_EXPIRY_HOURS * 3600,
+    )
+
+
+def get_current_user_id(request: Request, response: Response) -> str:
+    """Extract and verify user ID from session cookie. Refreshes the cookie on every successful auth (sliding session)."""
     settings = get_settings()
     token = request.cookies.get(COOKIE_NAME)
     if not token:
@@ -67,11 +79,12 @@ def get_current_user_id(request: Request) -> str:
         user_id = payload.get("sub")
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid session — missing subject")
-        return user_id
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Session expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid session")
+    set_session_cookie(response, user_id, settings)
+    return user_id
 
 
 async def get_current_user(
@@ -238,17 +251,8 @@ async def callback(
     # Backfill missing poster URLs in the background
     background_tasks.add_task(_backfill_posters_background)
 
-    # Set session cookie
-    token = create_jwt(str(user.id), settings)
     response = RedirectResponse(url=settings.BASE_URL)
-    response.set_cookie(
-        COOKIE_NAME,
-        token,
-        httponly=True,
-        secure=True,
-        samesite="lax",
-        max_age=JWT_EXPIRY_HOURS * 3600,
-    )
+    set_session_cookie(response, str(user.id), settings)
     response.delete_cookie(OAUTH_STATE_COOKIE)
     return response
 

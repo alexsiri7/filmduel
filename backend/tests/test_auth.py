@@ -92,6 +92,11 @@ def _make_request(cookies: dict | None = None) -> MagicMock:
     return request
 
 
+def _make_response() -> MagicMock:
+    """Create a mock FastAPI Response; set_cookie is a no-op MagicMock."""
+    return MagicMock()
+
+
 class TestGetCurrentUserId:
     def test_extracts_user_id(self, monkeypatch):
         """Valid token should return the user ID."""
@@ -99,17 +104,37 @@ class TestGetCurrentUserId:
         user_id = "my-user-id-abc"
         token = create_jwt(user_id, SETTINGS)
         request = _make_request({COOKIE_NAME: token})
-        result = get_current_user_id(request)
+        response = _make_response()
+        result = get_current_user_id(request, response)
         assert result == user_id
+
+    def test_refreshes_cookie_on_success(self, monkeypatch):
+        """On successful auth, a fresh session cookie should be set (sliding session)."""
+        monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
+        user_id = "my-user-id-abc"
+        token = create_jwt(user_id, SETTINGS)
+        request = _make_request({COOKIE_NAME: token})
+        response = _make_response()
+        get_current_user_id(request, response)
+        response.set_cookie.assert_called_once()
+        args = response.set_cookie.call_args.args
+        kwargs = response.set_cookie.call_args.kwargs
+        assert args[0] == COOKIE_NAME
+        assert kwargs.get("httponly") is True
+        assert kwargs.get("secure") is True
+        assert kwargs.get("samesite") == "lax"
+        assert kwargs.get("max_age") == JWT_EXPIRY_HOURS * 3600
 
     def test_no_cookie_raises_401(self, monkeypatch):
         """Missing cookie should raise 401."""
         monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
         request = _make_request({})
+        response = _make_response()
         with pytest.raises(HTTPException) as exc_info:
-            get_current_user_id(request)
+            get_current_user_id(request, response)
         assert exc_info.value.status_code == 401
         assert "Not authenticated" in exc_info.value.detail
+        response.set_cookie.assert_not_called()
 
     def test_expired_token_raises_401(self, monkeypatch):
         """Expired JWT should raise 401 with 'Session expired'."""
@@ -124,19 +149,23 @@ class TestGetCurrentUserId:
         }
         token = pyjwt.encode(payload, SETTINGS.SECRET_KEY, algorithm=JWT_ALGORITHM)
         request = _make_request({COOKIE_NAME: token})
+        response = _make_response()
         with pytest.raises(HTTPException) as exc_info:
-            get_current_user_id(request)
+            get_current_user_id(request, response)
         assert exc_info.value.status_code == 401
         assert "expired" in exc_info.value.detail.lower()
+        response.set_cookie.assert_not_called()
 
     def test_invalid_token_raises_401(self, monkeypatch):
         """Garbage token should raise 401."""
         monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
         request = _make_request({COOKIE_NAME: "not-a-valid-jwt"})
+        response = _make_response()
         with pytest.raises(HTTPException) as exc_info:
-            get_current_user_id(request)
+            get_current_user_id(request, response)
         assert exc_info.value.status_code == 401
         assert "Invalid session" in exc_info.value.detail
+        response.set_cookie.assert_not_called()
 
     def test_wrong_secret_raises_401(self, monkeypatch):
         """Token signed with wrong secret should raise 401."""
@@ -144,8 +173,9 @@ class TestGetCurrentUserId:
         wrong_settings = _make_settings(SECRET_KEY="wrong-secret")
         token = create_jwt("user-1", wrong_settings)
         request = _make_request({COOKIE_NAME: token})
+        response = _make_response()
         with pytest.raises(HTTPException) as exc_info:
-            get_current_user_id(request)
+            get_current_user_id(request, response)
         assert exc_info.value.status_code == 401
 
     def test_token_missing_sub_raises_401(self, monkeypatch):
@@ -160,7 +190,9 @@ class TestGetCurrentUserId:
         }
         token = pyjwt.encode(payload, SETTINGS.SECRET_KEY, algorithm=JWT_ALGORITHM)
         request = _make_request({COOKIE_NAME: token})
+        response = _make_response()
         with pytest.raises(HTTPException) as exc_info:
-            get_current_user_id(request)
+            get_current_user_id(request, response)
         assert exc_info.value.status_code == 401
         assert "missing subject" in exc_info.value.detail.lower()
+        response.set_cookie.assert_not_called()
