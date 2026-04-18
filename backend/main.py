@@ -36,7 +36,7 @@ app = FastAPI(title="FilmDuel", version="0.1.0")
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    if any(SELF_DUEL_ERROR_MSG in str(e.get("msg", "")) for e in exc.errors()):
+    if any(SELF_DUEL_ERROR_MSG in e.get("msg", "") for e in exc.errors()):
         return JSONResponse(
             status_code=400,
             content={"detail": "A movie cannot duel against itself"},
