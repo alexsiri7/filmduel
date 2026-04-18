@@ -47,7 +47,7 @@ jobs:
         run: |
           echo "Polling $STAGING_URL/health ..."
           for i in $(seq 1 20); do
-            if curl -sf --max-time 5 "$STAGING_URL/health" | grep -q '"status":"ok"'; then
+            if curl -sf --max-time 10 "$STAGING_URL/health" | grep -q '"status":"ok"'; then
               echo "Staging healthy after attempt $i"
               exit 0
             fi
@@ -94,6 +94,7 @@ jobs:
     name: Deploy to production
     runs-on: ubuntu-latest
     needs: [deploy-staging, smoke-tests]
+    environment: production
     permissions:
       deployments: write
     steps:
@@ -114,10 +115,12 @@ jobs:
             --detach
 
       - name: Verify production health
+        env:
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
         run: |
-          echo "Polling https://filmduel.up.railway.app/health ..."
+          echo "Polling $PRODUCTION_URL/health ..."
           for i in 1 2 3 4 5; do
-            if curl -sf --max-time 10 "https://filmduel.up.railway.app/health" | grep -q '"status":"ok"'; then
+            if curl -sf --max-time 10 "$PRODUCTION_URL/health" | grep -q '"status":"ok"'; then
               echo "Production healthy after attempt $i"
               exit 0
             fi
@@ -141,7 +144,11 @@ jobs:
             -f environment="production" \
             -F auto_merge=false \
             -F 'required_contexts=[]' \
-            --jq '.id')
+            --jq '.id') || { echo "ERROR: Failed to create GitHub deployment record"; exit 1; }
+          if [ -z "$DEP_ID" ]; then
+            echo "ERROR: DEP_ID is empty — deployment record not created"
+            exit 1
+          fi
           gh api "repos/${{ github.repository }}/deployments/$DEP_ID/statuses" \
             -f state="$STATE" \
             -f environment="production" \
