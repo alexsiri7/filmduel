@@ -26,11 +26,9 @@ from backend.schemas import (
 from backend.services.tournament import (
     create_tournament_bracket,
     curate_and_select_films,
-    generate_seeded_bracket,
     get_filtered_ranked_films,
     record_match_winner,
     validate_match,
-    _num_rounds,
 )
 
 router = APIRouter(prefix="/api/tournaments", tags=["tournaments"])
