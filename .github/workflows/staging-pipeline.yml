@@ -139,11 +139,9 @@ jobs:
         run: |
           STATE="success"
           [ "$DEPLOY_RESULT" != "success" ] && STATE="failure"
-          DEP_ID=$(gh api "repos/${{ github.repository }}/deployments" \
-            -f ref="$DEPLOY_SHA" \
-            -f environment="production" \
-            -F auto_merge=false \
-            -F 'required_contexts=[]' \
+          DEP_ID=$(printf '{"ref":"%s","environment":"production","auto_merge":false,"required_contexts":[]}' "$DEPLOY_SHA" | \
+            gh api "repos/${{ github.repository }}/deployments" \
+            --input - \
             --jq '.id') || { echo "ERROR: Failed to create GitHub deployment record"; exit 1; }
           if [ -z "$DEP_ID" ]; then
             echo "ERROR: DEP_ID is empty — deployment record not created"
