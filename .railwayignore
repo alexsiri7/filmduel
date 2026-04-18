@@ -1,0 +1,5 @@
+# Archon infrastructure — not part of the deployed app.
+# These directories contain symlinks to absolute local paths that
+# do not exist on CI runners, causing railway up to fail during indexing.
+scripts/
+.beads/
