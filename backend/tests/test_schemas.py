@@ -1,5 +1,7 @@
 """Tests for Pydantic request/response schemas."""
 
+from uuid import UUID
+
 import pytest
 from pydantic import ValidationError
 
@@ -56,8 +58,6 @@ class TestDuelSubmit:
             movie_b_id="550e8400-e29b-41d4-a716-446655440001",
             outcome=DuelOutcome.a_wins,
         )
-        from uuid import UUID
-
         assert ds.movie_a_id == UUID("550e8400-e29b-41d4-a716-446655440000")
         assert ds.outcome == DuelOutcome.a_wins
         assert ds.mode == DuelMode.discovery  # default

@@ -12,13 +12,12 @@ from urllib.parse import urlencode
 
 import jwt
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
-
-from backend.rate_limit import limiter
 from fastapi.responses import RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import Settings, get_settings
+from backend.rate_limit import limiter
 from backend.db import async_session_factory, get_db
 from backend.db_models import User, UserMovie
 from backend.schemas import UserResponse
