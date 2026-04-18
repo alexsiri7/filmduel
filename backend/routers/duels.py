@@ -71,7 +71,10 @@ async def submit_duel(
     outcome = body.outcome.value
     mode = body.mode.value
 
-    logger.info("duel_submitted user_id=%s movie_a=%s movie_b=%s outcome=%s mode=%s", uid, movie_a_id, movie_b_id, outcome, mode)
+    logger.info(
+        "duel_submitted user_id=%s movie_a=%s movie_b=%s outcome=%s mode=%s",
+        uid, movie_a_id, movie_b_id, outcome, mode,
+    )
 
     try:
         result = await process_duel(db, uid, movie_a_id, movie_b_id, outcome, mode)

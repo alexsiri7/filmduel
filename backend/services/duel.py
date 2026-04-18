@@ -175,7 +175,10 @@ async def process_duel(
 
     next_action = "swipe" if (seen_unranked < 3 or total_seen < 10) else "duel"
 
-    logger.info("duel_next_action user_id=%s next_action=%s seen_unranked=%d", user_id, next_action, seen_unranked)
+    logger.info(
+        "duel_next_action user_id=%s next_action=%s seen_unranked=%d",
+        user_id, next_action, seen_unranked,
+    )
 
     return ProcessDuelResult(
         api_result=DuelResult(
