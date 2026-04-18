@@ -7,13 +7,12 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
-
-from backend.rate_limit import limiter
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from backend.db import get_db
+from backend.rate_limit import limiter
 from backend.db_models import Movie, Tournament, TournamentMatch, User, UserMovie
 from backend.routers.auth import get_current_user
 from backend.schemas import (

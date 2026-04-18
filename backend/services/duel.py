@@ -10,10 +10,10 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+import logging
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-import logging
 
 from backend.db_models import Duel, UserMovie
 from backend.schemas import DuelOutcome, DuelResult

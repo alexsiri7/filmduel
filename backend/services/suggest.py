@@ -192,8 +192,6 @@ async def generate_suggestions(
 
     candidates = await _get_candidates(user_id, db, media_type)
     logger.info("suggest_candidates user_id=%s candidate_count=%d", user_id, len(candidates))
-
-
     if len(candidates) < NUM_PICKS:
         logger.warning(
             "User %s has only %d candidate films, need at least %d",

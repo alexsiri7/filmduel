@@ -1,0 +1,155 @@
+name: Staging → Production Pipeline
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy-staging:
+    name: Deploy to staging
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Resolve commit SHA
+        id: sha
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to staging
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          railway up \
+            --service web \
+            --environment staging \
+            --detach
+
+      - name: Wait for staging health
+        env:
+          STAGING_URL: ${{ secrets.STAGING_URL }}
+        run: |
+          echo "Polling $STAGING_URL/health ..."
+          for i in $(seq 1 20); do
+            if curl -sf --max-time 10 "$STAGING_URL/health" | grep -q '"status":"ok"'; then
+              echo "Staging healthy after attempt $i"
+              exit 0
+            fi
+            echo "Attempt $i/20 failed, waiting 30s..."
+            sleep 30
+          done
+          echo "Staging failed to become healthy after 20 attempts (10 min)"
+          exit 1
+
+    outputs:
+      deploy_sha: ${{ steps.sha.outputs.sha }}
+
+  smoke-tests:
+    name: Smoke tests against staging
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    env:
+      STAGING_URL: ${{ secrets.STAGING_URL }}
+    steps:
+      - name: Health check
+        run: |
+          echo "=== /health ==="
+          curl -sf --max-time 10 "$STAGING_URL/health" | grep -q '"status":"ok"'
+          echo "PASS: /health"
+
+      - name: Frontend loads (SPA served by backend)
+        run: |
+          echo "=== / (React SPA) ==="
+          STATUS=$(curl -o /dev/null -s -w "%{http_code}" --max-time 10 "$STAGING_URL/")
+          [ "$STATUS" = "200" ] || { echo "FAIL: / returned $STATUS"; exit 1; }
+          echo "PASS: / returned $STATUS"
+
+      - name: Rankings API reachable
+        run: |
+          echo "=== /api/rankings ==="
+          STATUS=$(curl -o /dev/null -s -w "%{http_code}" --max-time 10 "$STAGING_URL/api/rankings")
+          # 200 (open) or 401/403 (auth required) — both mean the API is up
+          [ "$STATUS" = "200" ] || [ "$STATUS" = "401" ] || [ "$STATUS" = "403" ] || {
+            echo "FAIL: /api/rankings returned unexpected $STATUS"; exit 1;
+          }
+          echo "PASS: /api/rankings returned $STATUS"
+
+  deploy-production:
+    name: Deploy to production
+    runs-on: ubuntu-latest
+    needs: [deploy-staging, smoke-tests]
+    environment: production
+    permissions:
+      deployments: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.deploy-staging.outputs.deploy_sha }}
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to production
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          railway up \
+            --service web \
+            --environment production \
+            --detach
+
+      - name: Verify production health
+        env:
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+        run: |
+          echo "Polling $PRODUCTION_URL/health ..."
+          for i in 1 2 3 4 5; do
+            if curl -sf --max-time 10 "$PRODUCTION_URL/health" | grep -q '"status":"ok"'; then
+              echo "Production healthy after attempt $i"
+              exit 0
+            fi
+            echo "Attempt $i/5 failed, waiting 15s..."
+            sleep 15
+          done
+          echo "Production health check failed after 5 attempts"
+          exit 1
+
+      - name: Record production deployment on GitHub
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEPLOY_SHA: ${{ needs.deploy-staging.outputs.deploy_sha }}
+          DEPLOY_RESULT: ${{ job.status }}
+        run: |
+          STATE="success"
+          [ "$DEPLOY_RESULT" != "success" ] && STATE="failure"
+          DEP_ID=$(gh api "repos/${{ github.repository }}/deployments" \
+            -f ref="$DEPLOY_SHA" \
+            -f environment="production" \
+            -F auto_merge=false \
+            -F 'required_contexts=[]' \
+            --jq '.id') || { echo "ERROR: Failed to create GitHub deployment record"; exit 1; }
+          if [ -z "$DEP_ID" ]; then
+            echo "ERROR: DEP_ID is empty — deployment record not created"
+            exit 1
+          fi
+          gh api "repos/${{ github.repository }}/deployments/$DEP_ID/statuses" \
+            -f state="$STATE" \
+            -f environment="production" \
+            -f description="Deploy $DEPLOY_RESULT at ${DEPLOY_SHA:0:7}"

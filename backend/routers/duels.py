@@ -7,11 +7,10 @@ import uuid
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from sqlalchemy import select
-
-from backend.rate_limit import limiter
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db import async_session_factory, get_db
+from backend.rate_limit import limiter
 from backend.db_models import Movie, User
 from backend.schemas import DuelSubmit, DuelResult
 from backend.routers.auth import get_current_user
