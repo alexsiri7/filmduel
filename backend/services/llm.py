@@ -41,8 +41,7 @@ async def chat_completion(
             ],
         )
     except Exception:
-        elapsed = time.monotonic() - t0
-        logger.error("llm_error model=%s elapsed=%.2fs", model_name, elapsed)
+        logger.error("llm_error model=%s elapsed=%.2fs", model_name, time.monotonic() - t0)
         raise
 
     elapsed = time.monotonic() - t0
