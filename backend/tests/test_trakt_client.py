@@ -71,7 +71,7 @@ class TestTraktClientPopular:
 
     @pytest.mark.asyncio
     async def test_get_popular_shows_url(self):
-        """get_popular_shows calls /shows/popular."""
+        """get_popular with media_type='show' calls /shows/popular."""
         mock_resp = _mock_response([{"ids": {"trakt": 2}, "title": "Show"}])
 
         mock_client = AsyncMock()
@@ -81,7 +81,7 @@ class TestTraktClientPopular:
 
         client = TraktClient(client_id="test-id")
         with patch.object(client, "_client", return_value=mock_client):
-            result = await client.get_popular_shows(limit=50)
+            result = await client.get_popular(limit=50, media_type="show")
 
         assert result == [{"ids": {"trakt": 2}, "title": "Show"}]
         call_args = mock_client.get.call_args

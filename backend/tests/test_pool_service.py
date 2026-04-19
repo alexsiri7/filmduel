@@ -52,11 +52,7 @@ class TestPopulateMoviePool:
         trakt_mock.get_recommendations.return_value = []
         trakt_mock.get_user_watched.return_value = fake_watched
         trakt_mock.get_user_ratings.return_value = []
-        trakt_mock.get_popular_shows.return_value = []
-        trakt_mock.get_trending_shows.return_value = []
-        trakt_mock.get_recommendations_shows.return_value = []
-        trakt_mock.get_user_watched_shows.return_value = []
-        trakt_mock.get_user_ratings_shows.return_value = []
+        # The unified methods accept media_type param; AsyncMock handles that automatically
 
         # Mock the DB execute for movie upserts and UUID lookups
         movie_uuid_1 = uuid.uuid4()
@@ -85,8 +81,9 @@ class TestPopulateMoviePool:
             mock_settings.return_value = MagicMock(TRAKT_CLIENT_ID="fake")
             await populate_movie_pool(user, db)
 
-        trakt_mock.get_popular.assert_awaited_once()
-        trakt_mock.get_user_watched.assert_awaited_once()
+        # Each method is called twice: once for movie, once for show
+        assert trakt_mock.get_popular.await_count == 2
+        assert trakt_mock.get_user_watched.await_count == 2
         # last_seen_at should be updated
         assert user.last_seen_at is not None
 

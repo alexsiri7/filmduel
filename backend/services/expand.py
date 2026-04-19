@@ -130,10 +130,7 @@ async def _expand_from_recommendations(
         access_token=user.trakt_access_token,
     )
     try:
-        if media_type == "show":
-            recs = await client.get_recommendations_shows(limit=100)
-        else:
-            recs = await client.get_recommendations(limit=100)
+        recs = await client.get_recommendations(limit=100, media_type=media_type)
     except Exception:
         logger.exception("Failed to fetch Trakt recommendations (%s)", media_type)
         return 0

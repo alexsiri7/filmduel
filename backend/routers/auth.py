@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import collections
 import logging
 import secrets
-import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
@@ -28,11 +26,6 @@ from backend.services.trakt import TraktClient
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["auth"])
-
-# ── Simple in-memory rate limiter for sync endpoint ──────────────────
-_sync_timestamps: dict[str, list[float]] = collections.defaultdict(list)
-SYNC_RATE_LIMIT = 3  # max calls
-SYNC_RATE_WINDOW = 3600  # per hour (seconds)
 
 COOKIE_NAME = "filmduel_session"
 JWT_ALGORITHM = "HS256"
@@ -280,7 +273,9 @@ async def me(user: User = Depends(get_current_user)):
 
 
 @router.post("/api/sync")
+@limiter.limit("3/hour")
 async def sync_trakt(
+    request: Request,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -289,19 +284,6 @@ async def sync_trakt(
 
     Rate limited to 3 calls per hour per user.
     """
-    user_key = str(current_user.id)
-    now = time.monotonic()
-
-    # Prune old timestamps outside the window
-    _sync_timestamps[user_key] = [
-        ts for ts in _sync_timestamps[user_key] if now - ts < SYNC_RATE_WINDOW
-    ]
-    if len(_sync_timestamps[user_key]) >= SYNC_RATE_LIMIT:
-        raise HTTPException(
-            status_code=429,
-            detail="Sync rate limit exceeded. Try again later.",
-        )
-    _sync_timestamps[user_key].append(now)
 
     # Count movies before sync so we can report new additions
     before_count_result = await db.execute(

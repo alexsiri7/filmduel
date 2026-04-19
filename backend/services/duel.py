@@ -21,6 +21,44 @@ from backend.services.elo import get_initial_elo, update_elo
 logger = logging.getLogger(__name__)
 
 
+async def apply_elo_result(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    winner_id: uuid.UUID,
+    loser_id: uuid.UUID,
+    um_w: UserMovie,
+    um_l: UserMovie,
+    mode: str,
+) -> Duel:
+    """Compute ELO, mutate UserMovies, create+return Duel record."""
+    now = datetime.now(timezone.utc)
+    w_elo = um_w.elo if um_w.elo is not None else get_initial_elo(um_w.seeded_elo)
+    l_elo = um_l.elo if um_l.elo is not None else get_initial_elo(um_l.seeded_elo)
+    new_w, new_l = update_elo(w_elo, l_elo, um_w.battles, um_l.battles)
+
+    um_w.elo = new_w
+    um_l.elo = new_l
+    um_w.battles += 1
+    um_l.battles += 1
+    um_w.last_dueled_at = now
+    um_l.last_dueled_at = now
+    um_w.updated_at = now
+    um_l.updated_at = now
+
+    duel = Duel(
+        user_id=user_id,
+        winner_movie_id=winner_id,
+        loser_movie_id=loser_id,
+        winner_elo_before=w_elo,
+        loser_elo_before=l_elo,
+        winner_elo_after=new_w,
+        loser_elo_after=new_l,
+        mode=mode,
+    )
+    db.add(duel)
+    return duel
+
+
 @dataclass
 class ProcessDuelResult:
     """Internal result carrying both the API response and data needed by background tasks."""
@@ -72,13 +110,11 @@ async def process_duel(
     else:
         pair_type = "unknown"
 
-    # ── ELO math (pure CPU, no I/O) ────────────────────────────────
+    # ── ELO math + duel record ───────────────────────────────────────
     new_elo_a: int | None = um_a.elo
     new_elo_b: int | None = um_b.elo
     delta_a = 0
     delta_b = 0
-    elo_a_before: int | None = None
-    elo_b_before: int | None = None
 
     now = datetime.now(timezone.utc)
 
@@ -87,75 +123,49 @@ async def process_duel(
         elo_b_before = um_b.elo if um_b.elo is not None else get_initial_elo(um_b.seeded_elo)
 
         if outcome == "a_wins":
-            new_elo_a, new_elo_b = update_elo(
-                elo_a_before, elo_b_before, um_a.battles, um_b.battles
-            )
-        else:  # b_wins
-            new_elo_b, new_elo_a = update_elo(
-                elo_b_before, elo_a_before, um_b.battles, um_a.battles
-            )
+            winner_id, loser_id = movie_a_id, movie_b_id
+            um_w, um_l = um_a, um_b
+        else:
+            winner_id, loser_id = movie_b_id, movie_a_id
+            um_w, um_l = um_b, um_a
 
-        delta_a = new_elo_a - elo_a_before
-        delta_b = new_elo_b - elo_b_before
-
-        # Mutate user_movies
         um_a.seen = True
         um_b.seen = True
-        um_a.elo = new_elo_a
-        um_b.elo = new_elo_b
-        um_a.battles += 1
-        um_b.battles += 1
-        um_a.last_dueled_at = now
-        um_b.last_dueled_at = now
-        um_a.updated_at = now
-        um_b.updated_at = now
+        duel = await apply_elo_result(db, user_id, winner_id, loser_id, um_w, um_l, mode)
+        duel.pair_type = pair_type
+
+        new_elo_a = um_a.elo
+        new_elo_b = um_b.elo
+        delta_a = new_elo_a - elo_a_before
+        delta_b = new_elo_b - elo_b_before
     elif outcome == "a_only":
         if um_a_seen_was_none:
             um_a.seen = True
         um_b.seen = False
         um_a.updated_at = now
         um_b.updated_at = now
+        duel = Duel(user_id=user_id, mode=mode, pair_type=pair_type)
+        db.add(duel)
     elif outcome == "b_only":
         if um_b_seen_was_none:
             um_b.seen = True
         um_a.seen = False
         um_a.updated_at = now
         um_b.updated_at = now
+        duel = Duel(user_id=user_id, mode=mode, pair_type=pair_type)
+        db.add(duel)
     elif outcome == "neither":
         um_a.seen = False
         um_b.seen = False
         um_a.updated_at = now
         um_b.updated_at = now
+        duel = Duel(user_id=user_id, mode=mode, pair_type=pair_type)
+        db.add(duel)
 
     logger.info(
         "duel_processed user_id=%s outcome=%s pair_type=%s elo_delta_a=%+d elo_delta_b=%+d",
         user_id, outcome, pair_type, delta_a, delta_b,
     )
-
-    # ── Duel record ─────────────────────────────────────────────────
-    winner_id = loser_id = None
-    w_elo_before = l_elo_before = w_elo_after = l_elo_after = None
-    if outcome == "a_wins":
-        winner_id, loser_id = movie_a_id, movie_b_id
-        w_elo_before, l_elo_before = elo_a_before, elo_b_before
-        w_elo_after, l_elo_after = new_elo_a, new_elo_b
-    elif outcome == "b_wins":
-        winner_id, loser_id = movie_b_id, movie_a_id
-        w_elo_before, l_elo_before = elo_b_before, elo_a_before
-        w_elo_after, l_elo_after = new_elo_b, new_elo_a
-
-    duel = Duel(
-        user_id=user_id,
-        winner_movie_id=winner_id,
-        loser_movie_id=loser_id,
-        winner_elo_before=w_elo_before,
-        loser_elo_before=l_elo_before,
-        winner_elo_after=w_elo_after,
-        loser_elo_after=l_elo_after,
-        mode=mode,
-        pair_type=pair_type,
-    )
-    db.add(duel)
 
     # ── next_action ─────────────────────────────────────────────────
     seen_unranked_stmt = select(func.count()).where(

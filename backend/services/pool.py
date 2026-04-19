@@ -45,6 +45,15 @@ def build_movie_upsert(movie_data: dict, now: datetime, media_type: str = "movie
     return stmt
 
 
+async def _safe_fetch(coro_func, *args, **kwargs) -> list:
+    """Call an async function, returning [] on failure."""
+    try:
+        return await coro_func(*args, **kwargs)
+    except Exception:
+        logger.exception("Failed to fetch from Trakt: %s", coro_func.__name__)
+        return []
+
+
 async def populate_movie_pool(user: User, db: AsyncSession) -> None:
     """Fetch movies and shows from Trakt and populate the user's pool.
 
@@ -64,109 +73,40 @@ async def populate_movie_pool(user: User, db: AsyncSession) -> None:
         access_token=user.trakt_access_token,
     )
 
-    # ── Movies ──────────────────────────────────────────────────────
-    try:
-        popular = await client.get_popular(limit=100)
-    except Exception:
-        logger.exception("Failed to fetch popular movies")
-        popular = []
-    try:
-        trending = await client.get_trending(limit=100)
-    except Exception:
-        logger.exception("Failed to fetch trending movies")
-        trending = []
-    try:
-        recommended = await client.get_recommendations(limit=100)
-    except Exception:
-        logger.exception("Failed to fetch recommendations")
-        recommended = []
-    try:
-        watched = await client.get_user_watched(user.trakt_user_id)
-    except Exception:
-        logger.exception("Failed to fetch watch history for %s", user.trakt_user_id)
-        watched = []
-    try:
-        ratings_list = await client.get_user_ratings(user.trakt_user_id)
-    except Exception:
-        logger.exception("Failed to fetch ratings for %s", user.trakt_user_id)
-        ratings_list = []
+    for media_type in ("movie", "show"):
+        popular = await _safe_fetch(client.get_popular, limit=100, media_type=media_type)
+        trending = await _safe_fetch(client.get_trending, limit=100, media_type=media_type)
+        recommended = await _safe_fetch(client.get_recommendations, limit=100, media_type=media_type)
+        watched = await _safe_fetch(client.get_user_watched, user.trakt_user_id, media_type=media_type)
+        ratings_list = await _safe_fetch(client.get_user_ratings, user.trakt_user_id, media_type=media_type)
 
-    ratings_by_trakt_id: dict[int, int] = {
-        r["trakt_id"]: r["rating"] for r in ratings_list
-    }
+        ratings_by_trakt_id: dict[int, int] = {
+            r["trakt_id"]: r["rating"] for r in ratings_list
+        }
 
-    movie_pool: dict[int, dict] = {}
-    seen_trakt_ids: set[int] = set()
+        pool: dict[int, dict] = {}
+        seen_trakt_ids: set[int] = set()
 
-    for movie in popular + trending + recommended:
-        trakt_id = movie["ids"]["trakt"]
-        if trakt_id not in movie_pool:
-            movie_pool[trakt_id] = movie
+        for item in popular + trending + recommended:
+            trakt_id = item["ids"]["trakt"]
+            if trakt_id not in pool:
+                pool[trakt_id] = item
 
-    for movie in watched:
-        trakt_id = movie["ids"]["trakt"]
-        seen_trakt_ids.add(trakt_id)
-        if trakt_id not in movie_pool:
-            movie_pool[trakt_id] = movie
+        for item in watched:
+            trakt_id = item["ids"]["trakt"]
+            seen_trakt_ids.add(trakt_id)
+            if trakt_id not in pool:
+                pool[trakt_id] = item
 
-    await _upsert_pool(db, user, movie_pool, seen_trakt_ids, ratings_by_trakt_id, "movie", now)
-
-    # ── TV Shows ────────────────────────────────────────────────────
-    try:
-        popular_shows = await client.get_popular_shows(limit=100)
-    except Exception:
-        logger.exception("Failed to fetch popular shows")
-        popular_shows = []
-    try:
-        trending_shows = await client.get_trending_shows(limit=100)
-    except Exception:
-        logger.exception("Failed to fetch trending shows")
-        trending_shows = []
-    try:
-        recommended_shows = await client.get_recommendations_shows(limit=100)
-    except Exception:
-        logger.exception("Failed to fetch show recommendations")
-        recommended_shows = []
-    try:
-        watched_shows = await client.get_user_watched_shows(user.trakt_user_id)
-    except Exception:
-        logger.exception("Failed to fetch watched shows for %s", user.trakt_user_id)
-        watched_shows = []
-    try:
-        show_ratings_list = await client.get_user_ratings_shows(user.trakt_user_id)
-    except Exception:
-        logger.exception("Failed to fetch show ratings for %s", user.trakt_user_id)
-        show_ratings_list = []
-
-    show_ratings_by_trakt_id: dict[int, int] = {
-        r["trakt_id"]: r["rating"] for r in show_ratings_list
-    }
-
-    show_pool: dict[int, dict] = {}
-    seen_show_trakt_ids: set[int] = set()
-
-    for show in popular_shows + trending_shows + recommended_shows:
-        trakt_id = show["ids"]["trakt"]
-        if trakt_id not in show_pool:
-            show_pool[trakt_id] = show
-
-    for show in watched_shows:
-        trakt_id = show["ids"]["trakt"]
-        seen_show_trakt_ids.add(trakt_id)
-        if trakt_id not in show_pool:
-            show_pool[trakt_id] = show
-
-    await _upsert_pool(db, user, show_pool, seen_show_trakt_ids, show_ratings_by_trakt_id, "show", now)
+        await _upsert_pool(db, user, pool, seen_trakt_ids, ratings_by_trakt_id, media_type, now)
 
     # Update last_seen_at
     user.last_seen_at = now
     await db.flush()
 
     logger.info(
-        "Pool sync complete for %s: %d movies + %d shows imported",
+        "Pool sync complete for %s",
         user.trakt_username,
-        len(movie_pool),
-        len(show_pool),
     )
 
 

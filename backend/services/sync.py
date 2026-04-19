@@ -23,10 +23,7 @@ async def _rate_with_retry(client: TraktClient, trakt_id: int, rating: int, medi
     """Submit a single rating to Trakt, retrying once on 5xx."""
     for attempt in range(2):
         try:
-            if media_type == "show":
-                await client.rate_show(trakt_id, rating)
-            else:
-                await client.rate_movie(trakt_id, rating)
+            await client.rate(trakt_id, rating, media_type=media_type)
             return
         except httpx.HTTPStatusError as exc:
             status = exc.response.status_code
@@ -96,10 +93,7 @@ async def sync_ratings_to_trakt(
     for um in user_movies:
         trakt_rating = elo_to_trakt_rating(um.elo)
         try:
-            if um.movie.media_type == "show":
-                await client.rate_show(um.movie.trakt_id, trakt_rating)
-            else:
-                await client.rate_movie(um.movie.trakt_id, trakt_rating)
+            await client.rate(um.movie.trakt_id, trakt_rating, media_type=um.movie.media_type)
             synced += 1
         except Exception:
             logger.exception(
