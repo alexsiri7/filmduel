@@ -16,19 +16,11 @@ from backend.rate_limit import limiter
 from backend.routers.auth import get_current_user
 from backend.schemas import MediaType, SwipeCardSchema, SwipeResponse, SwipeSubmit
 from backend.services.expand import expand_pool
+from backend.services.pair_selection import BANDS
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/swipe", tags=["swipe"])
-
-# Quality bands: (elo_low, elo_high, community_rating_low, community_rating_high)
-BANDS = [
-    ("elite", 1300, 9999, 80, 100),
-    ("strong", 1100, 1299, 65, 79),
-    ("mid", 900, 1099, 45, 64),
-    ("weak", 700, 899, 25, 44),
-    ("low", 0, 699, 0, 24),
-]
 
 
 def _elo_to_band_index(elo: int) -> int:

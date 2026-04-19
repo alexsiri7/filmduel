@@ -95,7 +95,7 @@ class TestBandsStructure:
 
     def test_band_names(self):
         names = [b[0] for b in BANDS]
-        assert names == ["elite", "strong", "mid", "weak", "low"]
+        assert names == ["elite", "strong", "mid", "weak", "poor"]
 
     def test_elo_ranges_descending(self):
         """ELO lower bounds should be strictly descending from elite to low."""

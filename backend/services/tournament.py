@@ -11,9 +11,9 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.db_models import Duel, Tournament, TournamentMatch, UserMovie
+from backend.db_models import Tournament, TournamentMatch, UserMovie
 from backend.services.curator import curate_tournament
-from backend.services.elo import get_initial_elo, update_elo
+from backend.services.duel import apply_elo_result
 
 logger = logging.getLogger(__name__)
 
@@ -351,30 +351,7 @@ async def record_match_winner(
         ).with_for_update()
     )).scalar_one()
 
-    w_elo = um_w.elo if um_w.elo is not None else get_initial_elo(um_w.seeded_elo)
-    l_elo = um_l.elo if um_l.elo is not None else get_initial_elo(um_l.seeded_elo)
-    new_w, new_l = update_elo(w_elo, l_elo, um_w.battles, um_l.battles)
-
-    um_w.elo = new_w
-    um_l.elo = new_l
-    um_w.battles += 1
-    um_l.battles += 1
-    um_w.last_dueled_at = now
-    um_l.last_dueled_at = now
-    um_w.updated_at = now
-    um_l.updated_at = now
-
-    duel = Duel(
-        user_id=user_id,
-        winner_movie_id=winner_id,
-        loser_movie_id=loser_id,
-        winner_elo_before=w_elo,
-        loser_elo_before=l_elo,
-        winner_elo_after=new_w,
-        loser_elo_after=new_l,
-        mode="tournament",
-    )
-    db.add(duel)
+    duel = await apply_elo_result(db, user_id, winner_id, loser_id, um_w, um_l, "tournament")
     await db.flush()
 
     match_obj.duel_id = duel.id

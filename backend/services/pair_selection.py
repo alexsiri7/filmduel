@@ -14,35 +14,34 @@ from backend.db_models import Movie, UserMovie
 # Quality band helpers
 # ---------------------------------------------------------------------------
 
-BAND_ORDER = ["elite", "strong", "mid", "weak", "poor"]
+# (name, elo_low, elo_high, community_rating_low, community_rating_high)
+BANDS = [
+    ("elite",  1300, 9999, 80, 100),
+    ("strong", 1100, 1299, 65, 79),
+    ("mid",     900, 1099, 45, 64),
+    ("weak",    700,  899, 25, 44),
+    ("poor",      0,  699,  0, 24),
+]
+
+BAND_ORDER = [b[0] for b in BANDS]
 
 
 def elo_to_band(elo: int | None) -> str:
     if elo is None:
         return "mid"
-    if elo >= 1300:
-        return "elite"
-    if elo >= 1100:
-        return "strong"
-    if elo >= 900:
-        return "mid"
-    if elo >= 700:
-        return "weak"
+    for name, low, high, _, _ in BANDS:
+        if low <= elo <= high:
+            return name
     return "poor"
 
 
 def community_rating_to_band(rating: float | None) -> str:
     if rating is None:
         return "mid"
-    if rating >= 80:
-        return "elite"
-    if rating >= 65:
-        return "strong"
-    if rating >= 45:
-        return "mid"
-    if rating >= 25:
-        return "weak"
-    return "poor"
+    for name, _, _, cr_low, cr_high in BANDS:
+        if cr_low <= rating <= cr_high:
+            return name
+    return "mid"
 
 
 def bands_adjacent(band_a: str, band_b: str) -> bool:

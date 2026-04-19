@@ -21,20 +21,18 @@ from backend.services.sync import _rate_with_retry
 
 @pytest.mark.asyncio
 async def test_rate_with_retry_dispatches_to_movie():
-    """Default media_type='movie' calls rate_movie."""
+    """Default media_type='movie' calls rate with media_type='movie'."""
     client = AsyncMock()
     await _rate_with_retry(client, trakt_id=123, rating=8, media_type="movie")
-    client.rate_movie.assert_awaited_once_with(123, 8)
-    client.rate_show.assert_not_awaited()
+    client.rate.assert_awaited_once_with(123, 8, media_type="movie")
 
 
 @pytest.mark.asyncio
 async def test_rate_with_retry_dispatches_to_show():
-    """media_type='show' calls rate_show."""
+    """media_type='show' calls rate with media_type='show'."""
     client = AsyncMock()
     await _rate_with_retry(client, trakt_id=456, rating=7, media_type="show")
-    client.rate_show.assert_awaited_once_with(456, 7)
-    client.rate_movie.assert_not_awaited()
+    client.rate.assert_awaited_once_with(456, 7, media_type="show")
 
 
 # ---------------------------------------------------------------------------
