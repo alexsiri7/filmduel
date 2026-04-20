@@ -24,7 +24,7 @@ router = APIRouter(prefix="/api/swipe", tags=["swipe"])
 
 
 def _elo_to_band_index(elo: int) -> int:
-    """Map an ELO value to a band index (0=elite .. 4=low)."""
+    """Map an ELO value to a band index (0=elite .. 4=poor)."""
     for i, (_, low, high, _, _) in enumerate(BANDS):
         if low <= elo <= high:
             return i
