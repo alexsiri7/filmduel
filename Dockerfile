@@ -4,7 +4,7 @@ WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm install
 COPY frontend/ ./
-RUN npm run build && test -d dist
+RUN npm run build && test -f dist/index.html
 
 # Stage 2: Python backend + built frontend
 FROM python:3.12-slim

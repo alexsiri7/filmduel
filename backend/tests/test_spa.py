@@ -52,6 +52,16 @@ def test_spa_fallback_serves_static_file_when_it_exists(tmp_path):
     assert response.status_code == 200
 
 
+def test_root_returns_503_when_index_html_missing(tmp_path):
+    """Dist dir exists but no index.html must return 503, not 404."""
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    with patch.object(main_module, "STATIC_DIR", dist):
+        response = client.get("/")
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Frontend not available"}
+
+
 def test_path_traversal_is_blocked(tmp_path):
     """Path traversal attempts must not serve files outside frontend/dist."""
     dist = tmp_path / "dist"
