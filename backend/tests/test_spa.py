@@ -62,6 +62,16 @@ def test_root_returns_503_when_index_html_missing(tmp_path):
     assert response.json() == {"detail": "Frontend not available"}
 
 
+def test_spa_fallback_returns_503_for_unknown_path_when_index_html_missing(tmp_path):
+    """Any SPA route must return 503 when dist exists but index.html is absent."""
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    with patch.object(main_module, "STATIC_DIR", dist):
+        response = client.get("/some/deep/route")
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Frontend not available"}
+
+
 def test_path_traversal_is_blocked(tmp_path):
     """Path traversal attempts must not serve files outside frontend/dist."""
     dist = tmp_path / "dist"
