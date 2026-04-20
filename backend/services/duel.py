@@ -144,21 +144,19 @@ async def process_duel(
         um_b.seen = False
         um_a.updated_at = now
         um_b.updated_at = now
-        duel = Duel(user_id=user_id, mode=mode, pair_type=pair_type)
-        db.add(duel)
     elif outcome == "b_only":
         if um_b_seen_was_none:
             um_b.seen = True
         um_a.seen = False
         um_a.updated_at = now
         um_b.updated_at = now
-        duel = Duel(user_id=user_id, mode=mode, pair_type=pair_type)
-        db.add(duel)
     elif outcome == "neither":
         um_a.seen = False
         um_b.seen = False
         um_a.updated_at = now
         um_b.updated_at = now
+
+    if outcome not in ("a_wins", "b_wins"):
         duel = Duel(user_id=user_id, mode=mode, pair_type=pair_type)
         db.add(duel)
 

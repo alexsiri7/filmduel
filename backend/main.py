@@ -110,11 +110,11 @@ async def spa_fallback(full_path: str):
     if not STATIC_DIR.is_dir():
         logger.warning("frontend/dist not found at %s — returning 503", STATIC_DIR)
         return JSONResponse({"detail": "Frontend not available"}, status_code=503)
+    index_html = STATIC_DIR / "index.html"
+    if not index_html.is_file():
+        logger.error("frontend/dist/index.html missing at %s — returning 503", index_html)
+        return JSONResponse({"detail": "Frontend not available"}, status_code=503)
     file_path = (STATIC_DIR / full_path).resolve()
     if file_path.is_file() and str(file_path).startswith(str(STATIC_DIR.resolve())):
         return FileResponse(file_path)
-    index_html = STATIC_DIR / "index.html"
-    if not index_html.is_file():
-        logger.warning("frontend/dist/index.html missing at %s — returning 503", index_html)
-        return JSONResponse({"detail": "Frontend not available"}, status_code=503)
     return FileResponse(index_html)

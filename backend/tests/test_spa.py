@@ -30,6 +30,26 @@ def test_spa_fallback_returns_503_for_unknown_path_when_dist_missing(tmp_path):
     assert response.json() == {"detail": "Frontend not available"}
 
 
+def test_root_returns_503_when_index_html_missing(tmp_path):
+    """Dist dir exists but no index.html must return 503, not 404."""
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    with patch.object(main_module, "STATIC_DIR", dist):
+        response = client.get("/")
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Frontend not available"}
+
+
+def test_spa_fallback_returns_503_for_unknown_path_when_index_html_missing(tmp_path):
+    """Any SPA route must return 503 when index.html is missing, not 404."""
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    with patch.object(main_module, "STATIC_DIR", dist):
+        response = client.get("/some/deep/route")
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Frontend not available"}
+
+
 def test_spa_fallback_serves_index_html_for_spa_route(tmp_path):
     """Non-file SPA routes (e.g. /login) must serve index.html."""
     dist = tmp_path / "dist"
