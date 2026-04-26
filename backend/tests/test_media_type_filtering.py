@@ -142,10 +142,11 @@ async def test_sync_ratings_background_refreshes_expired_token():
         mock_user_refreshed.trakt_access_token = "fresh-token"
         mock_refresh.return_value = mock_user_refreshed
 
-        mock_exec_result = MagicMock()
-        mock_exec_result.scalar_one_or_none.return_value = mock_user
-        mock_exec_result.all.return_value = mock_rows
-        mock_session.execute.return_value = mock_exec_result
+        mock_user_result = MagicMock()
+        mock_user_result.scalar_one_or_none.return_value = mock_user
+        mock_movies_result = MagicMock()
+        mock_movies_result.all.return_value = mock_rows
+        mock_session.execute.side_effect = [mock_user_result, mock_movies_result]
 
         await _sync_ratings_background(uid, mid_a, 1100, mid_b, 900)
 
@@ -154,3 +155,86 @@ async def test_sync_ratings_background_refreshes_expired_token():
         mock_sync.assert_awaited_once()
         call_args = mock_sync.call_args
         assert call_args[0][0] == "fresh-token"
+        assert set(call_args[0][1]) == {(trakt_id_a, 1100), (trakt_id_b, 900)}
+        assert call_args[0][2] == "movie"
+
+
+@pytest.mark.asyncio
+async def test_sync_ratings_background_skips_if_user_not_found():
+    """_sync_ratings_background returns early when user record is missing."""
+    from backend.routers.duels import _sync_ratings_background
+
+    with (
+        patch("backend.routers.duels.async_session_factory") as mock_factory,
+        patch("backend.routers.duels.ensure_fresh_token", new_callable=AsyncMock) as mock_refresh,
+    ):
+        mock_session = AsyncMock()
+        mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_exec_result = MagicMock()
+        mock_exec_result.scalar_one_or_none.return_value = None
+        mock_session.execute.return_value = mock_exec_result
+
+        await _sync_ratings_background(uuid.uuid4(), uuid.uuid4(), 1100, uuid.uuid4(), 900)
+
+        mock_refresh.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_sync_ratings_background_skips_if_no_trakt_token():
+    """_sync_ratings_background returns early when user has no Trakt token linked."""
+    from backend.routers.duels import _sync_ratings_background
+
+    mock_user = MagicMock()
+    mock_user.trakt_access_token = None
+
+    with (
+        patch("backend.routers.duels.async_session_factory") as mock_factory,
+        patch("backend.routers.duels.ensure_fresh_token", new_callable=AsyncMock) as mock_refresh,
+    ):
+        mock_session = AsyncMock()
+        mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_exec_result = MagicMock()
+        mock_exec_result.scalar_one_or_none.return_value = mock_user
+        mock_session.execute.return_value = mock_exec_result
+
+        await _sync_ratings_background(uuid.uuid4(), uuid.uuid4(), 1100, uuid.uuid4(), 900)
+
+        mock_refresh.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_sync_ratings_background_refresh_failure_is_swallowed():
+    """_sync_ratings_background swallows exceptions from ensure_fresh_token."""
+    import httpx
+    from backend.routers.duels import _sync_ratings_background
+
+    uid = uuid.uuid4()
+    mid_a = uuid.uuid4()
+    mid_b = uuid.uuid4()
+
+    mock_user = MagicMock()
+    mock_user.trakt_access_token = "expired-token"
+
+    with (
+        patch("backend.routers.duels.async_session_factory") as mock_factory,
+        patch(
+            "backend.routers.duels.ensure_fresh_token",
+            new_callable=AsyncMock,
+            side_effect=httpx.HTTPStatusError(
+                "401", request=MagicMock(), response=MagicMock(status_code=401)
+            ),
+        ),
+        patch("backend.routers.duels.sync_post_duel", new_callable=AsyncMock) as mock_sync,
+    ):
+        mock_session = AsyncMock()
+        mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_exec_result = MagicMock()
+        mock_exec_result.scalar_one_or_none.return_value = mock_user
+        mock_session.execute.return_value = mock_exec_result
+
+        await _sync_ratings_background(uid, mid_a, 1100, mid_b, 900)
+
+        mock_sync.assert_not_awaited()

@@ -56,7 +56,10 @@ async def _sync_ratings_background(
         if movie_ratings:
             await sync_post_duel(access_token, movie_ratings, media_type)
     except Exception:
-        logger.exception("Background rating sync failed for user %s", user_id)
+        logger.exception(
+            "Background rating sync failed for user %s (token refresh or sync error)",
+            user_id,
+        )
 
 
 @router.post("", response_model=DuelResult)
