@@ -13,7 +13,7 @@ from backend.db import async_session_factory, get_db
 from backend.rate_limit import limiter
 from backend.db_models import Movie, User
 from backend.schemas import DuelSubmit, DuelResult
-from backend.routers.auth import get_current_user
+from backend.routers.auth import get_current_user, ensure_fresh_token
 from backend.services.duel import process_duel
 from backend.services.sync import sync_post_duel
 
@@ -32,11 +32,14 @@ async def _sync_ratings_background(
     """Fire-and-forget Trakt rating sync after a duel with a winner."""
     try:
         async with async_session_factory() as session:
-            user_stmt = select(User.trakt_access_token).where(User.id == user_id)
+            user_stmt = select(User).where(User.id == user_id)
             result = await session.execute(user_stmt)
-            access_token = result.scalar_one_or_none()
-            if not access_token:
+            user = result.scalar_one_or_none()
+            if not user or not user.trakt_access_token:
                 return
+            user = await ensure_fresh_token(user, session)
+            await session.commit()
+            access_token = user.trakt_access_token
             movies_stmt = select(Movie.id, Movie.trakt_id, Movie.media_type).where(
                 Movie.id.in_([movie_a_id, movie_b_id])
             )
@@ -53,7 +56,10 @@ async def _sync_ratings_background(
         if movie_ratings:
             await sync_post_duel(access_token, movie_ratings, media_type)
     except Exception:
-        logger.exception("Background rating sync failed for user %s", user_id)
+        logger.exception(
+            "Background rating sync failed for user %s (token refresh or sync error)",
+            user_id,
+        )
 
 
 @router.post("", response_model=DuelResult)
@@ -82,7 +88,11 @@ async def submit_duel(
         raise HTTPException(status_code=400, detail=str(e))
 
     # Trakt sync in background (fire-and-forget)
-    if outcome in ("a_wins", "b_wins"):
+    if (
+        outcome in ("a_wins", "b_wins")
+        and result.new_elo_a is not None
+        and result.new_elo_b is not None
+    ):
         background_tasks.add_task(
             _sync_ratings_background,
             uid,
