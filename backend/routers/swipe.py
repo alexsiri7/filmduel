@@ -101,7 +101,10 @@ async def get_swipe_cards(
     else:
         # Band-weighted selection: 60% target, 20% above, 20% below
         band_idx = _elo_to_band_index(int(median_elo))
-        logger.info("swipe_band_selection user_id=%s median_elo=%s band=%s", uid, median_elo, BANDS[band_idx][0])
+        logger.info(
+            "swipe_band_selection user_id=%s median_elo=%s band=%s",
+            uid, median_elo, BANDS[band_idx][0],
+        )
 
         target_range = _community_rating_range(band_idx)
         above_idx = max(0, band_idx - 1)
@@ -234,7 +237,10 @@ async def submit_swipe_results(
     unknown_count = (await db.execute(unknown_stmt)).scalar() or 0
 
     if unknown_count < 50:
-        logger.info("swipe_pool_low user_id=%s unknown_count=%d triggering_expansion", uid, unknown_count)
+        logger.info(
+            "swipe_pool_low user_id=%s unknown_count=%d triggering_expansion",
+            uid, unknown_count,
+        )
         background_tasks.add_task(expand_pool, uid, media_type)
 
     return SwipeResponse(seen_count=seen_count, unseen_count=unseen_count, next_action=next_action)
