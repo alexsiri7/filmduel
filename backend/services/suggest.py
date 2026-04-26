@@ -49,7 +49,23 @@ async def _build_taste_profile(
         return None
 
     top_10 = ranked[:10]
-    bottom_5 = ranked[-5:]
+
+    bottom_stmt = (
+        select(UserMovie)
+        .options(joinedload(UserMovie.movie))
+        .join(Movie, UserMovie.movie_id == Movie.id)
+        .where(
+            UserMovie.user_id == user_id,
+            UserMovie.seen.is_(True),
+            UserMovie.battles >= 1,
+            UserMovie.elo.isnot(None),
+            Movie.media_type == media_type,
+        )
+        .order_by(UserMovie.elo.asc())
+        .limit(5)
+    )
+    bottom_result = await db.execute(bottom_stmt)
+    bottom_5 = bottom_result.unique().scalars().all()
 
     # Genre affinities: avg ELO per genre (only genres with 3+ films)
     genre_elos: dict[str, list[int]] = defaultdict(list)

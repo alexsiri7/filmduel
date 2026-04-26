@@ -98,6 +98,7 @@ async def get_user_stats(db: AsyncSession, user_id: uuid.UUID, media_type: str =
             func.sum(UserMovie.battles),
             func.avg(UserMovie.elo),
         )
+        .select_from(UserMovie)
         .join(Movie, UserMovie.movie_id == Movie.id)
         .where(*ranked_filters)
     )
@@ -148,7 +149,7 @@ async def get_user_stats(db: AsyncSession, user_id: uuid.UUID, media_type: str =
         "total_duels": (total_battles_sum or 0) // 2,
         "total_movies_ranked": total_movies,
         "unseen_count": unseen_count,
-        "average_elo": round(float(avg_elo), 2) if avg_elo else 0.0,
+        "average_elo": round(float(avg_elo), 2) if avg_elo is not None else 0.0,
         "highest_rated": highest_rated,
         "lowest_rated": lowest_rated,
     }
