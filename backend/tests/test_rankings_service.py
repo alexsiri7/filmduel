@@ -1,6 +1,104 @@
 """Tests for rankings service layer — pure logic (no DB)."""
 
-from backend.services.rankings import elo_to_letterboxd_rating, parse_decade
+import uuid
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from backend.services.rankings import elo_to_letterboxd_rating, get_user_stats, parse_decade
+
+
+# --- get_user_stats ---
+
+
+def _make_agg_result(count, battles_sum, avg_elo):
+    row = MagicMock()
+    row.one.return_value = (count, battles_sum, avg_elo)
+    return row
+
+
+def _make_scalar_result(value):
+    result = MagicMock()
+    result.scalar.return_value = value
+    return result
+
+
+def _make_orm_result(obj):
+    result = MagicMock()
+    result.unique.return_value.scalars.return_value.first.return_value = obj
+    return result
+
+
+class TestGetUserStats:
+    @pytest.mark.asyncio
+    async def test_empty_library_returns_zero_stats(self):
+        db = AsyncMock()
+        db.execute.side_effect = [
+            _make_agg_result(0, None, None),
+            _make_scalar_result(3),
+        ]
+        result = await get_user_stats(db, uuid.uuid4(), "movie")
+        assert result["total_duels"] == 0
+        assert result["total_movies_ranked"] == 0
+        assert result["average_elo"] == 0.0
+        assert result["highest_rated"] is None
+        assert result["lowest_rated"] is None
+        assert result["unseen_count"] == 3
+
+    @pytest.mark.asyncio
+    async def test_normal_stats_computed_correctly(self):
+        db = AsyncMock()
+        highest, lowest = MagicMock(elo=1300), MagicMock(elo=800)
+        db.execute.side_effect = [
+            _make_agg_result(5, 20, 1050.0),
+            _make_scalar_result(2),
+            _make_orm_result(highest),
+            _make_orm_result(lowest),
+        ]
+        result = await get_user_stats(db, uuid.uuid4(), "movie")
+        assert result["total_movies_ranked"] == 5
+        assert result["total_duels"] == 10  # 20 // 2
+        assert result["average_elo"] == 1050.0
+        assert result["highest_rated"] is highest
+        assert result["lowest_rated"] is lowest
+
+    @pytest.mark.asyncio
+    async def test_avg_elo_none_returns_zero_float(self):
+        db = AsyncMock()
+        db.execute.side_effect = [
+            _make_agg_result(1, 2, None),
+            _make_scalar_result(0),
+            _make_orm_result(MagicMock()),
+            _make_orm_result(MagicMock()),
+        ]
+        result = await get_user_stats(db, uuid.uuid4(), "movie")
+        assert result["average_elo"] == 0.0
+
+    @pytest.mark.asyncio
+    async def test_battles_sum_none_gives_zero_duels(self):
+        """battles_sum can be NULL when all users have 0 battles (edge: SQL AVG/SUM returns NULL on empty)."""
+        db = AsyncMock()
+        db.execute.side_effect = [
+            _make_agg_result(1, None, 1000.0),
+            _make_scalar_result(0),
+            _make_orm_result(MagicMock()),
+            _make_orm_result(MagicMock()),
+        ]
+        result = await get_user_stats(db, uuid.uuid4(), "movie")
+        assert result["total_duels"] == 0
+
+    @pytest.mark.asyncio
+    async def test_avg_elo_zero_returns_zero_not_falsy_skipped(self):
+        """avg_elo=0.0 is falsy — `is not None` guard must not skip it."""
+        db = AsyncMock()
+        db.execute.side_effect = [
+            _make_agg_result(1, 2, 0.0),
+            _make_scalar_result(0),
+            _make_orm_result(MagicMock()),
+            _make_orm_result(MagicMock()),
+        ]
+        result = await get_user_stats(db, uuid.uuid4(), "movie")
+        assert result["average_elo"] == 0.0
 
 
 # --- parse_decade ---
