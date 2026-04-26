@@ -105,10 +105,8 @@ async def process_duel(
     # ── Pair type (before battles are incremented) ──────────────────
     if um_a.battles >= 1 and um_b.battles >= 1:
         pair_type = "ranked_vs_ranked"
-    elif um_a.battles == 0 or um_b.battles == 0:
-        pair_type = "ranked_vs_unranked"
     else:
-        pair_type = "unknown"
+        pair_type = "ranked_vs_unranked"
 
     # ── ELO math + duel record ───────────────────────────────────────
     new_elo_a: int | None = um_a.elo

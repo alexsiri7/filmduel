@@ -135,10 +135,6 @@ async def _backfill_posters_background() -> None:
 
 async def _sync_pool_background(user_id, force: bool = False) -> None:
     """Run pool sync in a background task with its own DB session."""
-    import logging
-    from datetime import timedelta
-
-    logger = logging.getLogger(__name__)
     try:
         async with async_session_factory() as session:
             stmt = select(User).where(User.id == user_id)
