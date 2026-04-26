@@ -108,3 +108,49 @@ async def test_sync_ratings_background_handles_exceptions():
 
         # Should not raise — error is caught and logged
         await _sync_ratings_background(uid, mid_a, 1100, mid_b, 900)
+
+
+@pytest.mark.asyncio
+async def test_sync_ratings_background_refreshes_expired_token():
+    """_sync_ratings_background calls ensure_fresh_token before syncing."""
+    from backend.routers.duels import _sync_ratings_background
+
+    uid = uuid.uuid4()
+    mid_a = uuid.uuid4()
+    mid_b = uuid.uuid4()
+    trakt_id_a = 173916
+    trakt_id_b = 200000
+
+    mock_user = MagicMock()
+    mock_user.trakt_access_token = "expired-token"
+
+    mock_rows = [
+        MagicMock(id=mid_a, trakt_id=trakt_id_a, media_type="movie"),
+        MagicMock(id=mid_b, trakt_id=trakt_id_b, media_type="movie"),
+    ]
+
+    with (
+        patch("backend.routers.duels.async_session_factory") as mock_factory,
+        patch("backend.routers.duels.ensure_fresh_token", new_callable=AsyncMock) as mock_refresh,
+        patch("backend.routers.duels.sync_post_duel", new_callable=AsyncMock) as mock_sync,
+    ):
+        mock_session = AsyncMock()
+        mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_user_refreshed = MagicMock()
+        mock_user_refreshed.trakt_access_token = "fresh-token"
+        mock_refresh.return_value = mock_user_refreshed
+
+        mock_exec_result = MagicMock()
+        mock_exec_result.scalar_one_or_none.return_value = mock_user
+        mock_exec_result.all.return_value = mock_rows
+        mock_session.execute.return_value = mock_exec_result
+
+        await _sync_ratings_background(uid, mid_a, 1100, mid_b, 900)
+
+        mock_refresh.assert_awaited_once_with(mock_user, mock_session)
+        mock_session.commit.assert_awaited_once()
+        mock_sync.assert_awaited_once()
+        call_args = mock_sync.call_args
+        assert call_args[0][0] == "fresh-token"
