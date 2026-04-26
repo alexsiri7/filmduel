@@ -85,7 +85,11 @@ async def submit_duel(
         raise HTTPException(status_code=400, detail=str(e))
 
     # Trakt sync in background (fire-and-forget)
-    if outcome in ("a_wins", "b_wins"):
+    if (
+        outcome in ("a_wins", "b_wins")
+        and result.new_elo_a is not None
+        and result.new_elo_b is not None
+    ):
         background_tasks.add_task(
             _sync_ratings_background,
             uid,
