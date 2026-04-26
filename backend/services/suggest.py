@@ -40,6 +40,7 @@ async def _build_taste_profile(
             Movie.media_type == media_type,
         )
         .order_by(UserMovie.elo.desc())
+        .limit(500)
     )
     result = await db.execute(ranked_stmt)
     ranked = result.unique().scalars().all()

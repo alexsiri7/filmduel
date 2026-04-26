@@ -85,20 +85,24 @@ async def get_user_stats(db: AsyncSession, user_id: uuid.UUID, media_type: str =
     Returns dict with keys: total_duels, total_movies_ranked, unseen_count,
     average_elo, highest_rated (UserMovie|None), lowest_rated (UserMovie|None).
     """
-    stmt = (
-        select(UserMovie)
-        .options(joinedload(UserMovie.movie))
-        .join(Movie, UserMovie.movie_id == Movie.id)
-        .where(
-            UserMovie.user_id == user_id,
-            UserMovie.seen.is_(True),
-            UserMovie.battles > 0,
-            Movie.media_type == media_type,
+    ranked_filters = [
+        UserMovie.user_id == user_id,
+        UserMovie.seen.is_(True),
+        UserMovie.battles > 0,
+        Movie.media_type == media_type,
+    ]
+
+    agg_stmt = (
+        select(
+            func.count(UserMovie.id),
+            func.sum(UserMovie.battles),
+            func.avg(UserMovie.elo),
         )
-        .order_by(UserMovie.elo.desc())
+        .join(Movie, UserMovie.movie_id == Movie.id)
+        .where(*ranked_filters)
     )
-    result = await db.execute(stmt)
-    user_movies = result.unique().scalars().all()
+    agg_result = await db.execute(agg_stmt)
+    total_movies, total_battles_sum, avg_elo = agg_result.one()
 
     unseen_stmt = (
         select(func.count())
@@ -106,10 +110,9 @@ async def get_user_stats(db: AsyncSession, user_id: uuid.UUID, media_type: str =
         .join(Movie, UserMovie.movie_id == Movie.id)
         .where(UserMovie.user_id == user_id, UserMovie.seen.is_(False), Movie.media_type == media_type)
     )
-    unseen_result = await db.execute(unseen_stmt)
-    unseen_count = unseen_result.scalar() or 0
+    unseen_count = (await db.execute(unseen_stmt)).scalar() or 0
 
-    if not user_movies:
+    if not total_movies:
         return {
             "total_duels": 0,
             "total_movies_ranked": 0,
@@ -119,16 +122,35 @@ async def get_user_stats(db: AsyncSession, user_id: uuid.UUID, media_type: str =
             "lowest_rated": None,
         }
 
-    total_battles = sum(um.battles for um in user_movies)
-    elos = [um.elo for um in user_movies]
+    highest_stmt = (
+        select(UserMovie)
+        .options(joinedload(UserMovie.movie))
+        .join(Movie, UserMovie.movie_id == Movie.id)
+        .where(*ranked_filters)
+        .order_by(UserMovie.elo.desc())
+        .limit(1)
+    )
+    highest_result = await db.execute(highest_stmt)
+    highest_rated = highest_result.unique().scalars().first()
+
+    lowest_stmt = (
+        select(UserMovie)
+        .options(joinedload(UserMovie.movie))
+        .join(Movie, UserMovie.movie_id == Movie.id)
+        .where(*ranked_filters)
+        .order_by(UserMovie.elo.asc())
+        .limit(1)
+    )
+    lowest_result = await db.execute(lowest_stmt)
+    lowest_rated = lowest_result.unique().scalars().first()
 
     return {
-        "total_duels": total_battles // 2,
-        "total_movies_ranked": len(user_movies),
+        "total_duels": (total_battles_sum or 0) // 2,
+        "total_movies_ranked": total_movies,
         "unseen_count": unseen_count,
-        "average_elo": round(sum(elos) / len(elos), 2),
-        "highest_rated": user_movies[0],
-        "lowest_rated": user_movies[-1],
+        "average_elo": round(float(avg_elo), 2) if avg_elo else 0.0,
+        "highest_rated": highest_rated,
+        "lowest_rated": lowest_rated,
     }
 
 

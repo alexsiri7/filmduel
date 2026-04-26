@@ -93,6 +93,8 @@ async def select_pair(
             UserMovie.seen.is_(True),
             Movie.media_type == media_type,
         )
+        .order_by(UserMovie.updated_at.desc())
+        .limit(500)
     )
     seen_result = await db.execute(seen_stmt)
     seen_films = list(seen_result.unique().scalars().all())
