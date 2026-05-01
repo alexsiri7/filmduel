@@ -256,12 +256,22 @@ async def create_tournament_bracket(
                 TournamentMatch.position == next_pos,
             )
             next_match_obj = (await db.execute(next_round_stmt)).scalar_one()
-            if bye_match.position % 2 == 0:
-                next_match_obj.movie_a_id = bye_match.winner_movie_id
-            else:
-                next_match_obj.movie_b_id = bye_match.winner_movie_id
+            _advance_winner_to_next_round(
+                next_match_obj, bye_match.winner_movie_id, bye_match.position
+            )
 
         await db.flush()
+
+
+def _advance_winner_to_next_round(
+    next_match: TournamentMatch,
+    winner_movie_id: uuid.UUID,
+    current_position: int,
+) -> None:
+    if current_position % 2 == 0:
+        next_match.movie_a_id = winner_movie_id
+    else:
+        next_match.movie_b_id = winner_movie_id
 
 
 def validate_match(tournament: Tournament, match_id: uuid.UUID, winner_id: uuid.UUID) -> uuid.UUID:
@@ -325,10 +335,7 @@ async def record_match_winner(
                 TournamentMatch.position == next_pos,
             )
         )).scalar_one()
-        if match_obj.position % 2 == 0:
-            next_match.movie_a_id = winner_id
-        else:
-            next_match.movie_b_id = winner_id
+        _advance_winner_to_next_round(next_match, winner_id, match_obj.position)
 
     if round_num == num_rounds:
         t = (await db.execute(
