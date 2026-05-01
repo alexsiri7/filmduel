@@ -23,6 +23,7 @@ from backend.schemas import (
     TournamentMatchSchema,
     TournamentSchema,
 )
+from backend.services.ranking import ranked_user_movies_stmt
 from backend.services.tournament import (
     create_tournament_bracket,
     curate_and_select_films,
@@ -121,17 +122,9 @@ async def get_available_genres(
 ):
     """Return distinct genres from user's seen films for tournament filtering."""
     stmt = (
-        select(func.unnest(Movie.genres).label("genre"))
-        .select_from(UserMovie)
-        .join(Movie, UserMovie.movie_id == Movie.id)
-        .where(
-            UserMovie.user_id == current_user.id,
-            UserMovie.seen.is_(True),
-            UserMovie.battles >= 1,
-            UserMovie.elo.isnot(None),
-            Movie.genres.isnot(None),
-            Movie.media_type == media_type,
-        )
+        ranked_user_movies_stmt(current_user.id, media_type)
+        .with_only_columns(func.unnest(Movie.genres).label("genre"))
+        .where(Movie.genres.isnot(None))
         .distinct()
         .order_by("genre")
     )

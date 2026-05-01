@@ -16,6 +16,7 @@ from sqlalchemy.orm import joinedload
 
 from backend.db_models import Movie, UserMovie
 from backend.services.llm import chat_completion, parse_json_response
+from backend.services.ranking import ranked_user_movies_stmt
 
 logger = logging.getLogger(__name__)
 
@@ -29,16 +30,8 @@ async def _build_taste_profile(
 ) -> dict | None:
     """Return taste profile dict, or None if the user has < MIN_RANKED films."""
     ranked_stmt = (
-        select(UserMovie)
+        ranked_user_movies_stmt(user_id, media_type)
         .options(joinedload(UserMovie.movie))
-        .join(Movie, UserMovie.movie_id == Movie.id)
-        .where(
-            UserMovie.user_id == user_id,
-            UserMovie.seen.is_(True),
-            UserMovie.battles >= 1,
-            UserMovie.elo.isnot(None),
-            Movie.media_type == media_type,
-        )
         .order_by(UserMovie.elo.desc())
         .limit(500)
     )
@@ -51,16 +44,8 @@ async def _build_taste_profile(
     top_10 = ranked[:10]
 
     bottom_stmt = (
-        select(UserMovie)
+        ranked_user_movies_stmt(user_id, media_type)
         .options(joinedload(UserMovie.movie))
-        .join(Movie, UserMovie.movie_id == Movie.id)
-        .where(
-            UserMovie.user_id == user_id,
-            UserMovie.seen.is_(True),
-            UserMovie.battles >= 1,
-            UserMovie.elo.isnot(None),
-            Movie.media_type == media_type,
-        )
         .order_by(UserMovie.elo.asc())
         .limit(5)
     )
@@ -240,17 +225,8 @@ async def generate_suggestions(
 
 async def has_enough_ranked(user_id: uuid.UUID, db: AsyncSession, media_type: str = "movie") -> bool:
     """Check if user has at least MIN_RANKED ranked films of the given type."""
-    count_stmt = (
-        select(func.count())
-        .select_from(UserMovie)
-        .join(Movie, UserMovie.movie_id == Movie.id)
-        .where(
-            UserMovie.user_id == user_id,
-            UserMovie.seen.is_(True),
-            UserMovie.battles >= 1,
-            UserMovie.elo.isnot(None),
-            Movie.media_type == media_type,
-        )
+    count_stmt = ranked_user_movies_stmt(user_id, media_type).with_only_columns(
+        func.count()
     )
     result = await db.execute(count_stmt)
     count = result.scalar() or 0

@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.db_models import Tournament, TournamentMatch, UserMovie
 from backend.services.curator import curate_tournament
 from backend.services.duel import apply_elo_result
+from backend.services.ranking import ranked_user_movies_stmt
 
 logger = logging.getLogger(__name__)
 
@@ -119,19 +120,8 @@ async def get_filtered_ranked_films(
     """
     from sqlalchemy.orm import joinedload
 
-    from backend.db_models import Movie
-
-    stmt = (
-        select(UserMovie)
-        .options(joinedload(UserMovie.movie))
-        .join(Movie, UserMovie.movie_id == Movie.id)
-        .where(
-            UserMovie.user_id == user_id,
-            UserMovie.seen.is_(True),
-            UserMovie.battles >= 1,
-            UserMovie.elo.isnot(None),
-            Movie.media_type == media_type,
-        )
+    stmt = ranked_user_movies_stmt(user_id, media_type).options(
+        joinedload(UserMovie.movie)
     )
     result = await db.execute(stmt)
     user_movies = list(result.unique().scalars().all())
