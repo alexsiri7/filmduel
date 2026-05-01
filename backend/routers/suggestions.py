@@ -28,6 +28,24 @@ STALE_HOURS = 24
 MAX_REGENERATIONS_PER_DAY = 3
 
 
+async def _get_user_suggestion(
+    db: AsyncSession, suggestion_id: str, user_id: uuid.UUID
+) -> Suggestion:
+    stmt = (
+        select(Suggestion)
+        .options(joinedload(Suggestion.movie))
+        .where(
+            Suggestion.id == uuid.UUID(suggestion_id),
+            Suggestion.user_id == user_id,
+        )
+    )
+    result = await db.execute(stmt)
+    suggestion = result.unique().scalar_one_or_none()
+    if suggestion is None:
+        raise HTTPException(status_code=404, detail="Suggestion not found")
+    return suggestion
+
+
 def _build_suggestion_schema(s: Suggestion) -> SuggestionSchema:
     m = s.movie
     return SuggestionSchema(
@@ -206,19 +224,7 @@ async def dismiss_suggestion(
     db: AsyncSession = Depends(get_db),
 ):
     """Mark suggestion as dismissed."""
-    stmt = (
-        select(Suggestion)
-        .options(joinedload(Suggestion.movie))
-        .where(
-            Suggestion.id == uuid.UUID(suggestion_id),
-            Suggestion.user_id == current_user.id,
-        )
-    )
-    result = await db.execute(stmt)
-    suggestion = result.unique().scalar_one_or_none()
-
-    if not suggestion:
-        raise HTTPException(status_code=404, detail="Suggestion not found")
+    suggestion = await _get_user_suggestion(db, suggestion_id, current_user.id)
 
     suggestion.dismissed_at = datetime.now(timezone.utc)
     return _build_suggestion_schema(suggestion)
@@ -232,19 +238,7 @@ async def add_to_watchlist(
     db: AsyncSession = Depends(get_db),
 ):
     """Mark suggestion as added to watchlist and sync to Trakt."""
-    stmt = (
-        select(Suggestion)
-        .options(joinedload(Suggestion.movie))
-        .where(
-            Suggestion.id == uuid.UUID(suggestion_id),
-            Suggestion.user_id == current_user.id,
-        )
-    )
-    result = await db.execute(stmt)
-    suggestion = result.unique().scalar_one_or_none()
-
-    if not suggestion:
-        raise HTTPException(status_code=404, detail="Suggestion not found")
+    suggestion = await _get_user_suggestion(db, suggestion_id, current_user.id)
 
     suggestion.added_to_watchlist_at = datetime.now(timezone.utc)
 
@@ -273,19 +267,7 @@ async def mark_seen(
 ):
     """Mark the suggested film as seen and dismiss the suggestion."""
     uid = current_user.id
-    stmt = (
-        select(Suggestion)
-        .options(joinedload(Suggestion.movie))
-        .where(
-            Suggestion.id == uuid.UUID(suggestion_id),
-            Suggestion.user_id == uid,
-        )
-    )
-    result = await db.execute(stmt)
-    suggestion = result.unique().scalar_one_or_none()
-
-    if not suggestion:
-        raise HTTPException(status_code=404, detail="Suggestion not found")
+    suggestion = await _get_user_suggestion(db, suggestion_id, uid)
 
     # Update user_movies.seen = true
     um_stmt = select(UserMovie).where(
