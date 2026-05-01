@@ -17,6 +17,9 @@ class UserResponse(BaseModel):
 
 
 MediaType = Literal["movie", "show"]
+SwipeNextAction = Literal["duel", "swipe"]
+TournamentStatus = Literal["active", "completed", "abandoned"]
+SuggestionsStatus = Literal["ready", "not_enough_films", "no_candidates"]
 
 
 class MovieSchema(BaseModel):
@@ -119,7 +122,7 @@ class SwipeSubmit(BaseModel):
 class SwipeResponse(BaseModel):
     seen_count: int
     unseen_count: int
-    next_action: str = "duel"  # "duel" or "swipe" — whether user has enough seen films
+    next_action: SwipeNextAction = "duel"
 
 
 class StatsResponse(BaseModel):
@@ -160,7 +163,7 @@ class TournamentSchema(BaseModel):
     filter_type: Optional[str] = None
     filter_value: Optional[str] = None
     bracket_size: int
-    status: str
+    status: TournamentStatus
     champion_movie_id: Optional[str] = None
     tagline: Optional[str] = None
     theme_description: Optional[str] = None
@@ -183,7 +186,7 @@ class TournamentListItem(BaseModel):
     id: str
     name: str
     bracket_size: int
-    status: str
+    status: TournamentStatus
     created_at: datetime
     progress: str = ""
 
@@ -202,7 +205,7 @@ class SuggestionSchema(BaseModel):
 
 class SuggestionsResponse(BaseModel):
     suggestions: list[SuggestionSchema]
-    status: str = "ready"  # "ready" | "generating" | "not_enough_films"
+    status: SuggestionsStatus = "ready"
 
 
 # ── Feedback schemas ──────────────────────────────────────────────
