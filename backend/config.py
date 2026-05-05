@@ -17,6 +17,7 @@ class Settings(BaseSettings):
 
     # App secrets
     SECRET_KEY: str
+    TOKEN_ENC_KEY: str = ""  # ≥32 bytes; rotate independently of SECRET_KEY
     BASE_URL: str = "http://localhost:8000"
 
     # TMDB for poster images
