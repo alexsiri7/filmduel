@@ -32,8 +32,34 @@ class User(Base):
     )
     trakt_user_id: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
     trakt_username: Mapped[str] = mapped_column(Text, nullable=False)
-    trakt_access_token: Mapped[str] = mapped_column(Text, nullable=False)
-    trakt_refresh_token: Mapped[str] = mapped_column(Text, nullable=False)
+    # Stored encrypted at rest. Access via the trakt_access_token /
+    # trakt_refresh_token properties which transparently decrypt/encrypt.
+    trakt_access_token_enc: Mapped[str] = mapped_column(
+        "trakt_access_token", Text, nullable=False
+    )
+    trakt_refresh_token_enc: Mapped[str] = mapped_column(
+        "trakt_refresh_token", Text, nullable=False
+    )
+
+    @property
+    def trakt_access_token(self) -> str:
+        from backend.services.token_crypto import decrypt_token
+        return decrypt_token(self.trakt_access_token_enc)
+
+    @trakt_access_token.setter
+    def trakt_access_token(self, value: str) -> None:
+        from backend.services.token_crypto import encrypt_token
+        self.trakt_access_token_enc = encrypt_token(value)
+
+    @property
+    def trakt_refresh_token(self) -> str:
+        from backend.services.token_crypto import decrypt_token
+        return decrypt_token(self.trakt_refresh_token_enc)
+
+    @trakt_refresh_token.setter
+    def trakt_refresh_token(self, value: str) -> None:
+        from backend.services.token_crypto import encrypt_token
+        self.trakt_refresh_token_enc = encrypt_token(value)
     trakt_token_expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
@@ -42,6 +68,11 @@ class User(Base):
     )
     last_seen_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    tokens_invalid_before: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime(1970, 1, 1, tzinfo=timezone.utc),
+        server_default="1970-01-01T00:00:00+00:00",
     )
 
     user_movies: Mapped[list[UserMovie]] = relationship(back_populates="user", cascade="all, delete-orphan")

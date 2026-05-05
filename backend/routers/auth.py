@@ -11,7 +11,7 @@ from urllib.parse import urlencode
 import jwt
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import Settings, get_settings
@@ -29,7 +29,8 @@ router = APIRouter(tags=["auth"])
 
 COOKIE_NAME = "filmduel_session"
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRY_HOURS = 24 * 30  # 30-day idle timeout; refreshed on every authenticated request (sliding session)
+JWT_EXPIRY_HOURS = 72  # 3-day absolute lifetime per issued token
+REFRESH_INTERVAL = timedelta(hours=12)  # re-issue cookie at most once per 12h
 
 
 def create_jwt(user_id: str, settings: Settings) -> str:
@@ -57,8 +58,17 @@ def set_session_cookie(response: Response, user_id: str, settings: Settings) -> 
     )
 
 
-def get_current_user_id(request: Request, response: Response) -> str:
-    """Extract and verify user ID from session cookie. Refreshes the cookie on every successful auth (sliding session)."""
+async def get_current_user_id(
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+) -> str:
+    """Extract and verify user ID from session cookie.
+
+    Also performs server-side revocation check (catches logout from another
+    device) and re-issues the cookie at most once per REFRESH_INTERVAL
+    (bounded sliding session).
+    """
     settings = get_settings()
     token = request.cookies.get(COOKIE_NAME)
     if not token:
@@ -71,13 +81,28 @@ def get_current_user_id(request: Request, response: Response) -> str:
             audience="filmduel",
         )
         user_id = payload.get("sub")
+        iat = datetime.fromtimestamp(payload["iat"], tz=timezone.utc)
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid session — missing subject")
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Session expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid session")
-    set_session_cookie(response, user_id, settings)
+
+    # Server-side revocation: catches logout from another device or admin revoke.
+    invalid_before = await db.scalar(
+        select(User.tokens_invalid_before).where(User.id == uuid.UUID(user_id))
+    )
+    if invalid_before is None:
+        raise HTTPException(status_code=401, detail="User not found")
+    if invalid_before.tzinfo is None:
+        invalid_before = invalid_before.replace(tzinfo=timezone.utc)
+    if iat < invalid_before:
+        raise HTTPException(status_code=401, detail="Session revoked")
+
+    # Sliding refresh: only re-issue if the token is older than REFRESH_INTERVAL.
+    if datetime.now(timezone.utc) - iat > REFRESH_INTERVAL:
+        set_session_cookie(response, user_id, settings)
     return user_id
 
 
@@ -251,8 +276,18 @@ async def callback(
 
 @router.post("/auth/logout")
 @limiter.limit("10/minute")
-async def logout(request: Request):
-    """Clear the session cookie."""
+async def logout(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Clear the session cookie and revoke all previously issued JWTs."""
+    await db.execute(
+        update(User)
+        .where(User.id == uuid.UUID(user_id))
+        .values(tokens_invalid_before=datetime.now(timezone.utc))
+    )
+    await db.commit()
     response = Response(status_code=204)
     response.delete_cookie(COOKIE_NAME)
     return response
@@ -266,6 +301,33 @@ async def me(user: User = Depends(get_current_user)):
         trakt_username=user.trakt_username,
         created_at=user.created_at,
     )
+
+
+@router.delete("/api/me", status_code=204)
+@limiter.limit("3/hour")
+async def delete_account(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete the authenticated user's account (GDPR Art. 17).
+
+    Best-effort revokes the Trakt access token at the upstream, then
+    cascade-deletes the User row (and all dependent rows via ON DELETE CASCADE).
+    """
+    settings = get_settings()
+    client = TraktClient(client_id=settings.TRAKT_CLIENT_ID)
+    await client.revoke_token(
+        current_user.trakt_access_token,
+        client_secret=settings.TRAKT_CLIENT_SECRET,
+    )
+
+    await db.execute(delete(User).where(User.id == current_user.id))
+    await db.commit()
+
+    response = Response(status_code=204)
+    response.delete_cookie(COOKIE_NAME)
+    return response
 
 
 @router.post("/api/sync")

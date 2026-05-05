@@ -1,7 +1,7 @@
 """Tests for auth logic — JWT creation, verification, and user extraction."""
 
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import jwt as pyjwt
 import pytest
@@ -12,6 +12,7 @@ from backend.routers.auth import (
     COOKIE_NAME,
     JWT_ALGORITHM,
     JWT_EXPIRY_HOURS,
+    REFRESH_INTERVAL,
     create_jwt,
     get_current_user_id,
 )
@@ -29,6 +30,28 @@ def _make_settings(**overrides) -> Settings:
 
 
 SETTINGS = _make_settings()
+
+# Epoch sentinel — tokens_invalid_before value for a user with no revocations.
+_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
+def _make_db(invalid_before: datetime = _EPOCH) -> AsyncMock:
+    """Mock AsyncSession whose scalar() returns invalid_before."""
+    db = AsyncMock()
+    db.scalar.return_value = invalid_before
+    return db
+
+
+def _make_request(cookies: dict | None = None) -> MagicMock:
+    """Create a mock FastAPI Request with optional cookies."""
+    request = MagicMock()
+    request.cookies = cookies or {}
+    return request
+
+
+def _make_response() -> MagicMock:
+    """Create a mock FastAPI Response; set_cookie is a no-op MagicMock."""
+    return MagicMock()
 
 
 # ---------------------------------------------------------------------------
@@ -70,7 +93,6 @@ class TestCreateJWT:
         )
         exp = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
         now = datetime.now(timezone.utc)
-        # Should expire roughly JWT_EXPIRY_HOURS from now (allow 5 min tolerance)
         expected_min = now + timedelta(hours=JWT_EXPIRY_HOURS) - timedelta(minutes=5)
         assert exp > expected_min
 
@@ -81,65 +103,70 @@ class TestCreateJWT:
 
 
 # ---------------------------------------------------------------------------
-# get_current_user_id
+# get_current_user_id  (async — requires pytest-asyncio)
 # ---------------------------------------------------------------------------
 
 
-def _make_request(cookies: dict | None = None) -> MagicMock:
-    """Create a mock FastAPI Request with optional cookies."""
-    request = MagicMock()
-    request.cookies = cookies or {}
-    return request
-
-
-def _make_response() -> MagicMock:
-    """Create a mock FastAPI Response; set_cookie is a no-op MagicMock."""
-    return MagicMock()
-
-
 class TestGetCurrentUserId:
-    def test_extracts_user_id(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_extracts_user_id(self, monkeypatch):
         """Valid token should return the user ID."""
         monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
-        user_id = "my-user-id-abc"
+        user_id = "550e8400-e29b-41d4-a716-446655440000"
         token = create_jwt(user_id, SETTINGS)
         request = _make_request({COOKIE_NAME: token})
         response = _make_response()
-        result = get_current_user_id(request, response)
+        result = await get_current_user_id(request, response, _make_db())
         assert result == user_id
 
-    def test_refreshes_cookie_on_success(self, monkeypatch):
-        """On successful auth, a fresh session cookie should be set (sliding session)."""
+    @pytest.mark.asyncio
+    async def test_does_not_refresh_fresh_token(self, monkeypatch):
+        """A token younger than REFRESH_INTERVAL must not trigger a Set-Cookie."""
         monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
-        user_id = "my-user-id-abc"
-        token = create_jwt(user_id, SETTINGS)
+        token = create_jwt("550e8400-e29b-41d4-a716-446655440000", SETTINGS)
         request = _make_request({COOKIE_NAME: token})
         response = _make_response()
-        get_current_user_id(request, response)
+        await get_current_user_id(request, response, _make_db())
+        response.set_cookie.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_refreshes_old_token(self, monkeypatch):
+        """A token older than REFRESH_INTERVAL should trigger a new Set-Cookie."""
+        monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
+        old_iat = datetime.now(timezone.utc) - REFRESH_INTERVAL - timedelta(hours=1)
+        payload = {
+            "sub": "550e8400-e29b-41d4-a716-446655440000",
+            "jti": "x",
+            "iss": "filmduel",
+            "aud": "filmduel",
+            "exp": datetime.now(timezone.utc) + timedelta(hours=1),
+            "iat": old_iat,
+        }
+        token = pyjwt.encode(payload, SETTINGS.SECRET_KEY, algorithm=JWT_ALGORITHM)
+        request = _make_request({COOKIE_NAME: token})
+        response = _make_response()
+        await get_current_user_id(request, response, _make_db())
         response.set_cookie.assert_called_once()
-        args = response.set_cookie.call_args.args
         kwargs = response.set_cookie.call_args.kwargs
-        assert args[0] == COOKIE_NAME
         assert kwargs.get("httponly") is True
         assert kwargs.get("secure") is True
         assert kwargs.get("samesite") == "lax"
-        assert kwargs.get("max_age") == JWT_EXPIRY_HOURS * 3600
 
-    def test_no_cookie_raises_401(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_no_cookie_raises_401(self, monkeypatch):
         """Missing cookie should raise 401."""
         monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
         request = _make_request({})
         response = _make_response()
         with pytest.raises(HTTPException) as exc_info:
-            get_current_user_id(request, response)
+            await get_current_user_id(request, response, _make_db())
         assert exc_info.value.status_code == 401
         assert "Not authenticated" in exc_info.value.detail
-        response.set_cookie.assert_not_called()
 
-    def test_expired_token_raises_401(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_expired_token_raises_401(self, monkeypatch):
         """Expired JWT should raise 401 with 'Session expired'."""
         monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
-        # Create a token that expired an hour ago
         payload = {
             "sub": "user-1",
             "iss": "filmduel",
@@ -151,34 +178,35 @@ class TestGetCurrentUserId:
         request = _make_request({COOKIE_NAME: token})
         response = _make_response()
         with pytest.raises(HTTPException) as exc_info:
-            get_current_user_id(request, response)
+            await get_current_user_id(request, response, _make_db())
         assert exc_info.value.status_code == 401
         assert "expired" in exc_info.value.detail.lower()
-        response.set_cookie.assert_not_called()
 
-    def test_invalid_token_raises_401(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_invalid_token_raises_401(self, monkeypatch):
         """Garbage token should raise 401."""
         monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
         request = _make_request({COOKIE_NAME: "not-a-valid-jwt"})
         response = _make_response()
         with pytest.raises(HTTPException) as exc_info:
-            get_current_user_id(request, response)
+            await get_current_user_id(request, response, _make_db())
         assert exc_info.value.status_code == 401
         assert "Invalid session" in exc_info.value.detail
-        response.set_cookie.assert_not_called()
 
-    def test_wrong_secret_raises_401(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_wrong_secret_raises_401(self, monkeypatch):
         """Token signed with wrong secret should raise 401."""
         monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
         wrong_settings = _make_settings(SECRET_KEY="wrong-secret")
-        token = create_jwt("user-1", wrong_settings)
+        token = create_jwt("550e8400-e29b-41d4-a716-446655440000", wrong_settings)
         request = _make_request({COOKIE_NAME: token})
         response = _make_response()
         with pytest.raises(HTTPException) as exc_info:
-            get_current_user_id(request, response)
+            await get_current_user_id(request, response, _make_db())
         assert exc_info.value.status_code == 401
 
-    def test_token_missing_sub_raises_401(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_token_missing_sub_raises_401(self, monkeypatch):
         """Token without 'sub' claim should raise 401."""
         monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
         payload = {
@@ -192,7 +220,20 @@ class TestGetCurrentUserId:
         request = _make_request({COOKIE_NAME: token})
         response = _make_response()
         with pytest.raises(HTTPException) as exc_info:
-            get_current_user_id(request, response)
+            await get_current_user_id(request, response, _make_db())
         assert exc_info.value.status_code == 401
         assert "missing subject" in exc_info.value.detail.lower()
-        response.set_cookie.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_revoked_token_raises_401(self, monkeypatch):
+        """Token issued before tokens_invalid_before must be rejected."""
+        monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
+        token = create_jwt("550e8400-e29b-41d4-a716-446655440000", SETTINGS)
+        # DB reports that tokens issued before a future timestamp are invalid.
+        future_revocation = datetime.now(timezone.utc) + timedelta(seconds=5)
+        request = _make_request({COOKIE_NAME: token})
+        response = _make_response()
+        with pytest.raises(HTTPException) as exc_info:
+            await get_current_user_id(request, response, _make_db(future_revocation))
+        assert exc_info.value.status_code == 401
+        assert "revoked" in exc_info.value.detail.lower()

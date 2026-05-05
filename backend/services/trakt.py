@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 class TraktClient:
@@ -158,3 +162,18 @@ class TraktClient:
                 },
             )
             resp.raise_for_status()
+
+    async def revoke_token(self, token: str, *, client_secret: str) -> None:
+        """Revoke a Trakt OAuth token. Best-effort — does not raise on failure."""
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                await client.post(
+                    f"{self.BASE_URL}/oauth/revoke",
+                    json={
+                        "token": token,
+                        "client_id": self._client_id,
+                        "client_secret": client_secret,
+                    },
+                )
+        except Exception:
+            logger.warning("Trakt token revoke failed", exc_info=True)
