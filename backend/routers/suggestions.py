@@ -16,7 +16,12 @@ from backend.db import get_db
 from backend.rate_limit import limiter
 from backend.db_models import Movie, Suggestion, User, UserMovie
 from backend.routers.auth import get_current_user
-from backend.schemas import MediaType, MovieSchema, SuggestionSchema, SuggestionsResponse
+from backend.schemas import (
+    MediaType,
+    MovieSchema,
+    SuggestionSchema,
+    SuggestionsResponse,
+)
 from backend.services.suggest import generate_suggestions, has_enough_ranked
 from backend.services.trakt import TraktClient
 
@@ -177,12 +182,9 @@ async def regenerate_suggestions(
 
     # Count regenerations in last 24h (by counting distinct generated_at timestamps)
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
-    count_stmt = (
-        select(func.count(func.distinct(Suggestion.generated_at)))
-        .where(
-            Suggestion.user_id == uid,
-            Suggestion.generated_at > cutoff,
-        )
+    count_stmt = select(func.count(func.distinct(Suggestion.generated_at))).where(
+        Suggestion.user_id == uid,
+        Suggestion.generated_at > cutoff,
     )
     result = await db.execute(count_stmt)
     regen_count = result.scalar() or 0
@@ -249,7 +251,9 @@ async def add_to_watchlist(
 
     async def _sync_trakt_watchlist():
         try:
-            client = TraktClient(client_id=settings.TRAKT_CLIENT_ID, access_token=access_token)
+            client = TraktClient(
+                client_id=settings.TRAKT_CLIENT_ID, access_token=access_token
+            )
             await client.add_to_watchlist(trakt_id)
         except Exception:
             logger.exception("Failed to sync watchlist to Trakt for movie %s", trakt_id)

@@ -68,8 +68,11 @@ class TestCreateJWT:
         user_id = "550e8400-e29b-41d4-a716-446655440000"
         token = create_jwt(user_id, SETTINGS)
         payload = pyjwt.decode(
-            token, SETTINGS.SECRET_KEY, algorithms=[JWT_ALGORITHM],
-            issuer="filmduel", audience="filmduel",
+            token,
+            SETTINGS.SECRET_KEY,
+            algorithms=[JWT_ALGORITHM],
+            issuer="filmduel",
+            audience="filmduel",
         )
         assert payload["sub"] == user_id
         assert payload["iss"] == "filmduel"
@@ -79,8 +82,11 @@ class TestCreateJWT:
     def test_payload_has_exp_and_iat(self):
         token = create_jwt("user-1", SETTINGS)
         payload = pyjwt.decode(
-            token, SETTINGS.SECRET_KEY, algorithms=[JWT_ALGORITHM],
-            issuer="filmduel", audience="filmduel",
+            token,
+            SETTINGS.SECRET_KEY,
+            algorithms=[JWT_ALGORITHM],
+            issuer="filmduel",
+            audience="filmduel",
         )
         assert "exp" in payload
         assert "iat" in payload
@@ -88,8 +94,11 @@ class TestCreateJWT:
     def test_expiry_is_in_future(self):
         token = create_jwt("user-1", SETTINGS)
         payload = pyjwt.decode(
-            token, SETTINGS.SECRET_KEY, algorithms=[JWT_ALGORITHM],
-            issuer="filmduel", audience="filmduel",
+            token,
+            SETTINGS.SECRET_KEY,
+            algorithms=[JWT_ALGORITHM],
+            issuer="filmduel",
+            audience="filmduel",
         )
         exp = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
         now = datetime.now(timezone.utc)

@@ -131,8 +131,12 @@ async def test_sync_ratings_background_refreshes_expired_token():
 
     with (
         patch("backend.routers.duels.async_session_factory") as mock_factory,
-        patch("backend.routers.duels.ensure_fresh_token", new_callable=AsyncMock) as mock_refresh,
-        patch("backend.routers.duels.sync_post_duel", new_callable=AsyncMock) as mock_sync,
+        patch(
+            "backend.routers.duels.ensure_fresh_token", new_callable=AsyncMock
+        ) as mock_refresh,
+        patch(
+            "backend.routers.duels.sync_post_duel", new_callable=AsyncMock
+        ) as mock_sync,
     ):
         mock_session = AsyncMock()
         mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
@@ -166,7 +170,9 @@ async def test_sync_ratings_background_skips_if_user_not_found():
 
     with (
         patch("backend.routers.duels.async_session_factory") as mock_factory,
-        patch("backend.routers.duels.ensure_fresh_token", new_callable=AsyncMock) as mock_refresh,
+        patch(
+            "backend.routers.duels.ensure_fresh_token", new_callable=AsyncMock
+        ) as mock_refresh,
     ):
         mock_session = AsyncMock()
         mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
@@ -175,7 +181,9 @@ async def test_sync_ratings_background_skips_if_user_not_found():
         mock_exec_result.scalar_one_or_none.return_value = None
         mock_session.execute.return_value = mock_exec_result
 
-        await _sync_ratings_background(uuid.uuid4(), uuid.uuid4(), 1100, uuid.uuid4(), 900)
+        await _sync_ratings_background(
+            uuid.uuid4(), uuid.uuid4(), 1100, uuid.uuid4(), 900
+        )
 
         mock_refresh.assert_not_awaited()
 
@@ -190,7 +198,9 @@ async def test_sync_ratings_background_skips_if_no_trakt_token():
 
     with (
         patch("backend.routers.duels.async_session_factory") as mock_factory,
-        patch("backend.routers.duels.ensure_fresh_token", new_callable=AsyncMock) as mock_refresh,
+        patch(
+            "backend.routers.duels.ensure_fresh_token", new_callable=AsyncMock
+        ) as mock_refresh,
     ):
         mock_session = AsyncMock()
         mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
@@ -199,7 +209,9 @@ async def test_sync_ratings_background_skips_if_no_trakt_token():
         mock_exec_result.scalar_one_or_none.return_value = mock_user
         mock_session.execute.return_value = mock_exec_result
 
-        await _sync_ratings_background(uuid.uuid4(), uuid.uuid4(), 1100, uuid.uuid4(), 900)
+        await _sync_ratings_background(
+            uuid.uuid4(), uuid.uuid4(), 1100, uuid.uuid4(), 900
+        )
 
         mock_refresh.assert_not_awaited()
 
@@ -226,7 +238,9 @@ async def test_sync_ratings_background_refresh_failure_is_swallowed():
                 "401", request=MagicMock(), response=MagicMock(status_code=401)
             ),
         ),
-        patch("backend.routers.duels.sync_post_duel", new_callable=AsyncMock) as mock_sync,
+        patch(
+            "backend.routers.duels.sync_post_duel", new_callable=AsyncMock
+        ) as mock_sync,
     ):
         mock_session = AsyncMock()
         mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)

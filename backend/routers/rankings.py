@@ -11,7 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db import get_db
 from backend.db_models import User, UserMovie
-from backend.schemas import MediaType, MovieSchema, RankedMovie, RankingsResponse, StatsResponse
+from backend.schemas import (
+    MediaType,
+    MovieSchema,
+    RankedMovie,
+    RankingsResponse,
+    StatsResponse,
+)
 from backend.routers.auth import get_current_user
 from backend.services.elo import elo_to_trakt_rating
 from backend.services.rankings import (
@@ -57,12 +63,16 @@ async def get_rankings(
 ):
     """Return the user's ranked movies/shows sorted by ELO descending."""
     user_movies, total = await get_user_rankings(
-        db, current_user.id, genre=genre, decade=decade, limit=limit, offset=offset,
+        db,
+        current_user.id,
+        genre=genre,
+        decade=decade,
+        limit=limit,
+        offset=offset,
         media_type=media_type,
     )
     rankings = [
-        _build_ranked_movie(um, rank=offset + i + 1)
-        for i, um in enumerate(user_movies)
+        _build_ranked_movie(um, rank=offset + i + 1) for i, um in enumerate(user_movies)
     ]
     return RankingsResponse(rankings=rankings, total=total)
 

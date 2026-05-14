@@ -1,7 +1,5 @@
 """Tests for swipe logic — band indexing, community rating range, next_action."""
 
-import pytest
-
 from backend.routers.swipe import (
     BANDS,
     _community_rating_range,
@@ -43,8 +41,8 @@ class TestEloToBandIndex:
         # Check each boundary value
         assert _elo_to_band_index(1300) == 0  # elite lower bound
         assert _elo_to_band_index(1100) == 1  # strong lower bound
-        assert _elo_to_band_index(900) == 2   # mid lower bound
-        assert _elo_to_band_index(700) == 3   # weak lower bound
+        assert _elo_to_band_index(900) == 2  # mid lower bound
+        assert _elo_to_band_index(700) == 3  # weak lower bound
 
 
 # ---------------------------------------------------------------------------
@@ -101,13 +99,17 @@ class TestBandsStructure:
         """ELO lower bounds should be strictly descending from elite to low."""
         lows = [b[1] for b in BANDS]
         for i in range(len(lows) - 1):
-            assert lows[i] > lows[i + 1], f"Band {i} low={lows[i]} not > band {i+1} low={lows[i+1]}"
+            assert lows[i] > lows[i + 1], (
+                f"Band {i} low={lows[i]} not > band {i + 1} low={lows[i + 1]}"
+            )
 
     def test_community_rating_ranges_descending(self):
         """CR lower bounds should be strictly descending from elite to low."""
         cr_lows = [b[3] for b in BANDS]
         for i in range(len(cr_lows) - 1):
-            assert cr_lows[i] > cr_lows[i + 1], f"Band {i} cr_low={cr_lows[i]} not > band {i+1} cr_low={cr_lows[i+1]}"
+            assert cr_lows[i] > cr_lows[i + 1], (
+                f"Band {i} cr_low={cr_lows[i]} not > band {i + 1} cr_low={cr_lows[i + 1]}"
+            )
 
 
 # ---------------------------------------------------------------------------

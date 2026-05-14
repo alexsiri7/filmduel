@@ -121,7 +121,9 @@ class TestCreateTournamentBracketWithByes:
             result = MagicMock()
             if "round" in stmt_str and "is_bye" in stmt_str:
                 # Return bye matches from round 1
-                bye_matches = [obj for obj in added_objects if getattr(obj, "is_bye", False)]
+                bye_matches = [
+                    obj for obj in added_objects if getattr(obj, "is_bye", False)
+                ]
                 result.scalars.return_value.all.return_value = bye_matches
                 return result
             # Round 2 position lookup
@@ -136,8 +138,10 @@ class TestCreateTournamentBracketWithByes:
         await create_tournament_bracket(db, tournament_id, 8, films)
 
         from backend.db_models import TournamentMatch
+
         round1_matches = [
-            obj for obj in added_objects
+            obj
+            for obj in added_objects
             if isinstance(obj, TournamentMatch) and obj.round == 1
         ]
         assert len(round1_matches) == 4
@@ -160,8 +164,10 @@ class TestCreateTournamentBracketWithByes:
         await create_tournament_bracket(db, tournament_id, 8, films)
 
         from backend.db_models import TournamentMatch
+
         round1_matches = [
-            obj for obj in added_objects
+            obj
+            for obj in added_objects
             if isinstance(obj, TournamentMatch) and obj.round == 1
         ]
         bye_matches = [m for m in round1_matches if getattr(m, "is_bye", False)]
@@ -187,7 +193,9 @@ class TestCreateTournamentBracketWithByes:
             result = MagicMock()
             stmt_str = str(stmt)
             if "is_bye" in stmt_str:
-                bye_matches = [obj for obj in added_objects if getattr(obj, "is_bye", False)]
+                bye_matches = [
+                    obj for obj in added_objects if getattr(obj, "is_bye", False)
+                ]
                 result.scalars.return_value.all.return_value = bye_matches
             else:
                 result.scalar_one.return_value = round2_mock
@@ -198,8 +206,10 @@ class TestCreateTournamentBracketWithByes:
         await create_tournament_bracket(db, tournament_id, 8, films)
 
         from backend.db_models import TournamentMatch
+
         bye_matches = [
-            obj for obj in added_objects
+            obj
+            for obj in added_objects
             if isinstance(obj, TournamentMatch) and getattr(obj, "is_bye", False)
         ]
         for bm in bye_matches:
@@ -279,3 +289,18 @@ class TestValidateMatch:
 
         with pytest.raises(ValueError, match="not active"):
             validate_match(tournament, uuid.uuid4(), uuid.uuid4())
+
+
+# ---------------------------------------------------------------------------
+# TournamentSchema field exposure regression
+# ---------------------------------------------------------------------------
+
+
+class TestTournamentSchemaFields:
+    def test_tournament_schema_does_not_expose_llm_response(self):
+        """TournamentSchema must not surface internal LLM metadata."""
+        from backend.schemas import TournamentSchema
+
+        assert "llm_response" not in TournamentSchema.model_fields, (
+            "llm_response must not be part of the public TournamentSchema"
+        )

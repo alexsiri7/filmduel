@@ -54,12 +54,9 @@ async def _expand_pool_inner(user_id: uuid.UUID, media_type: str = "movie") -> i
         cutoff = now - EXPANSION_COOLDOWN
 
         # Get recent expansion sources to skip
-        recent_stmt = (
-            select(PoolExpansion.source, PoolExpansion.source_key)
-            .where(
-                PoolExpansion.user_id == user_id,
-                PoolExpansion.ran_at >= cutoff,
-            )
+        recent_stmt = select(PoolExpansion.source, PoolExpansion.source_key).where(
+            PoolExpansion.user_id == user_id,
+            PoolExpansion.ran_at >= cutoff,
         )
         result = await db.execute(recent_stmt)
         recent_keys: set[tuple[str, str | None]] = {
@@ -71,23 +68,32 @@ async def _expand_pool_inner(user_id: uuid.UUID, media_type: str = "movie") -> i
             added = await _expand_from_recommendations(
                 db, user_id, user, settings, recent_keys, now, media_type
             )
-            logger.info("expand_source user_id=%s source=trakt_recommendations added=%d", user_id, added)
+            logger.info(
+                "expand_source user_id=%s source=trakt_recommendations added=%d",
+                user_id,
+                added,
+            )
             total_added += added
 
         # Source B: TMDB similar films from top-ranked items (movies only)
         if total_added < TARGET_ADDED and media_type == "movie":
-            added = await _expand_from_similar(
-                db, user_id, settings, recent_keys, now
+            added = await _expand_from_similar(db, user_id, settings, recent_keys, now)
+            logger.info(
+                "expand_source user_id=%s source=tmdb_similar added=%d", user_id, added
             )
-            logger.info("expand_source user_id=%s source=tmdb_similar added=%d", user_id, added)
             total_added += added
 
         # Source C: Trakt anticipated
-        if total_added < TARGET_ADDED and ("anticipated", media_type) not in recent_keys:
+        if (
+            total_added < TARGET_ADDED
+            and ("anticipated", media_type) not in recent_keys
+        ):
             added = await _expand_from_anticipated(
                 db, user_id, user, settings, recent_keys, now, media_type
             )
-            logger.info("expand_source user_id=%s source=anticipated added=%d", user_id, added)
+            logger.info(
+                "expand_source user_id=%s source=anticipated added=%d", user_id, added
+            )
             total_added += added
 
         # Source D: Deeper popular pages
@@ -95,7 +101,9 @@ async def _expand_pool_inner(user_id: uuid.UUID, media_type: str = "movie") -> i
             added = await _expand_from_popular_pages(
                 db, user_id, user, settings, recent_keys, now, media_type
             )
-            logger.info("expand_source user_id=%s source=popular_pages added=%d", user_id, added)
+            logger.info(
+                "expand_source user_id=%s source=popular_pages added=%d", user_id, added
+            )
             total_added += added
 
         await db.commit()
@@ -141,13 +149,15 @@ async def _expand_from_recommendations(
         if ok:
             added += 1
 
-    db.add(PoolExpansion(
-        user_id=user_id,
-        source="trakt_recommendations",
-        source_key=source_key,
-        films_added=added,
-        ran_at=now,
-    ))
+    db.add(
+        PoolExpansion(
+            user_id=user_id,
+            source="trakt_recommendations",
+            source_key=source_key,
+            films_added=added,
+            ran_at=now,
+        )
+    )
     await db.flush()
     return added
 
@@ -192,13 +202,15 @@ async def _expand_from_similar(
                 added += 1
 
         # Record expansion
-        db.add(PoolExpansion(
-            user_id=user_id,
-            source="tmdb_similar",
-            source_key=source_key,
-            films_added=added,
-            ran_at=now,
-        ))
+        db.add(
+            PoolExpansion(
+                user_id=user_id,
+                source="tmdb_similar",
+                source_key=source_key,
+                films_added=added,
+                ran_at=now,
+            )
+        )
         total += added
 
         # Rate-limit TMDB calls
@@ -247,13 +259,15 @@ async def _expand_from_anticipated(
         if ok:
             added += 1
 
-    db.add(PoolExpansion(
-        user_id=user_id,
-        source="anticipated",
-        source_key=media_type,
-        films_added=added,
-        ran_at=now,
-    ))
+    db.add(
+        PoolExpansion(
+            user_id=user_id,
+            source="anticipated",
+            source_key=media_type,
+            films_added=added,
+            ran_at=now,
+        )
+    )
     await db.flush()
     return added
 
@@ -299,13 +313,15 @@ async def _expand_from_popular_pages(
             if ok:
                 added += 1
 
-        db.add(PoolExpansion(
-            user_id=user_id,
-            source=source,
-            source_key=source_key,
-            films_added=added,
-            ran_at=now,
-        ))
+        db.add(
+            PoolExpansion(
+                user_id=user_id,
+                source=source,
+                source_key=source_key,
+                films_added=added,
+                ran_at=now,
+            )
+        )
         total += added
 
         if total >= TARGET_ADDED:
@@ -332,21 +348,27 @@ async def _upsert_film_from_trakt(
     await db.flush()
 
     result = await db.execute(
-        select(Movie.id).where(Movie.trakt_id == trakt_id, Movie.media_type == media_type)
+        select(Movie.id).where(
+            Movie.trakt_id == trakt_id, Movie.media_type == media_type
+        )
     )
     movie_uuid = result.scalar_one_or_none()
     if not movie_uuid:
         return False
 
-    um_stmt = insert(UserMovie.__table__).values(
-        user_id=user_id,
-        movie_id=movie_uuid,
-        seen=None,
-        elo=None,
-        battles=0,
-        updated_at=now,
-    ).on_conflict_do_nothing(
-        index_elements=["user_id", "movie_id"],
+    um_stmt = (
+        insert(UserMovie.__table__)
+        .values(
+            user_id=user_id,
+            movie_id=movie_uuid,
+            seen=None,
+            elo=None,
+            battles=0,
+            updated_at=now,
+        )
+        .on_conflict_do_nothing(
+            index_elements=["user_id", "movie_id"],
+        )
     )
     result = await db.execute(um_stmt)
     return result.rowcount > 0
@@ -373,15 +395,19 @@ async def _upsert_film_from_tmdb(
 
     if row:
         # Movie exists, just ensure user_movie
-        um_stmt = insert(UserMovie.__table__).values(
-            user_id=user_id,
-            movie_id=row.id,
-            seen=None,
-            elo=None,
-            battles=0,
-            updated_at=now,
-        ).on_conflict_do_nothing(
-            index_elements=["user_id", "movie_id"],
+        um_stmt = (
+            insert(UserMovie.__table__)
+            .values(
+                user_id=user_id,
+                movie_id=row.id,
+                seen=None,
+                elo=None,
+                battles=0,
+                updated_at=now,
+            )
+            .on_conflict_do_nothing(
+                index_elements=["user_id", "movie_id"],
+            )
         )
         result = await db.execute(um_stmt)
         return result.rowcount > 0
@@ -392,25 +418,29 @@ async def _upsert_film_from_tmdb(
         return False
 
     # Upsert the movie (TMDB expansion is movies-only, so media_type="movie")
-    stmt = insert(Movie.__table__).values(
-        trakt_id=trakt_id,
-        media_type="movie",
-        tmdb_id=tmdb_id,
-        title=film.get("title", "Unknown"),
-        year=film.get("year"),
-        genres=film.get("genres"),
-        overview=film.get("overview"),
-        cached_at=now,
-    ).on_conflict_do_update(
-        index_elements=["trakt_id", "media_type"],
-        set_={
-            "tmdb_id": tmdb_id,
-            "title": film.get("title", "Unknown"),
-            "year": film.get("year"),
-            "genres": film.get("genres"),
-            "overview": film.get("overview"),
-            "cached_at": now,
-        },
+    stmt = (
+        insert(Movie.__table__)
+        .values(
+            trakt_id=trakt_id,
+            media_type="movie",
+            tmdb_id=tmdb_id,
+            title=film.get("title", "Unknown"),
+            year=film.get("year"),
+            genres=film.get("genres"),
+            overview=film.get("overview"),
+            cached_at=now,
+        )
+        .on_conflict_do_update(
+            index_elements=["trakt_id", "media_type"],
+            set_={
+                "tmdb_id": tmdb_id,
+                "title": film.get("title", "Unknown"),
+                "year": film.get("year"),
+                "genres": film.get("genres"),
+                "overview": film.get("overview"),
+                "cached_at": now,
+            },
+        )
     )
     await db.execute(stmt)
     await db.flush()
@@ -422,15 +452,19 @@ async def _upsert_film_from_tmdb(
     if not movie_uuid:
         return False
 
-    um_stmt = insert(UserMovie.__table__).values(
-        user_id=user_id,
-        movie_id=movie_uuid,
-        seen=None,
-        elo=None,
-        battles=0,
-        updated_at=now,
-    ).on_conflict_do_nothing(
-        index_elements=["user_id", "movie_id"],
+    um_stmt = (
+        insert(UserMovie.__table__)
+        .values(
+            user_id=user_id,
+            movie_id=movie_uuid,
+            seen=None,
+            elo=None,
+            battles=0,
+            updated_at=now,
+        )
+        .on_conflict_do_nothing(
+            index_elements=["user_id", "movie_id"],
+        )
     )
     result = await db.execute(um_stmt)
     return result.rowcount > 0

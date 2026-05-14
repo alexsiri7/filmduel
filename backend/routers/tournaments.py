@@ -13,7 +13,7 @@ from sqlalchemy.orm import joinedload
 
 from backend.db import get_db
 from backend.rate_limit import limiter
-from backend.db_models import Movie, Tournament, TournamentMatch, User, UserMovie
+from backend.db_models import Movie, Tournament, TournamentMatch, User
 from backend.routers.auth import get_current_user
 from backend.schemas import (
     MediaType,
@@ -80,7 +80,6 @@ def _tournament_schema(t: Tournament) -> TournamentSchema:
         tagline=t.tagline,
         theme_description=t.theme_description,
         is_ai_curated=t.is_ai_curated,
-        llm_response=t.llm_response,
         created_at=t.created_at,
         completed_at=t.completed_at,
         matches=[_match_schema(m) for m in sorted_matches],
@@ -143,7 +142,11 @@ async def get_pool_count(
     """Return number of ranked films matching the given filter."""
     try:
         user_movies = await get_filtered_ranked_films(
-            db, current_user.id, filter_type, filter_value, media_type=media_type,
+            db,
+            current_user.id,
+            filter_type,
+            filter_value,
+            media_type=media_type,
         )
     except ValueError:
         return {"count": 0}
@@ -163,7 +166,11 @@ async def create_tournament(
 
     try:
         user_movies = await get_filtered_ranked_films(
-            db, uid, body.filter_type, body.filter_value, media_type=body.media_type,
+            db,
+            uid,
+            body.filter_type,
+            body.filter_value,
+            media_type=body.media_type,
         )
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid decade format")
@@ -237,29 +244,41 @@ async def regenerate_tournament(
     tournament = await _load_tournament(tournament_id, uid, db)
 
     if not tournament.is_ai_curated:
-        raise HTTPException(status_code=400, detail="Only AI-curated tournaments can be regenerated")
+        raise HTTPException(
+            status_code=400, detail="Only AI-curated tournaments can be regenerated"
+        )
 
     played_matches = [
-        m for m in tournament.matches
-        if m.winner_movie_id is not None and not m.is_bye
+        m for m in tournament.matches if m.winner_movie_id is not None and not m.is_bye
     ]
     if played_matches:
-        raise HTTPException(status_code=400, detail="Cannot regenerate after matches have been played")
+        raise HTTPException(
+            status_code=400, detail="Cannot regenerate after matches have been played"
+        )
 
     regen_count = 0
     if tournament.llm_response and isinstance(tournament.llm_response, dict):
         regen_count = tournament.llm_response.get("_regen_count", 0)
     if regen_count >= 3:
-        raise HTTPException(status_code=400, detail="Maximum regeneration attempts (3) reached")
+        raise HTTPException(
+            status_code=400, detail="Maximum regeneration attempts (3) reached"
+        )
 
     try:
         user_movies = await get_filtered_ranked_films(
-            db, uid, tournament.filter_type, tournament.filter_value,
+            db,
+            uid,
+            tournament.filter_type,
+            tournament.filter_value,
         )
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid decade format")
 
-    original_hint = tournament.llm_response.get("_theme_hint", "") if tournament.llm_response else ""
+    original_hint = (
+        tournament.llm_response.get("_theme_hint", "")
+        if tournament.llm_response
+        else ""
+    )
     try:
         selected_ums, llm_result = await curate_and_select_films(
             user_movies=user_movies,
@@ -288,7 +307,9 @@ async def regenerate_tournament(
     t.theme_description = llm_result.get("theme_description")
     t.llm_response = llm_result
 
-    await create_tournament_bracket(db, tournament_id, tournament.bracket_size, selected_ums)
+    await create_tournament_bracket(
+        db, tournament_id, tournament.bracket_size, selected_ums
+    )
 
     tournament = await _load_tournament(tournament_id, uid, db)
     return _tournament_schema(tournament)
@@ -333,7 +354,9 @@ async def list_tournaments(
                 played = 0
                 total_in_round = 0
 
-            progress = f"Round {current_round} \u2014 {played}/{total_in_round} matches played"
+            progress = (
+                f"Round {current_round} \u2014 {played}/{total_in_round} matches played"
+            )
 
         items.append(
             TournamentListItem(
@@ -409,8 +432,13 @@ async def submit_match_result_endpoint(
         raise HTTPException(status_code=400, detail=str(e))
 
     await record_match_winner(
-        db, tournament_id, tournament.bracket_size,
-        match_id, winner_id, loser_id, uid,
+        db,
+        tournament_id,
+        tournament.bracket_size,
+        match_id,
+        winner_id,
+        loser_id,
+        uid,
     )
 
     tournament = await _load_tournament(tournament_id, uid, db)

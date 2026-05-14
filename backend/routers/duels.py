@@ -79,7 +79,11 @@ async def submit_duel(
 
     logger.info(
         "duel_submitted user_id=%s movie_a=%s movie_b=%s outcome=%s mode=%s",
-        uid, movie_a_id, movie_b_id, outcome, mode,
+        uid,
+        movie_a_id,
+        movie_b_id,
+        outcome,
+        mode,
     )
 
     try:

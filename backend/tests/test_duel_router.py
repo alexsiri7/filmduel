@@ -65,7 +65,9 @@ class TestSubmitDuel:
             new_elo_b=985,
         )
 
-        with patch("backend.routers.duels.process_duel", new_callable=AsyncMock) as mock_pd:
+        with patch(
+            "backend.routers.duels.process_duel", new_callable=AsyncMock
+        ) as mock_pd:
             mock_pd.return_value = fake_result
             client = TestClient(app)
             response = client.post(

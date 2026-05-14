@@ -27,7 +27,11 @@ class TestTraktClientExchangeCode:
     @pytest.mark.asyncio
     async def test_exchange_code_posts_correct_payload(self):
         """exchange_code sends correct JSON body and returns token dict."""
-        expected_tokens = {"access_token": "abc", "refresh_token": "def", "expires_in": 7776000}
+        expected_tokens = {
+            "access_token": "abc",
+            "refresh_token": "def",
+            "expires_in": 7776000,
+        }
         mock_resp = _mock_response(expected_tokens)
 
         mock_client = AsyncMock()
@@ -37,7 +41,9 @@ class TestTraktClientExchangeCode:
 
         client = TraktClient(client_id="test-client-id")
         with patch.object(client, "_client", return_value=mock_client):
-            result = await client.exchange_code("auth-code", "secret", "http://redirect")
+            result = await client.exchange_code(
+                "auth-code", "secret", "http://redirect"
+            )
 
         assert result == expected_tokens
         call_args = mock_client.post.call_args

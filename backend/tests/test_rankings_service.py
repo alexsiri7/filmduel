@@ -5,7 +5,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from backend.services.rankings import elo_to_letterboxd_rating, get_user_stats, parse_decade
+from backend.services.rankings import (
+    elo_to_letterboxd_rating,
+    get_user_stats,
+    parse_decade,
+)
 
 
 # --- get_user_stats ---

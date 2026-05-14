@@ -19,7 +19,9 @@ from backend.services.trakt import TraktClient
 logger = logging.getLogger(__name__)
 
 
-async def _rate_with_retry(client: TraktClient, trakt_id: int, rating: int, media_type: str = "movie") -> None:
+async def _rate_with_retry(
+    client: TraktClient, trakt_id: int, rating: int, media_type: str = "movie"
+) -> None:
     """Submit a single rating to Trakt, retrying once on 5xx."""
     for attempt in range(2):
         try:
@@ -93,12 +95,12 @@ async def sync_ratings_to_trakt(
     for um in user_movies:
         trakt_rating = elo_to_trakt_rating(um.elo)
         try:
-            await client.rate(um.movie.trakt_id, trakt_rating, media_type=um.movie.media_type)
+            await client.rate(
+                um.movie.trakt_id, trakt_rating, media_type=um.movie.media_type
+            )
             synced += 1
         except Exception:
-            logger.exception(
-                "Failed to sync rating for trakt_id=%s", um.movie.trakt_id
-            )
+            logger.exception("Failed to sync rating for trakt_id=%s", um.movie.trakt_id)
             failed += 1
 
     return {"synced": synced, "failed": failed}
