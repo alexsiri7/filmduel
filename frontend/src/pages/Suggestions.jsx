@@ -284,7 +284,7 @@ export default function Suggestions({ mediaType = "movie" }) {
               <div className="flex gap-3">
                 {s.movie.imdb_id && (
                   <a
-                    href={`https://www.imdb.com/title/${s.movie.imdb_id}/`}
+                    href={`https://www.imdb.com/title/${encodeURIComponent(s.movie.imdb_id)}/`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-[10px] font-label uppercase tracking-widest text-[#F5F0E8]/30 hover:text-primary-container transition-colors"
@@ -294,7 +294,7 @@ export default function Suggestions({ mediaType = "movie" }) {
                 )}
                 {s.movie.trakt_id && (
                   <a
-                    href={`https://trakt.tv/search/trakt/${s.movie.trakt_id}?id_type=${s.movie.media_type === "show" ? "show" : "movie"}`}
+                    href={`https://trakt.tv/search/trakt/${encodeURIComponent(s.movie.trakt_id)}?id_type=${s.movie.media_type === "show" ? "show" : "movie"}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-[10px] font-label uppercase tracking-widest text-[#F5F0E8]/30 hover:text-primary-container transition-colors"

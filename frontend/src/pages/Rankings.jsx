@@ -266,7 +266,7 @@ export default function Rankings({ mediaType = "movie" }) {
                   <div className="flex gap-3 mt-1">
                     {r.movie.trakt_id && (
                       <a
-                        href={`https://trakt.tv/search/trakt/${r.movie.trakt_id}?id_type=${r.movie.media_type === "show" ? "show" : "movie"}`}
+                        href={`https://trakt.tv/search/trakt/${encodeURIComponent(r.movie.trakt_id)}?id_type=${r.movie.media_type === "show" ? "show" : "movie"}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-[10px] font-label uppercase tracking-widest text-[#F5F0E8]/30 hover:text-primary-container transition-colors"
@@ -276,7 +276,7 @@ export default function Rankings({ mediaType = "movie" }) {
                     )}
                     {r.movie.imdb_id && (
                       <a
-                        href={`https://www.imdb.com/title/${r.movie.imdb_id}/`}
+                        href={`https://www.imdb.com/title/${encodeURIComponent(r.movie.imdb_id)}/`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-[10px] font-label uppercase tracking-widest text-[#F5F0E8]/30 hover:text-primary-container transition-colors"
