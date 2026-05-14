@@ -168,7 +168,6 @@ class TournamentSchema(BaseModel):
     tagline: Optional[str] = None
     theme_description: Optional[str] = None
     is_ai_curated: bool = False
-    llm_response: Optional[dict] = None
     created_at: datetime
     completed_at: Optional[datetime] = None
     matches: list[TournamentMatchSchema] = []

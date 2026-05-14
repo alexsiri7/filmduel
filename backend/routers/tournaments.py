@@ -80,7 +80,6 @@ def _tournament_schema(t: Tournament) -> TournamentSchema:
         tagline=t.tagline,
         theme_description=t.theme_description,
         is_ai_curated=t.is_ai_curated,
-        llm_response=t.llm_response,
         created_at=t.created_at,
         completed_at=t.completed_at,
         matches=[_match_schema(m) for m in sorted_matches],

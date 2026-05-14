@@ -279,3 +279,18 @@ class TestValidateMatch:
 
         with pytest.raises(ValueError, match="not active"):
             validate_match(tournament, uuid.uuid4(), uuid.uuid4())
+
+
+# ---------------------------------------------------------------------------
+# TournamentSchema field exposure regression
+# ---------------------------------------------------------------------------
+
+
+class TestTournamentSchemaFields:
+    def test_tournament_schema_does_not_expose_llm_response(self):
+        """TournamentSchema must not surface internal LLM metadata."""
+        from backend.schemas import TournamentSchema
+
+        assert "llm_response" not in TournamentSchema.model_fields, (
+            "llm_response must not be part of the public TournamentSchema"
+        )
