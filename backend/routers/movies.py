@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import logging
 from typing import Optional
 
@@ -14,6 +13,7 @@ from backend.db_models import User, UserMovie
 from backend.schemas import MediaType, MovieWithStateSchema, MoviePairResponse
 from backend.routers.auth import get_current_user
 from backend.services.pair_selection import select_pair
+from backend.services.token_crypto import decrypt_token, encrypt_token
 
 logger = logging.getLogger(__name__)
 
@@ -45,13 +45,12 @@ def _user_movie_to_schema(um: UserMovie) -> MovieWithStateSchema:
 
 
 def _encode_pair_token(id_a: str, id_b: str) -> str:
-    raw = f"{id_a},{id_b}"
-    return base64.urlsafe_b64encode(raw.encode()).decode()
+    return encrypt_token(f"{id_a},{id_b}")
 
 
 def _decode_pair_token(token: str) -> set[str] | None:
     try:
-        raw = base64.urlsafe_b64decode(token.encode()).decode()
+        raw = decrypt_token(token)
         parts = raw.split(",")
         if len(parts) == 2:
             return {parts[0], parts[1]}
