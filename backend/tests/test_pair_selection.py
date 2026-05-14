@@ -3,7 +3,6 @@
 import random
 import unittest.mock
 import uuid
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -206,13 +205,19 @@ class TestWeightedSample:
         """Films with fewer battles should have higher weight = 1/(battles+1)."""
         low_battles = _make_user_movie(battles=0)  # weight=1.0
         high_battles = _make_user_movie(battles=99)  # weight=0.01
-        with unittest.mock.patch("backend.services.pair_selection.random.choices") as mock_choices:
+        with unittest.mock.patch(
+            "backend.services.pair_selection.random.choices"
+        ) as mock_choices:
             mock_choices.return_value = [low_battles]
             result = _weighted_sample([low_battles, high_battles])
             assert result is low_battles
             # Verify weights passed to random.choices
             call_args = mock_choices.call_args
-            weights = call_args[1]["weights"] if "weights" in call_args[1] else call_args[0][1]
+            weights = (
+                call_args[1]["weights"]
+                if "weights" in call_args[1]
+                else call_args[0][1]
+            )
             # weight for low_battles = 1/(0+1) = 1.0, for high_battles = 1/(99+1) = 0.01
             assert weights[0] == pytest.approx(1.0)
             assert weights[1] == pytest.approx(0.01)
@@ -244,7 +249,9 @@ class TestPickChallenger:
         anchor = _make_user_movie(elo=1000, battles=5)
         close = _make_user_movie(elo=1020, battles=5)
         far = _make_user_movie(elo=1500, battles=5)
-        with unittest.mock.patch("backend.services.pair_selection.random.random", return_value=0.3):
+        with unittest.mock.patch(
+            "backend.services.pair_selection.random.random", return_value=0.3
+        ):
             with unittest.mock.patch(
                 "backend.services.pair_selection.random.choices",
                 side_effect=lambda population, weights, k: [population[0]],
@@ -272,9 +279,15 @@ class TestPickBootstrapPair:
         assert a is not b
 
     def test_avoids_last_pair(self):
-        f1 = _make_user_movie(movie_id=uuid.UUID("00000000-0000-0000-0000-000000000001"))
-        f2 = _make_user_movie(movie_id=uuid.UUID("00000000-0000-0000-0000-000000000002"))
-        f3 = _make_user_movie(movie_id=uuid.UUID("00000000-0000-0000-0000-000000000003"))
+        f1 = _make_user_movie(
+            movie_id=uuid.UUID("00000000-0000-0000-0000-000000000001")
+        )
+        f2 = _make_user_movie(
+            movie_id=uuid.UUID("00000000-0000-0000-0000-000000000002")
+        )
+        f3 = _make_user_movie(
+            movie_id=uuid.UUID("00000000-0000-0000-0000-000000000003")
+        )
         last_ids = {str(f1.movie_id), str(f2.movie_id)}
         # With 3 films and one pair excluded, should find a different pair
         random.seed(42)

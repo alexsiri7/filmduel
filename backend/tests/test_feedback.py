@@ -1,4 +1,5 @@
 """Tests for POST /api/feedback endpoint."""
+
 from __future__ import annotations
 
 import io
@@ -44,7 +45,16 @@ def client():
 
 
 class TestSubmitFeedback:
-    def _post(self, client, title="Bug", description="Details", screenshot=None, content_type="image/jpeg", user=None, db=None):
+    def _post(
+        self,
+        client,
+        title="Bug",
+        description="Details",
+        screenshot=None,
+        content_type="image/jpeg",
+        user=None,
+        db=None,
+    ):
         user = user or _make_user()
         db = db or _make_db()
 
@@ -65,7 +75,9 @@ class TestSubmitFeedback:
             if screenshot is not None:
                 files = {"screenshot": ("screenshot.jpg", screenshot, content_type)}
 
-            with patch("backend.routers.feedback.FeedbackReport", side_effect=make_report):
+            with patch(
+                "backend.routers.feedback.FeedbackReport", side_effect=make_report
+            ):
                 response = client.post("/api/feedback", data=data, files=files)
 
             response._created_reports = created_reports
@@ -91,7 +103,7 @@ class TestSubmitFeedback:
         assert report.description == "Details"
 
     def test_accepts_screenshot_within_size_limit(self, client):
-        small_image = b'\xff\xd8\xff' + b'\x00' * 100  # valid JPEG magic bytes
+        small_image = b"\xff\xd8\xff" + b"\x00" * 100  # valid JPEG magic bytes
         response = self._post(client, screenshot=io.BytesIO(small_image))
         assert response.status_code == 201
 
@@ -111,14 +123,18 @@ class TestSubmitFeedback:
         assert "image" in response.json()["detail"].lower()
 
     def test_screenshot_stored_as_base64_data_url_with_correct_mime(self, client):
-        jpeg_data = b'\xff\xd8\xff' + b'\x00' * 10  # valid JPEG magic bytes
-        response = self._post(client, screenshot=io.BytesIO(jpeg_data), content_type="image/jpeg")
+        jpeg_data = b"\xff\xd8\xff" + b"\x00" * 10  # valid JPEG magic bytes
+        response = self._post(
+            client, screenshot=io.BytesIO(jpeg_data), content_type="image/jpeg"
+        )
         report = response._created_reports[0]
         assert report.screenshot_data.startswith("data:image/jpeg;base64,")
 
     def test_png_screenshot_stored_with_png_mime(self, client):
-        png_data = b'\x89PNG\r\n\x1a\n' + b'\x00' * 10  # valid PNG magic bytes
-        response = self._post(client, screenshot=io.BytesIO(png_data), content_type="image/png")
+        png_data = b"\x89PNG\r\n\x1a\n" + b"\x00" * 10  # valid PNG magic bytes
+        response = self._post(
+            client, screenshot=io.BytesIO(png_data), content_type="image/png"
+        )
         report = response._created_reports[0]
         assert report.screenshot_data.startswith("data:image/png;base64,")
 

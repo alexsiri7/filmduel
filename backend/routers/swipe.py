@@ -85,9 +85,11 @@ async def get_swipe_cards(
     if median_elo is None:
         logger.info("swipe_band_selection user_id=%s band=none (no ranked films)", uid)
         # No ranked films yet — pick randomly from rated films
-        stmt = base.where(Movie.community_rating.isnot(None)).order_by(
-            func.random()
-        ).limit(10)
+        stmt = (
+            base.where(Movie.community_rating.isnot(None))
+            .order_by(func.random())
+            .limit(10)
+        )
         result = await db.execute(stmt)
         rows = result.all()
         # Backfill with random if not enough rated films
@@ -101,7 +103,12 @@ async def get_swipe_cards(
     else:
         # Band-weighted selection: 60% target, 20% above, 20% below
         band_idx = _elo_to_band_index(int(median_elo))
-        logger.info("swipe_band_selection user_id=%s median_elo=%s band=%s", uid, median_elo, BANDS[band_idx][0])
+        logger.info(
+            "swipe_band_selection user_id=%s median_elo=%s band=%s",
+            uid,
+            median_elo,
+            BANDS[band_idx][0],
+        )
 
         target_range = _community_rating_range(band_idx)
         above_idx = max(0, band_idx - 1)
@@ -204,7 +211,12 @@ async def submit_swipe_results(
         select(func.count())
         .select_from(UserMovie)
         .join(Movie, UserMovie.movie_id == Movie.id)
-        .where(UserMovie.user_id == uid, UserMovie.seen.is_(True), UserMovie.battles == 0, Movie.media_type == media_type)
+        .where(
+            UserMovie.user_id == uid,
+            UserMovie.seen.is_(True),
+            UserMovie.battles == 0,
+            Movie.media_type == media_type,
+        )
     )
     seen_unranked = (await db.execute(seen_unranked_stmt)).scalar() or 0
 
@@ -213,7 +225,11 @@ async def submit_swipe_results(
         select(func.count())
         .select_from(UserMovie)
         .join(Movie, UserMovie.movie_id == Movie.id)
-        .where(UserMovie.user_id == uid, UserMovie.seen.is_(True), Movie.media_type == media_type)
+        .where(
+            UserMovie.user_id == uid,
+            UserMovie.seen.is_(True),
+            Movie.media_type == media_type,
+        )
     )
     total_seen = (await db.execute(total_seen_stmt)).scalar() or 0
 
@@ -221,7 +237,12 @@ async def submit_swipe_results(
 
     logger.info(
         "swipe_submit user_id=%s seen_count=%d unseen_count=%d next_action=%s total_seen=%d seen_unranked=%d",
-        uid, seen_count, unseen_count, next_action, total_seen, seen_unranked,
+        uid,
+        seen_count,
+        unseen_count,
+        next_action,
+        total_seen,
+        seen_unranked,
     )
 
     # Check if pool needs expansion (scoped by media_type)
@@ -229,12 +250,22 @@ async def submit_swipe_results(
         select(func.count())
         .select_from(UserMovie)
         .join(Movie, UserMovie.movie_id == Movie.id)
-        .where(UserMovie.user_id == uid, UserMovie.seen.is_(None), Movie.media_type == media_type)
+        .where(
+            UserMovie.user_id == uid,
+            UserMovie.seen.is_(None),
+            Movie.media_type == media_type,
+        )
     )
     unknown_count = (await db.execute(unknown_stmt)).scalar() or 0
 
     if unknown_count < 50:
-        logger.info("swipe_pool_low user_id=%s unknown_count=%d triggering_expansion", uid, unknown_count)
+        logger.info(
+            "swipe_pool_low user_id=%s unknown_count=%d triggering_expansion",
+            uid,
+            unknown_count,
+        )
         background_tasks.add_task(expand_pool, uid, media_type)
 
-    return SwipeResponse(seen_count=seen_count, unseen_count=unseen_count, next_action=next_action)
+    return SwipeResponse(
+        seen_count=seen_count, unseen_count=unseen_count, next_action=next_action
+    )

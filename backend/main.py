@@ -17,7 +17,16 @@ from slowapi.errors import RateLimitExceeded
 
 from backend.config import get_settings
 from backend.rate_limit import limiter
-from backend.routers import auth, movies, duels, rankings, suggestions, swipe, tournaments, feedback
+from backend.routers import (
+    auth,
+    movies,
+    duels,
+    rankings,
+    suggestions,
+    swipe,
+    tournaments,
+    feedback,
+)
 from backend.schemas import SELF_DUEL_ERROR_MSG
 
 logger = logging.getLogger(__name__)
@@ -69,7 +78,9 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Strict-Transport-Security"] = (
+        "max-age=31536000; includeSubDomains"
+    )
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
         "img-src 'self' https://image.tmdb.org data:; "
@@ -112,7 +123,9 @@ async def spa_fallback(full_path: str):
         return JSONResponse({"detail": "Frontend not available"}, status_code=503)
     index_html = STATIC_DIR / "index.html"
     if not index_html.is_file():
-        logger.error("frontend/dist/index.html missing at %s — returning 503", index_html)
+        logger.error(
+            "frontend/dist/index.html missing at %s — returning 503", index_html
+        )
         return JSONResponse({"detail": "Frontend not available"}, status_code=503)
     file_path = (STATIC_DIR / full_path).resolve()
     if file_path.is_file() and str(file_path).startswith(str(STATIC_DIR.resolve())):

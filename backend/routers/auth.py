@@ -9,7 +9,14 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 import jwt
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Request,
+    Response,
+)
 from fastapi.responses import RedirectResponse
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -75,7 +82,8 @@ async def get_current_user_id(
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
         payload = jwt.decode(
-            token, settings.SECRET_KEY,
+            token,
+            settings.SECRET_KEY,
             algorithms=[JWT_ALGORITHM],
             issuer="filmduel",
             audience="filmduel",
@@ -83,7 +91,9 @@ async def get_current_user_id(
         user_id = payload.get("sub")
         iat = datetime.fromtimestamp(payload["iat"], tz=timezone.utc)
         if not user_id:
-            raise HTTPException(status_code=401, detail="Invalid session — missing subject")
+            raise HTTPException(
+                status_code=401, detail="Invalid session — missing subject"
+            )
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Session expired")
     except jwt.InvalidTokenError:
@@ -345,9 +355,9 @@ async def sync_trakt(
 
     # Count movies before sync so we can report new additions
     before_count_result = await db.execute(
-        select(func.count()).select_from(UserMovie).where(
-            UserMovie.user_id == current_user.id
-        )
+        select(func.count())
+        .select_from(UserMovie)
+        .where(UserMovie.user_id == current_user.id)
     )
     before_count = before_count_result.scalar() or 0
 
@@ -363,9 +373,9 @@ async def sync_trakt(
 
     # Count movies after sync
     after_count_result = await db.execute(
-        select(func.count()).select_from(UserMovie).where(
-            UserMovie.user_id == current_user.id
-        )
+        select(func.count())
+        .select_from(UserMovie)
+        .where(UserMovie.user_id == current_user.id)
     )
     after_count = after_count_result.scalar() or 0
     new_movies = max(0, after_count - before_count)

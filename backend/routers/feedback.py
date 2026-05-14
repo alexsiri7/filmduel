@@ -22,19 +22,19 @@ ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 
 # Magic bytes for allowed image types
 _IMAGE_SIGNATURES = {
-    b'\x89PNG\r\n\x1a\n': "image/png",
-    b'\xff\xd8\xff': "image/jpeg",
-    b'GIF87a': "image/gif",
-    b'GIF89a': "image/gif",
-    b'RIFF': "image/webp",  # WebP starts with RIFF....WEBP
+    b"\x89PNG\r\n\x1a\n": "image/png",
+    b"\xff\xd8\xff": "image/jpeg",
+    b"GIF87a": "image/gif",
+    b"GIF89a": "image/gif",
+    b"RIFF": "image/webp",  # WebP starts with RIFF....WEBP
 }
 
 
 def _detect_image_type(data: bytes) -> str | None:
     """Detect image type from magic bytes. Returns MIME type or None."""
     for sig, mime in _IMAGE_SIGNATURES.items():
-        if data[:len(sig)] == sig:
-            if mime == "image/webp" and data[8:12] != b'WEBP':
+        if data[: len(sig)] == sig:
+            if mime == "image/webp" and data[8:12] != b"WEBP":
                 continue
             return mime
     return None
@@ -72,8 +72,6 @@ async def submit_feedback(
     db.add(report)
     await db.flush()
 
-    logger.info(
-        "feedback_submitted user_id=%s title=%r", current_user.id, title[:50]
-    )
+    logger.info("feedback_submitted user_id=%s title=%r", current_user.id, title[:50])
 
     return FeedbackReportResponse(id=str(report.id), created_at=report.created_at)

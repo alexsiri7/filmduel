@@ -25,7 +25,9 @@ async def fetch_poster_url(tmdb_id: int) -> str | None:
             params={"api_key": settings.TMDB_API_KEY},
         )
         if resp.status_code != 200:
-            logger.warning("TMDB API returned %d for tmdb_id=%d", resp.status_code, tmdb_id)
+            logger.warning(
+                "TMDB API returned %d for tmdb_id=%d", resp.status_code, tmdb_id
+            )
             return None
         data = resp.json()
         poster_path = data.get("poster_path")
@@ -36,10 +38,24 @@ async def fetch_poster_url(tmdb_id: int) -> str | None:
 
 # TMDB genre_id -> genre name mapping (from TMDB API /genre/movie/list)
 TMDB_GENRE_MAP: dict[int, str] = {
-    28: "action", 12: "adventure", 16: "animation", 35: "comedy", 80: "crime",
-    99: "documentary", 18: "drama", 10751: "family", 14: "fantasy", 36: "history",
-    27: "horror", 10402: "music", 9648: "mystery", 10749: "romance",
-    878: "science-fiction", 10770: "tv movie", 53: "thriller", 10752: "war",
+    28: "action",
+    12: "adventure",
+    16: "animation",
+    35: "comedy",
+    80: "crime",
+    99: "documentary",
+    18: "drama",
+    10751: "family",
+    14: "fantasy",
+    36: "history",
+    27: "horror",
+    10402: "music",
+    9648: "mystery",
+    10749: "romance",
+    878: "science-fiction",
+    10770: "tv movie",
+    53: "thriller",
+    10752: "war",
     37: "western",
 }
 
@@ -55,7 +71,9 @@ async def fetch_tv_poster_url(tmdb_id: int) -> str | None:
             params={"api_key": settings.TMDB_API_KEY},
         )
         if resp.status_code != 200:
-            logger.warning("TMDB TV API returned %d for tmdb_id=%d", resp.status_code, tmdb_id)
+            logger.warning(
+                "TMDB TV API returned %d for tmdb_id=%d", resp.status_code, tmdb_id
+            )
             return None
         data = resp.json()
         poster_path = data.get("poster_path")
@@ -81,25 +99,33 @@ async def fetch_similar_films(tmdb_id: int, api_key: str) -> list[dict]:
             if resp.status_code != 200:
                 logger.warning(
                     "TMDB recommendations returned %d for tmdb_id=%d",
-                    resp.status_code, tmdb_id,
+                    resp.status_code,
+                    tmdb_id,
                 )
                 return []
             data = resp.json()
             results = []
             for item in data.get("results", []):
                 release_date = item.get("release_date", "")
-                year = int(release_date[:4]) if release_date and len(release_date) >= 4 else None
+                year = (
+                    int(release_date[:4])
+                    if release_date and len(release_date) >= 4
+                    else None
+                )
                 genres = [
-                    TMDB_GENRE_MAP[gid] for gid in item.get("genre_ids", [])
+                    TMDB_GENRE_MAP[gid]
+                    for gid in item.get("genre_ids", [])
                     if gid in TMDB_GENRE_MAP
                 ]
-                results.append({
-                    "tmdb_id": item["id"],
-                    "title": item.get("title", "Unknown"),
-                    "year": year,
-                    "overview": item.get("overview"),
-                    "genres": genres,
-                })
+                results.append(
+                    {
+                        "tmdb_id": item["id"],
+                        "title": item.get("title", "Unknown"),
+                        "year": year,
+                        "overview": item.get("overview"),
+                        "genres": genres,
+                    }
+                )
             return results
     except Exception:
         logger.exception("Failed to fetch TMDB recommendations for tmdb_id=%d", tmdb_id)

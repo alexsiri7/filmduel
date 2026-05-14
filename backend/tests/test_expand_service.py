@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from backend.services.expand import EXPANSION_COOLDOWN, _expand_pool_inner
+from backend.services.expand import _expand_pool_inner
 
 
 def _mock_session_factory(db):
@@ -74,7 +73,10 @@ class TestExpandPoolInner:
         trakt_mock.get_recommendations.return_value = fake_recs
 
         with (
-            patch("backend.services.expand.async_session_factory", return_value=_mock_session_factory(db)),
+            patch(
+                "backend.services.expand.async_session_factory",
+                return_value=_mock_session_factory(db),
+            ),
             patch("backend.services.expand.TraktClient", return_value=trakt_mock),
             patch("backend.services.expand.get_settings") as mock_settings,
             patch("backend.services.expand.backfill_posters", new_callable=AsyncMock),
@@ -122,7 +124,10 @@ class TestExpandPoolInner:
         trakt_mock.get_recommendations.return_value = []
 
         with (
-            patch("backend.services.expand.async_session_factory", return_value=_mock_session_factory(db)),
+            patch(
+                "backend.services.expand.async_session_factory",
+                return_value=_mock_session_factory(db),
+            ),
             patch("backend.services.expand.TraktClient", return_value=trakt_mock),
             patch("backend.services.expand.get_settings") as mock_settings,
             patch("backend.services.expand.backfill_posters", new_callable=AsyncMock),
@@ -142,7 +147,10 @@ class TestExpandPoolInner:
         db.get = AsyncMock(return_value=None)
 
         with (
-            patch("backend.services.expand.async_session_factory", return_value=_mock_session_factory(db)),
+            patch(
+                "backend.services.expand.async_session_factory",
+                return_value=_mock_session_factory(db),
+            ),
             patch("backend.services.expand.get_settings") as mock_settings,
         ):
             mock_settings.return_value = MagicMock(TRAKT_CLIENT_ID="fake")

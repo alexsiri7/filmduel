@@ -4,6 +4,7 @@ Revision ID: 002
 Revises: 001
 Create Date: 2026-04-11
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -34,8 +35,8 @@ def upgrade() -> None:
     # Drop old non-partial index, recreate as partial (WHERE elo IS NOT NULL)
     op.drop_index("ix_user_movies_user_elo", table_name="user_movies")
     op.execute(
-        'CREATE INDEX ix_user_movies_user_elo ON user_movies (user_id, elo) '
-        'WHERE elo IS NOT NULL'
+        "CREATE INDEX ix_user_movies_user_elo ON user_movies (user_id, elo) "
+        "WHERE elo IS NOT NULL"
     )
 
     # Add mode column to duels

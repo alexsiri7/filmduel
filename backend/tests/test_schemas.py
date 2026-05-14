@@ -269,9 +269,7 @@ class TestResponseModels:
         assert sr.next_action == "swipe"
 
     def test_stats_response_minimal(self):
-        st = StatsResponse(
-            total_duels=0, total_movies_ranked=0, average_elo=0.0
-        )
+        st = StatsResponse(total_duels=0, total_movies_ranked=0, average_elo=0.0)
         assert st.unseen_count == 0
         assert st.highest_rated is None
         assert st.lowest_rated is None

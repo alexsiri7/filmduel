@@ -16,11 +16,11 @@ from backend.db_models import Movie, UserMovie
 
 # (name, elo_low, elo_high, community_rating_low, community_rating_high)
 BANDS = [
-    ("elite",  1300, 9999, 80, 100),
+    ("elite", 1300, 9999, 80, 100),
     ("strong", 1100, 1299, 65, 79),
-    ("mid",     900, 1099, 45, 64),
-    ("weak",    700,  899, 25, 44),
-    ("poor",      0,  699,  0, 24),
+    ("mid", 900, 1099, 45, 64),
+    ("weak", 700, 899, 25, 44),
+    ("poor", 0, 699, 0, 24),
 ]
 
 BAND_ORDER = [b[0] for b in BANDS]
@@ -58,7 +58,9 @@ def _film_band(um: UserMovie) -> str:
     if um.battles >= 1:
         return elo_to_band(um.elo)
     return community_rating_to_band(
-        float(um.movie.community_rating) if um.movie.community_rating is not None else None
+        float(um.movie.community_rating)
+        if um.movie.community_rating is not None
+        else None
     )
 
 
@@ -100,7 +102,9 @@ async def select_pair(
     seen_films = list(seen_result.unique().scalars().all())
 
     if len(seen_films) < 2:
-        raise ValueError(f"Need more seen {media_type}s to duel. Swipe to classify some {media_type}s first!")
+        raise ValueError(
+            f"Need more seen {media_type}s to duel. Swipe to classify some {media_type}s first!"
+        )
 
     # Split into anchors (ranked, battles >= 1) and full pool
     anchor_pool = [f for f in seen_films if f.battles >= 1 and f.elo is not None]

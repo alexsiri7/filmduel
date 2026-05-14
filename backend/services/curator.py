@@ -15,8 +15,9 @@ logger = logging.getLogger(__name__)
 def _sanitize_theme_hint(hint: str) -> str:
     """Strip potential prompt injection from user theme hints."""
     hint = hint[:100]  # max length
-    hint = re.sub(r'[{}\[\]<>]', '', hint)  # remove structural chars
+    hint = re.sub(r"[{}\[\]<>]", "", hint)  # remove structural chars
     return hint.strip()
+
 
 SYSTEM_PROMPT = """\
 You are a film curator for a movie ranking app. Given a list of candidate films \
@@ -75,13 +76,19 @@ async def curate_tournament(
     system_prompt = SYSTEM_PROMPT.format(bracket_size=bracket_size)
     user_prompt = USER_PROMPT_TEMPLATE.format(
         bracket_size=bracket_size,
-        filter_context=f"Active filter: {filter_context}" if filter_context else "No filter applied",
-        theme_hint=f'User theme (use as inspiration): "{_sanitize_theme_hint(theme_hint)}"' if theme_hint else "",
+        filter_context=f"Active filter: {filter_context}"
+        if filter_context
+        else "No filter applied",
+        theme_hint=f'User theme (use as inspiration): "{_sanitize_theme_hint(theme_hint)}"'
+        if theme_hint
+        else "",
         candidates_text=candidates_text,
     )
 
     try:
-        text_content = await chat_completion(system_prompt, user_prompt, max_tokens=2000)
+        text_content = await chat_completion(
+            system_prompt, user_prompt, max_tokens=2000
+        )
     except ValueError as exc:
         # LLM_API_KEY not configured
         raise HTTPException(
@@ -104,6 +111,7 @@ async def curate_tournament(
         if match:
             try:
                 import json
+
                 result = json.loads(match.group(1))
             except Exception:
                 logger.error("Failed to parse LLM JSON output: %s", text_content[:500])

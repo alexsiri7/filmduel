@@ -4,6 +4,7 @@ Revision ID: 007
 Revises: 005
 Create Date: 2026-04-12
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -18,7 +19,9 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     op.add_column(
         "tournament_matches",
-        sa.Column("is_bye", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column(
+            "is_bye", sa.Boolean(), nullable=False, server_default=sa.text("false")
+        ),
     )
 
 

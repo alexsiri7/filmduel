@@ -4,6 +4,7 @@ Revision ID: 013
 Revises: 012
 Create Date: 2026-05-05
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -23,6 +24,7 @@ def upgrade() -> None:
     if not rows:
         return
     from backend.services.token_crypto import encrypt_token
+
     for row in rows:
         conn.execute(
             sa.text(
@@ -44,6 +46,7 @@ def downgrade() -> None:
         sa.text("SELECT id, trakt_access_token, trakt_refresh_token FROM users")
     ).fetchall()
     from backend.services.token_crypto import decrypt_token
+
     for row in rows:
         conn.execute(
             sa.text(

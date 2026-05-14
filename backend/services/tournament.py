@@ -34,7 +34,7 @@ async def curate_and_select_films(
     Returns (selected_user_movies_sorted_by_elo, llm_result_dict).
     Raises ValueError if LLM returns IDs not in the candidate pool.
     """
-    candidate_pool = user_movies[:bracket_size * 3]
+    candidate_pool = user_movies[: bracket_size * 3]
     candidates = [
         {
             "id": str(um.movie_id),
@@ -87,8 +87,14 @@ def generate_seeded_bracket(n: int) -> list[tuple[int, int]]:
         return [(1, 8), (4, 5), (2, 7), (3, 6)]
     if n == 16:
         return [
-            (1, 16), (8, 9), (4, 13), (5, 12),
-            (2, 15), (7, 10), (3, 14), (6, 11),
+            (1, 16),
+            (8, 9),
+            (4, 13),
+            (5, 12),
+            (2, 15),
+            (7, 10),
+            (3, 14),
+            (6, 11),
         ]
     if n == 32:
         top = generate_seeded_bracket(16)
@@ -129,8 +135,10 @@ async def get_filtered_ranked_films(
     if filter_type == "genre" and filter_value:
         genre_lower = filter_value.lower()
         user_movies = [
-            um for um in user_movies
-            if um.movie.genres and any(g.lower() == genre_lower for g in um.movie.genres)
+            um
+            for um in user_movies
+            if um.movie.genres
+            and any(g.lower() == genre_lower for g in um.movie.genres)
         ]
     elif filter_type == "decade" and filter_value:
         decade_str = filter_value.rstrip("s")
@@ -139,7 +147,8 @@ async def get_filtered_ranked_films(
         except ValueError:
             raise ValueError("Invalid decade format")
         user_movies = [
-            um for um in user_movies
+            um
+            for um in user_movies
             if um.movie.year and decade_start <= um.movie.year <= decade_start + 9
         ]
 
@@ -166,7 +175,11 @@ async def create_tournament_bracket(
 
     logger.info(
         "bracket_created tournament_id=%s bracket_size=%d num_films=%d num_byes=%d num_rounds=%d",
-        tournament_id, bracket_size, actual_films, num_byes, num_rounds,
+        tournament_id,
+        bracket_size,
+        actual_films,
+        num_byes,
+        num_rounds,
     )
 
     # Round 1 matches with seeded pairings (including byes)
@@ -214,7 +227,7 @@ async def create_tournament_bracket(
 
     # Empty matches for subsequent rounds
     for round_num in range(2, num_rounds + 1):
-        matches_in_round = bracket_size // (2 ** round_num)
+        matches_in_round = bracket_size // (2**round_num)
         for position in range(matches_in_round):
             match = TournamentMatch(
                 tournament_id=tournament_id,
@@ -227,13 +240,10 @@ async def create_tournament_bracket(
 
     # Propagate bye winners to round 2 slots
     if num_byes > 0:
-        r1_stmt = (
-            select(TournamentMatch)
-            .where(
-                TournamentMatch.tournament_id == tournament_id,
-                TournamentMatch.round == 1,
-                TournamentMatch.is_bye.is_(True),
-            )
+        r1_stmt = select(TournamentMatch).where(
+            TournamentMatch.tournament_id == tournament_id,
+            TournamentMatch.round == 1,
+            TournamentMatch.is_bye.is_(True),
         )
         r1_result = await db.execute(r1_stmt)
         bye_matches = r1_result.scalars().all()
@@ -264,7 +274,9 @@ def _advance_winner_to_next_round(
         next_match.movie_b_id = winner_movie_id
 
 
-def validate_match(tournament: Tournament, match_id: uuid.UUID, winner_id: uuid.UUID) -> uuid.UUID:
+def validate_match(
+    tournament: Tournament, match_id: uuid.UUID, winner_id: uuid.UUID
+) -> uuid.UUID:
     """Validate a match is playable. Returns the loser_id.
 
     Raises ValueError on validation failure.
@@ -300,9 +312,13 @@ async def record_match_winner(
     now = datetime.now(timezone.utc)
 
     # Mark winner + propagate (lock row to prevent double-submit)
-    match_obj = (await db.execute(
-        select(TournamentMatch).where(TournamentMatch.id == match_id).with_for_update()
-    )).scalar_one()
+    match_obj = (
+        await db.execute(
+            select(TournamentMatch)
+            .where(TournamentMatch.id == match_id)
+            .with_for_update()
+        )
+    ).scalar_one()
     if match_obj.winner_movie_id is not None:
         raise ValueError("Match already played")
     match_obj.winner_movie_id = winner_id
@@ -310,7 +326,10 @@ async def record_match_winner(
 
     logger.info(
         "match_result tournament_id=%s match_id=%s winner=%s round=%d",
-        tournament_id, match_id, winner_id, match_obj.round,
+        tournament_id,
+        match_id,
+        winner_id,
+        match_obj.round,
     )
 
     round_num = match_obj.round
@@ -318,37 +337,47 @@ async def record_match_winner(
 
     if round_num < num_rounds:
         next_pos = match_obj.position // 2
-        next_match = (await db.execute(
-            select(TournamentMatch).where(
-                TournamentMatch.tournament_id == tournament_id,
-                TournamentMatch.round == round_num + 1,
-                TournamentMatch.position == next_pos,
+        next_match = (
+            await db.execute(
+                select(TournamentMatch).where(
+                    TournamentMatch.tournament_id == tournament_id,
+                    TournamentMatch.round == round_num + 1,
+                    TournamentMatch.position == next_pos,
+                )
             )
-        )).scalar_one()
+        ).scalar_one()
         _advance_winner_to_next_round(next_match, winner_id, match_obj.position)
 
     if round_num == num_rounds:
-        t = (await db.execute(
-            select(Tournament).where(Tournament.id == tournament_id)
-        )).scalar_one()
+        t = (
+            await db.execute(select(Tournament).where(Tournament.id == tournament_id))
+        ).scalar_one()
         t.champion_movie_id = winner_id
         t.status = "completed"
         t.completed_at = now
-        logger.info("champion_crowned tournament_id=%s champion=%s", tournament_id, winner_id)
+        logger.info(
+            "champion_crowned tournament_id=%s champion=%s", tournament_id, winner_id
+        )
 
     # ELO update + duel record (same session, 2 extra queries)
-    um_w = (await db.execute(
-        select(UserMovie).where(
-            UserMovie.user_id == user_id, UserMovie.movie_id == winner_id
-        ).with_for_update()
-    )).scalar_one()
-    um_l = (await db.execute(
-        select(UserMovie).where(
-            UserMovie.user_id == user_id, UserMovie.movie_id == loser_id
-        ).with_for_update()
-    )).scalar_one()
+    um_w = (
+        await db.execute(
+            select(UserMovie)
+            .where(UserMovie.user_id == user_id, UserMovie.movie_id == winner_id)
+            .with_for_update()
+        )
+    ).scalar_one()
+    um_l = (
+        await db.execute(
+            select(UserMovie)
+            .where(UserMovie.user_id == user_id, UserMovie.movie_id == loser_id)
+            .with_for_update()
+        )
+    ).scalar_one()
 
-    duel = await apply_elo_result(db, user_id, winner_id, loser_id, um_w, um_l, "tournament")
+    duel = await apply_elo_result(
+        db, user_id, winner_id, loser_id, um_w, um_l, "tournament"
+    )
     await db.flush()
 
     match_obj.duel_id = duel.id

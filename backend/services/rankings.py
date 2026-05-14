@@ -66,7 +66,9 @@ async def get_user_rankings(
     if decade:
         decade_start, decade_end = parse_decade(decade)
         stmt = stmt.where(Movie.year >= decade_start, Movie.year <= decade_end)
-        count_stmt = count_stmt.where(Movie.year >= decade_start, Movie.year <= decade_end)
+        count_stmt = count_stmt.where(
+            Movie.year >= decade_start, Movie.year <= decade_end
+        )
 
     stmt = stmt.order_by(UserMovie.elo.desc()).offset(offset).limit(limit)
 
@@ -79,7 +81,9 @@ async def get_user_rankings(
     return user_movies, total
 
 
-async def get_user_stats(db: AsyncSession, user_id: uuid.UUID, media_type: str = "movie") -> dict:
+async def get_user_stats(
+    db: AsyncSession, user_id: uuid.UUID, media_type: str = "movie"
+) -> dict:
     """Return aggregate stats for the user's rankings.
 
     Returns dict with keys: total_duels, total_movies_ranked, unseen_count,
@@ -109,7 +113,11 @@ async def get_user_stats(db: AsyncSession, user_id: uuid.UUID, media_type: str =
         select(func.count())
         .select_from(UserMovie)
         .join(Movie, UserMovie.movie_id == Movie.id)
-        .where(UserMovie.user_id == user_id, UserMovie.seen.is_(False), Movie.media_type == media_type)
+        .where(
+            UserMovie.user_id == user_id,
+            UserMovie.seen.is_(False),
+            Movie.media_type == media_type,
+        )
     )
     unseen_count = (await db.execute(unseen_stmt)).scalar() or 0
 
@@ -155,7 +163,9 @@ async def get_user_stats(db: AsyncSession, user_id: uuid.UUID, media_type: str =
     }
 
 
-async def export_rankings_csv(db: AsyncSession, user_id: uuid.UUID, media_type: str = "movie") -> str:
+async def export_rankings_csv(
+    db: AsyncSession, user_id: uuid.UUID, media_type: str = "movie"
+) -> str:
     """Return CSV string content for Letterboxd export."""
     stmt = (
         select(UserMovie)
@@ -179,12 +189,14 @@ async def export_rankings_csv(db: AsyncSession, user_id: uuid.UUID, media_type: 
     for i, um in enumerate(user_movies):
         movie = um.movie
         trakt_rating = elo_to_letterboxd_rating(um.elo)
-        writer.writerow([
-            i + 1,
-            movie.title,
-            movie.year or "",
-            movie.imdb_id or "",
-            trakt_rating,
-        ])
+        writer.writerow(
+            [
+                i + 1,
+                movie.title,
+                movie.year or "",
+                movie.imdb_id or "",
+                trakt_rating,
+            ]
+        )
 
     return output.getvalue()

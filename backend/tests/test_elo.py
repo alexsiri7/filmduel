@@ -129,4 +129,3 @@ def test_get_initial_elo_with_seed():
 
 def test_get_initial_elo_without_seed():
     assert get_initial_elo(None) == 1000
-

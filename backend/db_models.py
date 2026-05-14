@@ -44,22 +44,27 @@ class User(Base):
     @property
     def trakt_access_token(self) -> str:
         from backend.services.token_crypto import decrypt_token
+
         return decrypt_token(self.trakt_access_token_enc)
 
     @trakt_access_token.setter
     def trakt_access_token(self, value: str) -> None:
         from backend.services.token_crypto import encrypt_token
+
         self.trakt_access_token_enc = encrypt_token(value)
 
     @property
     def trakt_refresh_token(self) -> str:
         from backend.services.token_crypto import decrypt_token
+
         return decrypt_token(self.trakt_refresh_token_enc)
 
     @trakt_refresh_token.setter
     def trakt_refresh_token(self, value: str) -> None:
         from backend.services.token_crypto import encrypt_token
+
         self.trakt_refresh_token_enc = encrypt_token(value)
+
     trakt_token_expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
@@ -75,14 +80,20 @@ class User(Base):
         server_default="1970-01-01T00:00:00+00:00",
     )
 
-    user_movies: Mapped[list[UserMovie]] = relationship(back_populates="user", cascade="all, delete-orphan")
-    duels: Mapped[list[Duel]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    user_movies: Mapped[list[UserMovie]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    duels: Mapped[list[Duel]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class Movie(Base):
     __tablename__ = "movies"
     __table_args__ = (
-        UniqueConstraint("trakt_id", "media_type", name="uq_movies_trakt_id_media_type"),
+        UniqueConstraint(
+            "trakt_id", "media_type", name="uq_movies_trakt_id_media_type"
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -100,7 +111,9 @@ class Movie(Base):
     overview: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     runtime: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     poster_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    community_rating: Mapped[Optional[float]] = mapped_column(Numeric(4, 1), nullable=True)
+    community_rating: Mapped[Optional[float]] = mapped_column(
+        Numeric(4, 1), nullable=True
+    )
     cached_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
@@ -166,9 +179,7 @@ class Tournament(Base):
     filter_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     filter_value: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     bracket_size: Mapped[int] = mapped_column(Integer, nullable=False)
-    status: Mapped[str] = mapped_column(
-        Text, nullable=False, server_default="active"
-    )
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="active")
     champion_movie_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("movies.id"), nullable=True
     )
@@ -223,7 +234,9 @@ class TournamentMatch(Base):
     duel_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("duels.id"), nullable=True
     )
-    is_bye: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    is_bye: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
     played_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -231,9 +244,7 @@ class TournamentMatch(Base):
     tournament: Mapped[Tournament] = relationship(back_populates="matches")
     movie_a: Mapped[Optional[Movie]] = relationship(foreign_keys=[movie_a_id])
     movie_b: Mapped[Optional[Movie]] = relationship(foreign_keys=[movie_b_id])
-    winner_movie: Mapped[Optional[Movie]] = relationship(
-        foreign_keys=[winner_movie_id]
-    )
+    winner_movie: Mapped[Optional[Movie]] = relationship(foreign_keys=[winner_movie_id])
     duel: Mapped[Optional[Duel]] = relationship()
 
 

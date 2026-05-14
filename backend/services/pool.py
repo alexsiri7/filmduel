@@ -37,10 +37,16 @@ def build_movie_upsert(movie_data: dict, now: datetime, media_type: str = "movie
         community_rating=community_rating,
         cached_at=now,
     )
-    update_set = {k: v for k, v in values.items() if k not in ("trakt_id", "media_type")}
-    stmt = insert(Movie.__table__).values(**values).on_conflict_do_update(
-        index_elements=["trakt_id", "media_type"],
-        set_=update_set,
+    update_set = {
+        k: v for k, v in values.items() if k not in ("trakt_id", "media_type")
+    }
+    stmt = (
+        insert(Movie.__table__)
+        .values(**values)
+        .on_conflict_do_update(
+            index_elements=["trakt_id", "media_type"],
+            set_=update_set,
+        )
     )
     return stmt
 
@@ -74,11 +80,21 @@ async def populate_movie_pool(user: User, db: AsyncSession) -> None:
     )
 
     for media_type in ("movie", "show"):
-        popular = await _safe_fetch(client.get_popular, limit=100, media_type=media_type)
-        trending = await _safe_fetch(client.get_trending, limit=100, media_type=media_type)
-        recommended = await _safe_fetch(client.get_recommendations, limit=100, media_type=media_type)
-        watched = await _safe_fetch(client.get_user_watched, user.trakt_user_id, media_type=media_type)
-        ratings_list = await _safe_fetch(client.get_user_ratings, user.trakt_user_id, media_type=media_type)
+        popular = await _safe_fetch(
+            client.get_popular, limit=100, media_type=media_type
+        )
+        trending = await _safe_fetch(
+            client.get_trending, limit=100, media_type=media_type
+        )
+        recommended = await _safe_fetch(
+            client.get_recommendations, limit=100, media_type=media_type
+        )
+        watched = await _safe_fetch(
+            client.get_user_watched, user.trakt_user_id, media_type=media_type
+        )
+        ratings_list = await _safe_fetch(
+            client.get_user_ratings, user.trakt_user_id, media_type=media_type
+        )
 
         ratings_by_trakt_id: dict[int, int] = {
             r["trakt_id"]: r["rating"] for r in ratings_list
@@ -98,7 +114,9 @@ async def populate_movie_pool(user: User, db: AsyncSession) -> None:
             if trakt_id not in pool:
                 pool[trakt_id] = item
 
-        await _upsert_pool(db, user, pool, seen_trakt_ids, ratings_by_trakt_id, media_type, now)
+        await _upsert_pool(
+            db, user, pool, seen_trakt_ids, ratings_by_trakt_id, media_type, now
+        )
 
     # Update last_seen_at
     user.last_seen_at = now
@@ -148,27 +166,31 @@ async def _upsert_pool(
         rating = ratings_by_trakt_id.get(trakt_id)
         seeded_elo = trakt_rating_to_seeded_elo(rating) if rating is not None else None
 
-        stmt = insert(UserMovie.__table__).values(
-            user_id=user.id,
-            movie_id=movie_uuid,
-            seen=seen,
-            elo=None,
-            seeded_elo=seeded_elo,
-            battles=0,
-            trakt_rating=rating,
-            updated_at=now,
-        ).on_conflict_do_update(
-            index_elements=["user_id", "movie_id"],
-            set_={
-                "seen": seen if seen is True else UserMovie.__table__.c.seen,
-                "seeded_elo": seeded_elo
-                if seeded_elo is not None
-                else UserMovie.__table__.c.seeded_elo,
-                "trakt_rating": rating
-                if rating is not None
-                else UserMovie.__table__.c.trakt_rating,
-                "updated_at": now,
-            },
+        stmt = (
+            insert(UserMovie.__table__)
+            .values(
+                user_id=user.id,
+                movie_id=movie_uuid,
+                seen=seen,
+                elo=None,
+                seeded_elo=seeded_elo,
+                battles=0,
+                trakt_rating=rating,
+                updated_at=now,
+            )
+            .on_conflict_do_update(
+                index_elements=["user_id", "movie_id"],
+                set_={
+                    "seen": seen if seen is True else UserMovie.__table__.c.seen,
+                    "seeded_elo": seeded_elo
+                    if seeded_elo is not None
+                    else UserMovie.__table__.c.seeded_elo,
+                    "trakt_rating": rating
+                    if rating is not None
+                    else UserMovie.__table__.c.trakt_rating,
+                    "updated_at": now,
+                },
+            )
         )
         await db.execute(stmt)
 

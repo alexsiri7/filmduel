@@ -73,7 +73,9 @@ class TraktClient:
             resp.raise_for_status()
             return resp.json()
 
-    async def get_popular(self, limit: int = 100, media_type: str = "movie") -> list[dict]:
+    async def get_popular(
+        self, limit: int = 100, media_type: str = "movie"
+    ) -> list[dict]:
         """Fetch popular movies or shows."""
         async with self._client() as client:
             resp = await client.get(
@@ -83,7 +85,9 @@ class TraktClient:
             resp.raise_for_status()
             return resp.json()
 
-    async def get_trending(self, limit: int = 100, media_type: str = "movie") -> list[dict]:
+    async def get_trending(
+        self, limit: int = 100, media_type: str = "movie"
+    ) -> list[dict]:
         """Fetch trending movies or shows.
 
         Trending returns [{watchers, movie/show}, ...] — this extracts the
@@ -97,7 +101,9 @@ class TraktClient:
             resp.raise_for_status()
             return [item[media_type] for item in resp.json()]
 
-    async def get_user_watched(self, username: str, media_type: str = "movie") -> list[dict]:
+    async def get_user_watched(
+        self, username: str, media_type: str = "movie"
+    ) -> list[dict]:
         """Fetch a user's watched movies or shows.
 
         Returns [{plays, last_watched_at, movie/show}, ...] — this extracts
@@ -111,7 +117,9 @@ class TraktClient:
             resp.raise_for_status()
             return [item[media_type] for item in resp.json()]
 
-    async def get_user_ratings(self, username: str, media_type: str = "movie") -> list[dict]:
+    async def get_user_ratings(
+        self, username: str, media_type: str = "movie"
+    ) -> list[dict]:
         """Fetch a user's movie or show ratings.
 
         Returns [{rating, trakt_id}, ...].
@@ -142,7 +150,9 @@ class TraktClient:
             )
             resp.raise_for_status()
 
-    async def get_recommendations(self, limit: int = 100, media_type: str = "movie") -> list[dict]:
+    async def get_recommendations(
+        self, limit: int = 100, media_type: str = "movie"
+    ) -> list[dict]:
         """Get personalized recommendations for the authenticated user."""
         async with self._client() as client:
             resp = await client.get(
@@ -157,9 +167,7 @@ class TraktClient:
         async with self._client() as client:
             resp = await client.post(
                 "/sync/watchlist",
-                json={
-                    f"{media_type}s": [{"ids": {"trakt": trakt_id}}]
-                },
+                json={f"{media_type}s": [{"ids": {"trakt": trakt_id}}]},
             )
             resp.raise_for_status()
 

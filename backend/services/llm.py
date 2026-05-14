@@ -41,13 +41,20 @@ async def chat_completion(
             ],
         )
     except Exception:
-        logger.error("llm_error model=%s elapsed=%.2fs", model_name, time.monotonic() - t0)
+        logger.error(
+            "llm_error model=%s elapsed=%.2fs", model_name, time.monotonic() - t0
+        )
         raise
 
     elapsed = time.monotonic() - t0
     usage = getattr(response, "usage", None)
     total_tokens = usage.total_tokens if usage else None
-    logger.info("llm_response model=%s elapsed=%.2fs tokens=%s", model_name, elapsed, total_tokens)
+    logger.info(
+        "llm_response model=%s elapsed=%.2fs tokens=%s",
+        model_name,
+        elapsed,
+        total_tokens,
+    )
 
     return response.choices[0].message.content
 
@@ -57,5 +64,9 @@ def parse_json_response(text: str) -> dict:
     text = text.strip()
     if text.startswith("```"):
         lines = text.split("\n")
-        text = "\n".join(lines[1:-1]) if lines[-1].strip() == "```" else "\n".join(lines[1:])
+        text = (
+            "\n".join(lines[1:-1])
+            if lines[-1].strip() == "```"
+            else "\n".join(lines[1:])
+        )
     return json.loads(text)

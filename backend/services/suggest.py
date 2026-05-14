@@ -112,14 +112,18 @@ async def _get_candidates(
     candidates = []
     for um in user_movies:
         m = um.movie
-        candidates.append({
-            "trakt_id": m.trakt_id,
-            "movie_id": str(m.id),
-            "title": m.title,
-            "year": m.year,
-            "genres": m.genres or [],
-            "community_rating": float(m.community_rating) if m.community_rating else None,
-        })
+        candidates.append(
+            {
+                "trakt_id": m.trakt_id,
+                "movie_id": str(m.id),
+                "title": m.title,
+                "year": m.year,
+                "genres": m.genres or [],
+                "community_rating": float(m.community_rating)
+                if m.community_rating
+                else None,
+            }
+        )
 
     return candidates
 
@@ -142,18 +146,18 @@ async def _call_llm(taste_profile: dict, candidates: list[dict]) -> list[dict]:
     )
 
     user_message = (
-        f"## User Taste Profile\n\n"
-        f"**Top 10 favorites (highest ELO):**\n"
+        "## User Taste Profile\n\n"
+        "**Top 10 favorites (highest ELO):**\n"
         + "\n".join(
             f"- {f['title']} ({f['year']}) [{', '.join(f['genres'])}] ELO: {f['elo']}"
             for f in taste_profile["top_10"]
         )
-        + f"\n\n**Bottom 5 (lowest ELO):**\n"
+        + "\n\n**Bottom 5 (lowest ELO):**\n"
         + "\n".join(
             f"- {f['title']} ({f['year']}) [{', '.join(f['genres'])}] ELO: {f['elo']}"
             for f in taste_profile["bottom_5"]
         )
-        + f"\n\n**Genre affinities (avg ELO):**\n"
+        + "\n\n**Genre affinities (avg ELO):**\n"
         + "\n".join(
             f"- {g}: {elo}" for g, elo in taste_profile["genre_affinities"].items()
         )
@@ -183,21 +187,31 @@ async def generate_suggestions(
     """
     taste_profile = await _build_taste_profile(user_id, db, media_type)
     if taste_profile is None:
-        logger.info("suggest_skip user_id=%s reason=insufficient_ranked (need %d)", user_id, MIN_RANKED)
+        logger.info(
+            "suggest_skip user_id=%s reason=insufficient_ranked (need %d)",
+            user_id,
+            MIN_RANKED,
+        )
         return []
 
     top_genre = next(iter(taste_profile["genre_affinities"]), None)
     logger.info(
         "suggest_taste_profile user_id=%s num_ranked=%d top_genre=%s",
-        user_id, taste_profile["total_ranked"], top_genre,
+        user_id,
+        taste_profile["total_ranked"],
+        top_genre,
     )
 
     candidates = await _get_candidates(user_id, db, media_type)
-    logger.info("suggest_candidates user_id=%s candidate_count=%d", user_id, len(candidates))
+    logger.info(
+        "suggest_candidates user_id=%s candidate_count=%d", user_id, len(candidates)
+    )
     if len(candidates) < NUM_PICKS:
         logger.warning(
             "User %s has only %d candidate films, need at least %d",
-            user_id, len(candidates), NUM_PICKS,
+            user_id,
+            len(candidates),
+            NUM_PICKS,
         )
         return []
 
@@ -205,7 +219,9 @@ async def generate_suggestions(
     trakt_to_movie = {c["trakt_id"]: c["movie_id"] for c in candidates}
 
     picks = await _call_llm(taste_profile, candidates)
-    logger.info("suggest_llm_response user_id=%s picks_returned=%d", user_id, len(picks))
+    logger.info(
+        "suggest_llm_response user_id=%s picks_returned=%d", user_id, len(picks)
+    )
 
     # Validate and map picks
     results = []
@@ -213,17 +229,21 @@ async def generate_suggestions(
         trakt_id = pick.get("trakt_id")
         reason = pick.get("reason", "Recommended for you.")
         if trakt_id in trakt_to_movie:
-            results.append({
-                "movie_id": trakt_to_movie[trakt_id],
-                "reason": reason,
-            })
+            results.append(
+                {
+                    "movie_id": trakt_to_movie[trakt_id],
+                    "reason": reason,
+                }
+            )
         if len(results) >= NUM_PICKS:
             break
 
     return results
 
 
-async def has_enough_ranked(user_id: uuid.UUID, db: AsyncSession, media_type: str = "movie") -> bool:
+async def has_enough_ranked(
+    user_id: uuid.UUID, db: AsyncSession, media_type: str = "movie"
+) -> bool:
     """Check if user has at least MIN_RANKED ranked films of the given type."""
     count_stmt = ranked_user_movies_stmt(user_id, media_type).with_only_columns(
         func.count()

@@ -117,8 +117,12 @@ async def process_duel(
     now = datetime.now(timezone.utc)
 
     if outcome in ("a_wins", "b_wins"):
-        elo_a_before = um_a.elo if um_a.elo is not None else get_initial_elo(um_a.seeded_elo)
-        elo_b_before = um_b.elo if um_b.elo is not None else get_initial_elo(um_b.seeded_elo)
+        elo_a_before = (
+            um_a.elo if um_a.elo is not None else get_initial_elo(um_a.seeded_elo)
+        )
+        elo_b_before = (
+            um_b.elo if um_b.elo is not None else get_initial_elo(um_b.seeded_elo)
+        )
 
         if outcome == "a_wins":
             winner_id, loser_id = movie_a_id, movie_b_id
@@ -129,7 +133,9 @@ async def process_duel(
 
         um_a.seen = True
         um_b.seen = True
-        duel = await apply_elo_result(db, user_id, winner_id, loser_id, um_w, um_l, mode)
+        duel = await apply_elo_result(
+            db, user_id, winner_id, loser_id, um_w, um_l, mode
+        )
         duel.pair_type = pair_type
 
         new_elo_a = um_a.elo
@@ -160,7 +166,11 @@ async def process_duel(
 
     logger.info(
         "duel_processed user_id=%s outcome=%s pair_type=%s elo_delta_a=%+d elo_delta_b=%+d",
-        user_id, outcome, pair_type, delta_a, delta_b,
+        user_id,
+        outcome,
+        pair_type,
+        delta_a,
+        delta_b,
     )
 
     # ── next_action ─────────────────────────────────────────────────
@@ -183,7 +193,9 @@ async def process_duel(
 
     logger.info(
         "duel_next_action user_id=%s next_action=%s seen_unranked=%d",
-        user_id, next_action, seen_unranked,
+        user_id,
+        next_action,
+        seen_unranked,
     )
 
     return ProcessDuelResult(

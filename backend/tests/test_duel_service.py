@@ -32,7 +32,9 @@ def _make_user_movie(
     return um
 
 
-def _make_fake_execute(um_a: MagicMock, um_b: MagicMock, seen_unranked: int = 5, total_seen: int = 20):
+def _make_fake_execute(
+    um_a: MagicMock, um_b: MagicMock, seen_unranked: int = 5, total_seen: int = 20
+):
     """Build a fake db.execute that dispatches by SQL statement content, not call order."""
     returned_a = False
     returned_b = False
@@ -44,7 +46,9 @@ def _make_fake_execute(um_a: MagicMock, um_b: MagicMock, seen_unranked: int = 5,
         # Count queries (contain 'count')
         if "count" in stmt_str.lower():
             # Distinguish seen_unranked (battles == 0) from total_seen
-            if "battles" in stmt_str.lower() or (not returned_a and "count" in stmt_str.lower()):
+            if "battles" in stmt_str.lower() or (
+                not returned_a and "count" in stmt_str.lower()
+            ):
                 result.scalar_one.return_value = seen_unranked
             else:
                 result.scalar_one.return_value = total_seen
@@ -183,9 +187,7 @@ async def test_process_duel_creates_duel_record():
     from backend.db_models import Duel
 
     duel_adds = [
-        call.args[0]
-        for call in db.add.call_args_list
-        if isinstance(call.args[0], Duel)
+        call.args[0] for call in db.add.call_args_list if isinstance(call.args[0], Duel)
     ]
     assert len(duel_adds) == 1
     duel = duel_adds[0]
@@ -368,9 +370,7 @@ async def test_pair_type_ranked_vs_ranked():
     from backend.db_models import Duel
 
     duel_adds = [
-        call.args[0]
-        for call in db.add.call_args_list
-        if isinstance(call.args[0], Duel)
+        call.args[0] for call in db.add.call_args_list if isinstance(call.args[0], Duel)
     ]
     assert len(duel_adds) == 1
     assert duel_adds[0].pair_type == "ranked_vs_ranked"
@@ -394,9 +394,7 @@ async def test_pair_type_ranked_vs_unranked():
     from backend.db_models import Duel
 
     duel_adds = [
-        call.args[0]
-        for call in db.add.call_args_list
-        if isinstance(call.args[0], Duel)
+        call.args[0] for call in db.add.call_args_list if isinstance(call.args[0], Duel)
     ]
     assert len(duel_adds) == 1
     assert duel_adds[0].pair_type == "ranked_vs_unranked"

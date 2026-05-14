@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from backend.services.pool import SYNC_COOLDOWN, populate_movie_pool
+from backend.services.pool import populate_movie_pool
 
 
 def _make_user(last_seen_at=None):
