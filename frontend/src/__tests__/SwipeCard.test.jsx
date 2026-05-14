@@ -6,7 +6,7 @@ const baseMovie = {
   id: 1,
   title: "The Matrix",
   year: 1999,
-  poster_url: "https://example.com/matrix.jpg",
+  poster_url: "https://image.tmdb.org/t/p/w500/matrix.jpg",
   genres: ["Sci-fi", "Action"],
   community_rating: 87,
 };
@@ -16,7 +16,7 @@ describe("SwipeCard", () => {
     render(<SwipeCard movie={baseMovie} onSwipe={() => {}} />);
     const img = screen.getByAltText("The Matrix poster");
     expect(img).toBeInTheDocument();
-    expect(img).toHaveAttribute("src", "https://example.com/matrix.jpg");
+    expect(img).toHaveAttribute("src", "https://image.tmdb.org/t/p/w500/matrix.jpg");
   });
 
   it("renders movie title", () => {

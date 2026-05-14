@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { getRankings, fetchStats, syncTrakt, getTournamentGenres } from "../api";
-import { mediaLabel, mediaLabelCap } from "../lib/utils";
+import { mediaLabel, mediaLabelCap, sanitizePosterUrl } from "../lib/utils";
 
 const LIMIT = 50;
 
@@ -193,9 +193,9 @@ export default function Rankings({ mediaType = "movie" }) {
                     isFirst ? "w-20 h-28 md:w-24 md:h-36" : "w-16 h-24 md:w-20 md:h-28"
                   }`}
                 >
-                  {r.movie.poster_url ? (
+                  {sanitizePosterUrl(r.movie.poster_url) ? (
                     <img
-                      src={r.movie.poster_url}
+                      src={sanitizePosterUrl(r.movie.poster_url)}
                       alt={r.movie.title}
                       className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500"
                       loading="lazy"

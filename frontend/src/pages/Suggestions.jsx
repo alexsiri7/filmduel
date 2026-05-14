@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { getSuggestions, regenerateSuggestions, dismissSuggestion, addToWatchlist, markSuggestionSeen } from "../api";
-import { mediaLabel, mediaLabelCap } from "../lib/utils";
+import { mediaLabel, mediaLabelCap, sanitizePosterUrl } from "../lib/utils";
 
 function SkeletonCard() {
   return (
@@ -251,9 +251,9 @@ export default function Suggestions({ mediaType = "movie" }) {
           >
             {/* Poster */}
             <div className="relative aspect-[2/3] overflow-hidden">
-              {s.movie.poster_url ? (
+              {sanitizePosterUrl(s.movie.poster_url) ? (
                 <img
-                  src={s.movie.poster_url}
+                  src={sanitizePosterUrl(s.movie.poster_url)}
                   alt={s.movie.title}
                   className="w-full h-full object-cover grayscale-[30%] group-hover:grayscale-0 transition-all duration-500"
                   loading="lazy"
