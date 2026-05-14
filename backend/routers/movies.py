@@ -55,7 +55,7 @@ def _decode_pair_token(token: str) -> set[str] | None:
         if len(parts) == 2:
             return {parts[0], parts[1]}
     except Exception:
-        pass
+        logger.warning("pair token decode failed — treating as no token", exc_info=True)
     return None
 
 
