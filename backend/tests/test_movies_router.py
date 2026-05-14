@@ -5,14 +5,22 @@ from __future__ import annotations
 import os
 import uuid
 
-import pytest
-
-
-# Provide a test TOKEN_ENC_KEY so Fernet doesn't raise at import time
+# Provide a test TOKEN_ENC_KEY so Fernet doesn't raise at import time.
+# Must set env vars AND clear the settings cache before importing backend modules
+# because get_settings() is lru_cache'd and may already be populated (with
+# TOKEN_ENC_KEY="") by earlier test modules that import backend.
 os.environ.setdefault("TOKEN_ENC_KEY", "test-secret-key-for-unit-tests-32b")
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 
-from backend.routers.movies import _decode_pair_token, _encode_pair_token
+from backend.config import get_settings  # noqa: E402
+
+get_settings.cache_clear()
+
+from backend.services.token_crypto import _fernet  # noqa: E402
+
+_fernet.cache_clear()
+
+from backend.routers.movies import _decode_pair_token, _encode_pair_token  # noqa: E402
 
 
 def test_pair_token_round_trips():
