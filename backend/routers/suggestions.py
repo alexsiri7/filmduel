@@ -12,10 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from backend.config import get_settings
-from backend.db import get_db
+from backend.db import async_session_factory, get_db
 from backend.rate_limit import limiter
 from backend.db_models import Movie, Suggestion, User, UserMovie
-from backend.routers.auth import get_current_user
+from backend.routers.auth import ensure_fresh_token, get_current_user
 from backend.schemas import (
     MediaType,
     MovieSchema,
@@ -246,11 +246,21 @@ async def add_to_watchlist(
 
     # Sync to Trakt watchlist in background
     trakt_id = suggestion.movie.trakt_id
-    access_token = current_user.trakt_access_token
+    user_id = current_user.id
     settings = get_settings()
 
     async def _sync_trakt_watchlist():
         try:
+            async with async_session_factory() as session:
+                result = await session.execute(
+                    select(User).where(User.id == user_id)
+                )
+                user = result.scalar_one_or_none()
+                if not user or not user.trakt_access_token:
+                    return
+                user = await ensure_fresh_token(user, session)
+                await session.commit()
+                access_token = user.trakt_access_token
             client = TraktClient(
                 client_id=settings.TRAKT_CLIENT_ID, access_token=access_token
             )
