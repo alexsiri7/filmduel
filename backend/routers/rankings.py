@@ -5,12 +5,14 @@ from __future__ import annotations
 import io
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db import get_db
 from backend.db_models import User, UserMovie
+from backend.rate_limit import limiter
+from backend.routers.auth import get_current_user
 from backend.schemas import (
     MediaType,
     MovieSchema,
@@ -18,7 +20,6 @@ from backend.schemas import (
     RankingsResponse,
     StatsResponse,
 )
-from backend.routers.auth import get_current_user
 from backend.services.elo import elo_to_trakt_rating
 from backend.services.rankings import (
     export_rankings_csv,
@@ -113,7 +114,9 @@ async def get_stats(
 
 
 @router.get("/export/csv")
+@limiter.limit("6/minute")  # CSV generation is expensive; tighter than other endpoints
 async def export_csv(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     media_type: MediaType = Query(default="movie"),

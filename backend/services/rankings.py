@@ -188,6 +188,7 @@ async def export_rankings_csv(
             Movie.media_type == media_type,
         )
         .order_by(UserMovie.elo.desc())
+        .limit(10000)  # safety cap — Letterboxd CSV is unrealistic above this count
     )
     result = await db.execute(stmt)
     user_movies = result.unique().scalars().all()
