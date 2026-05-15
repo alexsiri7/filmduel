@@ -244,16 +244,18 @@ export default function Suggestions({ mediaType = "movie" }) {
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {activeSuggestions.map((s) => (
+        {activeSuggestions.map((s) => {
+          const posterUrl = sanitizePosterUrl(s.movie.poster_url);
+          return (
           <div
             key={s.id}
             className="group bg-[#141312] overflow-hidden transition-all hover:shadow-accent-sm"
           >
             {/* Poster */}
             <div className="relative aspect-[2/3] overflow-hidden">
-              {sanitizePosterUrl(s.movie.poster_url) ? (
+              {posterUrl ? (
                 <img
-                  src={sanitizePosterUrl(s.movie.poster_url)}
+                  src={posterUrl}
                   alt={s.movie.title}
                   className="w-full h-full object-cover grayscale-[30%] group-hover:grayscale-0 transition-all duration-500"
                   loading="lazy"
@@ -335,7 +337,8 @@ export default function Suggestions({ mediaType = "movie" }) {
               </div>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
