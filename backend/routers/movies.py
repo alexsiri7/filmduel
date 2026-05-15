@@ -5,7 +5,9 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+
+from backend.rate_limit import limiter
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db import get_db
@@ -65,7 +67,9 @@ def _decode_pair_token(token: str) -> set[str] | None:
 
 
 @router.get("/pair", response_model=MoviePairResponse)
+@limiter.limit("60/minute")
 async def get_movie_pair(
+    request: Request,
     mode: str = Query(default="discovery"),
     last_pair_token: Optional[str] = Query(default=None),
     media_type: MediaType = Query(default="movie"),

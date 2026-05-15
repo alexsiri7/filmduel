@@ -188,6 +188,7 @@ async def export_rankings_csv(
             Movie.media_type == media_type,
         )
         .order_by(UserMovie.elo.desc())
+        .limit(10000)
     )
     result = await db.execute(stmt)
     user_movies = result.unique().scalars().all()

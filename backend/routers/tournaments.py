@@ -316,7 +316,9 @@ async def regenerate_tournament(
 
 
 @router.get("", response_model=list[TournamentListItem])
+@limiter.limit("30/minute")
 async def list_tournaments(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -326,6 +328,7 @@ async def list_tournaments(
         .options(joinedload(Tournament.matches))
         .where(Tournament.user_id == current_user.id)
         .order_by(Tournament.created_at.desc())
+        .limit(100)
     )
     result = await db.execute(stmt)
     tournaments = result.unique().scalars().all()

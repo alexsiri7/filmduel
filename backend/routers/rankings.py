@@ -5,7 +5,9 @@ from __future__ import annotations
 import io
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+
+from backend.rate_limit import limiter
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -113,7 +115,9 @@ async def get_stats(
 
 
 @router.get("/export/csv")
+@limiter.limit("6/minute")
 async def export_csv(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     media_type: MediaType = Query(default="movie"),
