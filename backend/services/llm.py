@@ -64,9 +64,8 @@ def parse_json_response(text: str) -> dict:
     text = text.strip()
     if text.startswith("```"):
         lines = text.split("\n")
-        text = (
-            "\n".join(lines[1:-1])
-            if lines[-1].strip() == "```"
-            else "\n".join(lines[1:])
-        )
+        if lines[-1].strip() == "```":
+            text = "\n".join(lines[1:-1])
+        else:
+            text = "\n".join(lines[1:])
     return json.loads(text)
