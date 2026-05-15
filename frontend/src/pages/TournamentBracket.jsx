@@ -424,6 +424,7 @@ export default function TournamentBracket({ mediaType = "movie" }) {
   // ── Bracket View ─────────────────────────────────────────────────
   const isCompleted = tournament.status === "completed";
   const isAbandoned = tournament.status === "abandoned";
+  const championPosterUrl = sanitizePosterUrl(champion?.poster_url);
 
   return (
     <div className="min-h-screen bg-[#0F0E0D] p-6 md:p-12 pb-32">
@@ -474,9 +475,9 @@ export default function TournamentBracket({ mediaType = "movie" }) {
       {isCompleted && champion && (
         <div className="mb-10 bg-[#1d1b1a] border-l-4 border-primary-container p-6 md:p-8 flex items-center gap-6 shadow-accent-inset">
           <div className="w-20 h-28 md:w-28 md:h-40 shrink-0 overflow-hidden relative">
-            {sanitizePosterUrl(champion.poster_url) && (
+            {championPosterUrl && (
               <img
-                src={sanitizePosterUrl(champion.poster_url)}
+                src={championPosterUrl}
                 alt={champion.title}
                 className="w-full h-full object-cover"
               />
