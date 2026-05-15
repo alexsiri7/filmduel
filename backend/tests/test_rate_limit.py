@@ -10,7 +10,6 @@ os.environ.setdefault("TOKEN_ENC_KEY", "test-secret-key-for-unit-tests-32b")
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 
 import jwt
-import pytest
 
 from backend.rate_limit import _rate_limit_key
 
