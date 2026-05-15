@@ -86,8 +86,15 @@ async def add_security_headers(request: Request, call_next):
         "default-src 'self'; "
         "img-src 'self' https://image.tmdb.org data:; "
         "script-src 'self'; "
-        "style-src 'self' 'unsafe-inline'; "
-        "connect-src 'self' https://*.sentry.io"
+        "style-src 'self'; "
+        "connect-src 'self' https://*.sentry.io; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'; "
+        "object-src 'none'"
+    )
+    response.headers["Permissions-Policy"] = (
+        "geolocation=(), microphone=(), camera=()"
     )
     return response
 
