@@ -6,7 +6,7 @@ const baseMovie = {
   id: 1,
   title: "Blade Runner",
   year: 1982,
-  poster_url: "https://example.com/poster.jpg",
+  poster_url: "https://image.tmdb.org/t/p/w500/poster.jpg",
   genres: ["Sci-fi", "Drama", "Thriller"],
   elo: 1450,
   battles: 12,
@@ -27,7 +27,7 @@ describe("MovieCard", () => {
     render(<MovieCard movie={baseMovie} />);
     const img = screen.getByAltText("Blade Runner poster");
     expect(img).toBeInTheDocument();
-    expect(img).toHaveAttribute("src", "https://example.com/poster.jpg");
+    expect(img).toHaveAttribute("src", "https://image.tmdb.org/t/p/w500/poster.jpg");
   });
 
   it("shows genre badges (max 2)", () => {
@@ -94,5 +94,25 @@ describe("MovieCard", () => {
     const movie = { ...baseMovie, genres: [] };
     render(<MovieCard movie={movie} />);
     expect(screen.getByText("Blade Runner")).toBeInTheDocument();
+  });
+
+  it("rejects data: URI and falls back to placeholder", () => {
+    const movie = { ...baseMovie, poster_url: "data:image/png;base64,abc" };
+    render(<MovieCard movie={movie} />);
+    const img = screen.getByAltText("Blade Runner poster");
+    expect(img).toHaveAttribute(
+      "src",
+      "https://via.placeholder.com/300x450?text=No+Poster"
+    );
+  });
+
+  it("rejects non-TMDB https URL and falls back to placeholder", () => {
+    const movie = { ...baseMovie, poster_url: "https://evil.example.com/img.jpg" };
+    render(<MovieCard movie={movie} />);
+    const img = screen.getByAltText("Blade Runner poster");
+    expect(img).toHaveAttribute(
+      "src",
+      "https://via.placeholder.com/300x450?text=No+Poster"
+    );
   });
 });

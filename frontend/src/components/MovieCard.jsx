@@ -1,4 +1,4 @@
-import { cn } from "../lib/utils";
+import { cn, sanitizePosterUrl } from "../lib/utils";
 
 export default function MovieCard({
   movie,
@@ -9,9 +9,8 @@ export default function MovieCard({
   compact = false,
   chosen, // "winner" | "loser" | undefined
 }) {
-  const posterSrc = movie.poster_url
-    ? movie.poster_url
-    : "https://via.placeholder.com/300x450?text=No+Poster";
+  const posterSrc = sanitizePosterUrl(movie.poster_url)
+    ?? "https://via.placeholder.com/300x450?text=No+Poster";
 
   const genres = (movie.genres || []).slice(0, 2);
 

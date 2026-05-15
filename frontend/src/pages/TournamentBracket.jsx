@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getTournament, submitTournamentMatch, abandonTournament, regenerateTournament } from "../api";
 import MovieCard from "../components/MovieCard";
-import { mediaLabel } from "../lib/utils";
+import { mediaLabel, sanitizePosterUrl } from "../lib/utils";
 
 function roundLabel(round, totalRounds) {
   if (round === totalRounds) return "Final";
@@ -25,7 +25,7 @@ function PosterThumb({ movie, isWinner, isLoser }) {
   return (
     <div className="w-8 h-12 shrink-0 overflow-hidden relative">
       <img
-        src={movie.poster_url || ""}
+        src={sanitizePosterUrl(movie.poster_url) ?? ""}
         alt={movie.title}
         className={`w-full h-full object-cover transition-all ${
           isLoser ? "grayscale opacity-40" : ""
@@ -474,9 +474,9 @@ export default function TournamentBracket({ mediaType = "movie" }) {
       {isCompleted && champion && (
         <div className="mb-10 bg-[#1d1b1a] border-l-4 border-primary-container p-6 md:p-8 flex items-center gap-6 shadow-accent-inset">
           <div className="w-20 h-28 md:w-28 md:h-40 shrink-0 overflow-hidden relative">
-            {champion.poster_url && (
+            {sanitizePosterUrl(champion.poster_url) && (
               <img
-                src={champion.poster_url}
+                src={sanitizePosterUrl(champion.poster_url)}
                 alt={champion.title}
                 className="w-full h-full object-cover"
               />

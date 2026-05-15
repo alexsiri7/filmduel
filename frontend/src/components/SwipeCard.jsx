@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from "react";
+import { sanitizePosterUrl } from "../lib/utils";
 
 const THRESHOLD = 80;
 
@@ -9,7 +10,8 @@ export default function SwipeCard({ movie, onSwipe }) {
   const startX = useRef(0);
   const isDragging = useRef(false);
 
-  const posterSrc = movie.poster_url || "https://via.placeholder.com/300x450?text=No+Poster";
+  const posterSrc = sanitizePosterUrl(movie.poster_url)
+    ?? "https://via.placeholder.com/300x450?text=No+Poster";
   const genres = (movie.genres || []).slice(0, 3);
 
   const rotation = offset * 0.08;
