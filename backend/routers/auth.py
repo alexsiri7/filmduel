@@ -59,7 +59,7 @@ def set_session_cookie(response: Response, user_id: str, settings: Settings) -> 
         COOKIE_NAME,
         create_jwt(user_id, settings),
         httponly=True,
-        secure=True,
+        secure=settings.is_https,
         samesite="lax",
         max_age=JWT_EXPIRY_HOURS * 3600,
     )
@@ -207,7 +207,7 @@ async def login(request: Request, settings: Settings = Depends(get_settings)):
         OAUTH_STATE_COOKIE,
         state,
         httponly=True,
-        secure=True,
+        secure=settings.is_https,
         samesite="lax",
         max_age=300,
     )
