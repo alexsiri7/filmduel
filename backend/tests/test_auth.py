@@ -177,7 +177,9 @@ class TestGetCurrentUserId:
             "exp": datetime.now(timezone.utc) + timedelta(hours=1),
             "iat": old_iat,
         }
-        token = pyjwt.encode(payload, https_settings.SECRET_KEY, algorithm=JWT_ALGORITHM)
+        token = pyjwt.encode(
+            payload, https_settings.SECRET_KEY, algorithm=JWT_ALGORITHM
+        )
         request = _make_request({COOKIE_NAME: token})
         response = _make_response()
         await get_current_user_id(request, response, _make_db())
@@ -280,9 +282,13 @@ class TestEnsureFreshToken:
     def _make_user(self, expires_soon: bool = True) -> MagicMock:
         user = MagicMock()
         if expires_soon:
-            user.trakt_token_expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
+            user.trakt_token_expires_at = datetime.now(timezone.utc) - timedelta(
+                hours=1
+            )
         else:
-            user.trakt_token_expires_at = datetime.now(timezone.utc) + timedelta(hours=2)
+            user.trakt_token_expires_at = datetime.now(timezone.utc) + timedelta(
+                hours=2
+            )
         user.trakt_refresh_token = "refresh-tok"
         user.trakt_access_token = "old-access"
         return user

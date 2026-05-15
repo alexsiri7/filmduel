@@ -110,7 +110,9 @@ async def _create_suggestions(
         try:
             movie_id = uuid.UUID(pick["movie_id"])
         except ValueError:
-            logger.warning("AI returned malformed movie_id: %s — skipping", pick.get("movie_id"))
+            logger.warning(
+                "AI returned malformed movie_id: %s — skipping", pick.get("movie_id")
+            )
             continue
         s = Suggestion(
             user_id=user_id,
@@ -261,9 +263,7 @@ async def add_to_watchlist(
     async def _sync_trakt_watchlist():
         try:
             async with async_session_factory() as session:
-                result = await session.execute(
-                    select(User).where(User.id == user_id)
-                )
+                result = await session.execute(select(User).where(User.id == user_id))
                 user = result.scalar_one_or_none()
                 if not user or not user.trakt_access_token:
                     return

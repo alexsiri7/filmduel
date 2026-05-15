@@ -93,9 +93,7 @@ async def add_security_headers(request: Request, call_next):
         "form-action 'self'; "
         "object-src 'none'"
     )
-    response.headers["Permissions-Policy"] = (
-        "geolocation=(), microphone=(), camera=()"
-    )
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
     return response
 
 

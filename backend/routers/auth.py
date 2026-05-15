@@ -252,7 +252,9 @@ async def callback(
     trakt_user_id = str(profile["ids"]["slug"])
     ttl = tokens.get("expires_in")
     if ttl is None:
-        logger.warning("Trakt exchange_code response missing expires_in; using default TTL")
+        logger.warning(
+            "Trakt exchange_code response missing expires_in; using default TTL"
+        )
         ttl = _TRAKT_TOKEN_DEFAULT_TTL_SECONDS
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl)
 

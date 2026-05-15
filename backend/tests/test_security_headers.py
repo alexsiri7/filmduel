@@ -1,4 +1,5 @@
 """Tests for security response headers set by the add_security_headers middleware."""
+
 from __future__ import annotations
 
 import pytest
