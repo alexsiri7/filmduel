@@ -146,20 +146,19 @@ async def _call_llm(taste_profile: dict, candidates: list[dict]) -> list[dict]:
         "- Prefer films with higher community ratings when taste-fit is similar"
     )
 
-    def _safe_title_genres(item: dict) -> tuple[str, str]:
-        title = _sanitize_llm_input(item["title"], max_len=150)
-        genres = ", ".join(
+    def _safe_genres(item: dict) -> str:
+        return ", ".join(
             _sanitize_llm_input(g, max_len=50) for g in (item.get("genres") or [])
         )
-        return title, genres
 
     def _safe_film_line(f: dict) -> str:
-        title, genres = _safe_title_genres(f)
-        return f"- {title} ({f['year']}) [{genres}] ELO: {f['elo']}"
+        title = _sanitize_llm_input(f["title"], max_len=150)
+        return f"- {title} ({f['year']}) [{_safe_genres(f)}] ELO: {f['elo']}"
 
     def _safe_candidate_line(c: dict) -> str:
-        title, genres = _safe_title_genres(c)
-        return f"- trakt_id={c['trakt_id']}: {title} ({c['year']}) [{genres}] rating={c['community_rating'] or 'N/A'}"
+        title = _sanitize_llm_input(c["title"], max_len=150)
+        rating = c["community_rating"] or "N/A"
+        return f"- trakt_id={c['trakt_id']}: {title} ({c['year']}) [{_safe_genres(c)}] rating={rating}"
 
     user_message = (
         "## User Taste Profile\n\n"
