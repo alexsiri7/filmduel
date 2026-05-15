@@ -180,3 +180,33 @@ def test_csv_export_format():
     assert rows[1][3] == "tt0133093"
     assert rows[1][4] == "8"
     assert len(rows) == 3
+
+
+# --- CSV injection sanitization ---
+
+
+def test_sanitize_csv_cell_formula_prefixes():
+    """Cells starting with injection-trigger characters must be prefixed with a quote."""
+    from backend.services.rankings import _sanitize_csv_cell
+
+    dangerous = ["=CMD", "+1-1", "-1+1", "@SUM(A1)", "\t hidden", "\nhidden"]
+    for val in dangerous:
+        result = _sanitize_csv_cell(val)
+        assert result.startswith("'"), f"Expected quote prefix for: {val!r}"
+        assert result[1:] == val
+
+
+def test_sanitize_csv_cell_safe_values():
+    """Safe cell values must pass through unchanged."""
+    from backend.services.rankings import _sanitize_csv_cell
+
+    safe = ["The Matrix", "tt0133093", "", "Inception", "2001: A Space Odyssey"]
+    for val in safe:
+        assert _sanitize_csv_cell(val) == val
+
+
+def test_sanitize_csv_cell_empty():
+    """Empty string must not be modified."""
+    from backend.services.rankings import _sanitize_csv_cell
+
+    assert _sanitize_csv_cell("") == ""

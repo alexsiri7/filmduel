@@ -163,6 +163,16 @@ async def get_user_stats(
     }
 
 
+_FORMULA_PREFIXES = frozenset("=+-@\t\n")
+
+
+def _sanitize_csv_cell(value: str) -> str:
+    """Prevent CSV formula injection by prepending a single quote to dangerous prefixes."""
+    if value and value[0] in _FORMULA_PREFIXES:
+        return "'" + value
+    return value
+
+
 async def export_rankings_csv(
     db: AsyncSession, user_id: uuid.UUID, media_type: str = "movie"
 ) -> str:
@@ -192,9 +202,9 @@ async def export_rankings_csv(
         writer.writerow(
             [
                 i + 1,
-                movie.title,
+                _sanitize_csv_cell(movie.title),
                 movie.year or "",
-                movie.imdb_id or "",
+                _sanitize_csv_cell(movie.imdb_id or ""),
                 trakt_rating,
             ]
         )
