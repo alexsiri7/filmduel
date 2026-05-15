@@ -12,11 +12,12 @@ from backend.services.llm import chat_completion, parse_json_response
 logger = logging.getLogger(__name__)
 
 
-def _sanitize_theme_hint(hint: str) -> str:
-    """Strip potential prompt injection from user theme hints."""
-    hint = hint[:100]  # max length
-    hint = re.sub(r"[{}\[\]<>]", "", hint)  # remove structural chars
-    return hint.strip()
+def _sanitize_llm_input(text: str, max_len: int = 200) -> str:
+    """Strip potential prompt injection from user-controlled or DB-sourced strings."""
+    text = text[:max_len]
+    text = re.sub(r"[{}\[\]<>]", "", text)
+    text = text.replace("\n", " ").replace("\r", " ")
+    return text.strip()
 
 
 SYSTEM_PROMPT = """\
@@ -65,10 +66,13 @@ async def curate_tournament(
     # Build candidate text
     lines = []
     for c in candidates:
-        genres_str = ", ".join(c.get("genres") or []) or "unknown"
+        safe_title = _sanitize_llm_input(c["title"], max_len=150)
+        safe_genres = ", ".join(
+            _sanitize_llm_input(g, max_len=50) for g in (c.get("genres") or [])
+        ) or "unknown"
         lines.append(
-            f'- ID: {c["id"]} | "{c["title"]}" ({c.get("year", "?")})'
-            f" | Genres: {genres_str} | ELO: {c.get('elo', '?')}"
+            f'- ID: {c["id"]} | "{safe_title}" ({c.get("year", "?")})'
+            f" | Genres: {safe_genres} | ELO: {c.get('elo', '?')}"
             f" | Battles: {c.get('battles', 0)}"
         )
     candidates_text = "\n".join(lines)
@@ -76,10 +80,10 @@ async def curate_tournament(
     system_prompt = SYSTEM_PROMPT.format(bracket_size=bracket_size)
     user_prompt = USER_PROMPT_TEMPLATE.format(
         bracket_size=bracket_size,
-        filter_context=f"Active filter: {filter_context}"
+        filter_context=f"Active filter: {_sanitize_llm_input(filter_context)}"
         if filter_context
         else "No filter applied",
-        theme_hint=f'User theme (use as inspiration): "{_sanitize_theme_hint(theme_hint)}"'
+        theme_hint=f'User theme (use as inspiration): "{_sanitize_llm_input(theme_hint, max_len=100)}"'
         if theme_hint
         else "",
         candidates_text=candidates_text,

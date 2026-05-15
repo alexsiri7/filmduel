@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from backend.db_models import Movie, UserMovie
+from backend.services.curator import _sanitize_llm_input
 from backend.services.llm import chat_completion, parse_json_response
 from backend.services.ranking import ranked_user_movies_stmt
 
@@ -145,30 +146,30 @@ async def _call_llm(taste_profile: dict, candidates: list[dict]) -> list[dict]:
         "- Prefer films with higher community ratings when taste-fit is similar"
     )
 
+    def _safe_film_line(f: dict) -> str:
+        title = _sanitize_llm_input(f["title"], max_len=150)
+        genres = ", ".join(_sanitize_llm_input(g, max_len=50) for g in (f.get("genres") or []))
+        return f"- {title} ({f['year']}) [{genres}] ELO: {f['elo']}"
+
+    def _safe_candidate_line(c: dict) -> str:
+        title = _sanitize_llm_input(c["title"], max_len=150)
+        genres = ", ".join(_sanitize_llm_input(g, max_len=50) for g in (c.get("genres") or []))
+        return f"- trakt_id={c['trakt_id']}: {title} ({c['year']}) [{genres}] rating={c['community_rating'] or 'N/A'}"
+
     user_message = (
         "## User Taste Profile\n\n"
         "**Top 10 favorites (highest ELO):**\n"
-        + "\n".join(
-            f"- {f['title']} ({f['year']}) [{', '.join(f['genres'])}] ELO: {f['elo']}"
-            for f in taste_profile["top_10"]
-        )
+        + "\n".join(_safe_film_line(f) for f in taste_profile["top_10"])
         + "\n\n**Bottom 5 (lowest ELO):**\n"
-        + "\n".join(
-            f"- {f['title']} ({f['year']}) [{', '.join(f['genres'])}] ELO: {f['elo']}"
-            for f in taste_profile["bottom_5"]
-        )
+        + "\n".join(_safe_film_line(f) for f in taste_profile["bottom_5"])
         + "\n\n**Genre affinities (avg ELO):**\n"
         + "\n".join(
-            f"- {g}: {elo}" for g, elo in taste_profile["genre_affinities"].items()
+            f"- {_sanitize_llm_input(g, max_len=50)}: {elo}"
+            for g, elo in taste_profile["genre_affinities"].items()
         )
         + f"\n\nTotal ranked films: {taste_profile['total_ranked']}"
         + f"\n\n## Candidate Films (pick {NUM_PICKS} from these)\n\n"
-        + "\n".join(
-            f"- trakt_id={c['trakt_id']}: {c['title']} ({c['year']}) "
-            f"[{', '.join(c['genres'])}] "
-            f"rating={c['community_rating'] or 'N/A'}"
-            for c in candidates
-        )
+        + "\n".join(_safe_candidate_line(c) for c in candidates)
     )
 
     text_content = await chat_completion(system_prompt, user_message, max_tokens=1500)
