@@ -158,8 +158,29 @@ class TestGetCurrentUserId:
         response.set_cookie.assert_called_once()
         kwargs = response.set_cookie.call_args.kwargs
         assert kwargs.get("httponly") is True
-        assert kwargs.get("secure") is True
+        assert kwargs.get("secure") is SETTINGS.is_https
         assert kwargs.get("samesite") == "lax"
+
+    @pytest.mark.asyncio
+    async def test_refreshes_old_token_https_sets_secure_cookie(self, monkeypatch):
+        """Cookie refresh sets secure=True when BASE_URL is HTTPS."""
+        https_settings = _make_settings(BASE_URL="https://filmduel.example.com")
+        monkeypatch.setattr("backend.routers.auth.get_settings", lambda: https_settings)
+        old_iat = datetime.now(timezone.utc) - REFRESH_INTERVAL - timedelta(hours=1)
+        payload = {
+            "sub": "550e8400-e29b-41d4-a716-446655440000",
+            "jti": "x",
+            "iss": "filmduel",
+            "aud": "filmduel",
+            "exp": datetime.now(timezone.utc) + timedelta(hours=1),
+            "iat": old_iat,
+        }
+        token = pyjwt.encode(payload, https_settings.SECRET_KEY, algorithm=JWT_ALGORITHM)
+        request = _make_request({COOKIE_NAME: token})
+        response = _make_response()
+        await get_current_user_id(request, response, _make_db())
+        kwargs = response.set_cookie.call_args.kwargs
+        assert kwargs.get("secure") is True
 
     @pytest.mark.asyncio
     async def test_no_cookie_raises_401(self, monkeypatch):
