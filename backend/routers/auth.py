@@ -392,8 +392,8 @@ async def sync_trakt(
     background_tasks.add_task(_backfill_posters_background)
 
     logger.info(
-        "Manual sync for %s: %d new movies (total: %d)",
-        current_user.trakt_username,
+        "Manual sync user_id=%s: %d new movies (total: %d)",
+        current_user.id,
         new_movies,
         after_count,
     )
