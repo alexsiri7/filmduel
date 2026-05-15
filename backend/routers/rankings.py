@@ -5,7 +5,7 @@ from __future__ import annotations
 import io
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -62,15 +62,18 @@ async def get_rankings(
     media_type: MediaType = Query(default="movie"),
 ):
     """Return the user's ranked movies/shows sorted by ELO descending."""
-    user_movies, total = await get_user_rankings(
-        db,
-        current_user.id,
-        genre=genre,
-        decade=decade,
-        limit=limit,
-        offset=offset,
-        media_type=media_type,
-    )
+    try:
+        user_movies, total = await get_user_rankings(
+            db,
+            current_user.id,
+            genre=genre,
+            decade=decade,
+            limit=limit,
+            offset=offset,
+            media_type=media_type,
+        )
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid decade format")
     rankings = [
         _build_ranked_movie(um, rank=offset + i + 1) for i, um in enumerate(user_movies)
     ]

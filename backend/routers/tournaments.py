@@ -424,7 +424,10 @@ async def submit_match_result_endpoint(
     """Submit a tournament match result."""
     uid = current_user.id
     tournament = await _load_tournament(tournament_id, uid, db)
-    winner_id = uuid.UUID(body.winner_movie_id)
+    try:
+        winner_id = uuid.UUID(body.winner_movie_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid winner_movie_id")
 
     try:
         loser_id = validate_match(tournament, match_id, winner_id)
