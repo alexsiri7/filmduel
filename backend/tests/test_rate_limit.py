@@ -7,7 +7,7 @@ import time
 from unittest.mock import MagicMock, patch
 
 os.environ.setdefault("TOKEN_ENC_KEY", "test-secret-key-for-unit-tests-32b")
-os.environ.setdefault("SECRET_KEY", "test-secret-key")
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
 
 import jwt
 

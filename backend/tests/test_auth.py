@@ -22,7 +22,7 @@ from backend.routers.auth import (
 
 def _make_settings(**overrides) -> Settings:
     defaults = {
-        "SECRET_KEY": "test-secret-key-for-unit-tests",
+        "SECRET_KEY": "test-secret-key-for-unit-tests!!",
         "TRAKT_CLIENT_ID": "",
         "TRAKT_CLIENT_SECRET": "",
         "DATABASE_URL": "postgresql+asyncpg://localhost/test",
@@ -231,7 +231,7 @@ class TestGetCurrentUserId:
     async def test_wrong_secret_raises_401(self, monkeypatch):
         """Token signed with wrong secret should raise 401."""
         monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
-        wrong_settings = _make_settings(SECRET_KEY="wrong-secret")
+        wrong_settings = _make_settings(SECRET_KEY="wrong-secret-key-for-unit-test!!")
         token = create_jwt("550e8400-e29b-41d4-a716-446655440000", wrong_settings)
         request = _make_request({COOKIE_NAME: token})
         response = _make_response()
