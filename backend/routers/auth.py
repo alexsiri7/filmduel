@@ -32,6 +32,10 @@ from backend.services.trakt import TraktClient
 
 logger = logging.getLogger(__name__)
 
+# Trakt's documented token lifetime is 90 days (7776000 s).
+# Used as a fallback when expires_in is absent from the API response.
+_TRAKT_TOKEN_DEFAULT_TTL_SECONDS = 7776000
+
 router = APIRouter(tags=["auth"])
 
 COOKIE_NAME = "filmduel_session"
@@ -153,9 +157,11 @@ async def ensure_fresh_token(user: User, db: AsyncSession) -> User:
 
     user.trakt_access_token = tokens["access_token"]
     user.trakt_refresh_token = tokens.get("refresh_token", user.trakt_refresh_token)
-    user.trakt_token_expires_at = datetime.now(timezone.utc) + timedelta(
-        seconds=tokens.get("expires_in", 7776000)
-    )
+    ttl = tokens.get("expires_in")
+    if ttl is None:
+        logger.warning("Trakt refresh response missing expires_in; using default TTL")
+        ttl = _TRAKT_TOKEN_DEFAULT_TTL_SECONDS
+    user.trakt_token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl)
     user.last_seen_at = datetime.now(timezone.utc)
     await db.flush()
 
@@ -244,9 +250,11 @@ async def callback(
     profile = await authed_client.get_profile()
 
     trakt_user_id = str(profile["ids"]["slug"])
-    expires_at = datetime.now(timezone.utc) + timedelta(
-        seconds=tokens.get("expires_in", 7776000)
-    )
+    ttl = tokens.get("expires_in")
+    if ttl is None:
+        logger.warning("Trakt exchange_code response missing expires_in; using default TTL")
+        ttl = _TRAKT_TOKEN_DEFAULT_TTL_SECONDS
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl)
 
     # Check if user exists
     stmt = select(User).where(User.trakt_user_id == trakt_user_id)
