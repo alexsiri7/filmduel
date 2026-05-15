@@ -70,7 +70,7 @@ async def populate_movie_pool(user: User, db: AsyncSession) -> None:
     if last_seen and last_seen.tzinfo is None:
         last_seen = last_seen.replace(tzinfo=timezone.utc)
     if last_seen and (now - last_seen) < SYNC_COOLDOWN:
-        logger.info("Skipping pool sync for %s — synced recently", user.trakt_username)
+        logger.info("Skipping pool sync user_id=%s — synced recently", user.id)
         return
 
     settings = get_settings()
@@ -123,8 +123,8 @@ async def populate_movie_pool(user: User, db: AsyncSession) -> None:
     await db.flush()
 
     logger.info(
-        "Pool sync complete for %s",
-        user.trakt_username,
+        "Pool sync complete user_id=%s",
+        user.id,
     )
 
 
