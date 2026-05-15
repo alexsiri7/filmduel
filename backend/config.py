@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     # Trakt OAuth
     TRAKT_CLIENT_ID: str = ""
     TRAKT_CLIENT_SECRET: str = ""
-    TRAKT_REDIRECT_URI: str = "http://localhost:8000/api/auth/callback"
+    TRAKT_REDIRECT_URI: str = "http://localhost:8000/auth/callback"
 
     # Database (Supabase Postgres via connection string)
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
