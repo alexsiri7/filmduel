@@ -1,7 +1,14 @@
 """Application configuration via environment variables."""
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 from functools import lru_cache
+
+_SECRET_KEY_PLACEHOLDERS = frozenset({
+    "secret", "changeme", "your-secret-key", "your_secret_key",
+    "example", "insecure", "placeholder", "default", "password",
+    "replace-me", "replace_me", "mysecretkey", "mysecret",
+})
 
 
 class Settings(BaseSettings):
@@ -18,6 +25,20 @@ class Settings(BaseSettings):
     # App secrets
     SECRET_KEY: str
     TOKEN_ENC_KEY: str = ""  # ≥32 bytes; rotate independently of SECRET_KEY
+
+    @field_validator("SECRET_KEY", mode="before")
+    @classmethod
+    def validate_secret_key(cls, v: str) -> str:
+        if v.lower() in _SECRET_KEY_PLACEHOLDERS:
+            raise ValueError(
+                "SECRET_KEY appears to be a placeholder value; "
+                "set a strong random secret"
+            )
+        if len(v) < 32:
+            raise ValueError(
+                f"SECRET_KEY must be at least 32 characters; got {len(v)}"
+            )
+        return v
     BASE_URL: str = "http://localhost:8000"
 
     # TMDB for poster images

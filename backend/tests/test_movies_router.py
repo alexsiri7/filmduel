@@ -10,7 +10,7 @@ import uuid
 # because get_settings() is lru_cache'd and may already be populated (with
 # TOKEN_ENC_KEY="") by earlier test modules that import backend.
 os.environ.setdefault("TOKEN_ENC_KEY", "test-secret-key-for-unit-tests-32b")
-os.environ.setdefault("SECRET_KEY", "test-secret-key")
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
 
 from backend.config import get_settings  # noqa: E402
 

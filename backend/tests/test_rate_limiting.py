@@ -7,7 +7,7 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 os.environ.setdefault("TOKEN_ENC_KEY", "test-secret-key-for-unit-tests-32b")
-os.environ.setdefault("SECRET_KEY", "test-secret-key")
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
 
 import pytest
 from fastapi.testclient import TestClient
