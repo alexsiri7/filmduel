@@ -164,6 +164,7 @@ export default function Rankings({ mediaType = "movie" }) {
           {rankings.map((r, idx) => {
             const isFirst = r.rank === 1;
             const rank = String(r.rank).padStart(2, "0");
+            const posterUrl = sanitizePosterUrl(r.movie.poster_url);
 
             return (
               <div
@@ -193,9 +194,9 @@ export default function Rankings({ mediaType = "movie" }) {
                     isFirst ? "w-20 h-28 md:w-24 md:h-36" : "w-16 h-24 md:w-20 md:h-28"
                   }`}
                 >
-                  {sanitizePosterUrl(r.movie.poster_url) ? (
+                  {posterUrl ? (
                     <img
-                      src={sanitizePosterUrl(r.movie.poster_url)}
+                      src={posterUrl}
                       alt={r.movie.title}
                       className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500"
                       loading="lazy"

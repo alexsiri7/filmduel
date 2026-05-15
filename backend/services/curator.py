@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 
@@ -114,8 +115,6 @@ async def curate_tournament(
         match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text_content, re.DOTALL)
         if match:
             try:
-                import json
-
                 result = json.loads(match.group(1))
             except Exception:
                 logger.error("Failed to parse LLM JSON output: %s", text_content[:500])
