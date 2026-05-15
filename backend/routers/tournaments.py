@@ -328,7 +328,7 @@ async def list_tournaments(
         .options(joinedload(Tournament.matches))
         .where(Tournament.user_id == current_user.id)
         .order_by(Tournament.created_at.desc())
-        .limit(100)
+        .limit(100)  # safety cap — prevents unbounded result sets per user
     )
     result = await db.execute(stmt)
     tournaments = result.unique().scalars().all()

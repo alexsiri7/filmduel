@@ -6,14 +6,13 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-
-from backend.rate_limit import limiter
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db import get_db
 from backend.db_models import User, UserMovie
-from backend.schemas import MediaType, MovieWithStateSchema, MoviePairResponse
+from backend.rate_limit import limiter
 from backend.routers.auth import get_current_user
+from backend.schemas import MediaType, MovieWithStateSchema, MoviePairResponse
 from backend.services.pair_selection import select_pair
 from backend.services.token_crypto import decrypt_token, encrypt_token
 
