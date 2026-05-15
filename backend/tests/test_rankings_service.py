@@ -125,6 +125,24 @@ def test_parse_decade_without_s():
     assert parse_decade("1980") == (1980, 1989)
 
 
+def test_parse_decade_invalid_raises_value_error():
+    """Non-numeric decade string must raise ValueError."""
+    with pytest.raises(ValueError):
+        parse_decade("invalid")
+
+
+def test_parse_decade_empty_string_raises_value_error():
+    """Empty string must raise ValueError."""
+    with pytest.raises(ValueError):
+        parse_decade("")
+
+
+def test_parse_decade_partial_numeric_raises_value_error():
+    """Partially numeric decade string must raise ValueError."""
+    with pytest.raises(ValueError):
+        parse_decade("19x0s")
+
+
 # --- elo_to_letterboxd_rating ---
 
 

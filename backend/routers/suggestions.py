@@ -36,11 +36,15 @@ MAX_REGENERATIONS_PER_DAY = 3
 async def _get_user_suggestion(
     db: AsyncSession, suggestion_id: str, user_id: uuid.UUID
 ) -> Suggestion:
+    try:
+        sid = uuid.UUID(suggestion_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid suggestion ID")
     stmt = (
         select(Suggestion)
         .options(joinedload(Suggestion.movie))
         .where(
-            Suggestion.id == uuid.UUID(suggestion_id),
+            Suggestion.id == sid,
             Suggestion.user_id == user_id,
         )
     )
@@ -103,9 +107,14 @@ async def _create_suggestions(
 
     suggestions = []
     for pick in picks:
+        try:
+            movie_id = uuid.UUID(pick["movie_id"])
+        except ValueError:
+            logger.warning("AI returned malformed movie_id: %s — skipping", pick.get("movie_id"))
+            continue
         s = Suggestion(
             user_id=user_id,
-            movie_id=uuid.UUID(pick["movie_id"]),
+            movie_id=movie_id,
             reason=pick["reason"],
             generated_at=datetime.now(timezone.utc),
         )
