@@ -1,5 +1,11 @@
 """Tests for auth logic — JWT creation, verification, and user extraction."""
 
+from __future__ import annotations
+
+import os
+
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
+
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 
