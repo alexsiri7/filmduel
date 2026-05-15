@@ -13,7 +13,9 @@ from backend.routers.auth import (
     JWT_ALGORITHM,
     JWT_EXPIRY_HOURS,
     REFRESH_INTERVAL,
+    _TRAKT_TOKEN_DEFAULT_TTL_SECONDS,
     create_jwt,
+    ensure_fresh_token,
     get_current_user_id,
 )
 
@@ -246,3 +248,66 @@ class TestGetCurrentUserId:
             await get_current_user_id(request, response, _make_db(future_revocation))
         assert exc_info.value.status_code == 401
         assert "revoked" in exc_info.value.detail.lower()
+
+
+# ---------------------------------------------------------------------------
+# ensure_fresh_token — default TTL fallback
+# ---------------------------------------------------------------------------
+
+
+class TestEnsureFreshToken:
+    def _make_user(self, expires_soon: bool = True) -> MagicMock:
+        user = MagicMock()
+        if expires_soon:
+            user.trakt_token_expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        else:
+            user.trakt_token_expires_at = datetime.now(timezone.utc) + timedelta(hours=2)
+        user.trakt_refresh_token = "refresh-tok"
+        user.trakt_access_token = "old-access"
+        return user
+
+    @pytest.mark.asyncio
+    async def test_uses_default_ttl_when_expires_in_missing(self, monkeypatch):
+        """When Trakt omits expires_in, token expiry uses the default TTL."""
+        monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
+        mock_client = AsyncMock()
+        mock_client.refresh_token.return_value = {
+            "access_token": "new-access",
+            "refresh_token": "new-refresh",
+            # No expires_in key
+        }
+        monkeypatch.setattr(
+            "backend.routers.auth.TraktClient", lambda **kw: mock_client
+        )
+        user = self._make_user(expires_soon=True)
+        db = AsyncMock()
+
+        now = datetime.now(timezone.utc)
+        await ensure_fresh_token(user, db)
+
+        expected = now + timedelta(seconds=_TRAKT_TOKEN_DEFAULT_TTL_SECONDS)
+        actual = user.trakt_token_expires_at
+        assert abs((actual - expected).total_seconds()) < 5
+
+    @pytest.mark.asyncio
+    async def test_uses_provided_expires_in(self, monkeypatch):
+        """When Trakt provides expires_in, that value is used."""
+        monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
+        mock_client = AsyncMock()
+        mock_client.refresh_token.return_value = {
+            "access_token": "new-access",
+            "refresh_token": "new-refresh",
+            "expires_in": 3600,
+        }
+        monkeypatch.setattr(
+            "backend.routers.auth.TraktClient", lambda **kw: mock_client
+        )
+        user = self._make_user(expires_soon=True)
+        db = AsyncMock()
+
+        now = datetime.now(timezone.utc)
+        await ensure_fresh_token(user, db)
+
+        expected = now + timedelta(seconds=3600)
+        actual = user.trakt_token_expires_at
+        assert abs((actual - expected).total_seconds()) < 5
