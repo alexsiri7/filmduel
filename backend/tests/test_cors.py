@@ -1,7 +1,5 @@
 """Integration tests for CORS middleware configuration."""
 
-from __future__ import annotations
-
 from fastapi.testclient import TestClient
 
 from backend.main import app

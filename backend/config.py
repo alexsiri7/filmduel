@@ -64,11 +64,10 @@ class Settings(BaseSettings):
         entries = [e for e in entries if e]  # drop empties
         if not entries:
             raise ValueError("CORS_ORIGINS must contain at least one origin")
-        for origin in entries:
-            if origin == "*":
-                raise ValueError(
-                    "CORS_ORIGINS must not contain '*' when allow_credentials=True"
-                )
+        if "*" in entries:
+            raise ValueError(
+                "CORS_ORIGINS must not contain '*' when allow_credentials=True"
+            )
         return entries
 
     # Sentry
