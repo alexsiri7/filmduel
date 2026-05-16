@@ -127,36 +127,38 @@ export default function ReportIssueModal({ onClose }) {
                     Include Screenshot
                   </span>
                 </label>
-                {includeScreenshot && screenshotDataUrl ? (
-                  <div className="space-y-2 mt-2">
-                    <img
-                      src={editedScreenshotDataUrl || screenshotDataUrl}
-                      alt="Screenshot preview"
-                      className="max-h-[120px] border border-[#F5F0E8]/10"
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setShowEditor(true)}
-                        className="text-primary-container text-xs font-headline font-bold uppercase tracking-wider hover:text-primary-container/80 transition-colors"
-                      >
-                        Edit Screenshot
-                      </button>
-                      <button
-                        onClick={handleRemoveScreenshot}
-                        className="text-[#F5F0E8]/30 text-xs font-headline font-bold uppercase tracking-wider hover:text-[#F5F0E8]/60 transition-colors"
-                      >
-                        Remove
-                      </button>
+                {includeScreenshot && (
+                  screenshotDataUrl ? (
+                    <div className="space-y-2 mt-2">
+                      <img
+                        src={editedScreenshotDataUrl || screenshotDataUrl}
+                        alt="Screenshot preview"
+                        className="max-h-[120px] border border-[#F5F0E8]/10"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setShowEditor(true)}
+                          className="text-primary-container text-xs font-headline font-bold uppercase tracking-wider hover:text-primary-container/80 transition-colors"
+                        >
+                          Edit Screenshot
+                        </button>
+                        <button
+                          onClick={handleRemoveScreenshot}
+                          className="text-[#F5F0E8]/30 text-xs font-headline font-bold uppercase tracking-wider hover:text-[#F5F0E8]/60 transition-colors"
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ) : includeScreenshot && !screenshotDataUrl ? (
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="text-[#F5F0E8]/40 text-xs font-headline font-bold uppercase tracking-wider hover:text-primary-container/70 transition-colors mt-2"
-                  >
-                    Choose File
-                  </button>
-                ) : null}
+                  ) : (
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="text-[#F5F0E8]/40 text-xs font-headline font-bold uppercase tracking-wider hover:text-primary-container/70 transition-colors mt-2"
+                    >
+                      Choose File
+                    </button>
+                  )
+                )}
               </div>
             </div>
 
