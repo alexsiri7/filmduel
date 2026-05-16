@@ -33,11 +33,47 @@ logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
+_SCRUB_KEYS = frozenset(
+    {
+        "trakt_access_token",
+        "trakt_refresh_token",
+        "trakt_access_token_enc",
+        "trakt_refresh_token_enc",
+        "access_token",
+        "refresh_token",
+        "SECRET_KEY",
+        "Authorization",
+        "authorization",  # httpx normalizes response headers to lowercase
+        "_headers",
+    }
+)
+
+
+def _scrub_sensitive(event, hint):  # noqa: ANN001
+    """Strip OAuth tokens and secret keys from Sentry stack frame locals.
+
+    Scrubs using two strategies:
+    - Exact match against _SCRUB_KEYS (explicit allowlist of known sensitive fields)
+    - Substring match: any local variable whose name contains "token" or "secret"
+      (case-insensitive) is also filtered, covering future fields automatically.
+
+    Filtered values are replaced with "[Filtered]".
+    """
+    for exc_val in (event.get("exception") or {}).get("values") or []:
+        for frame in (exc_val.get("stacktrace") or {}).get("frames") or []:
+            vars_ = frame.get("vars") or {}
+            for key in list(vars_):
+                if key in _SCRUB_KEYS or "token" in key.lower() or "secret" in key.lower():
+                    vars_[key] = "[Filtered]"
+    return event
+
+
 if settings.SENTRY_DSN:
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN,
         send_default_pii=False,
         traces_sample_rate=0.1,
+        before_send=_scrub_sensitive,
     )
 
 app = FastAPI(title="FilmDuel", version="0.1.0")
@@ -133,9 +169,10 @@ async def spa_fallback(full_path: str):
             "frontend/dist/index.html missing at %s — returning 503", index_html
         )
         return JSONResponse({"detail": "Frontend not available"}, status_code=503)
+    static_root = STATIC_DIR.resolve()
     file_path = (STATIC_DIR / full_path).resolve()
     if file_path.is_file():
-        if file_path.is_relative_to(STATIC_DIR):
+        if file_path.is_relative_to(static_root):
             return FileResponse(file_path)
         logger.warning(
             "spa_fallback blocked out-of-bounds access: requested=%s resolved=%s",
