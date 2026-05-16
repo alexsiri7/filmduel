@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from urllib.parse import urlparse
 
 import sentry_sdk
 from fastapi import FastAPI, Request
@@ -117,8 +118,51 @@ app.add_middleware(
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "DELETE"],
-    allow_headers=["Content-Type"],  # SPA only sends Content-Type; auth is cookie-based
+    allow_headers=["Content-Type", "X-Requested-With"],  # X-Requested-With is required for the CSRF bypass (see csrf_origin_check middleware)
 )
+
+
+@app.middleware("http")
+async def csrf_origin_check(request: Request, call_next):
+    """Block state-changing requests from unexpected origins.
+
+    Checks Origin (or Referer fallback) against the CORS allowlist.
+    Also accepts requests with X-Requested-With header (set by our SPA).
+    Exempt: GET, HEAD, OPTIONS (safe methods / preflight).
+    """
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return await call_next(request)
+
+    # X-Requested-With is a custom header — browsers never send it cross-site
+    # without a preflight, so its presence proves the request came from our SPA
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+        return await call_next(request)
+
+    origin = request.headers.get("origin") or request.headers.get("referer", "")
+
+    # No origin or referer header — non-browser / server-to-server clients cannot
+    # perform CSRF (they have no victim session cookie), so allow through.
+    if not origin:
+        return await call_next(request)
+
+    # Normalise to scheme+host — strips path/query from Referer; Origin already
+    # carries only scheme+host, so this is a no-op for them.
+    parsed = urlparse(origin)
+    origin_base = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+
+    if origin_base in settings.CORS_ORIGINS:
+        return await call_next(request)
+
+    logger.warning(
+        "csrf_check_failed method=%s origin=%r path=%s",
+        request.method,
+        origin,
+        request.url.path,
+    )
+    return JSONResponse(
+        status_code=403,
+        content={"detail": "CSRF check failed: unexpected origin"},
+    )
 
 
 @app.middleware("http")
@@ -182,10 +226,9 @@ async def spa_fallback(full_path: str):
             "frontend/dist/index.html missing at %s — returning 503", index_html
         )
         return JSONResponse({"detail": "Frontend not available"}, status_code=503)
-    static_root = STATIC_DIR.resolve()
     file_path = (STATIC_DIR / full_path).resolve()
     if file_path.is_file():
-        if file_path.is_relative_to(static_root):
+        if file_path.is_relative_to(STATIC_DIR):
             return FileResponse(file_path)
         logger.warning(
             "spa_fallback blocked out-of-bounds access: requested=%s resolved=%s",
