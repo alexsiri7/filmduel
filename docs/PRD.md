@@ -2,7 +2,7 @@
 
 ## Overview
 
-FilmDuel is a web app that helps users discover and rank movies and TV shows through pairwise comparisons. Users authenticate with their Trakt account, toggle between Movies and TV Shows via the nav bar, classify films rapidly via a Tinder-style swipe session, then duel seen films against each other to build an ELO-ranked library. Ratings sync back to Trakt in real time.
+FilmDuel is a web app that helps users discover and rank movies and TV shows through pairwise comparisons. Users authenticate with their Trakt account, toggle between Movies and TV Shows via the nav bar, classify films rapidly via a Tinder-style swipe session, then duel seen films against each other to build an ELO-ranked library. ELO ratings can optionally sync back to Trakt in real time when the user enables the "Sync to Trakt" toggle.
 
 The experience has two distinct modes that alternate naturally:
 - **Swipe** — fast, mindless sorting. Seen it or not?
@@ -18,7 +18,7 @@ The experience should feel like a game — fast, opinionated, oddly compelling.
 - Generate meaningful ELO rankings through enjoyable head-to-head duels
 - Always show interesting match-ups (good vs good, bad vs bad — not random)
 - Surface films the user has forgotten they've seen
-- Sync ratings back to Trakt so the data lives somewhere useful
+- Optionally sync ELO ratings back to Trakt (user opt-in) so the data lives somewhere useful
 - Export rankings to Letterboxd CSV format
 
 ---

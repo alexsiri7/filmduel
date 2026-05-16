@@ -3,8 +3,100 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import Nav from "../components/Nav";
 
+// ── Sync to Trakt toggle tests (use vi.mock to control api module) ─────────
+
+vi.mock("../api", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    getMe: vi.fn(),
+    updateSettings: vi.fn(() => Promise.resolve()),
+  };
+});
+
+import { getMe, updateSettings } from "../api";
+
+
+describe("Nav — Sync to Trakt toggle", () => {
+  const renderNav = () =>
+    render(
+      <MemoryRouter>
+        <Nav />
+      </MemoryRouter>
+    );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("renders toggle in OFF state when user has sync disabled", async () => {
+    getMe.mockResolvedValueOnce({ sync_ratings_to_trakt: false });
+    renderNav();
+    await waitFor(() => {
+      const toggle = screen.getByRole("switch");
+      expect(toggle).toHaveAttribute("aria-checked", "false");
+    });
+  });
+
+  it("renders toggle in ON state when user has sync enabled", async () => {
+    getMe.mockResolvedValueOnce({ sync_ratings_to_trakt: true });
+    renderNav();
+    await waitFor(() => {
+      const toggle = screen.getByRole("switch");
+      expect(toggle).toHaveAttribute("aria-checked", "true");
+    });
+  });
+
+  it("toggles ON and calls updateSettings when clicked while OFF", async () => {
+    getMe.mockResolvedValueOnce({ sync_ratings_to_trakt: false });
+    renderNav();
+    await waitFor(() => screen.getByRole("switch"));
+    fireEvent.click(screen.getByRole("switch"));
+    await waitFor(() => {
+      expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "true");
+      expect(updateSettings).toHaveBeenCalledWith({ sync_ratings_to_trakt: true });
+    });
+  });
+
+  it("toggles OFF and calls updateSettings when clicked while ON", async () => {
+    getMe.mockResolvedValueOnce({ sync_ratings_to_trakt: true });
+    renderNav();
+    await waitFor(() => screen.getByRole("switch"));
+    fireEvent.click(screen.getByRole("switch"));
+    await waitFor(() => {
+      expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "false");
+      expect(updateSettings).toHaveBeenCalledWith({ sync_ratings_to_trakt: false });
+    });
+  });
+
+  it("defaults to OFF when getMe returns null", async () => {
+    getMe.mockResolvedValueOnce(null);
+    renderNav();
+    await waitFor(() => {
+      expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "false");
+    });
+  });
+
+  it("rolls back toggle state when updateSettings fails", async () => {
+    getMe.mockResolvedValueOnce({ sync_ratings_to_trakt: false });
+    updateSettings.mockRejectedValueOnce(new Error("Network error"));
+    renderNav();
+    await waitFor(() => screen.getByRole("switch"));
+    fireEvent.click(screen.getByRole("switch"));
+    // After failure, toggle should roll back to OFF
+    await waitFor(() => {
+      expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "false");
+    });
+  });
+});
+
 describe("Nav", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
+    // The api module is mocked above. Set safe defaults for the existing Nav tests.
+    getMe.mockResolvedValue(null);
+    updateSettings.mockResolvedValue(null);
+    // logout is also mocked; stub fetch so the Sign Out test can verify the call
     vi.stubGlobal(
       "fetch",
       vi.fn(() =>

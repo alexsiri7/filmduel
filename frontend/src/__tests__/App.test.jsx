@@ -7,9 +7,16 @@ describe("App", () => {
   beforeEach(() => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(() =>
-        Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
-      )
+      vi.fn((url) => {
+        if (url === "/api/me") {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ sync_ratings_to_trakt: false }),
+          });
+        }
+        return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve(null) });
+      })
     );
   });
 
@@ -121,7 +128,7 @@ describe("App", () => {
       "fetch",
       vi.fn((url) => {
         if (url === "/api/me") {
-          return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+          return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ sync_ratings_to_trakt: false }) });
         }
         if (url.includes("/api/rankings") && !url.includes("stats")) {
           return Promise.resolve({

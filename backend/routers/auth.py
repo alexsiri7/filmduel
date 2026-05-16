@@ -325,8 +325,10 @@ async def me(user: User = Depends(get_current_user)):
 
 
 @router.patch("/api/me/settings", response_model=UserResponse)
+@limiter.limit("30/minute")
 async def update_settings(
     body: UserSettingsUpdate,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

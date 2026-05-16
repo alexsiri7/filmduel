@@ -17,15 +17,23 @@ export default function Nav({ mediaType, setMediaType }) {
   const [syncRatings, setSyncRatings] = useState(false);
 
   useEffect(() => {
-    getMe().then((user) => {
-      if (user) setSyncRatings(user.sync_ratings_to_trakt);
-    });
+    getMe()
+      .then((user) => {
+        if (user) setSyncRatings(user.sync_ratings_to_trakt);
+      })
+      .catch(() => {
+        // Leave syncRatings at false (safe default).
+      });
   }, []);
 
   const handleSyncToggle = async () => {
     const next = !syncRatings;
     setSyncRatings(next);
-    await updateSettings({ sync_ratings_to_trakt: next });
+    try {
+      await updateSettings({ sync_ratings_to_trakt: next });
+    } catch {
+      setSyncRatings(!next); // rollback on failure
+    }
   };
 
   const handleLogout = async () => {
@@ -111,15 +119,16 @@ export default function Nav({ mediaType, setMediaType }) {
         >
           Report Issue
         </button>
-        <label className="flex items-center justify-between w-full cursor-pointer py-2 group">
-          <span className="text-[#F5F0E8]/30 group-hover:text-[#F5F0E8]/60 font-headline font-bold uppercase text-xs tracking-widest transition-colors">
+        <div className="flex items-center justify-between w-full py-2 group">
+          <span className="text-[#F5F0E8]/30 group-hover:text-[#F5F0E8]/60 font-headline font-bold uppercase text-xs tracking-widest transition-colors cursor-default">
             Sync to Trakt
           </span>
           <button
             role="switch"
             aria-checked={syncRatings}
+            aria-label="Sync to Trakt"
             onClick={handleSyncToggle}
-            className={`relative w-9 h-5 rounded-full transition-colors ${
+            className={`relative w-9 h-5 rounded-full transition-colors cursor-pointer ${
               syncRatings ? "bg-primary-container" : "bg-[#F5F0E8]/20"
             }`}
           >
@@ -129,7 +138,7 @@ export default function Nav({ mediaType, setMediaType }) {
               }`}
             />
           </button>
-        </label>
+        </div>
         <button
           onClick={handleLogout}
           className="w-full text-[#F5F0E8]/30 hover:text-[#F5F0E8]/60 font-headline font-bold uppercase text-xs tracking-widest py-2 transition-colors"

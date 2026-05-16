@@ -14,6 +14,8 @@ import pytest
 from fastapi import HTTPException
 
 from backend.config import Settings
+from starlette.requests import Request as StarletteRequest
+
 from backend.routers.auth import (
     COOKIE_NAME,
     JWT_ALGORITHM,
@@ -23,6 +25,7 @@ from backend.routers.auth import (
     create_jwt,
     ensure_fresh_token,
     get_current_user_id,
+    update_settings,
 )
 
 
@@ -344,3 +347,79 @@ class TestEnsureFreshToken:
         expected = now + timedelta(seconds=3600)
         actual = user.trakt_token_expires_at
         assert abs((actual - expected).total_seconds()) < 5
+
+
+# ---------------------------------------------------------------------------
+# update_settings
+# ---------------------------------------------------------------------------
+
+
+def _make_starlette_request() -> StarletteRequest:
+    """Create a minimal real Starlette Request for rate-limited endpoints."""
+    scope = {
+        "type": "http",
+        "method": "PATCH",
+        "path": "/api/me/settings",
+        "query_string": b"",
+        "headers": [],
+        "client": ("127.0.0.1", 12345),
+        "app": MagicMock(),
+    }
+    scope["app"].state = MagicMock()
+    scope["app"].state.limiter = MagicMock()
+    scope["app"].state.limiter.enabled = False
+    return StarletteRequest(scope)
+
+
+class TestUpdateSettings:
+    def _make_user(self, sync_ratings: bool = False) -> MagicMock:
+        user = MagicMock()
+        user.id = "00000000-0000-0000-0000-000000000001"
+        user.trakt_username = "testuser"
+        user.created_at = datetime(2024, 1, 1, tzinfo=timezone.utc)
+        user.sync_ratings_to_trakt = sync_ratings
+        return user
+
+    @pytest.mark.asyncio
+    async def test_update_settings_enables_sync(self, monkeypatch):
+        """Enables sync: sets flag to True, commits, refreshes, and returns updated response."""
+        from backend.schemas import UserSettingsUpdate
+        from backend.rate_limit import limiter
+
+        monkeypatch.setattr(limiter, "enabled", False)
+
+        user = self._make_user(sync_ratings=False)
+        db = AsyncMock()
+
+        result = await update_settings(
+            body=UserSettingsUpdate(sync_ratings_to_trakt=True),
+            request=_make_starlette_request(),
+            current_user=user,
+            db=db,
+        )
+
+        assert user.sync_ratings_to_trakt is True
+        db.commit.assert_awaited_once()
+        db.refresh.assert_awaited_once_with(user)
+        assert result.sync_ratings_to_trakt is True
+
+    @pytest.mark.asyncio
+    async def test_update_settings_disables_sync(self, monkeypatch):
+        """Disables sync: sets flag to False and returns updated response."""
+        from backend.schemas import UserSettingsUpdate
+        from backend.rate_limit import limiter
+
+        monkeypatch.setattr(limiter, "enabled", False)
+
+        user = self._make_user(sync_ratings=True)
+        db = AsyncMock()
+
+        result = await update_settings(
+            body=UserSettingsUpdate(sync_ratings_to_trakt=False),
+            request=_make_starlette_request(),
+            current_user=user,
+            db=db,
+        )
+
+        assert user.sync_ratings_to_trakt is False
+        assert result.sync_ratings_to_trakt is False

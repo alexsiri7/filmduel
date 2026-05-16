@@ -80,7 +80,7 @@ class User(Base):
         server_default="1970-01-01T00:00:00+00:00",
     )
     sync_ratings_to_trakt: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="false"
+        Boolean, nullable=False, default=False, server_default="false"
     )
 
     user_movies: Mapped[list[UserMovie]] = relationship(
