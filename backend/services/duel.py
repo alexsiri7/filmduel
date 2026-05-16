@@ -69,12 +69,18 @@ class ProcessDuelResult:
 
 
 async def get_user_movie(
-    db: AsyncSession, user_id: uuid.UUID, movie_id: uuid.UUID
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    movie_id: uuid.UUID,
+    *,
+    for_update: bool = False,
 ) -> UserMovie:
     """Fetch an existing UserMovie or raise if not found."""
     stmt = select(UserMovie).where(
         UserMovie.user_id == user_id, UserMovie.movie_id == movie_id
     )
+    if for_update:
+        stmt = stmt.with_for_update()
     result = await db.execute(stmt)
     um = result.scalar_one_or_none()
     if not um:
@@ -96,8 +102,14 @@ async def process_duel(
     FastAPI dependency).  Returns a ``DuelResult`` ready to send to the client.
     """
     # ── Fetch / create user_movies ──────────────────────────────────
-    um_a = await get_user_movie(db, user_id, movie_a_id)
-    um_b = await get_user_movie(db, user_id, movie_b_id)
+    # Acquire row locks in deterministic UUID order to prevent deadlocks
+    first_id, second_id = sorted([movie_a_id, movie_b_id])
+    first_um = await get_user_movie(db, user_id, first_id, for_update=True)
+    second_um = await get_user_movie(db, user_id, second_id, for_update=True)
+    if first_id == movie_a_id:
+        um_a, um_b = first_um, second_um
+    else:
+        um_a, um_b = second_um, first_um
 
     um_a_seen_was_none = um_a.seen is None
     um_b_seen_was_none = um_b.seen is None
