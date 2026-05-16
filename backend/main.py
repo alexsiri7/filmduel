@@ -64,7 +64,8 @@ def _scrub_sensitive(event: dict, hint: dict) -> dict:
         for frame in (exc_val.get("stacktrace") or {}).get("frames") or []:
             vars_ = frame.get("vars") or {}
             for key in list(vars_):
-                if key in _SCRUB_KEYS or "token" in key.lower() or "secret" in key.lower():
+                lower = key.lower()
+                if key in _SCRUB_KEYS or "token" in lower or "secret" in lower:
                     vars_[key] = "[Filtered]"
     return event
 
