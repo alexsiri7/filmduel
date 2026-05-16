@@ -85,6 +85,9 @@ def _scrub_validation_errors(errors: list[dict]) -> list[dict]:
     Pydantic v2 includes the raw user-submitted value under the 'input' key.
     Removing it prevents free-text user data from appearing in logs/Sentry.
     The full errors() list (including 'input') is still returned to the client.
+
+    Note: scrubbing is shallow (top-level 'input' only). Pydantic v2 flattens
+    most errors, so nested inputs are rare. Revisit if discriminated unions are added.
     """
     return [{k: v for k, v in e.items() if k != "input"} for e in errors]
 
