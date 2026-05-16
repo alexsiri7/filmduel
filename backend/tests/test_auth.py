@@ -382,7 +382,7 @@ class TestUpdateSettings:
 
     @pytest.mark.asyncio
     async def test_update_settings_enables_sync(self, monkeypatch):
-        """Enables sync: sets flag to True, commits, refreshes, and returns updated response."""
+        """Enables sync: sets flag to True, commits, and returns updated response."""
         from backend.schemas import UserSettingsUpdate
         from backend.rate_limit import limiter
 
@@ -400,7 +400,7 @@ class TestUpdateSettings:
 
         assert user.sync_ratings_to_trakt is True
         db.commit.assert_awaited_once()
-        db.refresh.assert_awaited_once_with(user)
+        db.refresh.assert_not_awaited()
         assert result.sync_ratings_to_trakt is True
 
     @pytest.mark.asyncio

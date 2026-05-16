@@ -47,6 +47,11 @@ def test_list_tournaments_is_registered_with_rate_limiter():
     assert "backend.routers.tournaments.list_tournaments" in limiter._Limiter__marked_for_limiting
 
 
+def test_submit_feedback_is_registered_with_rate_limiter():
+    """submit_feedback must be registered in the slowapi limiter."""
+    assert "backend.routers.feedback.submit_feedback" in limiter._Limiter__marked_for_limiting
+
+
 def test_rate_limit_exceeded_handler_registered():
     """RateLimitExceeded exception handler must be registered on the app."""
     assert RateLimitExceeded in app.exception_handlers
