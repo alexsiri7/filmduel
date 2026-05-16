@@ -1,0 +1,7 @@
+# Dev/test-only requirements. Edit this file, then run:
+#   uv pip compile --generate-hashes --python-version 3.12 \
+#     --python-platform linux backend/requirements-dev.in \
+#     -c backend/requirements.txt \
+#     -o backend/requirements-dev.txt
+pytest
+pytest-asyncio

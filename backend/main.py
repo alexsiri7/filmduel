@@ -50,7 +50,7 @@ _SCRUB_KEYS = frozenset(
 )
 
 
-def _scrub_sensitive(event, hint):  # noqa: ANN001
+def _scrub_sensitive(event: dict, hint: dict) -> dict:
     """Strip OAuth tokens and secret keys from Sentry stack frame locals.
 
     Scrubs using two strategies:
@@ -118,7 +118,8 @@ app.add_middleware(
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "DELETE"],
-    allow_headers=["Content-Type", "X-Requested-With"],  # X-Requested-With is required for the CSRF bypass (see csrf_origin_check middleware)
+    # X-Requested-With is required for the CSRF bypass (see csrf_origin_check middleware)
+    allow_headers=["Content-Type", "X-Requested-With"],
 )
 
 
@@ -208,7 +209,7 @@ async def health():
 
 # --- Static files / SPA fallback ---
 
-STATIC_DIR = (Path(__file__).resolve().parent.parent / "frontend" / "dist").resolve()
+STATIC_DIR = (Path(__file__).parent.parent / "frontend" / "dist").resolve()
 
 if (STATIC_DIR / "assets").is_dir():
     app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")

@@ -38,6 +38,7 @@ def _safe_decrypt(report_id: str, ciphertext: str | None) -> str | None:
         )
         return None
 
+
 MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024  # 5 MB
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 
