@@ -134,6 +134,12 @@ async def spa_fallback(full_path: str):
         )
         return JSONResponse({"detail": "Frontend not available"}, status_code=503)
     file_path = (STATIC_DIR / full_path).resolve()
-    if file_path.is_file() and file_path.is_relative_to(STATIC_DIR.resolve()):
-        return FileResponse(file_path)
+    if file_path.is_file():
+        if file_path.is_relative_to(STATIC_DIR.resolve()):
+            return FileResponse(file_path)
+        logger.warning(
+            "spa_fallback blocked out-of-bounds access: requested=%s resolved=%s",
+            full_path,
+            file_path,
+        )
     return FileResponse(index_html)
