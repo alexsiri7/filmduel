@@ -335,7 +335,6 @@ async def update_settings(
     """Update user preferences."""
     current_user.sync_ratings_to_trakt = body.sync_ratings_to_trakt
     await db.commit()
-    await db.refresh(current_user)
     return UserResponse(
         id=str(current_user.id),
         trakt_username=current_user.trakt_username,
