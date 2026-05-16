@@ -70,9 +70,17 @@ class TestCorsOriginsValidation:
         with pytest.raises(ValidationError, match="must not contain '\\*'"):
             _make_settings(CORS_ORIGINS="*")
 
-    def test_wildcard_in_list_rejected(self):
+    def test_wildcard_in_string_rejected(self):
         with pytest.raises(ValidationError, match="must not contain '\\*'"):
             _make_settings(CORS_ORIGINS="http://localhost:5173,*")
+
+    def test_wildcard_in_list_rejected(self):
+        with pytest.raises(ValidationError, match="must not contain '\\*'"):
+            _make_settings(CORS_ORIGINS=["http://localhost:5173", "*"])
+
+    def test_non_string_non_list_rejected(self):
+        with pytest.raises(ValidationError, match="comma-separated string or list"):
+            _make_settings(CORS_ORIGINS=42)
 
     def test_empty_string_rejected(self):
         with pytest.raises(ValidationError, match="at least one origin"):

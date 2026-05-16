@@ -68,7 +68,7 @@ app.add_middleware(
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "DELETE"],
-    allow_headers=["Content-Type"],
+    allow_headers=["Content-Type"],  # SPA only sends Content-Type; auth is cookie-based
 )
 
 
