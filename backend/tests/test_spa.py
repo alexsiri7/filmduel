@@ -84,3 +84,23 @@ def test_path_traversal_is_blocked(tmp_path):
         response = client.get("/../secret.txt")
     assert response.status_code == 200
     assert "SECRET" not in response.text
+
+
+def test_sibling_directory_is_blocked_via_symlink(tmp_path):
+    """A symlink inside dist pointing to a sibling directory must not be followed."""
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<html>app</html>")
+    sibling = tmp_path / "dist-sibling"
+    sibling.mkdir()
+    (sibling / "secret.txt").write_text("SECRET")
+
+    # Symlink inside dist pointing to the sibling — this is the actual attack vector
+    # that the startswith → is_relative_to fix addresses.
+    (dist / "link").symlink_to("../dist-sibling")
+
+    with patch.object(main_module, "STATIC_DIR", dist):
+        response = client.get("/link/secret.txt")
+    assert response.status_code == 200
+    assert "SECRET" not in response.text
+    assert "app" in response.text
