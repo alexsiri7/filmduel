@@ -14,6 +14,8 @@ import pytest
 from fastapi import HTTPException
 
 from backend.config import Settings
+from backend.rate_limit import limiter
+from backend.schemas import UserSettingsUpdate
 from starlette.requests import Request as StarletteRequest
 
 from backend.routers.auth import (
@@ -365,8 +367,6 @@ def _make_starlette_request() -> StarletteRequest:
         "client": ("127.0.0.1", 12345),
         "app": MagicMock(),
     }
-    scope["app"].state = MagicMock()
-    scope["app"].state.limiter = MagicMock()
     scope["app"].state.limiter.enabled = False
     return StarletteRequest(scope)
 
@@ -406,9 +406,6 @@ class TestUpdateSettings:
     @pytest.mark.asyncio
     async def test_update_settings_disables_sync(self, monkeypatch):
         """Disables sync: sets flag to False and returns updated response."""
-        from backend.schemas import UserSettingsUpdate
-        from backend.rate_limit import limiter
-
         monkeypatch.setattr(limiter, "enabled", False)
 
         user = self._make_user(sync_ratings=True)
