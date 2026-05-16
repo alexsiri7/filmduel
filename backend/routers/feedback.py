@@ -7,10 +7,9 @@ import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.requests import Request
 
 from backend.db import get_db
 from backend.db_models import FeedbackReport, User
@@ -68,13 +67,22 @@ def _detect_image_type(data: bytes) -> str | None:
 @router.post("", response_model=FeedbackReportResponse, status_code=201)
 @limiter.limit("5/hour")
 async def submit_feedback(
-    request: Request,
+    request: Request,  # required by slowapi for rate-key extraction
     title: str = Form(...),
     description: str = Form(...),
     screenshot: UploadFile = File(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Submit a new feedback report.
+
+    Enforces two independent rate limits:
+    - slowapi: 5 requests/hour (in-memory, by IP/user via @limiter.limit)
+    - DB guard: MAX_FEEDBACK_PER_DAY (20) submissions per user in any rolling 24-hour window
+
+    Both limits return HTTP 429. The DB guard uses `or 0` to handle None
+    returned by db.scalar() on drivers that return NULL for an empty count.
+    """
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     daily_count: int = (
         await db.scalar(
@@ -85,9 +93,14 @@ async def submit_feedback(
         )
     ) or 0
     if daily_count >= MAX_FEEDBACK_PER_DAY:
+        logger.warning(
+            "feedback_daily_cap_hit user_id=%s count=%d",
+            current_user.id,
+            daily_count,
+        )
         raise HTTPException(
             status_code=429,
-            detail="Feedback limit reached. You may submit up to 20 reports per day.",
+            detail=f"Feedback limit reached. You may submit up to {MAX_FEEDBACK_PER_DAY} reports per day.",
         )
 
     screenshot_data_enc = None
