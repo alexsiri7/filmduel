@@ -7,7 +7,6 @@ import os
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
 
-import pytest
 from fastapi.testclient import TestClient
 
 from backend.main import _scrub_validation_errors, app
@@ -45,7 +44,7 @@ class TestScrubValidationErrors:
     def test_logger_does_not_emit_raw_input(self, caplog):
         """Integration: WARNING log must not contain the raw user input."""
         with caplog.at_level(logging.WARNING, logger="backend.main"):
-            response = client.post(
+            client.post(
                 "/api/tournaments",
                 json={"name": "x" * 200},  # triggers string_too_long
                 headers={"Authorization": "Bearer fake"},
