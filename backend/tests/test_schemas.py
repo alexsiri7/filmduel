@@ -20,6 +20,7 @@ from backend.schemas import (
     SwipeResponse,
     SwipeResultItem,
     SwipeSubmit,
+    TournamentCreate,
     UserResponse,
 )
 
@@ -182,6 +183,53 @@ class TestMovieSchema:
     def test_missing_required_rejected(self):
         with pytest.raises(ValidationError):
             MovieSchema(id="1")  # missing trakt_id, title
+
+    def test_media_type_defaults_to_movie(self):
+        m = MovieSchema(id="1", trakt_id=42, title="Blade Runner")
+        assert m.media_type == "movie"
+
+    def test_media_type_show_accepted(self):
+        m = MovieSchema(id="1", trakt_id=42, title="The Wire", media_type="show")
+        assert m.media_type == "show"
+
+    def test_invalid_media_type_rejected(self):
+        with pytest.raises(ValidationError):
+            MovieSchema(id="1", trakt_id=42, title="Podcast", media_type="podcast")
+
+
+# ---------------------------------------------------------------------------
+# TournamentCreate
+# ---------------------------------------------------------------------------
+
+
+class TestTournamentCreate:
+    def test_valid_minimal(self):
+        tc = TournamentCreate(bracket_size=16)
+        assert tc.bracket_size == 16
+        assert tc.media_type == "movie"
+        assert tc.name == ""
+        assert tc.ai_curated is False
+
+    def test_valid_show_media_type(self):
+        tc = TournamentCreate(bracket_size=32, media_type="show")
+        assert tc.media_type == "show"
+
+    def test_invalid_media_type_rejected(self):
+        with pytest.raises(ValidationError):
+            TournamentCreate(bracket_size=16, media_type="podcast")
+
+    def test_invalid_bracket_size_rejected(self):
+        with pytest.raises(ValidationError):
+            TournamentCreate(bracket_size=4)
+
+    def test_name_max_length_enforced(self):
+        with pytest.raises(ValidationError):
+            TournamentCreate(bracket_size=16, name="x" * 101)
+
+    def test_all_valid_bracket_sizes(self):
+        for size in [8, 16, 32, 64]:
+            tc = TournamentCreate(bracket_size=size)
+            assert tc.bracket_size == size
 
 
 # ---------------------------------------------------------------------------
