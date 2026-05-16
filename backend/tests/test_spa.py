@@ -84,3 +84,18 @@ def test_path_traversal_is_blocked(tmp_path):
         response = client.get("/../secret.txt")
     assert response.status_code == 200
     assert "SECRET" not in response.text
+
+
+def test_sibling_directory_is_blocked(tmp_path):
+    """Files in a sibling directory named with the dist prefix must not be served."""
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<html>app</html>")
+    sibling = tmp_path / "dist-sibling"
+    sibling.mkdir()
+    (sibling / "secret.txt").write_text("SECRET")
+
+    with patch.object(main_module, "STATIC_DIR", dist):
+        response = client.get("/dist-sibling/secret.txt")
+    assert response.status_code == 200
+    assert "SECRET" not in response.text
