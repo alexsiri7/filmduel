@@ -35,33 +35,31 @@ def _make_user_movie(
 def _make_fake_execute(
     um_a: MagicMock, um_b: MagicMock, seen_unranked: int = 5, total_seen: int = 20
 ):
-    """Build a fake db.execute that dispatches by SQL statement content, not call order."""
-    returned_a = False
-    returned_b = False
+    """Build a fake db.execute that dispatches by movie_id bound parameter."""
+    movie_map = {
+        um_a.movie_id: um_a,
+        um_b.movie_id: um_b,
+    }
 
     async def fake_execute(stmt):
-        nonlocal returned_a, returned_b
         result = MagicMock()
         stmt_str = str(stmt)
         # Count queries (contain 'count')
         if "count" in stmt_str.lower():
             # Distinguish seen_unranked (battles == 0) from total_seen
-            if "battles" in stmt_str.lower() or (
-                not returned_a and "count" in stmt_str.lower()
-            ):
+            if "battles" in stmt_str.lower():
                 result.scalar_one.return_value = seen_unranked
             else:
                 result.scalar_one.return_value = total_seen
             return result
-        # UserMovie select queries — return um_a first, then um_b
-        if not returned_a:
-            returned_a = True
-            result.scalar_one_or_none.return_value = um_a
-            return result
-        if not returned_b:
-            returned_b = True
-            result.scalar_one_or_none.return_value = um_b
-            return result
+        # UserMovie select queries — extract movie_id from WHERE clause
+        try:
+            movie_id = stmt.whereclause.clauses[1].right.value
+            if movie_id in movie_map:
+                result.scalar_one_or_none.return_value = movie_map[movie_id]
+                return result
+        except (AttributeError, IndexError):
+            pass
         # Fallback for any additional queries
         result.scalar_one.return_value = seen_unranked
         return result
