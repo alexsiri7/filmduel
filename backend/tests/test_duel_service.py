@@ -52,17 +52,23 @@ def _make_fake_execute(
             else:
                 result.scalar_one.return_value = total_seen
             return result
-        # UserMovie select queries — extract movie_id from WHERE clause
+        # UserMovie select queries — extract movie_id from WHERE clause.
+        # We introspect the SQLAlchemy AST (.whereclause.clauses[1].right.value)
+        # because sorted lock order makes call-order dispatch incorrect.
+        # If SQLAlchemy changes its AST layout, the except raises loudly so the
+        # failure is immediately visible rather than producing a confusing ValueError.
         try:
             movie_id = stmt.whereclause.clauses[1].right.value
             if movie_id in movie_map:
                 result.scalar_one_or_none.return_value = movie_map[movie_id]
                 return result
-        except (AttributeError, IndexError):
-            pass
-        # Fallback for any additional queries
-        result.scalar_one.return_value = seen_unranked
-        return result
+            raise AssertionError(
+                f"movie_id {movie_id!r} not in movie_map {list(movie_map)}"
+            )
+        except (AttributeError, IndexError) as exc:
+            raise AssertionError(
+                f"Failed to extract movie_id from WHERE clause — SQLAlchemy AST may have changed: {exc}"
+            ) from exc
 
     return fake_execute
 
@@ -87,6 +93,31 @@ async def test_get_user_movie_existing():
 
     um = await get_user_movie(db, uid, mid)
     assert um is existing
+
+
+@pytest.mark.asyncio
+async def test_get_user_movie_with_for_update():
+    """Verify that for_update=True causes with_for_update() to be applied to the statement."""
+    uid = uuid.uuid4()
+    mid = uuid.uuid4()
+    existing = _make_user_movie(uid, mid)
+
+    captured_stmts = []
+
+    async def capturing_execute(stmt):
+        captured_stmts.append(stmt)
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = existing
+        return result
+
+    db = AsyncMock()
+    db.execute = capturing_execute
+
+    um = await get_user_movie(db, uid, mid, for_update=True)
+    assert um is existing
+    assert len(captured_stmts) == 1
+    # SQLAlchemy Select.__str__() includes "FOR UPDATE" when with_for_update() is applied
+    assert "FOR UPDATE" in str(captured_stmts[0]).upper()
 
 
 @pytest.mark.asyncio
@@ -131,6 +162,34 @@ async def test_process_duel_a_wins_elo():
     assert um_b.battles == 6
     assert um_a.seen is True
     assert um_b.seen is True
+
+
+@pytest.mark.asyncio
+async def test_process_duel_a_wins_reversed_sort_order():
+    """
+    When movie_b_id sorts before movie_a_id in UUID order, um_a/um_b must still
+    refer to the correct movies. This exercises the 'else' branch at duel.py:109-110.
+    """
+    uid = uuid.uuid4()
+    # Force movie_b_id < movie_a_id lexicographically
+    mid_b = uuid.UUID("00000000-0000-0000-0000-000000000001")
+    mid_a = uuid.UUID("ffffffff-ffff-ffff-ffff-ffffffffffff")
+
+    um_a = _make_user_movie(uid, mid_a, elo=1000, battles=5)
+    um_b = _make_user_movie(uid, mid_b, elo=1000, battles=5)
+
+    db = AsyncMock()
+    db.execute = _make_fake_execute(um_a, um_b)
+
+    result = await process_duel(db, uid, mid_a, mid_b, "a_wins", "discovery")
+
+    # A is the winner — must gain ELO regardless of UUID sort order
+    assert result.api_result.movie_a_elo_delta > 0, "A (winner) should gain ELO"
+    assert result.api_result.movie_b_elo_delta < 0, "B (loser) should lose ELO"
+    assert um_a.seen is True
+    assert um_b.seen is True
+    assert um_a.battles == 6
+    assert um_b.battles == 6
 
 
 # ---------------------------------------------------------------------------
