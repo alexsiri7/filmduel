@@ -54,7 +54,7 @@ def _scrub_sensitive(event: dict, hint: dict) -> dict:
     """Strip OAuth tokens and secret keys from Sentry stack frame locals.
 
     Scrubs using two strategies:
-    - Exact match against _SCRUB_KEYS (explicit allowlist of known sensitive fields)
+    - Exact match against _SCRUB_KEYS (denylist of known sensitive fields)
     - Substring match: any local variable whose name contains "token" or "secret"
       (case-insensitive) is also filtered, covering future fields automatically.
 
