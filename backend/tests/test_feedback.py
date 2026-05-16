@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import os
+
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
+os.environ.setdefault("TOKEN_ENC_KEY", "dGVzdC1lbmMta2V5LWZvci11bml0LXRlc3RzITEhMTIzNA==")
+
 import io
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -35,7 +40,8 @@ def _make_feedback_report(**kwargs):
     report.created_at = kwargs.get("created_at", datetime.now(timezone.utc))
     report.title = kwargs.get("title", "")
     report.description = kwargs.get("description", "")
-    report.screenshot_data = kwargs.get("screenshot_data", None)
+    report.screenshot_data_enc = kwargs.get("screenshot_data_enc", None)
+    report.purge_after = kwargs.get("purge_after", None)
     return report
 
 
@@ -122,23 +128,152 @@ class TestSubmitFeedback:
         assert response.status_code == 415
         assert "image" in response.json()["detail"].lower()
 
-    def test_screenshot_stored_as_base64_data_url_with_correct_mime(self, client):
+    def test_screenshot_stored_encrypted(self, client):
+        from backend.services.token_crypto import decrypt_token
+
         jpeg_data = b"\xff\xd8\xff" + b"\x00" * 10  # valid JPEG magic bytes
         response = self._post(
             client, screenshot=io.BytesIO(jpeg_data), content_type="image/jpeg"
         )
         report = response._created_reports[0]
-        assert report.screenshot_data.startswith("data:image/jpeg;base64,")
+        # Stored value is Fernet ciphertext, not raw base64
+        assert report.screenshot_data_enc is not None
+        assert not report.screenshot_data_enc.startswith("data:")
+        # Decrypted value is the original data URL
+        decrypted = decrypt_token(report.screenshot_data_enc)
+        assert decrypted.startswith("data:image/jpeg;base64,")
 
-    def test_png_screenshot_stored_with_png_mime(self, client):
+    def test_png_screenshot_stored_encrypted_with_png_mime(self, client):
+        from backend.services.token_crypto import decrypt_token
+
         png_data = b"\x89PNG\r\n\x1a\n" + b"\x00" * 10  # valid PNG magic bytes
         response = self._post(
             client, screenshot=io.BytesIO(png_data), content_type="image/png"
         )
         report = response._created_reports[0]
-        assert report.screenshot_data.startswith("data:image/png;base64,")
+        assert report.screenshot_data_enc is not None
+        decrypted = decrypt_token(report.screenshot_data_enc)
+        assert decrypted.startswith("data:image/png;base64,")
 
     def test_no_screenshot_stores_none(self, client):
         response = self._post(client)
         report = response._created_reports[0]
-        assert report.screenshot_data is None
+        assert report.screenshot_data_enc is None
+
+    def test_purge_after_set_to_90_days(self, client):
+        jpeg_data = b"\xff\xd8\xff" + b"\x00" * 10
+        response = self._post(
+            client, screenshot=io.BytesIO(jpeg_data), content_type="image/jpeg"
+        )
+        report = response._created_reports[0]
+        assert report.purge_after is not None
+        diff = report.purge_after - datetime.now(timezone.utc)
+        assert timedelta(days=89) < diff <= timedelta(days=91)
+
+    def test_purge_after_is_none_when_no_screenshot(self, client):
+        # purge_after should only be set when a screenshot is present (TTL applies to screenshot lifecycle)
+        response = self._post(client)
+        report = response._created_reports[0]
+        assert report.screenshot_data_enc is None
+        assert report.purge_after is None
+
+
+class TestAdminListFeedback:
+    def _get(self, client, reports=None):
+        user = _make_user()
+        db = _make_db()
+        reports = reports or []
+        db.execute = AsyncMock(
+            return_value=MagicMock(
+                scalars=MagicMock(
+                    return_value=MagicMock(all=MagicMock(return_value=reports))
+                )
+            )
+        )
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: db
+        try:
+            return client.get("/api/feedback/admin")
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_returns_200_empty_list(self, client):
+        response = self._get(client)
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_decrypts_screenshot_in_response(self, client):
+        from backend.services.token_crypto import encrypt_token
+
+        encrypted = encrypt_token("data:image/jpeg;base64,abc123")
+        report = _make_feedback_report(screenshot_data_enc=encrypted)
+        response = self._get(client, reports=[report])
+        data = response.json()
+        assert data[0]["screenshot_data"] == "data:image/jpeg;base64,abc123"
+
+    def test_screenshot_data_null_when_none_stored(self, client):
+        report = _make_feedback_report(screenshot_data_enc=None)
+        response = self._get(client, reports=[report])
+        assert response.json()[0]["screenshot_data"] is None
+
+    def test_corrupted_ciphertext_returns_null_not_500(self, client):
+        # A corrupted ciphertext should degrade gracefully (null screenshot) rather than crash all
+        report = _make_feedback_report(screenshot_data_enc="not-valid-fernet-ciphertext")
+        response = self._get(client, reports=[report])
+        assert response.status_code == 200
+        assert response.json()[0]["screenshot_data"] is None
+
+
+class TestScrubScreenshot:
+    def _delete(self, client, report_id, report_obj=None):
+        user = _make_user()
+        db = _make_db()
+        db.execute = AsyncMock(
+            return_value=MagicMock(
+                scalar_one_or_none=MagicMock(return_value=report_obj)
+            )
+        )
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: db
+        try:
+            return client.delete(f"/api/feedback/admin/{report_id}/screenshot")
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_returns_204_and_nulls_field(self, client):
+        report = _make_feedback_report(screenshot_data_enc="encrypted-data")
+        response = self._delete(client, report.id, report_obj=report)
+        assert response.status_code == 204
+        assert report.screenshot_data_enc is None
+
+    def test_returns_404_when_report_not_found(self, client):
+        response = self._delete(client, uuid.uuid4(), report_obj=None)
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()
+
+
+class TestPurgeExpiredScreenshots:
+    def _delete(self, client, purged_ids=None):
+        user = _make_user()
+        db = _make_db()
+        purged_ids = purged_ids or []
+        db.execute = AsyncMock(
+            return_value=MagicMock(fetchall=MagicMock(return_value=[(pid,) for pid in purged_ids]))
+        )
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: db
+        try:
+            return client.delete("/api/feedback/admin/purge-expired-screenshots")
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_returns_purged_count(self, client):
+        purged = [uuid.uuid4(), uuid.uuid4()]
+        response = self._delete(client, purged_ids=purged)
+        assert response.status_code == 200
+        assert response.json() == {"purged": 2}
+
+    def test_returns_zero_when_nothing_to_purge(self, client):
+        response = self._delete(client, purged_ids=[])
+        assert response.status_code == 200
+        assert response.json() == {"purged": 0}

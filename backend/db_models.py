@@ -346,9 +346,12 @@ class FeedbackReport(Base):
     )
     title: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    screenshot_data: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    screenshot_data_enc: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    purge_after: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
     user: Mapped[User] = relationship()

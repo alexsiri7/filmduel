@@ -213,3 +213,13 @@ class SuggestionsResponse(BaseModel):
 class FeedbackReportResponse(BaseModel):
     id: str
     created_at: datetime
+
+
+class FeedbackAdminResponse(BaseModel):
+    id: str
+    user_id: str
+    title: str
+    description: str
+    screenshot_data: Optional[str] = None  # decrypted, only for admin view
+    created_at: datetime
+    purge_after: Optional[datetime] = None
