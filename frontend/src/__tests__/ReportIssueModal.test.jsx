@@ -89,4 +89,20 @@ describe("ReportIssueModal", () => {
     fireEvent.click(screen.getByText("Cancel"));
     expect(onClose).toHaveBeenCalledOnce();
   });
+
+  it("screenshot opt-in checkbox defaults to unchecked (OFF by default)", () => {
+    renderModal();
+    const checkbox = screen.getByRole("checkbox", { name: /include screenshot/i });
+    expect(checkbox).not.toBeChecked();
+  });
+
+  it("submits null screenshot when checkbox is unchecked", async () => {
+    submitFeedback.mockResolvedValueOnce({ id: "abc", created_at: "2026-05-16" });
+    renderModal();
+    fillForm();
+    fireEvent.click(screen.getByText("Submit"));
+    await waitFor(() => expect(submitFeedback).toHaveBeenCalled());
+    // Third argument (screenshot) must be null when checkbox is unchecked
+    expect(submitFeedback).toHaveBeenCalledWith("Bug", "Details", null);
+  });
 });

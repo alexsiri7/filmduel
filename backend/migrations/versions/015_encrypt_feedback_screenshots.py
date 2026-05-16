@@ -20,7 +20,8 @@ def upgrade() -> None:
     # Rename column to make encryption expectation explicit
     op.alter_column("feedback_reports", "screenshot_data",
                     new_column_name="screenshot_data_enc")
-    # Add purge_after: 90 days from created_at for existing rows, 90 days from now for future
+    # Backfill purge_after for existing rows using their original created_at timestamp.
+    # New submissions have purge_after set at write time in backend/routers/feedback.py.
     op.add_column(
         "feedback_reports",
         sa.Column("purge_after", sa.DateTime(timezone=True), nullable=True),
@@ -31,6 +32,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # NOTE: screenshot data NULLed in upgrade() is NOT restored.
+    # Downgrade only reverses the schema; existing rows will have screenshot_data = NULL.
     op.drop_column("feedback_reports", "purge_after")
+    # Scrub encrypted values before renaming so old code never sees ciphertext
+    op.execute("UPDATE feedback_reports SET screenshot_data_enc = NULL")
     op.alter_column("feedback_reports", "screenshot_data_enc",
                     new_column_name="screenshot_data")

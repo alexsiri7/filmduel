@@ -21,6 +21,23 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/feedback", tags=["feedback"])
 
+
+def _safe_decrypt(report_id: str, ciphertext: str | None) -> str | None:
+    """Decrypt screenshot ciphertext, returning None and logging on failure.
+
+    Prevents one corrupted or key-mismatched record from crashing the full admin listing.
+    """
+    if not ciphertext:
+        return None
+    try:
+        return decrypt_token(ciphertext)
+    except RuntimeError:
+        logger.error(
+            "screenshot_decrypt_failed report_id=%s — returning null screenshot",
+            report_id,
+        )
+        return None
+
 MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024  # 5 MB
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 
@@ -66,9 +83,23 @@ async def submit_feedback(
                 detail="Screenshot must be a valid image (JPEG, PNG, GIF, or WebP)",
             )
         plain = f"data:{mime};base64," + base64.b64encode(raw).decode()
-        screenshot_data_enc = encrypt_token(plain)
+        try:
+            screenshot_data_enc = encrypt_token(plain)
+        except RuntimeError:
+            logger.error(
+                "screenshot_encrypt_failed user_id=%s — TOKEN_ENC_KEY misconfigured?",
+                current_user.id,
+            )
+            raise HTTPException(
+                status_code=503,
+                detail="Screenshot could not be stored securely. Please try again later.",
+            )
 
-    purge_after = datetime.now(timezone.utc) + timedelta(days=90)
+    purge_after = (
+        datetime.now(timezone.utc) + timedelta(days=90)
+        if screenshot_data_enc is not None
+        else None
+    )
     report = FeedbackReport(
         user_id=current_user.id,
         title=title.strip(),
@@ -100,7 +131,7 @@ async def list_feedback(
             user_id=str(r.user_id),
             title=r.title,
             description=r.description,
-            screenshot_data=decrypt_token(r.screenshot_data_enc) if r.screenshot_data_enc else None,
+            screenshot_data=_safe_decrypt(str(r.id), r.screenshot_data_enc),
             created_at=r.created_at,
             purge_after=r.purge_after,
         )
@@ -114,6 +145,7 @@ async def scrub_screenshot(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # TODO: replace with proper role check when admin roles are implemented
     result = await db.execute(
         select(FeedbackReport).where(FeedbackReport.id == report_id)
     )
@@ -122,6 +154,11 @@ async def scrub_screenshot(
         raise HTTPException(status_code=404, detail="Report not found")
     report.screenshot_data_enc = None
     await db.flush()
+    logger.info(
+        "screenshot_scrubbed report_id=%s by user_id=%s",
+        report_id,
+        current_user.id,
+    )
 
 
 @router.delete("/admin/purge-expired-screenshots", status_code=200)
@@ -129,6 +166,7 @@ async def purge_expired_screenshots(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # TODO: replace with proper role check when admin roles are implemented
     now = datetime.now(timezone.utc)
     result = await db.execute(
         update(FeedbackReport)
