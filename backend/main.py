@@ -43,13 +43,22 @@ _SCRUB_KEYS = frozenset(
         "refresh_token",
         "SECRET_KEY",
         "Authorization",
+        "authorization",  # httpx normalizes response headers to lowercase
         "_headers",
     }
 )
 
 
 def _scrub_sensitive(event, hint):  # noqa: ANN001
-    """Strip OAuth tokens and secret keys from Sentry stack frame locals."""
+    """Strip OAuth tokens and secret keys from Sentry stack frame locals.
+
+    Scrubs using two strategies:
+    - Exact match against _SCRUB_KEYS (explicit allowlist of known sensitive fields)
+    - Substring match: any local variable whose name contains "token" or "secret"
+      (case-insensitive) is also filtered, covering future fields automatically.
+
+    Filtered values are replaced with "[Filtered]".
+    """
     for exc_val in (event.get("exception") or {}).get("values") or []:
         for frame in (exc_val.get("stacktrace") or {}).get("frames") or []:
             vars_ = frame.get("vars") or {}
