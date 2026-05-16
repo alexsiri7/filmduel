@@ -1,0 +1,37 @@
+# Secrets & local config — never bake into image
+.env
+.env.*
+!.env.example
+
+# Version control
+.git
+.gitignore
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# Node artifacts
+node_modules/
+frontend/dist/
+.vite/
+
+# Local databases
+*.db
+*.sqlite
+
+# Tests (not needed at runtime)
+tests/
+backend/tests/
+
+# Dev tooling & docs
+scripts/
+docs/
+*.md
+!README.md
+
+# Credential / beads files
+.dolt/
+.beads-credential-key
