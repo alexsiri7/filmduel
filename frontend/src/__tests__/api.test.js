@@ -50,6 +50,23 @@ describe("api", () => {
     });
   }
 
+  // X-Requested-With header
+  describe("X-Requested-With header", () => {
+    it("sends X-Requested-With header on every request()", async () => {
+      mockFetchOk({});
+      await getMe();
+      const [, init] = fetch.mock.calls[0];
+      expect(init.headers["X-Requested-With"]).toBe("XMLHttpRequest");
+    });
+
+    it("sends X-Requested-With header on multipart submitFeedback POST", async () => {
+      mockFetchOk({ id: "abc", created_at: "2026-01-01T00:00:00Z" });
+      await submitFeedback("title", "desc");
+      const [, init] = fetch.mock.calls[0];
+      expect(init.headers["X-Requested-With"]).toBe("XMLHttpRequest");
+    });
+  });
+
   // fetchPair
   describe("fetchPair", () => {
     it("calls correct endpoint with mode param", async () => {

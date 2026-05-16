@@ -105,7 +105,7 @@ app.add_middleware(
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "DELETE"],
-    allow_headers=["Content-Type", "X-Requested-With"],
+    allow_headers=["Content-Type", "X-Requested-With"],  # X-Requested-With is required for the CSRF bypass (see csrf_origin_check middleware)
 )
 
 
@@ -126,18 +126,26 @@ async def csrf_origin_check(request: Request, call_next):
         return await call_next(request)
 
     origin = request.headers.get("origin") or request.headers.get("referer", "")
-    # Normalise: strip trailing slash and path from Referer
-    parsed = urlparse(origin)
-    origin_base = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
 
-    if origin_base and origin_base in settings.CORS_ORIGINS:
-        return await call_next(request)
-
-    # No origin header (non-browser clients without credentials) — allow
-    # This handles server-to-server calls and health checks
+    # No origin or referer header — non-browser / server-to-server clients cannot
+    # perform CSRF (they have no victim session cookie), so allow through.
     if not origin:
         return await call_next(request)
 
+    # Normalise to scheme+host — strips path/query from Referer; Origin already
+    # carries only scheme+host, so this is a no-op for them.
+    parsed = urlparse(origin)
+    origin_base = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+
+    if origin_base in settings.CORS_ORIGINS:
+        return await call_next(request)
+
+    logger.warning(
+        "csrf_check_failed method=%s origin=%r path=%s",
+        request.method,
+        origin,
+        request.url.path,
+    )
     return JSONResponse(
         status_code=403,
         content={"detail": "CSRF check failed: unexpected origin"},
