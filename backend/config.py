@@ -50,7 +50,25 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "google/gemini-3.1-flash-lite-preview"
 
     # CORS
-    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
+    CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def validate_cors_origins(cls, v: object) -> list[str]:
+        if isinstance(v, str):
+            entries = [o.strip() for o in v.split(",")]
+        elif isinstance(v, list):
+            entries = [str(o).strip() for o in v]
+        else:
+            raise ValueError("CORS_ORIGINS must be a comma-separated string or list")
+        entries = [e for e in entries if e]  # drop empties
+        if not entries:
+            raise ValueError("CORS_ORIGINS must contain at least one origin")
+        if "*" in entries:
+            raise ValueError(
+                "CORS_ORIGINS must not contain '*' when allow_credentials=True"
+            )
+        return entries
 
     # Sentry
     SENTRY_DSN: str = ""
