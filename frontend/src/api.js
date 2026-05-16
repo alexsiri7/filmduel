@@ -5,7 +5,11 @@
 async function request(path, options = {}) {
   const res = await fetch(path, {
     credentials: "include",
-    headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest", ...options.headers },
+    headers: {
+      "Content-Type": "application/json",
+      "X-Requested-With": "XMLHttpRequest",
+      ...options.headers,
+    },
     ...options,
   });
   if (res.status === 401) { window.location.href = "/login"; return null; }
