@@ -383,9 +383,6 @@ class TestUpdateSettings:
     @pytest.mark.asyncio
     async def test_update_settings_enables_sync(self, monkeypatch):
         """Enables sync: sets flag to True, commits, and returns updated response."""
-        from backend.schemas import UserSettingsUpdate
-        from backend.rate_limit import limiter
-
         monkeypatch.setattr(limiter, "enabled", False)
 
         user = self._make_user(sync_ratings=False)
