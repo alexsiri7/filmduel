@@ -14,6 +14,11 @@ class UserResponse(BaseModel):
     id: str
     trakt_username: str
     created_at: datetime
+    sync_ratings_to_trakt: bool
+
+
+class UserSettingsUpdate(BaseModel):
+    sync_ratings_to_trakt: bool
 
 
 MediaType = Literal["movie", "show"]

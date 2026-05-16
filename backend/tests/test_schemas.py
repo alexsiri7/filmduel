@@ -22,6 +22,7 @@ from backend.schemas import (
     SwipeSubmit,
     TournamentCreate,
     UserResponse,
+    UserSettingsUpdate,
 )
 
 
@@ -326,9 +327,13 @@ class TestResponseModels:
         from datetime import datetime, timezone
 
         ur = UserResponse(
-            id="abc", trakt_username="testuser", created_at=datetime.now(timezone.utc)
+            id="abc",
+            trakt_username="testuser",
+            created_at=datetime.now(timezone.utc),
+            sync_ratings_to_trakt=False,
         )
         assert ur.trakt_username == "testuser"
+        assert ur.sync_ratings_to_trakt is False
 
     def test_movie_pair_response(self):
         ma = MovieWithStateSchema(id="1", trakt_id=1, title="A")
@@ -336,6 +341,14 @@ class TestResponseModels:
         pr = MoviePairResponse(movie_a=ma, movie_b=mb)
         assert pr.next_pair_token is None
         assert pr.movie_a.title == "A"
+
+    def test_user_settings_update_accepts_bool(self):
+        s = UserSettingsUpdate(sync_ratings_to_trakt=True)
+        assert s.sync_ratings_to_trakt is True
+
+    def test_user_settings_update_rejects_non_bool(self):
+        with pytest.raises(ValidationError):
+            UserSettingsUpdate(sync_ratings_to_trakt="not-a-boolean-value")
 
     def test_feedback_report_response(self):
         from datetime import datetime, timezone

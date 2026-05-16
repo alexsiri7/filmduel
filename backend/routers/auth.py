@@ -25,7 +25,7 @@ from backend.config import Settings, get_settings
 from backend.rate_limit import limiter
 from backend.db import async_session_factory, get_db
 from backend.db_models import User, UserMovie
-from backend.schemas import UserResponse
+from backend.schemas import UserResponse, UserSettingsUpdate
 from backend.services.pool import populate_movie_pool
 from backend.services.tmdb import backfill_posters
 from backend.services.trakt import TraktClient
@@ -320,6 +320,27 @@ async def me(user: User = Depends(get_current_user)):
         id=str(user.id),
         trakt_username=user.trakt_username,
         created_at=user.created_at,
+        sync_ratings_to_trakt=user.sync_ratings_to_trakt,
+    )
+
+
+@router.patch("/api/me/settings", response_model=UserResponse)
+@limiter.limit("30/minute")
+async def update_settings(
+    body: UserSettingsUpdate,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update user preferences."""
+    current_user.sync_ratings_to_trakt = body.sync_ratings_to_trakt
+    await db.commit()
+    await db.refresh(current_user)
+    return UserResponse(
+        id=str(current_user.id),
+        trakt_username=current_user.trakt_username,
+        created_at=current_user.created_at,
+        sync_ratings_to_trakt=current_user.sync_ratings_to_trakt,
     )
 
 

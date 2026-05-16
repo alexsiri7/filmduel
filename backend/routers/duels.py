@@ -35,7 +35,7 @@ async def _sync_ratings_background(
             user_stmt = select(User).where(User.id == user_id)
             result = await session.execute(user_stmt)
             user = result.scalar_one_or_none()
-            if not user or not user.trakt_access_token:
+            if not user or not user.trakt_access_token or not user.sync_ratings_to_trakt:
                 return
             user = await ensure_fresh_token(user, session)
             await session.commit()

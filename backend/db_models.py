@@ -79,6 +79,9 @@ class User(Base):
         default=lambda: datetime(1970, 1, 1, tzinfo=timezone.utc),
         server_default="1970-01-01T00:00:00+00:00",
     )
+    sync_ratings_to_trakt: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
 
     user_movies: Mapped[list[UserMovie]] = relationship(
         back_populates="user", cascade="all, delete-orphan"

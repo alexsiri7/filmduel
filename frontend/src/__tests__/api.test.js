@@ -8,6 +8,7 @@ import {
   getMe,
   logout,
   submitFeedback,
+  updateSettings,
 } from "../api";
 
 describe("api", () => {
@@ -166,6 +167,22 @@ describe("api", () => {
         json: () => Promise.reject(new Error("not json")),
       });
       await expect(getRankings()).rejects.toThrow("Request failed");
+    });
+  });
+
+  // updateSettings
+  describe("updateSettings", () => {
+    it("sends PATCH to /api/me/settings with serialized body", async () => {
+      mockFetchOk({ id: "1", trakt_username: "u", created_at: "2024-01-01T00:00:00Z", sync_ratings_to_trakt: true });
+      await updateSettings({ sync_ratings_to_trakt: true });
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/me/settings",
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({ sync_ratings_to_trakt: true }),
+          headers: expect.objectContaining({ "Content-Type": "application/json" }),
+        })
+      );
     });
   });
 

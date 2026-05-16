@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { logout } from "../api";
+import { logout, getMe, updateSettings } from "../api";
 import ReportIssueModal from "./ReportIssueModal";
 
 const navItems = [
@@ -14,6 +14,27 @@ const navItems = [
 export default function Nav({ mediaType, setMediaType }) {
   const location = useLocation();
   const [showFeedback, setShowFeedback] = useState(false);
+  const [syncRatings, setSyncRatings] = useState(false);
+
+  useEffect(() => {
+    getMe()
+      .then((user) => {
+        if (user) setSyncRatings(user.sync_ratings_to_trakt);
+      })
+      .catch(() => {
+        // Leave syncRatings at false (safe default).
+      });
+  }, []);
+
+  const handleSyncToggle = async () => {
+    const next = !syncRatings;
+    setSyncRatings(next);
+    try {
+      await updateSettings({ sync_ratings_to_trakt: next });
+    } catch {
+      setSyncRatings(!next); // rollback on failure
+    }
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -98,6 +119,26 @@ export default function Nav({ mediaType, setMediaType }) {
         >
           Report Issue
         </button>
+        <div className="flex items-center justify-between w-full py-2 group">
+          <span className="text-[#F5F0E8]/30 group-hover:text-[#F5F0E8]/60 font-headline font-bold uppercase text-xs tracking-widest transition-colors cursor-default">
+            Sync to Trakt
+          </span>
+          <button
+            role="switch"
+            aria-checked={syncRatings}
+            aria-label="Sync to Trakt"
+            onClick={handleSyncToggle}
+            className={`relative w-9 h-5 rounded-full transition-colors cursor-pointer ${
+              syncRatings ? "bg-primary-container" : "bg-[#F5F0E8]/20"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 w-4 h-4 bg-[#0F0E0D] rounded-full transition-transform ${
+                syncRatings ? "translate-x-4" : ""
+              }`}
+            />
+          </button>
+        </div>
         <button
           onClick={handleLogout}
           className="w-full text-[#F5F0E8]/30 hover:text-[#F5F0E8]/60 font-headline font-bold uppercase text-xs tracking-widest py-2 transition-colors"
