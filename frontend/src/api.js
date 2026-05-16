@@ -5,7 +5,7 @@
 async function request(path, options = {}) {
   const res = await fetch(path, {
     credentials: "include",
-    headers: { "Content-Type": "application/json", ...options.headers },
+    headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest", ...options.headers },
     ...options,
   });
   if (res.status === 401) { window.location.href = "/login"; return null; }
@@ -149,6 +149,7 @@ export async function submitFeedback(title, description, screenshotDataUrl = nul
   const response = await fetch("/api/feedback", {
     method: "POST",
     credentials: "include",
+    headers: { "X-Requested-With": "XMLHttpRequest" },
     body: formData,
   });
   if (response.status === 401) { window.location.href = "/login"; return null; }

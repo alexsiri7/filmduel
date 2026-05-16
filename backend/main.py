@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from urllib.parse import urlparse
 
 import sentry_sdk
 from fastapi import FastAPI, Request
@@ -104,8 +105,43 @@ app.add_middleware(
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "DELETE"],
-    allow_headers=["Content-Type"],  # SPA only sends Content-Type; auth is cookie-based
+    allow_headers=["Content-Type", "X-Requested-With"],
 )
+
+
+@app.middleware("http")
+async def csrf_origin_check(request: Request, call_next):
+    """Block state-changing requests from unexpected origins.
+
+    Checks Origin (or Referer fallback) against the CORS allowlist.
+    Also accepts requests with X-Requested-With header (set by our SPA).
+    Exempt: GET, HEAD, OPTIONS (safe methods / preflight).
+    """
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return await call_next(request)
+
+    # X-Requested-With is a custom header — browsers never send it cross-site
+    # without a preflight, so its presence proves the request came from our SPA
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+        return await call_next(request)
+
+    origin = request.headers.get("origin") or request.headers.get("referer", "")
+    # Normalise: strip trailing slash and path from Referer
+    parsed = urlparse(origin)
+    origin_base = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+
+    if origin_base and origin_base in settings.CORS_ORIGINS:
+        return await call_next(request)
+
+    # No origin header (non-browser clients without credentials) — allow
+    # This handles server-to-server calls and health checks
+    if not origin:
+        return await call_next(request)
+
+    return JSONResponse(
+        status_code=403,
+        content={"detail": "CSRF check failed: unexpected origin"},
+    )
 
 
 @app.middleware("http")
