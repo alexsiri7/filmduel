@@ -42,6 +42,15 @@ def test_export_csv_is_registered_with_rate_limiter():
     assert "backend.routers.rankings.export_csv" in limiter._Limiter__marked_for_limiting
 
 
+def test_export_csv_rate_limit_is_10_per_hour():
+    """export_csv rate limit must be exactly 10/hour (not 6/minute or any other value)."""
+    limits = limiter._route_limits.get("backend.routers.rankings.export_csv", [])
+    limit_strings = [str(lim.limit) for lim in limits]
+    assert any("10 per 1 hour" in s for s in limit_strings), (
+        f"Expected '10/hour' limit on export_csv, got: {limit_strings}"
+    )
+
+
 def test_list_tournaments_is_registered_with_rate_limiter():
     """list_tournaments must be registered in the slowapi limiter."""
     assert "backend.routers.tournaments.list_tournaments" in limiter._Limiter__marked_for_limiting
