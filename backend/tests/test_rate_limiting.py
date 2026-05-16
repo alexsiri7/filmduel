@@ -1,4 +1,4 @@
-"""Tests for rate limiting enforcement and SQL cap boundaries on PR #223 endpoints."""
+"""Tests for rate limiting enforcement and SQL cap boundaries."""
 
 from __future__ import annotations
 
@@ -40,6 +40,19 @@ def test_get_movie_pair_is_registered_with_rate_limiter():
 def test_export_csv_is_registered_with_rate_limiter():
     """export_csv must be registered in the slowapi limiter."""
     assert "backend.routers.rankings.export_csv" in limiter._Limiter__marked_for_limiting
+
+
+def test_export_csv_rate_limit_is_10_per_hour():
+    """export_csv rate limit must be exactly 10/hour (not 6/minute or any other value)."""
+    # _route_limits is a private slowapi API (single-underscore, not name-mangled).
+    # Intentional: consistent with _Limiter__marked_for_limiting usage above.
+    # If a slowapi upgrade renames this, the test will error loudly — which is correct.
+    # slowapi is pinned with --require-hashes in requirements.txt (see PR #237).
+    limits = limiter._route_limits.get("backend.routers.rankings.export_csv", [])
+    limit_strings = [str(lim.limit) for lim in limits]
+    assert any("10 per 1 hour" in s for s in limit_strings), (
+        f"Expected '10/hour' limit on export_csv, got: {limit_strings}"
+    )
 
 
 def test_list_tournaments_is_registered_with_rate_limiter():
