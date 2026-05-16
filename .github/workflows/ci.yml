@@ -21,7 +21,10 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install -r backend/requirements.txt pytest pytest-asyncio
+        run: |
+          pip install --require-hashes \
+            -r backend/requirements.txt \
+            -r backend/requirements-dev.txt
 
       - name: Check imports
         run: python -c "from backend.main import app; print('OK')"
