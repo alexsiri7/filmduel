@@ -326,9 +326,13 @@ class TestResponseModels:
         from datetime import datetime, timezone
 
         ur = UserResponse(
-            id="abc", trakt_username="testuser", created_at=datetime.now(timezone.utc)
+            id="abc",
+            trakt_username="testuser",
+            created_at=datetime.now(timezone.utc),
+            sync_ratings_to_trakt=False,
         )
         assert ur.trakt_username == "testuser"
+        assert ur.sync_ratings_to_trakt is False
 
     def test_movie_pair_response(self):
         ma = MovieWithStateSchema(id="1", trakt_id=1, title="A")

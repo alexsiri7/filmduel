@@ -63,6 +63,13 @@ export function logout() { return request("/auth/logout", { method: "POST" }); }
 
 export function syncTrakt() { return request("/api/sync", { method: "POST" }); }
 
+export function updateSettings(payload) {
+  return request("/api/me/settings", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
 // ── Tournaments ──────────────────────────────────────────────────────
 
 export function getTournaments() {

@@ -252,3 +252,87 @@ async def test_sync_ratings_background_refresh_failure_is_swallowed():
         await _sync_ratings_background(uid, mid_a, 1100, mid_b, 900)
 
         mock_sync.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_sync_ratings_background_skips_when_opt_out():
+    """_sync_ratings_background skips sync when sync_ratings_to_trakt is False."""
+    from backend.routers.duels import _sync_ratings_background
+
+    mock_user = MagicMock()
+    mock_user.trakt_access_token = "valid_token"
+    mock_user.sync_ratings_to_trakt = False
+
+    with (
+        patch("backend.routers.duels.async_session_factory") as mock_factory,
+        patch(
+            "backend.routers.duels.ensure_fresh_token", new_callable=AsyncMock
+        ) as mock_refresh,
+        patch(
+            "backend.routers.duels.sync_post_duel", new_callable=AsyncMock
+        ) as mock_sync,
+    ):
+        mock_session = AsyncMock()
+        mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_exec_result = MagicMock()
+        mock_exec_result.scalar_one_or_none.return_value = mock_user
+        mock_session.execute.return_value = mock_exec_result
+
+        await _sync_ratings_background(
+            uuid.uuid4(), uuid.uuid4(), 1100, uuid.uuid4(), 900
+        )
+
+        mock_refresh.assert_not_awaited()
+        mock_sync.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_sync_ratings_background_syncs_when_opt_in():
+    """_sync_ratings_background syncs when sync_ratings_to_trakt is True."""
+    from backend.routers.duels import _sync_ratings_background
+
+    uid = uuid.uuid4()
+    mid_a = uuid.uuid4()
+    mid_b = uuid.uuid4()
+
+    mock_user = MagicMock()
+    mock_user.trakt_access_token = "valid_token"
+    mock_user.sync_ratings_to_trakt = True
+
+    mock_movie_row_a = MagicMock()
+    mock_movie_row_a.id = mid_a
+    mock_movie_row_a.trakt_id = 111
+    mock_movie_row_a.media_type = "movie"
+
+    mock_movie_row_b = MagicMock()
+    mock_movie_row_b.id = mid_b
+    mock_movie_row_b.trakt_id = 222
+    mock_movie_row_b.media_type = "movie"
+
+    mock_user_result = MagicMock()
+    mock_user_result.scalar_one_or_none.return_value = mock_user
+
+    mock_movies_result = MagicMock()
+    mock_movies_result.all.return_value = [mock_movie_row_a, mock_movie_row_b]
+
+    mock_session = AsyncMock()
+    mock_session.execute.side_effect = [mock_user_result, mock_movies_result]
+
+    with (
+        patch("backend.routers.duels.async_session_factory") as mock_factory,
+        patch(
+            "backend.routers.duels.ensure_fresh_token",
+            new_callable=AsyncMock,
+            return_value=mock_user,
+        ),
+        patch(
+            "backend.routers.duels.sync_post_duel", new_callable=AsyncMock
+        ) as mock_sync,
+    ):
+        mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        await _sync_ratings_background(uid, mid_a, 1100, mid_b, 900)
+
+        mock_sync.assert_awaited_once()
