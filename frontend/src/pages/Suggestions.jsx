@@ -247,96 +247,96 @@ export default function Suggestions({ mediaType = "movie" }) {
         {activeSuggestions.map((s) => {
           const posterUrl = sanitizePosterUrl(s.movie.poster_url);
           return (
-          <div
-            key={s.id}
-            className="group bg-[#141312] overflow-hidden transition-all hover:shadow-accent-sm"
-          >
-            {/* Poster */}
-            <div className="relative aspect-[2/3] overflow-hidden">
-              {posterUrl ? (
-                <img
-                  src={posterUrl}
-                  alt={s.movie.title}
-                  className="w-full h-full object-cover grayscale-[30%] group-hover:grayscale-0 transition-all duration-500"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="w-full h-full bg-[#1d1b1a] flex items-center justify-center">
-                  <span className="text-[#6B6760] font-headline text-4xl opacity-30">?</span>
-                </div>
-              )}
-              {/* Title overlay */}
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-4 pt-12">
-                <h3 className="font-headline font-bold uppercase text-[#F5F0E8] text-lg leading-tight truncate">
-                  {s.movie.title}
-                </h3>
-                {s.movie.year && (
-                  <span className="text-xs font-label text-[#F5F0E8]/50">{s.movie.year}</span>
-                )}
-              </div>
-            </div>
-
-            {/* Reason + links + actions */}
-            <div className="p-4 space-y-3">
-              <p className="text-[#F5F0E8]/50 font-body text-sm italic leading-relaxed">
-                {s.reason}
-              </p>
-
-              {/* External links */}
-              <div className="flex gap-3">
-                {s.movie.imdb_id && (
-                  <a
-                    href={`https://www.imdb.com/title/${encodeURIComponent(s.movie.imdb_id)}/`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[10px] font-label uppercase tracking-widest text-[#F5F0E8]/30 hover:text-primary-container transition-colors"
-                  >
-                    IMDB
-                  </a>
-                )}
-                {s.movie.trakt_id && (
-                  <a
-                    href={`https://trakt.tv/search/trakt/${encodeURIComponent(s.movie.trakt_id)}?id_type=${s.movie.media_type === "show" ? "show" : "movie"}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[10px] font-label uppercase tracking-widest text-[#F5F0E8]/30 hover:text-primary-container transition-colors"
-                  >
-                    Trakt
-                  </a>
-                )}
-              </div>
-
-              {/* Action buttons */}
-              <div className="flex gap-2">
-                {s.added_to_watchlist_at ? (
-                  <div className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-primary-container/20 text-primary-container font-headline font-bold uppercase text-xs tracking-widest">
-                    On Watchlist
-                  </div>
+            <div
+              key={s.id}
+              className="group bg-[#141312] overflow-hidden transition-all hover:shadow-accent-sm"
+            >
+              {/* Poster */}
+              <div className="relative aspect-[2/3] overflow-hidden">
+                {posterUrl ? (
+                  <img
+                    src={posterUrl}
+                    alt={s.movie.title}
+                    className="w-full h-full object-cover grayscale-[30%] group-hover:grayscale-0 transition-all duration-500"
+                    loading="lazy"
+                  />
                 ) : (
-                  <button
-                    onClick={() => handleAddToWatchlist(s.id)}
-                    className="flex-1 px-4 py-3 bg-primary-container text-[#0F0E0D] font-headline font-bold uppercase text-xs tracking-widest hover:scale-[1.02] active:scale-95 transition-all"
-                  >
-                    Watchlist
-                  </button>
+                  <div className="w-full h-full bg-[#1d1b1a] flex items-center justify-center">
+                    <span className="text-[#6B6760] font-headline text-4xl opacity-30">?</span>
+                  </div>
                 )}
-                <button
-                  onClick={() => handleMarkSeen(s.id)}
-                  className="px-3 py-3 border border-primary-container/30 text-primary-container/70 font-headline font-bold uppercase text-[10px] tracking-widest hover:bg-primary-container/10 hover:text-primary-container transition-colors"
-                  title={`I've seen this ${label}`}
-                >
-                  Seen it
-                </button>
-                <button
-                  onClick={() => handleDismiss(s.id)}
-                  className="w-12 h-12 flex items-center justify-center border border-[#F5F0E8]/10 text-[#F5F0E8]/40 hover:text-[#F5F0E8] hover:border-[#F5F0E8]/30 transition-colors text-lg"
-                  title="Dismiss"
-                >
-                  &times;
-                </button>
+                {/* Title overlay */}
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-4 pt-12">
+                  <h3 className="font-headline font-bold uppercase text-[#F5F0E8] text-lg leading-tight truncate">
+                    {s.movie.title}
+                  </h3>
+                  {s.movie.year && (
+                    <span className="text-xs font-label text-[#F5F0E8]/50">{s.movie.year}</span>
+                  )}
+                </div>
+              </div>
+  
+              {/* Reason + links + actions */}
+              <div className="p-4 space-y-3">
+                <p className="text-[#F5F0E8]/50 font-body text-sm italic leading-relaxed">
+                  {s.reason}
+                </p>
+  
+                {/* External links */}
+                <div className="flex gap-3">
+                  {s.movie.imdb_id && (
+                    <a
+                      href={`https://www.imdb.com/title/${encodeURIComponent(s.movie.imdb_id)}/`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] font-label uppercase tracking-widest text-[#F5F0E8]/30 hover:text-primary-container transition-colors"
+                    >
+                      IMDB
+                    </a>
+                  )}
+                  {s.movie.trakt_id && (
+                    <a
+                      href={`https://trakt.tv/search/trakt/${encodeURIComponent(s.movie.trakt_id)}?id_type=${s.movie.media_type === "show" ? "show" : "movie"}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] font-label uppercase tracking-widest text-[#F5F0E8]/30 hover:text-primary-container transition-colors"
+                    >
+                      Trakt
+                    </a>
+                  )}
+                </div>
+  
+                {/* Action buttons */}
+                <div className="flex gap-2">
+                  {s.added_to_watchlist_at ? (
+                    <div className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-primary-container/20 text-primary-container font-headline font-bold uppercase text-xs tracking-widest">
+                      On Watchlist
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handleAddToWatchlist(s.id)}
+                      className="flex-1 px-4 py-3 bg-primary-container text-[#0F0E0D] font-headline font-bold uppercase text-xs tracking-widest hover:scale-[1.02] active:scale-95 transition-all"
+                    >
+                      Watchlist
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleMarkSeen(s.id)}
+                    className="px-3 py-3 border border-primary-container/30 text-primary-container/70 font-headline font-bold uppercase text-[10px] tracking-widest hover:bg-primary-container/10 hover:text-primary-container transition-colors"
+                    title={`I've seen this ${label}`}
+                  >
+                    Seen it
+                  </button>
+                  <button
+                    onClick={() => handleDismiss(s.id)}
+                    className="w-12 h-12 flex items-center justify-center border border-[#F5F0E8]/10 text-[#F5F0E8]/40 hover:text-[#F5F0E8] hover:border-[#F5F0E8]/30 transition-colors text-lg"
+                    title="Dismiss"
+                  >
+                    &times;
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
           );
         })}
       </div>
