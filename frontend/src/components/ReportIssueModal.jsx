@@ -9,6 +9,7 @@ export default function ReportIssueModal({ onClose }) {
   const [editedScreenshotDataUrl, setEditedScreenshotDataUrl] = useState(null);
   const [showEditor, setShowEditor] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [includeScreenshot, setIncludeScreenshot] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
   const fileInputRef = useRef(null);
@@ -38,7 +39,7 @@ export default function ReportIssueModal({ onClose }) {
     setSubmitting(true);
     setError(null);
     try {
-      const result = await submitFeedback(title, description, editedScreenshotDataUrl || screenshotDataUrl);
+      const result = await submitFeedback(title, description, includeScreenshot ? (editedScreenshotDataUrl || screenshotDataUrl) : null);
       if (result === null) return; // 401 redirect in progress
       setSuccess(true);
       setTimeout(onClose, 1500);
@@ -102,7 +103,7 @@ export default function ReportIssueModal({ onClose }) {
                 />
               </div>
 
-              {/* Screenshot */}
+              {/* Screenshot — opt-in, default OFF */}
               <div>
                 <input
                   ref={fileInputRef}
@@ -111,8 +112,23 @@ export default function ReportIssueModal({ onClose }) {
                   onChange={handleFileChange}
                   className="hidden"
                 />
-                {screenshotDataUrl ? (
-                  <div className="space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={includeScreenshot}
+                    onChange={(e) => {
+                      setIncludeScreenshot(e.target.checked);
+                      if (!e.target.checked) handleRemoveScreenshot();
+                      else fileInputRef.current?.click();
+                    }}
+                    className="accent-primary-container"
+                  />
+                  <span className="text-[#F5F0E8]/60 text-xs uppercase tracking-wider font-headline font-bold">
+                    Include Screenshot
+                  </span>
+                </label>
+                {includeScreenshot && screenshotDataUrl ? (
+                  <div className="space-y-2 mt-2">
                     <img
                       src={editedScreenshotDataUrl || screenshotDataUrl}
                       alt="Screenshot preview"
@@ -133,14 +149,14 @@ export default function ReportIssueModal({ onClose }) {
                       </button>
                     </div>
                   </div>
-                ) : (
+                ) : includeScreenshot && !screenshotDataUrl ? (
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="text-[#F5F0E8]/40 text-xs font-headline font-bold uppercase tracking-wider hover:text-primary-container/70 transition-colors"
+                    className="text-[#F5F0E8]/40 text-xs font-headline font-bold uppercase tracking-wider hover:text-primary-container/70 transition-colors mt-2"
                   >
-                    Attach Screenshot
+                    Choose File
                   </button>
-                )}
+                ) : null}
               </div>
             </div>
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import io
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -35,7 +35,8 @@ def _make_feedback_report(**kwargs):
     report.created_at = kwargs.get("created_at", datetime.now(timezone.utc))
     report.title = kwargs.get("title", "")
     report.description = kwargs.get("description", "")
-    report.screenshot_data = kwargs.get("screenshot_data", None)
+    report.screenshot_data_enc = kwargs.get("screenshot_data_enc", None)
+    report.purge_after = kwargs.get("purge_after", None)
     return report
 
 
@@ -122,23 +123,44 @@ class TestSubmitFeedback:
         assert response.status_code == 415
         assert "image" in response.json()["detail"].lower()
 
-    def test_screenshot_stored_as_base64_data_url_with_correct_mime(self, client):
+    def test_screenshot_stored_encrypted(self, client):
+        from backend.services.token_crypto import decrypt_token
+
         jpeg_data = b"\xff\xd8\xff" + b"\x00" * 10  # valid JPEG magic bytes
         response = self._post(
             client, screenshot=io.BytesIO(jpeg_data), content_type="image/jpeg"
         )
         report = response._created_reports[0]
-        assert report.screenshot_data.startswith("data:image/jpeg;base64,")
+        # Stored value is Fernet ciphertext, not raw base64
+        assert report.screenshot_data_enc is not None
+        assert not report.screenshot_data_enc.startswith("data:")
+        # Decrypted value is the original data URL
+        decrypted = decrypt_token(report.screenshot_data_enc)
+        assert decrypted.startswith("data:image/jpeg;base64,")
 
-    def test_png_screenshot_stored_with_png_mime(self, client):
+    def test_png_screenshot_stored_encrypted_with_png_mime(self, client):
+        from backend.services.token_crypto import decrypt_token
+
         png_data = b"\x89PNG\r\n\x1a\n" + b"\x00" * 10  # valid PNG magic bytes
         response = self._post(
             client, screenshot=io.BytesIO(png_data), content_type="image/png"
         )
         report = response._created_reports[0]
-        assert report.screenshot_data.startswith("data:image/png;base64,")
+        assert report.screenshot_data_enc is not None
+        decrypted = decrypt_token(report.screenshot_data_enc)
+        assert decrypted.startswith("data:image/png;base64,")
 
     def test_no_screenshot_stores_none(self, client):
         response = self._post(client)
         report = response._created_reports[0]
-        assert report.screenshot_data is None
+        assert report.screenshot_data_enc is None
+
+    def test_purge_after_set_to_90_days(self, client):
+        jpeg_data = b"\xff\xd8\xff" + b"\x00" * 10
+        response = self._post(
+            client, screenshot=io.BytesIO(jpeg_data), content_type="image/jpeg"
+        )
+        report = response._created_reports[0]
+        assert report.purge_after is not None
+        diff = report.purge_after - datetime.now(timezone.utc)
+        assert timedelta(days=89) < diff <= timedelta(days=91)
