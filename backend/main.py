@@ -79,6 +79,19 @@ if settings.SENTRY_DSN:
 app = FastAPI(title="FilmDuel", version="0.1.0")
 
 
+def _scrub_validation_errors(errors: list[dict]) -> list[dict]:
+    """Strip 'input' values from Pydantic v2 error dicts before logging.
+
+    Pydantic v2 includes the raw user-submitted value under the 'input' key.
+    Removing it prevents free-text user data from appearing in logs/Sentry.
+    The full errors() list (including 'input') is still returned to the client.
+
+    Note: scrubbing is shallow (top-level 'input' only). Pydantic v2 flattens
+    most errors, so nested inputs are rare. Revisit if discriminated unions are added.
+    """
+    return [{k: v for k, v in e.items() if k != "input"} for e in errors]
+
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     if any(SELF_DUEL_ERROR_MSG in e.get("msg", "") for e in exc.errors()):
@@ -89,7 +102,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     logger.warning(
         "validation_error path=%s errors=%s",
         request.url.path,
-        exc.errors(),
+        _scrub_validation_errors(exc.errors()),
     )
     return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
