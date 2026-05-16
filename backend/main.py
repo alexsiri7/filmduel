@@ -115,7 +115,7 @@ async def health():
 
 # --- Static files / SPA fallback ---
 
-STATIC_DIR = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+STATIC_DIR = (Path(__file__).resolve().parent.parent / "frontend" / "dist").resolve()
 
 if (STATIC_DIR / "assets").is_dir():
     app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
@@ -135,7 +135,7 @@ async def spa_fallback(full_path: str):
         return JSONResponse({"detail": "Frontend not available"}, status_code=503)
     file_path = (STATIC_DIR / full_path).resolve()
     if file_path.is_file():
-        if file_path.is_relative_to(STATIC_DIR.resolve()):
+        if file_path.is_relative_to(STATIC_DIR):
             return FileResponse(file_path)
         logger.warning(
             "spa_fallback blocked out-of-bounds access: requested=%s resolved=%s",
