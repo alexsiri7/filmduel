@@ -28,10 +28,12 @@ backend/tests/
 
 # Dev tooling & docs
 scripts/
+.github/
 docs/
 *.md
 !README.md
 
 # Credential / beads files
 .dolt/
+.beads/
 .beads-credential-key
