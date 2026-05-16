@@ -24,7 +24,6 @@ def _make_event_with_frame_vars(vars_: dict) -> dict:
     }
 
 
-
 class TestScrubSensitive:
     def test_trakt_access_token_is_filtered(self):
         event = _make_event_with_frame_vars({"trakt_access_token": "abc123secret"})

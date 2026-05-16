@@ -39,6 +39,7 @@ class Settings(BaseSettings):
                 f"SECRET_KEY must be at least 32 characters; got {len(v)}"
             )
         return v
+
     BASE_URL: str = "http://localhost:8000"
 
     # TMDB for poster images
