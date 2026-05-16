@@ -48,7 +48,7 @@ class TestSecretKeyValidation:
 
     def test_32_char_placeholder_prefix_is_not_rejected(self):
         """A 32-char key that isn't in the placeholder set passes."""
-        key = "secret-but-padded-to-32-chars!!!"  # 33 chars, not in set
+        key = "secret-but-padded-to-32-chars!!!"  # 32 chars, not in set
         s = _make_settings(SECRET_KEY=key)
         assert s.SECRET_KEY == key
 
