@@ -8,11 +8,13 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.requests import Request
 
 from backend.db import get_db
 from backend.db_models import FeedbackReport, User
+from backend.rate_limit import limiter
 from backend.routers.auth import get_current_user
 from backend.schemas import FeedbackAdminResponse, FeedbackReportResponse
 from backend.services.token_crypto import decrypt_token, encrypt_token
@@ -41,6 +43,7 @@ def _safe_decrypt(report_id: str, ciphertext: str | None) -> str | None:
 
 MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024  # 5 MB
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+MAX_FEEDBACK_PER_DAY = 20  # per-user daily cap
 
 # Magic bytes for allowed image types
 _IMAGE_SIGNATURES = {
@@ -63,13 +66,30 @@ def _detect_image_type(data: bytes) -> str | None:
 
 
 @router.post("", response_model=FeedbackReportResponse, status_code=201)
+@limiter.limit("5/hour")
 async def submit_feedback(
+    request: Request,
     title: str = Form(...),
     description: str = Form(...),
     screenshot: UploadFile = File(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    daily_count: int = (
+        await db.scalar(
+            select(func.count()).where(
+                FeedbackReport.user_id == current_user.id,
+                FeedbackReport.created_at >= cutoff,
+            )
+        )
+    ) or 0
+    if daily_count >= MAX_FEEDBACK_PER_DAY:
+        raise HTTPException(
+            status_code=429,
+            detail="Feedback limit reached. You may submit up to 20 reports per day.",
+        )
+
     screenshot_data_enc = None
     if screenshot and screenshot.filename:
         raw = await screenshot.read(MAX_SCREENSHOT_BYTES + 1)

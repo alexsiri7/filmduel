@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 
 from backend.db import get_db
 from backend.main import app
+from backend.rate_limit import limiter
 from backend.routers.auth import get_current_user
 
 
@@ -30,6 +31,7 @@ def _make_db():
     db = AsyncMock()
     db.add = MagicMock()
     db.flush = AsyncMock()
+    db.scalar = AsyncMock(return_value=0)  # default: 0 submissions today
     return db
 
 
@@ -43,6 +45,14 @@ def _make_feedback_report(**kwargs):
     report.screenshot_data_enc = kwargs.get("screenshot_data_enc", None)
     report.purge_after = kwargs.get("purge_after", None)
     return report
+
+
+@pytest.fixture(autouse=True)
+def _reset_limiter():
+    """Reset slowapi in-memory counters between tests so the 5/hour cap doesn't leak."""
+    limiter.reset()
+    yield
+    limiter.reset()
 
 
 @pytest.fixture
@@ -66,11 +76,17 @@ class TestSubmitFeedback:
 
         # Capture what arguments FeedbackReport was called with
         created_reports = []
+        from backend.db_models import FeedbackReport as RealFeedbackReport
 
-        def make_report(**kwargs):
-            report = _make_feedback_report(**kwargs)
-            created_reports.append(report)
-            return report
+        class _MockFeedbackReport:
+            # Preserve SQLAlchemy column descriptors for query building
+            user_id = RealFeedbackReport.user_id
+            created_at = RealFeedbackReport.created_at
+
+            def __new__(cls, **kwargs):
+                report = _make_feedback_report(**kwargs)
+                created_reports.append(report)
+                return report
 
         app.dependency_overrides[get_current_user] = lambda: user
         app.dependency_overrides[get_db] = lambda: db
@@ -82,7 +98,7 @@ class TestSubmitFeedback:
                 files = {"screenshot": ("screenshot.jpg", screenshot, content_type)}
 
             with patch(
-                "backend.routers.feedback.FeedbackReport", side_effect=make_report
+                "backend.routers.feedback.FeedbackReport", _MockFeedbackReport
             ):
                 response = client.post("/api/feedback", data=data, files=files)
 
@@ -250,6 +266,65 @@ class TestScrubScreenshot:
         response = self._delete(client, uuid.uuid4(), report_obj=None)
         assert response.status_code == 404
         assert "not found" in response.json()["detail"].lower()
+
+
+class TestSubmitFeedbackRateLimit:
+    """Tests for rate limiting on POST /api/feedback."""
+
+    def test_submit_feedback_is_registered_with_rate_limiter(self):
+        """submit_feedback must be registered in the slowapi limiter."""
+        from backend.rate_limit import limiter
+
+        assert (
+            "backend.routers.feedback.submit_feedback"
+            in limiter._Limiter__marked_for_limiting
+        )
+
+    def test_submit_feedback_endpoint_reachable_with_request_param(self, client):
+        """submit_feedback responds (not 500) after request:Request param was added."""
+        from backend.db_models import FeedbackReport as RealFeedbackReport
+
+        fake_user = _make_user()
+        mock_db = _make_db()
+
+        app.dependency_overrides[get_current_user] = lambda: fake_user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        report = _make_feedback_report()
+
+        class _MockFR:
+            user_id = RealFeedbackReport.user_id
+            created_at = RealFeedbackReport.created_at
+
+            def __new__(cls, **kwargs):
+                return report
+
+        with patch("backend.routers.feedback.FeedbackReport", _MockFR):
+            resp = client.post(
+                "/api/feedback",
+                data={"title": "Test", "description": "Details"},
+            )
+
+        app.dependency_overrides.clear()
+        assert resp.status_code != 500
+
+    def test_submit_feedback_daily_cap_returns_429(self, client):
+        """submit_feedback returns 429 when user has hit the daily cap."""
+        fake_user = _make_user()
+        mock_db = _make_db()
+        mock_db.scalar = AsyncMock(return_value=20)  # already at cap
+
+        app.dependency_overrides[get_current_user] = lambda: fake_user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        resp = client.post(
+            "/api/feedback",
+            data={"title": "Test", "description": "Details"},
+        )
+
+        app.dependency_overrides.clear()
+        assert resp.status_code == 429
+        assert "20" in resp.json()["detail"]
 
 
 class TestPurgeExpiredScreenshots:
