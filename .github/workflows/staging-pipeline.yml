@@ -133,8 +133,15 @@ jobs:
       - name: Smoke test production public domain
         run: |
           echo "=== /health (public domain) ==="
-          curl -sf --max-time 10 "https://filmduel.up.railway.app/health" | grep -q '"status":"ok"'
-          echo "PASS: /health"
+          for i in 1 2 3 4 5; do
+            if curl -sf --max-time 10 "https://filmduel.up.railway.app/health" | grep -q '"status":"ok"'; then
+              echo "PASS: /health (attempt $i)"
+              break
+            fi
+            [ "$i" -eq 5 ] && { echo "FAIL: /health did not return ok after 5 attempts"; exit 1; }
+            echo "Attempt $i/5 failed, waiting 15s..."
+            sleep 15
+          done
 
           echo "=== / (React SPA, public domain) ==="
           STATUS=$(curl -o /dev/null -s -w "%{http_code}" --max-time 10 "https://filmduel.up.railway.app/")
