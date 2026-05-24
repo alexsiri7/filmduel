@@ -131,10 +131,12 @@ jobs:
           exit 1
 
       - name: Smoke test production public domain
+        env:
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
         run: |
           echo "=== /health (public domain) ==="
           for i in 1 2 3 4 5; do
-            if curl -sf --max-time 10 "https://filmduel.up.railway.app/health" | grep -q '"status":"ok"'; then
+            if curl -sf --max-time 10 "$PRODUCTION_URL/health" | grep -q '"status":"ok"'; then
               echo "PASS: /health (attempt $i)"
               break
             fi
@@ -144,12 +146,12 @@ jobs:
           done
 
           echo "=== / (React SPA, public domain) ==="
-          STATUS=$(curl -o /dev/null -s -w "%{http_code}" --max-time 10 "https://filmduel.up.railway.app/")
+          STATUS=$(curl -o /dev/null -s -w "%{http_code}" --max-time 10 "$PRODUCTION_URL/")
           [ "$STATUS" = "200" ] || { echo "FAIL: / returned $STATUS"; exit 1; }
           echo "PASS: / returned $STATUS"
 
           echo "=== /api/rankings (public domain) ==="
-          STATUS=$(curl -o /dev/null -s -w "%{http_code}" --max-time 10 "https://filmduel.up.railway.app/api/rankings")
+          STATUS=$(curl -o /dev/null -s -w "%{http_code}" --max-time 10 "$PRODUCTION_URL/api/rankings")
           [ "$STATUS" = "200" ] || [ "$STATUS" = "401" ] || [ "$STATUS" = "403" ] || {
             echo "FAIL: /api/rankings returned unexpected $STATUS"; exit 1;
           }
