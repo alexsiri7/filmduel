@@ -138,8 +138,8 @@ jobs:
               echo "PASS: /health (attempt $i)"
               break
             fi
+            [ "$i" -eq 5 ] && { echo "FAIL: /health did not return ok after 5 attempts"; exit 1; }
             echo "Attempt $i/5 failed, waiting 15s..."
-            [ "$i" = "5" ] && { echo "FAIL: /health did not return ok after 5 attempts"; exit 1; }
             sleep 15
           done
 
