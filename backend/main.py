@@ -150,7 +150,7 @@ async def csrf_origin_check(request: Request, call_next):
     # Normalise to scheme+host — strips path/query from Referer; Origin already
     # carries only scheme+host, so this is a no-op for them.
     parsed = urlparse(origin)
-    origin_base = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+    origin_base = f"{parsed.scheme}://{parsed.netloc}"
 
     if origin_base in settings.CORS_ORIGINS:
         return await call_next(request)

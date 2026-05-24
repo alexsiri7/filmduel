@@ -103,11 +103,11 @@ async def process_duel(
     """
     # ── Fetch / create user_movies ──────────────────────────────────
     # Acquire row locks in deterministic UUID order to prevent deadlocks
-    locked = {
-        i: await get_user_movie(db, user_id, i, for_update=True)
-        for i in sorted([movie_a_id, movie_b_id])
-    }
-    um_a, um_b = locked[movie_a_id], locked[movie_b_id]
+    first_id, second_id = sorted([movie_a_id, movie_b_id])
+    um_first = await get_user_movie(db, user_id, first_id, for_update=True)
+    um_second = await get_user_movie(db, user_id, second_id, for_update=True)
+    um_a = um_first if first_id == movie_a_id else um_second
+    um_b = um_second if first_id == movie_a_id else um_first
 
     um_a_seen_was_none = um_a.seen is None
     um_b_seen_was_none = um_b.seen is None
