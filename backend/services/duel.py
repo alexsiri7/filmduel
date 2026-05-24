@@ -106,7 +106,10 @@ async def process_duel(
     first_id, second_id = sorted([movie_a_id, movie_b_id])
     um_first = await get_user_movie(db, user_id, first_id, for_update=True)
     um_second = await get_user_movie(db, user_id, second_id, for_update=True)
-    um_a, um_b = (um_first, um_second) if first_id == movie_a_id else (um_second, um_first)
+    if first_id == movie_a_id:
+        um_a, um_b = um_first, um_second
+    else:
+        um_a, um_b = um_second, um_first
 
     um_a_seen_was_none = um_a.seen is None
     um_b_seen_was_none = um_b.seen is None
