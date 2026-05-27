@@ -1,13 +1,13 @@
 # Issue #255 Resolution Summary
 
-**Issue**: Deploy down: https://filmduel.interstellarai.net returning HTTP 000000
+**Issue**: Deploy down: https://filmduel.interstellarai.net returning HTTP 000
 **Status**: ✅ RESOLVED (Auto-recovered via Railway restart policy)
 **Resolved**: 2026-05-27
 **Investigation Date**: 2026-05-27T12:30:00Z
 
 ## Problem Statement
 
-Production deployment at https://filmduel.interstellarai.net was reported as unreachable with HTTP status "000000" at 2026-05-27 12:00:56 UTC.
+Production deployment at https://filmduel.interstellarai.net was reported as unreachable with HTTP status "000" at 2026-05-27 12:00:56 UTC.
 
 ## Root Cause Analysis
 
@@ -19,10 +19,10 @@ HTTP status `000` from curl indicates a connection-level failure (no TCP connect
 - Most likely trigger: Brief container crash, OOM condition, or platform maintenance
 
 **Evidence Chain**:
-1. `curl` exit code `000` = connection refused/timed out (not HTTP response)
+1. `curl` HTTP status code `000` = connection refused/timed out (not an HTTP-level error)
 2. Railway restart policy active: `railway.toml:6-9` — `restartPolicyType = "ON_FAILURE"`
 3. Service now healthy: Direct verification shows HTTP 200 and `{"status":"ok"}` from `/health`
-4. Issue manifested 3 days after last deployment (`b2804cc`, 2026-05-25) — not a regression
+4. Issue manifested 3 days after last deployment (`b2804cc`, 2026-05-24) — not a regression
 
 ## Current Status
 
