@@ -93,3 +93,34 @@ class TestCorsOriginsValidation:
     def test_list_input_accepted(self):
         s = _make_settings(CORS_ORIGINS=["http://localhost:5173"])
         assert s.CORS_ORIGINS == ["http://localhost:5173"]
+
+
+class TestTokenEncKeyValidation:
+    def test_empty_string_accepted(self):
+        """Empty TOKEN_ENC_KEY is allowed at config load; runtime check handles it."""
+        s = _make_settings(TOKEN_ENC_KEY="")
+        assert s.TOKEN_ENC_KEY == ""
+
+    def test_valid_32_char_key_accepted(self):
+        s = _make_settings(TOKEN_ENC_KEY="a" * 32)
+        assert s.TOKEN_ENC_KEY == "a" * 32
+
+    def test_31_char_key_rejected(self):
+        with pytest.raises(ValidationError, match="at least 32 characters"):
+            _make_settings(TOKEN_ENC_KEY="a" * 31)
+
+    def test_placeholder_change_me_in_production_rejected(self):
+        with pytest.raises(ValidationError, match="placeholder"):
+            _make_settings(TOKEN_ENC_KEY="change-me-in-production")
+
+    def test_placeholder_secret_rejected(self):
+        with pytest.raises(ValidationError, match="placeholder"):
+            _make_settings(TOKEN_ENC_KEY="secret")
+
+    def test_placeholder_is_case_insensitive(self):
+        with pytest.raises(ValidationError, match="placeholder"):
+            _make_settings(TOKEN_ENC_KEY="SECRET")
+
+    def test_valid_long_key_accepted(self):
+        s = _make_settings(TOKEN_ENC_KEY="x" * 64)
+        assert len(s.TOKEN_ENC_KEY) == 64
