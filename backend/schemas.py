@@ -61,7 +61,6 @@ class DuelOutcome(str, Enum):
     a_only = "a_only"
     b_only = "b_only"
     neither = "neither"
-    draw = "draw"
 
 
 class DuelMode(str, Enum):
