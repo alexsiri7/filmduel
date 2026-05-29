@@ -60,7 +60,7 @@ def test_cors_preflight_allows_patch_method():
 
 
 def test_cors_preflight_rejects_unlisted_method():
-    """Verify that methods not in allow_methods are not reflected in the preflight response."""
+    """Verify that methods not in allow_methods are rejected in the preflight response."""
     response = client.options(
         "/health",
         headers={
@@ -69,6 +69,7 @@ def test_cors_preflight_rejects_unlisted_method():
             "Access-Control-Request-Headers": "Content-Type",
         },
     )
-    # PUT is not in allow_methods; preflight should not approve it
+    # Starlette returns 400 for preflight with an unlisted method
+    assert response.status_code == 400
     allow_methods = response.headers.get("access-control-allow-methods", "")
     assert "put" not in allow_methods.lower()
