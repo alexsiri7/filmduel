@@ -56,9 +56,7 @@ class Settings(BaseSettings):
     @classmethod
     def validate_token_enc_key(cls, v: str) -> str:
         if v == "":
-            return (
-                v  # empty string is allowed; runtime check in token_crypto handles it
-            )
+            return v  # empty string is allowed; runtime check in token_crypto handles it
         if v.lower() in _WEAK_KEY_PLACEHOLDERS:
             raise ValueError(
                 "TOKEN_ENC_KEY appears to be a placeholder value; "
