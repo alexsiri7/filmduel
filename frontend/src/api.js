@@ -70,6 +70,13 @@ export function updateSettings(payload) {
   });
 }
 
+export function acceptConsent(version) {
+  return request("/api/me/consent", {
+    method: "POST",
+    body: JSON.stringify({ version }),
+  });
+}
+
 // ── Tournaments ──────────────────────────────────────────────────────
 
 export function getTournaments() {

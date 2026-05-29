@@ -119,6 +119,12 @@ export default function Nav({ mediaType, setMediaType }) {
         >
           Report Issue
         </button>
+        <Link
+          to="/privacy"
+          className="block w-full text-center text-[#F5F0E8]/30 hover:text-primary-container/70 font-headline font-bold uppercase text-xs tracking-widest py-2 transition-colors"
+        >
+          Privacy Policy
+        </Link>
         <div className="flex items-center justify-between w-full py-2 group">
           <span className="text-[#F5F0E8]/30 group-hover:text-[#F5F0E8]/60 font-headline font-bold uppercase text-xs tracking-widest transition-colors cursor-default">
             Sync to Trakt
