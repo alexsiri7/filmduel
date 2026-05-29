@@ -26,7 +26,7 @@ from backend.config import Settings, get_settings
 from backend.rate_limit import limiter
 from backend.db import async_session_factory, get_db
 from backend.db_models import User, UserMovie
-from backend.schemas import UserResponse, UserSettingsUpdate
+from backend.schemas import ConsentAccept, UserResponse, UserSettingsUpdate
 from backend.services.pool import populate_movie_pool
 from backend.services.tmdb import backfill_posters
 from backend.services.trakt import TraktClient
@@ -376,6 +376,7 @@ async def me(user: User = Depends(get_current_user)):
         trakt_username=user.trakt_username,
         created_at=user.created_at,
         sync_ratings_to_trakt=user.sync_ratings_to_trakt,
+        privacy_policy_accepted=user.privacy_policy_accepted,
     )
 
 
@@ -395,6 +396,38 @@ async def update_settings(
         trakt_username=current_user.trakt_username,
         created_at=current_user.created_at,
         sync_ratings_to_trakt=current_user.sync_ratings_to_trakt,
+        privacy_policy_accepted=current_user.privacy_policy_accepted,
+    )
+
+
+# Must match the version string sent by frontend/src/components/ConsentModal.jsx
+CURRENT_PRIVACY_POLICY_VERSION = "1.0"
+
+
+@router.post("/api/me/consent", response_model=UserResponse)
+@limiter.limit("10/minute")
+async def accept_consent(
+    body: ConsentAccept,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Record that the user has accepted the privacy policy (GDPR consent)."""
+    if body.version != CURRENT_PRIVACY_POLICY_VERSION:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unrecognized policy version '{body.version}'. Expected '{CURRENT_PRIVACY_POLICY_VERSION}'.",
+        )
+    current_user.privacy_policy_accepted = True
+    current_user.privacy_policy_accepted_at = datetime.now(timezone.utc)
+    current_user.privacy_policy_version = CURRENT_PRIVACY_POLICY_VERSION
+    await db.commit()
+    return UserResponse(
+        id=str(current_user.id),
+        trakt_username=current_user.trakt_username,
+        created_at=current_user.created_at,
+        sync_ratings_to_trakt=current_user.sync_ratings_to_trakt,
+        privacy_policy_accepted=current_user.privacy_policy_accepted,
     )
 
 

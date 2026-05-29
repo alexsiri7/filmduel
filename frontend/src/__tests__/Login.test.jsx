@@ -40,4 +40,11 @@ describe("Login", () => {
     expect(logo).toBeInTheDocument();
     expect(logo.tagName).toBe("IMG");
   });
+
+  it("renders Privacy Policy footer link pointing to /privacy", () => {
+    renderLogin();
+    const link = screen.getByRole("link", { name: /privacy policy/i });
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute("href", "/privacy");
+  });
 });

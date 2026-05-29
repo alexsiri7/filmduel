@@ -12,7 +12,7 @@ describe("App", () => {
           return Promise.resolve({
             ok: true,
             status: 200,
-            json: () => Promise.resolve({ sync_ratings_to_trakt: false }),
+            json: () => Promise.resolve({ sync_ratings_to_trakt: false, privacy_policy_accepted: true }),
           });
         }
         return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve(null) });
@@ -123,12 +123,63 @@ describe("App", () => {
     localStorage.removeItem("filmduel_media_type");
   });
 
+  it("shows ConsentModal when user has not accepted privacy policy", async () => {
+    vi.stubGlobal("fetch", vi.fn((url) => {
+      if (url === "/api/me") {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ sync_ratings_to_trakt: false, privacy_policy_accepted: false }),
+        });
+      }
+      return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve(null) });
+    }));
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>
+    );
+    await waitFor(() => {
+      expect(screen.getByText(/before you continue/i)).toBeInTheDocument();
+    });
+  });
+
+  it("does not show ConsentModal when user has accepted privacy policy", async () => {
+    vi.stubGlobal("fetch", vi.fn((url) => {
+      if (url === "/api/me") {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ sync_ratings_to_trakt: false, privacy_policy_accepted: true }),
+        });
+      }
+      return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve(null) });
+    }));
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>
+    );
+    await waitFor(() => {
+      expect(screen.queryByText(/before you continue/i)).not.toBeInTheDocument();
+    });
+  });
+
+  it("renders /privacy page without auth redirect", () => {
+    render(
+      <MemoryRouter initialEntries={["/privacy"]}>
+        <App />
+      </MemoryRouter>
+    );
+    expect(screen.getByText("PRIVACY POLICY")).toBeInTheDocument();
+  });
+
   it("routes to /rankings correctly", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn((url) => {
         if (url === "/api/me") {
-          return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ sync_ratings_to_trakt: false }) });
+          return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ sync_ratings_to_trakt: false, privacy_policy_accepted: true }) });
         }
         if (url.includes("/api/rankings") && !url.includes("stats")) {
           return Promise.resolve({

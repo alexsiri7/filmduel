@@ -190,4 +190,11 @@ describe("Nav", () => {
     renderNav();
     expect(screen.getByText("The Noir Projectionist")).toBeInTheDocument();
   });
+
+  it("renders Privacy Policy link pointing to /privacy", () => {
+    renderNav();
+    const link = screen.getByRole("link", { name: /privacy policy/i });
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute("href", "/privacy");
+  });
 });

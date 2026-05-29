@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import Nav from "./components/Nav";
+import ConsentModal from "./components/ConsentModal";
 import Login from "./pages/Login";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 import Duel from "./pages/Duel";
 import Rankings from "./pages/Rankings";
 import Swipe from "./pages/Swipe";
@@ -11,11 +13,25 @@ import TournamentBracket from "./pages/TournamentBracket";
 
 function ProtectedRoute({ children }) {
   const [status, setStatus] = useState("loading");
+  const [showConsent, setShowConsent] = useState(false);
 
   useEffect(() => {
     fetch("/api/me", { credentials: "include" })
-      .then((r) => setStatus(r.ok ? "authenticated" : "unauthenticated"))
-      .catch(() => setStatus("unauthenticated"));
+      .then((r) => {
+        if (!r.ok) { setStatus("unauthenticated"); return null; }
+        return r.json();
+      })
+      .then((data) => {
+        if (!data) return;
+        if (!data.privacy_policy_accepted) {
+          setShowConsent(true);
+        }
+        setStatus("authenticated");
+      })
+      .catch((err) => {
+        console.error("Auth check failed:", err);
+        setStatus("unauthenticated");
+      });
   }, []);
 
   if (status === "loading") {
@@ -30,7 +46,11 @@ function ProtectedRoute({ children }) {
   if (status === "unauthenticated") {
     return <Navigate to="/login" replace />;
   }
-  return children;
+  return showConsent ? (
+    <ConsentModal onAccepted={() => setShowConsent(false)} />
+  ) : (
+    children
+  );
 }
 
 export default function App() {
@@ -50,11 +70,12 @@ export default function App() {
     return () => document.body.classList.remove("show-mode");
   }, [mediaType]);
 
-  if (isLogin) {
+  if (isLogin || location.pathname === "/privacy") {
     return (
       <div className="min-h-screen bg-[#0F0E0D] text-[#F5F0E8]">
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
         </Routes>
       </div>
     );

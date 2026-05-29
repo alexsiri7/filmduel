@@ -145,6 +145,16 @@ export default function Login() {
 
       </div>
 
+      {/* Footer */}
+      <footer className="py-12 text-center">
+        <a
+          href="/privacy"
+          className="text-[#6B6760] hover:text-[#F5F0E8]/60 font-headline text-xs uppercase tracking-widest transition-colors"
+        >
+          Privacy Policy
+        </a>
+      </footer>
+
       {/* Decorative background elements */}
       <div className="fixed top-12 left-12 opacity-5 hidden md:block pointer-events-none">
         <span className="font-headline text-9xl font-black select-none">ACT I</span>

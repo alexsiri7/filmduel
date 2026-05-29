@@ -15,10 +15,15 @@ class UserResponse(BaseModel):
     trakt_username: str
     created_at: datetime
     sync_ratings_to_trakt: bool
+    privacy_policy_accepted: bool
 
 
 class UserSettingsUpdate(BaseModel):
     sync_ratings_to_trakt: bool
+
+
+class ConsentAccept(BaseModel):
+    version: str = Field(..., min_length=1, max_length=20)
 
 
 MediaType = Literal["movie", "show"]

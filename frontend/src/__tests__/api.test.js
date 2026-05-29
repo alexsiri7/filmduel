@@ -9,6 +9,7 @@ import {
   logout,
   submitFeedback,
   updateSettings,
+  acceptConsent,
 } from "../api";
 
 describe("api", () => {
@@ -227,6 +228,28 @@ describe("api", () => {
       expect(secondCallArgs[0]).toBe("/api/feedback");
       const body = secondCallArgs[1].body;
       expect(body.get("screenshot")).toBeInstanceOf(Blob);
+    });
+  });
+
+  // acceptConsent
+  describe("acceptConsent", () => {
+    it("sends POST to /api/me/consent with version in body", async () => {
+      mockFetchOk({ id: "1", trakt_username: "u", created_at: "2024-01-01T00:00:00Z",
+                    sync_ratings_to_trakt: false, privacy_policy_accepted: true });
+      await acceptConsent("1.0");
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/me/consent",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ version: "1.0" }),
+        })
+      );
+    });
+
+    it("redirects to /login on 401", async () => {
+      mockFetch401();
+      await acceptConsent("1.0");
+      expect(window.location.href).toBe("/login");
     });
   });
 
