@@ -113,7 +113,9 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         request.url.path,
         _scrub_validation_errors(exc.errors()),
     )
-    return JSONResponse(status_code=422, content={"detail": _scrub_validation_errors(exc.errors())})
+    return JSONResponse(
+        status_code=422, content={"detail": _scrub_validation_errors(exc.errors())}
+    )
 
 
 # Rate limiting

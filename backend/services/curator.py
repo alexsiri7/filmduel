@@ -68,9 +68,12 @@ async def curate_tournament(
     lines = []
     for c in candidates:
         safe_title = _sanitize_llm_input(c["title"], max_len=150)
-        safe_genres = ", ".join(
-            _sanitize_llm_input(g, max_len=50) for g in (c.get("genres") or [])
-        ) or "unknown"
+        safe_genres = (
+            ", ".join(
+                _sanitize_llm_input(g, max_len=50) for g in (c.get("genres") or [])
+            )
+            or "unknown"
+        )
         lines.append(
             f'- ID: {c["id"]} | "{safe_title}" ({c.get("year", "?")})'
             f" | Genres: {safe_genres} | ELO: {c.get('elo', '?')}"

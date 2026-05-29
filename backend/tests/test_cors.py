@@ -22,9 +22,10 @@ def test_cors_preflight_allows_content_type_header():
         },
     )
     assert response.status_code == 200
-    assert "content-type" in response.headers.get(
-        "access-control-allow-headers", ""
-    ).lower()
+    assert (
+        "content-type"
+        in response.headers.get("access-control-allow-headers", "").lower()
+    )
 
 
 def test_cors_preflight_allows_x_requested_with_header():
@@ -38,9 +39,10 @@ def test_cors_preflight_allows_x_requested_with_header():
         },
     )
     assert response.status_code == 200
-    assert "x-requested-with" in response.headers.get(
-        "access-control-allow-headers", ""
-    ).lower()
+    assert (
+        "x-requested-with"
+        in response.headers.get("access-control-allow-headers", "").lower()
+    )
 
 
 def test_cors_preflight_allows_patch_method():
@@ -54,9 +56,7 @@ def test_cors_preflight_allows_patch_method():
         },
     )
     assert response.status_code == 200
-    assert "patch" in response.headers.get(
-        "access-control-allow-methods", ""
-    ).lower()
+    assert "patch" in response.headers.get("access-control-allow-methods", "").lower()
 
 
 def test_cors_preflight_rejects_unlisted_method():

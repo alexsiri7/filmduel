@@ -4,12 +4,25 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
-_WEAK_KEY_PLACEHOLDERS = frozenset({
-    "secret", "changeme", "change-me", "change-me-in-production",
-    "your-secret-key", "your_secret_key",
-    "example", "insecure", "placeholder", "default", "password",
-    "replace-me", "replace_me", "mysecretkey", "mysecret",
-})
+_WEAK_KEY_PLACEHOLDERS = frozenset(
+    {
+        "secret",
+        "changeme",
+        "change-me",
+        "change-me-in-production",
+        "your-secret-key",
+        "your_secret_key",
+        "example",
+        "insecure",
+        "placeholder",
+        "default",
+        "password",
+        "replace-me",
+        "replace_me",
+        "mysecretkey",
+        "mysecret",
+    }
+)
 
 
 class Settings(BaseSettings):
@@ -36,9 +49,7 @@ class Settings(BaseSettings):
                 "set a strong random secret"
             )
         if len(v) < 32:
-            raise ValueError(
-                f"SECRET_KEY must be at least 32 characters; got {len(v)}"
-            )
+            raise ValueError(f"SECRET_KEY must be at least 32 characters; got {len(v)}")
         return v
 
     @field_validator("TOKEN_ENC_KEY", mode="before")

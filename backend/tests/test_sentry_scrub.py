@@ -11,17 +11,7 @@ from backend.main import _scrub_sensitive  # noqa: E402
 
 
 def _make_event_with_frame_vars(vars_: dict) -> dict:
-    return {
-        "exception": {
-            "values": [
-                {
-                    "stacktrace": {
-                        "frames": [{"vars": vars_}]
-                    }
-                }
-            ]
-        }
-    }
+    return {"exception": {"values": [{"stacktrace": {"frames": [{"vars": vars_}]}}]}}
 
 
 def _get_frame_vars(event: dict) -> dict:
@@ -55,7 +45,9 @@ class TestScrubSensitive:
         assert _get_frame_vars(result)["db_secret"] == "[Filtered]"
 
     def test_non_sensitive_keys_are_preserved(self):
-        event = _make_event_with_frame_vars({"user_id": "uuid-1234", "media_type": "movie"})
+        event = _make_event_with_frame_vars(
+            {"user_id": "uuid-1234", "media_type": "movie"}
+        )
         result = _scrub_sensitive(event, {})
         frame_vars = _get_frame_vars(result)
         assert frame_vars["user_id"] == "uuid-1234"
@@ -90,7 +82,9 @@ class TestScrubSensitive:
 
     def test_headers_key_is_filtered(self):
         """_headers has no 'token'/'secret' substring — only the static set covers it."""
-        event = _make_event_with_frame_vars({"_headers": {"Authorization": "Bearer tok123"}})
+        event = _make_event_with_frame_vars(
+            {"_headers": {"Authorization": "Bearer tok123"}}
+        )
         result = _scrub_sensitive(event, {})
         assert _get_frame_vars(result)["_headers"] == "[Filtered]"
 
@@ -115,15 +109,25 @@ class TestScrubSensitive:
         event = {
             "exception": {
                 "values": [
-                    {"stacktrace": {"frames": [{"vars": {"trakt_access_token": "tok1"}}]}},
+                    {
+                        "stacktrace": {
+                            "frames": [{"vars": {"trakt_access_token": "tok1"}}]
+                        }
+                    },
                     {"stacktrace": {"frames": [{"vars": {"refresh_token": "ref1"}}]}},
                 ]
             }
         }
         result = _scrub_sensitive(event, {})
         values = result["exception"]["values"]
-        assert values[0]["stacktrace"]["frames"][0]["vars"]["trakt_access_token"] == "[Filtered]"
-        assert values[1]["stacktrace"]["frames"][0]["vars"]["refresh_token"] == "[Filtered]"
+        assert (
+            values[0]["stacktrace"]["frames"][0]["vars"]["trakt_access_token"]
+            == "[Filtered]"
+        )
+        assert (
+            values[1]["stacktrace"]["frames"][0]["vars"]["refresh_token"]
+            == "[Filtered]"
+        )
 
     def test_frame_without_vars_is_safe(self):
         """Frames without a 'vars' key (Sentry omits it when locals are unavailable) must not raise."""
@@ -133,4 +137,6 @@ class TestScrubSensitive:
             }
         }
         result = _scrub_sensitive(event, {})
-        assert result["exception"]["values"][0]["stacktrace"]["frames"][0] == {"type": "FrameWithNoVars"}
+        assert result["exception"]["values"][0]["stacktrace"]["frames"][0] == {
+            "type": "FrameWithNoVars"
+        }

@@ -5,7 +5,9 @@ from __future__ import annotations
 import os
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
-os.environ.setdefault("TOKEN_ENC_KEY", "dGVzdC1lbmMta2V5LWZvci11bml0LXRlc3RzITEhMTIzNA==")
+os.environ.setdefault(
+    "TOKEN_ENC_KEY", "dGVzdC1lbmMta2V5LWZvci11bml0LXRlc3RzITEhMTIzNA=="
+)
 
 import io
 import uuid
@@ -97,9 +99,7 @@ class TestSubmitFeedback:
             if screenshot is not None:
                 files = {"screenshot": ("screenshot.jpg", screenshot, content_type)}
 
-            with patch(
-                "backend.routers.feedback.FeedbackReport", _MockFeedbackReport
-            ):
+            with patch("backend.routers.feedback.FeedbackReport", _MockFeedbackReport):
                 response = client.post("/api/feedback", data=data, files=files)
 
             response._created_reports = created_reports
@@ -193,6 +193,30 @@ class TestSubmitFeedback:
         assert report.screenshot_data_enc is None
         assert report.purge_after is None
 
+    def test_rejects_title_too_long(self, client):
+        response = self._post(client, title="x" * 201)
+        assert response.status_code == 422
+        body = response.json()
+        assert "detail" in body
+        for error in body["detail"]:
+            assert "input" not in error, "422 must not include raw input (SEC-003)"
+
+    def test_rejects_description_too_long(self, client):
+        response = self._post(client, description="x" * 5001)
+        assert response.status_code == 422
+        body = response.json()
+        assert "detail" in body
+        for error in body["detail"]:
+            assert "input" not in error, "422 must not include raw input (SEC-003)"
+
+    def test_accepts_title_at_max_length(self, client):
+        response = self._post(client, title="x" * 200)
+        assert response.status_code == 201
+
+    def test_accepts_description_at_max_length(self, client):
+        response = self._post(client, description="x" * 5000)
+        assert response.status_code == 201
+
 
 class TestAdminListFeedback:
     def _get(self, client, reports=None):
@@ -234,7 +258,9 @@ class TestAdminListFeedback:
 
     def test_corrupted_ciphertext_returns_null_not_500(self, client):
         # A corrupted ciphertext should degrade gracefully (null screenshot) rather than crash all
-        report = _make_feedback_report(screenshot_data_enc="not-valid-fernet-ciphertext")
+        report = _make_feedback_report(
+            screenshot_data_enc="not-valid-fernet-ciphertext"
+        )
         response = self._get(client, reports=[report])
         assert response.status_code == 200
         assert response.json()[0]["screenshot_data"] is None
@@ -370,7 +396,9 @@ class TestPurgeExpiredScreenshots:
         db = _make_db()
         purged_ids = purged_ids or []
         db.execute = AsyncMock(
-            return_value=MagicMock(fetchall=MagicMock(return_value=[(pid,) for pid in purged_ids]))
+            return_value=MagicMock(
+                fetchall=MagicMock(return_value=[(pid,) for pid in purged_ids])
+            )
         )
         app.dependency_overrides[get_current_user] = lambda: user
         app.dependency_overrides[get_db] = lambda: db
