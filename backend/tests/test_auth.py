@@ -529,6 +529,7 @@ class TestGetCurrentUserId:
         with pytest.raises(HTTPException) as exc_info:
             await get_current_user_id(request, response, db)
         assert exc_info.value.status_code == 401
+        assert "not found" in exc_info.value.detail.lower()
         response.delete_cookie.assert_called_once_with(COOKIE_NAME)
 
 

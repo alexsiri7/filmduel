@@ -6,6 +6,7 @@ import logging
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import NoReturn
 from urllib.parse import urlencode
 
 import jwt
@@ -114,7 +115,7 @@ async def get_current_user_id(
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    def _reject(detail: str) -> None:
+    def _reject(detail: str) -> NoReturn:
         response.delete_cookie(COOKIE_NAME)
         raise HTTPException(status_code=401, detail=detail)
 
