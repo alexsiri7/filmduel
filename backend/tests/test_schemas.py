@@ -46,6 +46,8 @@ class TestDuelOutcome:
         """'draw' is not a valid outcome; it must not exist in the enum."""
         with pytest.raises(AttributeError):
             _ = DuelOutcome.draw
+        with pytest.raises(ValueError):
+            _ = DuelOutcome("draw")
 
     def test_is_string_enum(self):
         assert isinstance(DuelOutcome.a_wins, str)
