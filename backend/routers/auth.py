@@ -53,8 +53,9 @@ def create_jwt(
 ) -> str:
     """Create a signed JWT for session management.
 
-    orig_iat: the original login timestamp, carried forward across refreshes.
-    Defaults to now (initial login).
+    orig_iat: the original login timestamp (datetime), carried forward across
+    refreshes. Stored as a Unix timestamp float in the JWT payload.
+    Defaults to now on initial login.
     """
     now = datetime.now(timezone.utc)
     payload = {
@@ -78,12 +79,15 @@ def set_session_cookie(
     """Issue a fresh session cookie for user_id.
 
     orig_iat: original login time forwarded on refresh; None for a new login.
-    Cookie max_age is capped to the remaining session lifetime.
+    Cookie max_age is bounded by the shorter of the per-token JWT expiry
+    (72 h) and the remaining session lifetime (30-day cap - elapsed).
     """
     now = datetime.now(timezone.utc)
     session_start = orig_iat or now
     remaining = SESSION_MAX_LIFETIME - (now - session_start)
-    max_age = min(JWT_EXPIRY_HOURS * 3600, max(0, int(remaining.total_seconds())))
+    if remaining <= timedelta(0):
+        return  # session cap already reached; do not issue new credentials
+    max_age = min(JWT_EXPIRY_HOURS * 3600, int(remaining.total_seconds()))
     response.set_cookie(
         COOKIE_NAME,
         create_jwt(user_id, settings, orig_iat=session_start),
@@ -120,8 +124,10 @@ async def get_current_user_id(
         user_id = payload.get("sub")
         iat = datetime.fromtimestamp(payload["iat"], tz=timezone.utc)
         raw_orig = payload.get("orig_iat")
+        if raw_orig is not None and not isinstance(raw_orig, (int, float)):
+            raise HTTPException(status_code=401, detail="Invalid session")
         orig_iat = (
-            datetime.fromtimestamp(raw_orig, tz=timezone.utc)
+            datetime.fromtimestamp(float(raw_orig), tz=timezone.utc)
             if raw_orig is not None
             else iat  # legacy tokens: treat iat as orig_iat
         )
@@ -145,12 +151,14 @@ async def get_current_user_id(
     if iat < invalid_before:
         raise HTTPException(status_code=401, detail="Session revoked")
 
+    now = datetime.now(timezone.utc)
+
     # Hard cap: absolute 30-day session lifetime regardless of activity.
-    if datetime.now(timezone.utc) - orig_iat > SESSION_MAX_LIFETIME:
+    if now - orig_iat > SESSION_MAX_LIFETIME:
         raise HTTPException(status_code=401, detail="Session expired")
 
     # Sliding refresh: only re-issue if the token is older than REFRESH_INTERVAL.
-    if datetime.now(timezone.utc) - iat > REFRESH_INTERVAL:
+    if now - iat > REFRESH_INTERVAL:
         set_session_cookie(response, user_id, settings, orig_iat=orig_iat)
     return user_id
 
