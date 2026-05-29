@@ -330,3 +330,233 @@ def test_regenerate_suggestions_returns_429_when_rate_limit_exceeded():
     response = _rate_limit_exceeded_handler(mock_request, exc)
 
     assert response.status_code == 429
+
+
+# ---------------------------------------------------------------------------
+# Limiter registration — PR #279: 9 newly rate-limited endpoints
+# ---------------------------------------------------------------------------
+
+
+def test_get_rankings_is_registered_with_rate_limiter():
+    """get_rankings must be registered in the slowapi limiter."""
+    assert "backend.routers.rankings.get_rankings" in limiter._Limiter__marked_for_limiting
+
+
+def test_get_stats_is_registered_with_rate_limiter():
+    """get_stats must be registered in the slowapi limiter."""
+    assert "backend.routers.rankings.get_stats" in limiter._Limiter__marked_for_limiting
+
+
+def test_dismiss_suggestion_is_registered_with_rate_limiter():
+    """dismiss_suggestion must be registered in the slowapi limiter."""
+    assert (
+        "backend.routers.suggestions.dismiss_suggestion"
+        in limiter._Limiter__marked_for_limiting
+    )
+
+
+def test_add_to_watchlist_is_registered_with_rate_limiter():
+    """add_to_watchlist must be registered in the slowapi limiter."""
+    assert (
+        "backend.routers.suggestions.add_to_watchlist"
+        in limiter._Limiter__marked_for_limiting
+    )
+
+
+def test_mark_seen_is_registered_with_rate_limiter():
+    """mark_seen must be registered in the slowapi limiter."""
+    assert (
+        "backend.routers.suggestions.mark_seen" in limiter._Limiter__marked_for_limiting
+    )
+
+
+def test_get_available_genres_is_registered_with_rate_limiter():
+    """get_available_genres must be registered in the slowapi limiter."""
+    assert (
+        "backend.routers.tournaments.get_available_genres"
+        in limiter._Limiter__marked_for_limiting
+    )
+
+
+def test_get_pool_count_is_registered_with_rate_limiter():
+    """get_pool_count must be registered in the slowapi limiter."""
+    assert (
+        "backend.routers.tournaments.get_pool_count"
+        in limiter._Limiter__marked_for_limiting
+    )
+
+
+def test_get_tournament_is_registered_with_rate_limiter():
+    """get_tournament must be registered in the slowapi limiter."""
+    assert (
+        "backend.routers.tournaments.get_tournament"
+        in limiter._Limiter__marked_for_limiting
+    )
+
+
+def test_get_next_match_is_registered_with_rate_limiter():
+    """get_next_match must be registered in the slowapi limiter."""
+    assert (
+        "backend.routers.tournaments.get_next_match"
+        in limiter._Limiter__marked_for_limiting
+    )
+
+
+def test_submit_match_result_endpoint_is_registered_with_rate_limiter():
+    """submit_match_result_endpoint must be registered in the slowapi limiter."""
+    assert (
+        "backend.routers.tournaments.submit_match_result_endpoint"
+        in limiter._Limiter__marked_for_limiting
+    )
+
+
+def test_abandon_tournament_is_registered_with_rate_limiter():
+    """abandon_tournament must be registered in the slowapi limiter."""
+    assert (
+        "backend.routers.tournaments.abandon_tournament"
+        in limiter._Limiter__marked_for_limiting
+    )
+
+
+# ---------------------------------------------------------------------------
+# Rate limit values — business-critical endpoints from PR #279
+# ---------------------------------------------------------------------------
+
+
+def test_abandon_tournament_rate_limit_is_10_per_minute():
+    """abandon_tournament rate limit must be exactly 10/minute (destructive endpoint)."""
+    limits = limiter._route_limits.get(
+        "backend.routers.tournaments.abandon_tournament", []
+    )
+    limit_strings = [str(lim.limit) for lim in limits]
+    assert any("10 per 1 minute" in s for s in limit_strings), (
+        f"Expected '10/minute' limit on abandon_tournament, got: {limit_strings}"
+    )
+
+
+def test_add_to_watchlist_rate_limit_is_30_per_minute():
+    """add_to_watchlist must be 30/minute (stricter than other POST endpoints: spawns Trakt task)."""
+    limits = limiter._route_limits.get(
+        "backend.routers.suggestions.add_to_watchlist", []
+    )
+    limit_strings = [str(lim.limit) for lim in limits]
+    assert any("30 per 1 minute" in s for s in limit_strings), (
+        f"Expected '30/minute' limit on add_to_watchlist, got: {limit_strings}"
+    )
+
+
+def test_submit_match_result_rate_limit_is_60_per_minute():
+    """submit_match_result_endpoint must be 60/minute."""
+    limits = limiter._route_limits.get(
+        "backend.routers.tournaments.submit_match_result_endpoint", []
+    )
+    limit_strings = [str(lim.limit) for lim in limits]
+    assert any("60 per 1 minute" in s for s in limit_strings), (
+        f"Expected '60/minute' limit on submit_match_result_endpoint, got: {limit_strings}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Endpoint reachability — confirms request:Request param injection works
+# (PR #279 endpoints)
+# ---------------------------------------------------------------------------
+
+
+def test_get_rankings_endpoint_reachable():
+    """get_rankings responds (not 500) after request:Request param was added."""
+    fake_user = _make_user()
+    mock_db = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.unique.return_value.scalars.return_value.all.return_value = []
+    mock_db.execute.return_value = mock_result
+
+    app.dependency_overrides[get_current_user] = lambda: fake_user
+    app.dependency_overrides[get_db] = lambda: mock_db
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        resp = client.get("/api/rankings")
+
+    app.dependency_overrides.clear()
+    assert resp.status_code != 500
+
+
+def test_get_stats_endpoint_reachable():
+    """get_stats responds (not 500) after request:Request param was added."""
+    fake_user = _make_user()
+    empty_stats = {
+        "total_duels": 0,
+        "total_movies_ranked": 0,
+        "unseen_count": 0,
+        "average_elo": 0.0,
+        "highest_rated": None,
+        "lowest_rated": None,
+    }
+
+    app.dependency_overrides[get_current_user] = lambda: fake_user
+    app.dependency_overrides[get_db] = lambda: AsyncMock()
+
+    with patch(
+        "backend.routers.rankings.get_user_stats", new_callable=AsyncMock
+    ) as mock_stats:
+        mock_stats.return_value = empty_stats
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.get("/api/rankings/stats")
+
+    app.dependency_overrides.clear()
+    assert resp.status_code != 500
+
+
+def test_dismiss_suggestion_endpoint_reachable():
+    """dismiss_suggestion responds (not 500) after request:Request param was added."""
+    fake_user = _make_user()
+    mock_db = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.unique.return_value.scalar_one_or_none.return_value = None
+    mock_db.execute.return_value = mock_result
+
+    app.dependency_overrides[get_current_user] = lambda: fake_user
+    app.dependency_overrides[get_db] = lambda: mock_db
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        resp = client.post(f"/api/suggestions/{uuid.uuid4()}/dismiss")
+
+    app.dependency_overrides.clear()
+    # 404 expected (suggestion not found); confirms endpoint + Request param works
+    assert resp.status_code != 500
+
+
+def test_get_available_genres_endpoint_reachable():
+    """get_available_genres responds (not 500) after request:Request param was added."""
+    fake_user = _make_user()
+    mock_db = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = []
+    mock_db.execute.return_value = mock_result
+
+    app.dependency_overrides[get_current_user] = lambda: fake_user
+    app.dependency_overrides[get_db] = lambda: mock_db
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        resp = client.get("/api/tournaments/genres")
+
+    app.dependency_overrides.clear()
+    assert resp.status_code != 500
+
+
+def test_abandon_tournament_endpoint_reachable():
+    """abandon_tournament responds (not 500) after request:Request param was added."""
+    fake_user = _make_user()
+    mock_db = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.unique.return_value.scalar_one_or_none.return_value = None
+    mock_db.execute.return_value = mock_result
+
+    app.dependency_overrides[get_current_user] = lambda: fake_user
+    app.dependency_overrides[get_db] = lambda: mock_db
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        resp = client.delete(f"/api/tournaments/{uuid.uuid4()}")
+
+    app.dependency_overrides.clear()
+    # 404 expected (tournament not found); confirms endpoint + Request param works
+    assert resp.status_code != 500
