@@ -25,6 +25,16 @@ _WEAK_KEY_PLACEHOLDERS = frozenset(
 )
 
 
+def _validate_key_strength(name: str, v: str) -> str:
+    if v.lower() in _WEAK_KEY_PLACEHOLDERS:
+        raise ValueError(
+            f"{name} appears to be a placeholder value; set a strong random secret"
+        )
+    if len(v) < 32:
+        raise ValueError(f"{name} must be at least 32 characters; got {len(v)}")
+    return v
+
+
 class Settings(BaseSettings):
     """All settings loaded from environment variables or .env file."""
 
@@ -43,30 +53,14 @@ class Settings(BaseSettings):
     @field_validator("SECRET_KEY", mode="before")
     @classmethod
     def validate_secret_key(cls, v: str) -> str:
-        if v.lower() in _WEAK_KEY_PLACEHOLDERS:
-            raise ValueError(
-                "SECRET_KEY appears to be a placeholder value; "
-                "set a strong random secret"
-            )
-        if len(v) < 32:
-            raise ValueError(f"SECRET_KEY must be at least 32 characters; got {len(v)}")
-        return v
+        return _validate_key_strength("SECRET_KEY", v)
 
     @field_validator("TOKEN_ENC_KEY", mode="before")
     @classmethod
     def validate_token_enc_key(cls, v: str) -> str:
         if v == "":
             return v  # empty string is allowed; runtime check in token_crypto handles it
-        if v.lower() in _WEAK_KEY_PLACEHOLDERS:
-            raise ValueError(
-                "TOKEN_ENC_KEY appears to be a placeholder value; "
-                "set a strong random secret"
-            )
-        if len(v) < 32:
-            raise ValueError(
-                f"TOKEN_ENC_KEY must be at least 32 characters; got {len(v)}"
-            )
-        return v
+        return _validate_key_strength("TOKEN_ENC_KEY", v)
 
     BASE_URL: str = "http://localhost:8000"
 
