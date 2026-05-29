@@ -196,10 +196,26 @@ class TestSubmitFeedback:
     def test_rejects_title_too_long(self, client):
         response = self._post(client, title="x" * 201)
         assert response.status_code == 422
+        body = response.json()
+        assert "detail" in body
+        for error in body["detail"]:
+            assert "input" not in error, "422 must not include raw input (SEC-003)"
 
     def test_rejects_description_too_long(self, client):
         response = self._post(client, description="x" * 5001)
         assert response.status_code == 422
+        body = response.json()
+        assert "detail" in body
+        for error in body["detail"]:
+            assert "input" not in error, "422 must not include raw input (SEC-003)"
+
+    def test_accepts_title_at_max_length(self, client):
+        response = self._post(client, title="x" * 200)
+        assert response.status_code == 201
+
+    def test_accepts_description_at_max_length(self, client):
+        response = self._post(client, description="x" * 5000)
+        assert response.status_code == 201
 
 
 class TestAdminListFeedback:
