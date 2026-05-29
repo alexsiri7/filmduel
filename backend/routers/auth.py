@@ -113,6 +113,11 @@ async def get_current_user_id(
     token = request.cookies.get(COOKIE_NAME)
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
+
+    def _reject(detail: str) -> None:
+        response.delete_cookie(COOKIE_NAME)
+        raise HTTPException(status_code=401, detail=detail)
+
     try:
         payload = jwt.decode(
             token,
@@ -126,35 +131,33 @@ async def get_current_user_id(
         raw_orig = payload.get("orig_iat")
         if raw_orig is not None:
             if not isinstance(raw_orig, (int, float)):
-                raise HTTPException(status_code=401, detail="Invalid session")
+                _reject("Invalid session")
             orig_iat = datetime.fromtimestamp(float(raw_orig), tz=timezone.utc)
         else:
             orig_iat = iat  # legacy tokens: treat iat as orig_iat
         if not user_id:
-            raise HTTPException(
-                status_code=401, detail="Invalid session — missing subject"
-            )
+            _reject("Invalid session — missing subject")
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Session expired")
+        _reject("Session expired")
     except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid session")
+        _reject("Invalid session")
 
     # Server-side revocation: catches logout from another device or admin revoke.
     invalid_before = await db.scalar(
         select(User.tokens_invalid_before).where(User.id == uuid.UUID(user_id))
     )
     if invalid_before is None:
-        raise HTTPException(status_code=401, detail="User not found")
+        _reject("User not found")
     if invalid_before.tzinfo is None:
         invalid_before = invalid_before.replace(tzinfo=timezone.utc)
     if iat < invalid_before:
-        raise HTTPException(status_code=401, detail="Session revoked")
+        _reject("Session revoked")
 
     now = datetime.now(timezone.utc)
 
     # Hard cap: absolute 30-day session lifetime regardless of activity.
     if now - orig_iat > SESSION_MAX_LIFETIME:
-        raise HTTPException(status_code=401, detail="Session expired")
+        _reject("Session expired")
 
     # Sliding refresh: only re-issue if the token is older than REFRESH_INTERVAL.
     if now - iat > REFRESH_INTERVAL:
