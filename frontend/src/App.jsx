@@ -16,22 +16,19 @@ function ProtectedRoute({ children }) {
   const [showConsent, setShowConsent] = useState(false);
 
   useEffect(() => {
-    fetch("/api/me", { credentials: "include" })
-      .then((r) => {
-        if (!r.ok) { setStatus("unauthenticated"); return null; }
-        return r.json();
-      })
-      .then((data) => {
-        if (!data) return;
-        if (!data.privacy_policy_accepted) {
-          setShowConsent(true);
-        }
+    const checkAuth = async () => {
+      try {
+        const r = await fetch("/api/me", { credentials: "include" });
+        if (!r.ok) { setStatus("unauthenticated"); return; }
+        const data = await r.json();
+        if (!data.privacy_policy_accepted) setShowConsent(true);
         setStatus("authenticated");
-      })
-      .catch((err) => {
+      } catch (err) {
         console.error("Auth check failed:", err);
         setStatus("unauthenticated");
-      });
+      }
+    };
+    checkAuth();
   }, []);
 
   if (status === "loading") {
