@@ -26,13 +26,27 @@ def _make_fake_user() -> MagicMock:
 
 class TestScrubValidationErrors:
     def test_input_key_is_stripped(self):
-        errors = [{"type": "string_too_long", "loc": ("name",), "msg": "...", "input": "user text"}]
+        errors = [
+            {
+                "type": "string_too_long",
+                "loc": ("name",),
+                "msg": "...",
+                "input": "user text",
+            }
+        ]
         result = _scrub_validation_errors(errors)
         assert "input" in errors[0], "original should be unchanged"
         assert "input" not in result[0]
 
     def test_other_keys_preserved(self):
-        errors = [{"type": "string_too_long", "loc": ("name",), "msg": "too long", "input": "x"}]
+        errors = [
+            {
+                "type": "string_too_long",
+                "loc": ("name",),
+                "msg": "too long",
+                "input": "x",
+            }
+        ]
         result = _scrub_validation_errors(errors)
         assert result[0]["type"] == "string_too_long"
         assert result[0]["loc"] == ("name",)
@@ -59,14 +73,22 @@ class TestScrubValidationErrors:
             with caplog.at_level(logging.WARNING, logger="backend.main"):
                 resp = client.post(
                     "/api/tournaments",
-                    json={"name": "x" * 200},  # triggers string_too_long (max_length=100)
+                    json={
+                        "name": "x" * 200
+                    },  # triggers string_too_long (max_length=100)
                 )
             assert resp.status_code == 422
 
-            validation_records = [r for r in caplog.records if "validation_error" in r.message]
-            assert validation_records, "expected at least one validation_error log record"
+            validation_records = [
+                r for r in caplog.records if "validation_error" in r.message
+            ]
+            assert validation_records, (
+                "expected at least one validation_error log record"
+            )
             for record in validation_records:
-                assert "x" * 200 not in record.message, "raw user input must not appear in logs"
+                assert "x" * 200 not in record.message, (
+                    "raw user input must not appear in logs"
+                )
         finally:
             app.dependency_overrides.pop(get_current_user, None)
 
@@ -83,6 +105,8 @@ class TestScrubValidationErrors:
             detail = response.json()["detail"]
             # The response body must not carry the raw input value — scrubbed to prevent user data leaks
             for error in detail:
-                assert "input" not in error, "422 response must not include raw input (SEC-003)"
+                assert "input" not in error, (
+                    "422 response must not include raw input (SEC-003)"
+                )
         finally:
             app.dependency_overrides.pop(get_current_user, None)

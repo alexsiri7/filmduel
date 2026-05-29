@@ -114,7 +114,9 @@ async def get_stats(
 
 
 @router.get("/export/csv")
-@limiter.limit("10/hour")  # per-user via _rate_limit_key; 10 exports/hour is ample for CSV downloads
+@limiter.limit(
+    "10/hour"
+)  # per-user via _rate_limit_key; 10 exports/hour is ample for CSV downloads
 async def export_csv(
     request: Request,
     current_user: User = Depends(get_current_user),

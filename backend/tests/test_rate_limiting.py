@@ -34,12 +34,16 @@ def _make_user():
 
 def test_get_movie_pair_is_registered_with_rate_limiter():
     """get_movie_pair must be registered in the slowapi limiter."""
-    assert "backend.routers.movies.get_movie_pair" in limiter._Limiter__marked_for_limiting
+    assert (
+        "backend.routers.movies.get_movie_pair" in limiter._Limiter__marked_for_limiting
+    )
 
 
 def test_export_csv_is_registered_with_rate_limiter():
     """export_csv must be registered in the slowapi limiter."""
-    assert "backend.routers.rankings.export_csv" in limiter._Limiter__marked_for_limiting
+    assert (
+        "backend.routers.rankings.export_csv" in limiter._Limiter__marked_for_limiting
+    )
 
 
 def test_export_csv_rate_limit_is_10_per_hour():
@@ -57,12 +61,18 @@ def test_export_csv_rate_limit_is_10_per_hour():
 
 def test_list_tournaments_is_registered_with_rate_limiter():
     """list_tournaments must be registered in the slowapi limiter."""
-    assert "backend.routers.tournaments.list_tournaments" in limiter._Limiter__marked_for_limiting
+    assert (
+        "backend.routers.tournaments.list_tournaments"
+        in limiter._Limiter__marked_for_limiting
+    )
 
 
 def test_submit_feedback_is_registered_with_rate_limiter():
     """submit_feedback must be registered in the slowapi limiter."""
-    assert "backend.routers.feedback.submit_feedback" in limiter._Limiter__marked_for_limiting
+    assert (
+        "backend.routers.feedback.submit_feedback"
+        in limiter._Limiter__marked_for_limiting
+    )
 
 
 def test_rate_limit_exceeded_handler_registered():
@@ -111,7 +121,9 @@ def test_get_movie_pair_endpoint_reachable():
     app.dependency_overrides[get_current_user] = lambda: fake_user
     app.dependency_overrides[get_db] = lambda: AsyncMock()
 
-    with patch("backend.routers.movies.select_pair", new_callable=AsyncMock) as mock_pair:
+    with patch(
+        "backend.routers.movies.select_pair", new_callable=AsyncMock
+    ) as mock_pair:
         mock_pair.side_effect = ValueError("not enough films")
         with TestClient(app, raise_server_exceptions=False) as client:
             resp = client.get("/api/movies/pair")
@@ -184,7 +196,9 @@ def test_list_tournaments_returns_at_most_100_results():
         fake_tournaments.append(t)
 
     mock_result = MagicMock()
-    mock_result.unique.return_value.scalars.return_value.all.return_value = fake_tournaments
+    mock_result.unique.return_value.scalars.return_value.all.return_value = (
+        fake_tournaments
+    )
     mock_db.execute.return_value = mock_result
 
     app.dependency_overrides[get_current_user] = lambda: fake_user

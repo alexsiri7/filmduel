@@ -22,7 +22,9 @@ def _make_request(cookie_value=None, client_ip="1.2.3.4"):
 
 
 def _make_valid_token(sub: str, secret: str = "test-secret") -> str:
-    return jwt.encode({"sub": sub, "exp": time.time() + 3600}, secret, algorithm="HS256")
+    return jwt.encode(
+        {"sub": sub, "exp": time.time() + 3600}, secret, algorithm="HS256"
+    )
 
 
 def test_rate_limit_key_authenticated_user_returns_user_key():
