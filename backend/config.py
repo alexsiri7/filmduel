@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     @field_validator("TOKEN_ENC_KEY", mode="before")
     @classmethod
     def validate_token_enc_key(cls, v: str) -> str:
-        if not v:
+        if v == "":
             return v  # empty string is allowed; runtime check in token_crypto handles it
         if v.lower() in _WEAK_KEY_PLACEHOLDERS:
             raise ValueError(

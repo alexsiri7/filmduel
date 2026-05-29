@@ -109,6 +109,10 @@ class TestTokenEncKeyValidation:
         with pytest.raises(ValidationError, match="at least 32 characters"):
             _make_settings(TOKEN_ENC_KEY="a" * 31)
 
+    def test_placeholder_change_me_rejected(self):
+        with pytest.raises(ValidationError, match="placeholder"):
+            _make_settings(TOKEN_ENC_KEY="change-me")
+
     def test_placeholder_change_me_in_production_rejected(self):
         with pytest.raises(ValidationError, match="placeholder"):
             _make_settings(TOKEN_ENC_KEY="change-me-in-production")
