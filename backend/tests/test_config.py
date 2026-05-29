@@ -1,4 +1,4 @@
-"""Unit tests for Settings.validate_secret_key."""
+"""Unit tests for Settings validators."""
 
 import pytest
 from pydantic import ValidationError

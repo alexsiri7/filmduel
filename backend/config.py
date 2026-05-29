@@ -25,7 +25,7 @@ class Settings(BaseSettings):
 
     # App secrets
     SECRET_KEY: str
-    TOKEN_ENC_KEY: str = ""  # ≥32 bytes; rotate independently of SECRET_KEY
+    TOKEN_ENC_KEY: str = ""  # ≥32 chars; rotate independently of SECRET_KEY
 
     @field_validator("SECRET_KEY", mode="before")
     @classmethod
