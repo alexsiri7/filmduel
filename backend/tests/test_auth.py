@@ -23,6 +23,7 @@ from backend.routers.auth import (
     JWT_ALGORITHM,
     JWT_EXPIRY_HOURS,
     REFRESH_INTERVAL,
+    SESSION_MAX_LIFETIME,
     _TRAKT_TOKEN_DEFAULT_TTL_SECONDS,
     create_jwt,
     ensure_fresh_token,
@@ -282,6 +283,76 @@ class TestGetCurrentUserId:
             await get_current_user_id(request, response, _make_db(future_revocation))
         assert exc_info.value.status_code == 401
         assert "revoked" in exc_info.value.detail.lower()
+
+    @pytest.mark.asyncio
+    async def test_hard_cap_rejects_session_older_than_30_days(self, monkeypatch):
+        """A session older than SESSION_MAX_DAYS must be rejected even if JWT is fresh."""
+        monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
+        orig = datetime.now(timezone.utc) - SESSION_MAX_LIFETIME - timedelta(hours=1)
+        payload = {
+            "sub": "550e8400-e29b-41d4-a716-446655440000",
+            "jti": "x",
+            "iss": "filmduel",
+            "aud": "filmduel",
+            "exp": datetime.now(timezone.utc) + timedelta(hours=1),
+            "iat": datetime.now(timezone.utc) - timedelta(hours=1),
+            "orig_iat": orig.timestamp(),
+        }
+        token = pyjwt.encode(payload, SETTINGS.SECRET_KEY, algorithm=JWT_ALGORITHM)
+        request = _make_request({COOKIE_NAME: token})
+        response = _make_response()
+        with pytest.raises(HTTPException) as exc_info:
+            await get_current_user_id(request, response, _make_db())
+        assert exc_info.value.status_code == 401
+        assert "expired" in exc_info.value.detail.lower()
+
+    @pytest.mark.asyncio
+    async def test_refresh_preserves_orig_iat(self, monkeypatch):
+        """Refreshed token must carry forward the original orig_iat."""
+        monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
+        orig = datetime.now(timezone.utc) - timedelta(days=5)
+        old_iat = datetime.now(timezone.utc) - REFRESH_INTERVAL - timedelta(hours=1)
+        payload = {
+            "sub": "550e8400-e29b-41d4-a716-446655440000",
+            "jti": "x",
+            "iss": "filmduel",
+            "aud": "filmduel",
+            "exp": datetime.now(timezone.utc) + timedelta(hours=1),
+            "iat": old_iat,
+            "orig_iat": orig.timestamp(),
+        }
+        token = pyjwt.encode(payload, SETTINGS.SECRET_KEY, algorithm=JWT_ALGORITHM)
+        request = _make_request({COOKIE_NAME: token})
+        response = _make_response()
+        await get_current_user_id(request, response, _make_db())
+        response.set_cookie.assert_called_once()
+        # Decode the newly issued token and verify orig_iat was preserved
+        new_token = response.set_cookie.call_args.args[1]
+        new_payload = pyjwt.decode(
+            new_token, SETTINGS.SECRET_KEY,
+            algorithms=[JWT_ALGORITHM],
+            audience="filmduel", issuer="filmduel",
+        )
+        assert abs(new_payload["orig_iat"] - orig.timestamp()) < 2
+
+    @pytest.mark.asyncio
+    async def test_legacy_token_without_orig_iat_accepted(self, monkeypatch):
+        """Tokens missing orig_iat (issued before the fix) should still work."""
+        monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
+        payload = {
+            "sub": "550e8400-e29b-41d4-a716-446655440000",
+            "jti": "x",
+            "iss": "filmduel",
+            "aud": "filmduel",
+            "exp": datetime.now(timezone.utc) + timedelta(hours=1),
+            "iat": datetime.now(timezone.utc) - timedelta(hours=1),
+            # no orig_iat
+        }
+        token = pyjwt.encode(payload, SETTINGS.SECRET_KEY, algorithm=JWT_ALGORITHM)
+        request = _make_request({COOKIE_NAME: token})
+        response = _make_response()
+        result = await get_current_user_id(request, response, _make_db())
+        assert result == "550e8400-e29b-41d4-a716-446655440000"
 
 
 # ---------------------------------------------------------------------------
