@@ -124,13 +124,12 @@ async def get_current_user_id(
         user_id = payload.get("sub")
         iat = datetime.fromtimestamp(payload["iat"], tz=timezone.utc)
         raw_orig = payload.get("orig_iat")
-        if raw_orig is not None and not isinstance(raw_orig, (int, float)):
-            raise HTTPException(status_code=401, detail="Invalid session")
-        orig_iat = (
-            datetime.fromtimestamp(float(raw_orig), tz=timezone.utc)
-            if raw_orig is not None
-            else iat  # legacy tokens: treat iat as orig_iat
-        )
+        if raw_orig is not None:
+            if not isinstance(raw_orig, (int, float)):
+                raise HTTPException(status_code=401, detail="Invalid session")
+            orig_iat = datetime.fromtimestamp(float(raw_orig), tz=timezone.utc)
+        else:
+            orig_iat = iat  # legacy tokens: treat iat as orig_iat
         if not user_id:
             raise HTTPException(
                 status_code=401, detail="Invalid session — missing subject"
