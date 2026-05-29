@@ -368,9 +368,7 @@ async def logout(
     return response
 
 
-@router.get("/api/me", response_model=UserResponse)
-async def me(user: User = Depends(get_current_user)):
-    """Return the current authenticated user's profile."""
+def _build_user_response(user: User) -> UserResponse:
     return UserResponse(
         id=str(user.id),
         trakt_username=user.trakt_username,
@@ -378,6 +376,12 @@ async def me(user: User = Depends(get_current_user)):
         sync_ratings_to_trakt=user.sync_ratings_to_trakt,
         privacy_policy_accepted=user.privacy_policy_accepted,
     )
+
+
+@router.get("/api/me", response_model=UserResponse)
+async def me(user: User = Depends(get_current_user)):
+    """Return the current authenticated user's profile."""
+    return _build_user_response(user)
 
 
 @router.patch("/api/me/settings", response_model=UserResponse)
@@ -391,13 +395,7 @@ async def update_settings(
     """Update user preferences."""
     current_user.sync_ratings_to_trakt = body.sync_ratings_to_trakt
     await db.commit()
-    return UserResponse(
-        id=str(current_user.id),
-        trakt_username=current_user.trakt_username,
-        created_at=current_user.created_at,
-        sync_ratings_to_trakt=current_user.sync_ratings_to_trakt,
-        privacy_policy_accepted=current_user.privacy_policy_accepted,
-    )
+    return _build_user_response(current_user)
 
 
 # Must match the version string sent by frontend/src/components/ConsentModal.jsx
@@ -422,13 +420,7 @@ async def accept_consent(
     current_user.privacy_policy_accepted_at = datetime.now(timezone.utc)
     current_user.privacy_policy_version = CURRENT_PRIVACY_POLICY_VERSION
     await db.commit()
-    return UserResponse(
-        id=str(current_user.id),
-        trakt_username=current_user.trakt_username,
-        created_at=current_user.created_at,
-        sync_ratings_to_trakt=current_user.sync_ratings_to_trakt,
-        privacy_policy_accepted=current_user.privacy_policy_accepted,
-    )
+    return _build_user_response(current_user)
 
 
 @router.delete("/api/me", status_code=204)
