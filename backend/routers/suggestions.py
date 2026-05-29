@@ -178,7 +178,7 @@ async def get_suggestions(
 
 
 @router.post("/regenerate", response_model=SuggestionsResponse)
-@limiter.limit("3/minute")
+@limiter.limit("3/day")
 async def regenerate_suggestions(
     request: Request,
     current_user: User = Depends(get_current_user),

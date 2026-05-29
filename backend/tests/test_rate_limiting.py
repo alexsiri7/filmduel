@@ -286,3 +286,27 @@ async def test_export_csv_query_includes_limit_clause():
         dialect=sqlite.dialect(), compile_kwargs={"literal_binds": True}
     )
     assert "10000" in str(compiled)
+
+
+# ---------------------------------------------------------------------------
+# Rate limit — regenerate_suggestions capped at 3/day
+# ---------------------------------------------------------------------------
+
+
+def test_regenerate_suggestions_is_registered_with_rate_limiter():
+    """regenerate_suggestions must be registered in the slowapi limiter."""
+    assert (
+        "backend.routers.suggestions.regenerate_suggestions"
+        in limiter._Limiter__marked_for_limiting
+    )
+
+
+def test_regenerate_suggestions_rate_limit_is_3_per_day():
+    """regenerate_suggestions rate limit must be exactly 3/day (not 3/minute)."""
+    limits = limiter._route_limits.get(
+        "backend.routers.suggestions.regenerate_suggestions", []
+    )
+    limit_strings = [str(lim.limit) for lim in limits]
+    assert any("3 per 1 day" in s for s in limit_strings), (
+        f"Expected '3/day' limit on regenerate_suggestions, got: {limit_strings}"
+    )
