@@ -193,6 +193,14 @@ class TestSubmitFeedback:
         assert report.screenshot_data_enc is None
         assert report.purge_after is None
 
+    def test_rejects_title_too_long(self, client):
+        response = self._post(client, title="x" * 201)
+        assert response.status_code == 422
+
+    def test_rejects_description_too_long(self, client):
+        response = self._post(client, description="x" * 5001)
+        assert response.status_code == 422
+
 
 class TestAdminListFeedback:
     def _get(self, client, reports=None):

@@ -68,8 +68,8 @@ def _detect_image_type(data: bytes) -> str | None:
 @limiter.limit("5/hour")
 async def submit_feedback(
     request: Request,  # required by slowapi for rate-key extraction
-    title: str = Form(...),
-    description: str = Form(...),
+    title: str = Form(..., max_length=200),
+    description: str = Form(..., max_length=5000),
     screenshot: UploadFile = File(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
