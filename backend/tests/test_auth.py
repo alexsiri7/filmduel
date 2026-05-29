@@ -329,9 +329,11 @@ class TestGetCurrentUserId:
         # Decode the newly issued token and verify orig_iat was preserved
         new_token = response.set_cookie.call_args.args[1]
         new_payload = pyjwt.decode(
-            new_token, SETTINGS.SECRET_KEY,
+            new_token,
+            SETTINGS.SECRET_KEY,
             algorithms=[JWT_ALGORITHM],
-            audience="filmduel", issuer="filmduel",
+            audience="filmduel",
+            issuer="filmduel",
         )
         assert abs(new_payload["orig_iat"] - orig.timestamp()) < 2
 
