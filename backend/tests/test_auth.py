@@ -68,6 +68,21 @@ def _make_response() -> MagicMock:
     return MagicMock()
 
 
+def _make_jwt_payload(**overrides) -> dict:
+    """Build a JWT payload dict with test defaults; use overrides for per-test variations."""
+    now = datetime.now(timezone.utc)
+    base = {
+        "sub": "550e8400-e29b-41d4-a716-446655440000",
+        "jti": "x",
+        "iss": "filmduel",
+        "aud": "filmduel",
+        "exp": now + timedelta(hours=1),
+        "iat": now - timedelta(hours=1),
+    }
+    base.update(overrides)
+    return base
+
+
 # ---------------------------------------------------------------------------
 # create_jwt
 # ---------------------------------------------------------------------------
@@ -253,6 +268,7 @@ class TestGetCurrentUserId:
             await get_current_user_id(request, response, _make_db())
         assert exc_info.value.status_code == 401
         assert "expired" in exc_info.value.detail.lower()
+        response.delete_cookie.assert_called_once_with(COOKIE_NAME)
 
     @pytest.mark.asyncio
     async def test_invalid_token_raises_401(self, monkeypatch):
@@ -264,6 +280,7 @@ class TestGetCurrentUserId:
             await get_current_user_id(request, response, _make_db())
         assert exc_info.value.status_code == 401
         assert "Invalid session" in exc_info.value.detail
+        response.delete_cookie.assert_called_once_with(COOKIE_NAME)
 
     @pytest.mark.asyncio
     async def test_wrong_secret_raises_401(self, monkeypatch):
@@ -276,6 +293,7 @@ class TestGetCurrentUserId:
         with pytest.raises(HTTPException) as exc_info:
             await get_current_user_id(request, response, _make_db())
         assert exc_info.value.status_code == 401
+        response.delete_cookie.assert_called_once_with(COOKIE_NAME)
 
     @pytest.mark.asyncio
     async def test_token_missing_sub_raises_401(self, monkeypatch):
@@ -295,6 +313,7 @@ class TestGetCurrentUserId:
             await get_current_user_id(request, response, _make_db())
         assert exc_info.value.status_code == 401
         assert "missing subject" in exc_info.value.detail.lower()
+        response.delete_cookie.assert_called_once_with(COOKIE_NAME)
 
     @pytest.mark.asyncio
     async def test_revoked_token_raises_401(self, monkeypatch):
@@ -309,21 +328,14 @@ class TestGetCurrentUserId:
             await get_current_user_id(request, response, _make_db(future_revocation))
         assert exc_info.value.status_code == 401
         assert "revoked" in exc_info.value.detail.lower()
+        response.delete_cookie.assert_called_once_with(COOKIE_NAME)
 
     @pytest.mark.asyncio
     async def test_hard_cap_rejects_session_older_than_30_days(self, monkeypatch):
         """A session older than SESSION_MAX_DAYS must be rejected even if JWT is fresh."""
         monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
         orig = datetime.now(timezone.utc) - SESSION_MAX_LIFETIME - timedelta(hours=1)
-        payload = {
-            "sub": "550e8400-e29b-41d4-a716-446655440000",
-            "jti": "x",
-            "iss": "filmduel",
-            "aud": "filmduel",
-            "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-            "iat": datetime.now(timezone.utc) - timedelta(hours=1),
-            "orig_iat": orig.timestamp(),
-        }
+        payload = _make_jwt_payload(orig_iat=orig.timestamp())
         token = pyjwt.encode(payload, SETTINGS.SECRET_KEY, algorithm=JWT_ALGORITHM)
         request = _make_request({COOKIE_NAME: token})
         response = _make_response()
@@ -331,6 +343,7 @@ class TestGetCurrentUserId:
             await get_current_user_id(request, response, _make_db())
         assert exc_info.value.status_code == 401
         assert "expired" in exc_info.value.detail.lower()
+        response.delete_cookie.assert_called_once_with(COOKIE_NAME)
 
     @pytest.mark.asyncio
     async def test_refresh_preserves_orig_iat(self, monkeypatch):
@@ -338,15 +351,7 @@ class TestGetCurrentUserId:
         monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
         orig = datetime.now(timezone.utc) - timedelta(days=5)
         old_iat = datetime.now(timezone.utc) - REFRESH_INTERVAL - timedelta(hours=1)
-        payload = {
-            "sub": "550e8400-e29b-41d4-a716-446655440000",
-            "jti": "x",
-            "iss": "filmduel",
-            "aud": "filmduel",
-            "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-            "iat": old_iat,
-            "orig_iat": orig.timestamp(),
-        }
+        payload = _make_jwt_payload(iat=old_iat, orig_iat=orig.timestamp())
         token = pyjwt.encode(payload, SETTINGS.SECRET_KEY, algorithm=JWT_ALGORITHM)
         request = _make_request({COOKIE_NAME: token})
         response = _make_response()
@@ -367,15 +372,7 @@ class TestGetCurrentUserId:
     async def test_legacy_token_without_orig_iat_accepted(self, monkeypatch):
         """Tokens missing orig_iat (issued before the fix) should still work."""
         monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
-        payload = {
-            "sub": "550e8400-e29b-41d4-a716-446655440000",
-            "jti": "x",
-            "iss": "filmduel",
-            "aud": "filmduel",
-            "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-            "iat": datetime.now(timezone.utc) - timedelta(hours=1),
-            # no orig_iat
-        }
+        payload = _make_jwt_payload()  # no orig_iat — simulates a pre-fix token
         token = pyjwt.encode(payload, SETTINGS.SECRET_KEY, algorithm=JWT_ALGORITHM)
         request = _make_request({COOKIE_NAME: token})
         response = _make_response()
@@ -387,15 +384,7 @@ class TestGetCurrentUserId:
         """Refreshing a legacy token should set orig_iat = iat in the new token."""
         monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
         old_iat = datetime.now(timezone.utc) - REFRESH_INTERVAL - timedelta(hours=1)
-        payload = {
-            "sub": "550e8400-e29b-41d4-a716-446655440000",
-            "jti": "x",
-            "iss": "filmduel",
-            "aud": "filmduel",
-            "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-            "iat": old_iat,
-            # no orig_iat — simulates a pre-fix token
-        }
+        payload = _make_jwt_payload(iat=old_iat)  # no orig_iat — simulates a pre-fix token
         token = pyjwt.encode(payload, SETTINGS.SECRET_KEY, algorithm=JWT_ALGORITHM)
         request = _make_request({COOKIE_NAME: token})
         response = _make_response()
@@ -419,15 +408,7 @@ class TestGetCurrentUserId:
         # Session started 29d 23h ago — 1h left before hard cap
         orig = datetime.now(timezone.utc) - SESSION_MAX_LIFETIME + timedelta(hours=1)
         old_iat = datetime.now(timezone.utc) - REFRESH_INTERVAL - timedelta(hours=1)
-        payload = {
-            "sub": "550e8400-e29b-41d4-a716-446655440000",
-            "jti": "x",
-            "iss": "filmduel",
-            "aud": "filmduel",
-            "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-            "iat": old_iat,
-            "orig_iat": orig.timestamp(),
-        }
+        payload = _make_jwt_payload(iat=old_iat, orig_iat=orig.timestamp())
         token = pyjwt.encode(payload, SETTINGS.SECRET_KEY, algorithm=JWT_ALGORITHM)
         request = _make_request({COOKIE_NAME: token})
         response = _make_response()
@@ -446,15 +427,7 @@ class TestGetCurrentUserId:
         monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
         orig = datetime.now(timezone.utc) - timedelta(days=5)  # well within 30 days
         old_iat = datetime.now(timezone.utc) - REFRESH_INTERVAL - timedelta(hours=1)
-        payload = {
-            "sub": "550e8400-e29b-41d4-a716-446655440000",
-            "jti": "x",
-            "iss": "filmduel",
-            "aud": "filmduel",
-            "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-            "iat": old_iat,
-            "orig_iat": orig.timestamp(),
-        }
+        payload = _make_jwt_payload(iat=old_iat, orig_iat=orig.timestamp())
         token = pyjwt.encode(payload, SETTINGS.SECRET_KEY, algorithm=JWT_ALGORITHM)
         request = _make_request({COOKIE_NAME: token})
         response = _make_response()
@@ -469,15 +442,7 @@ class TestGetCurrentUserId:
         # 29 days 20 hours old — only 4 hours of session lifetime remain
         orig = datetime.now(timezone.utc) - SESSION_MAX_LIFETIME + timedelta(hours=4)
         old_iat = datetime.now(timezone.utc) - REFRESH_INTERVAL - timedelta(hours=1)
-        payload = {
-            "sub": "550e8400-e29b-41d4-a716-446655440000",
-            "jti": "x",
-            "iss": "filmduel",
-            "aud": "filmduel",
-            "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-            "iat": old_iat,
-            "orig_iat": orig.timestamp(),
-        }
+        payload = _make_jwt_payload(iat=old_iat, orig_iat=orig.timestamp())
         token = pyjwt.encode(payload, SETTINGS.SECRET_KEY, algorithm=JWT_ALGORITHM)
         request = _make_request({COOKIE_NAME: token})
         response = _make_response()
@@ -492,15 +457,10 @@ class TestGetCurrentUserId:
     async def test_malformed_orig_iat_raises_401(self, monkeypatch):
         """A token with a non-numeric orig_iat claim should raise 401, not 500."""
         monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
-        payload = {
-            "sub": "550e8400-e29b-41d4-a716-446655440000",
-            "jti": "x",
-            "iss": "filmduel",
-            "aud": "filmduel",
-            "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-            "iat": datetime.now(timezone.utc),
-            "orig_iat": "not-a-timestamp",  # malformed
-        }
+        payload = _make_jwt_payload(
+            iat=datetime.now(timezone.utc),
+            orig_iat="not-a-timestamp",  # malformed
+        )
         token = pyjwt.encode(payload, SETTINGS.SECRET_KEY, algorithm=JWT_ALGORITHM)
         request = _make_request({COOKIE_NAME: token})
         response = _make_response()
@@ -508,6 +468,23 @@ class TestGetCurrentUserId:
             await get_current_user_id(request, response, _make_db())
         assert exc_info.value.status_code == 401
         assert "Invalid session" in exc_info.value.detail
+        response.delete_cookie.assert_called_once_with(COOKIE_NAME)
+
+    @pytest.mark.asyncio
+    async def test_user_not_found_clears_cookie(self, monkeypatch):
+        """When DB returns no user, cookie must be cleared."""
+        monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
+        user_id = "550e8400-e29b-41d4-a716-446655440000"
+        token = create_jwt(user_id, SETTINGS)
+        request = _make_request({COOKIE_NAME: token})
+        response = _make_response()
+        db = AsyncMock()
+        db.scalar.return_value = None  # simulate missing user
+        with pytest.raises(HTTPException) as exc_info:
+            await get_current_user_id(request, response, db)
+        assert exc_info.value.status_code == 401
+        assert "not found" in exc_info.value.detail.lower()
+        response.delete_cookie.assert_called_once_with(COOKIE_NAME)
 
 
 # ---------------------------------------------------------------------------
