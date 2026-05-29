@@ -231,7 +231,9 @@ async def regenerate_suggestions(
 
 
 @router.post("/{suggestion_id}/dismiss", response_model=SuggestionSchema)
+@limiter.limit("60/minute")
 async def dismiss_suggestion(
+    request: Request,
     suggestion_id: str,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -244,7 +246,9 @@ async def dismiss_suggestion(
 
 
 @router.post("/{suggestion_id}/watchlist", response_model=SuggestionSchema)
+@limiter.limit("30/minute")
 async def add_to_watchlist(
+    request: Request,
     suggestion_id: str,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
@@ -283,7 +287,9 @@ async def add_to_watchlist(
 
 
 @router.post("/{suggestion_id}/seen", response_model=SuggestionSchema)
+@limiter.limit("60/minute")
 async def mark_seen(
+    request: Request,
     suggestion_id: str,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

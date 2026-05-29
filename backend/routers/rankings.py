@@ -53,7 +53,9 @@ def _build_ranked_movie(um: UserMovie, rank: int) -> RankedMovie:
 
 
 @router.get("", response_model=RankingsResponse)
+@limiter.limit("30/minute")
 async def get_rankings(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     limit: int = Query(default=50, le=200),
@@ -82,7 +84,9 @@ async def get_rankings(
 
 
 @router.get("/stats", response_model=StatsResponse)
+@limiter.limit("30/minute")
 async def get_stats(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     media_type: MediaType = Query(default="movie"),
