@@ -412,9 +412,14 @@ async def accept_consent(
     db: AsyncSession = Depends(get_db),
 ):
     """Record that the user has accepted the privacy policy (GDPR consent)."""
+    if body.version != CURRENT_PRIVACY_POLICY_VERSION:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unrecognized policy version '{body.version}'. Expected '{CURRENT_PRIVACY_POLICY_VERSION}'.",
+        )
     current_user.privacy_policy_accepted = True
     current_user.privacy_policy_accepted_at = datetime.now(timezone.utc)
-    current_user.privacy_policy_version = body.version
+    current_user.privacy_policy_version = CURRENT_PRIVACY_POLICY_VERSION
     await db.commit()
     return UserResponse(
         id=str(current_user.id),

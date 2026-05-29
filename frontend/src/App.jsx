@@ -30,7 +30,10 @@ function ProtectedRoute({ children }) {
         }
         setStatus("authenticated");
       })
-      .catch(() => setStatus("unauthenticated"));
+      .catch((err) => {
+        console.error("Auth check failed:", err);
+        setStatus("unauthenticated");
+      });
   }, []);
 
   if (status === "loading") {
@@ -48,7 +51,7 @@ function ProtectedRoute({ children }) {
   return (
     <>
       {showConsent && <ConsentModal onAccepted={() => setShowConsent(false)} />}
-      {children}
+      {!showConsent && children}
     </>
   );
 }

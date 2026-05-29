@@ -3,13 +3,17 @@ import { acceptConsent } from "../api";
 
 export default function ConsentModal({ onAccepted }) {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const handleAccept = async () => {
     setLoading(true);
+    setError(null);
     try {
       await acceptConsent("1.0");
       onAccepted();
-    } catch {
+    } catch (err) {
+      console.error("Failed to record consent:", err);
+      setError(err.message || "Failed to save. Please try again.");
       setLoading(false);
     }
   };
@@ -39,6 +43,7 @@ export default function ConsentModal({ onAccepted }) {
         >
           Read full Privacy Policy →
         </a>
+        {error && <p className="text-[#C04A20] text-sm mb-4">{error}</p>}
         <button
           onClick={handleAccept}
           disabled={loading}

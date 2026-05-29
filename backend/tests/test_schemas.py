@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from backend.schemas import (
+    ConsentAccept,
     DuelMode,
     DuelOutcome,
     DuelResult,
@@ -346,9 +347,11 @@ class TestResponseModels:
             trakt_username="testuser",
             created_at=datetime.now(timezone.utc),
             sync_ratings_to_trakt=False,
+            privacy_policy_accepted=False,
         )
         assert ur.trakt_username == "testuser"
         assert ur.sync_ratings_to_trakt is False
+        assert ur.privacy_policy_accepted is False
 
     def test_movie_pair_response(self):
         ma = MovieWithStateSchema(id="1", trakt_id=1, title="A")
@@ -376,3 +379,17 @@ class TestResponseModels:
         )
         assert r.id == "550e8400-e29b-41d4-a716-446655440000"
         assert isinstance(r.created_at, datetime)
+
+
+class TestConsentAccept:
+    def test_valid_version_accepted(self):
+        ca = ConsentAccept(version="1.0")
+        assert ca.version == "1.0"
+
+    def test_empty_version_accepted(self):
+        ca = ConsentAccept(version="")
+        assert ca.version == ""
+
+    def test_missing_version_rejected(self):
+        with pytest.raises(ValidationError):
+            ConsentAccept()

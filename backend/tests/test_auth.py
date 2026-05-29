@@ -15,16 +15,18 @@ from fastapi import HTTPException
 
 from backend.config import Settings
 from backend.rate_limit import limiter
-from backend.schemas import UserSettingsUpdate
+from backend.schemas import ConsentAccept, UserSettingsUpdate
 from starlette.requests import Request as StarletteRequest
 
 from backend.routers.auth import (
     COOKIE_NAME,
+    CURRENT_PRIVACY_POLICY_VERSION,
     JWT_ALGORITHM,
     JWT_EXPIRY_HOURS,
     REFRESH_INTERVAL,
     SESSION_MAX_LIFETIME,
     _TRAKT_TOKEN_DEFAULT_TTL_SECONDS,
+    accept_consent,
     create_jwt,
     ensure_fresh_token,
     get_current_user_id,
@@ -624,3 +626,76 @@ class TestUpdateSettings:
 
         assert user.sync_ratings_to_trakt is False
         assert result.sync_ratings_to_trakt is False
+
+
+# ---------------------------------------------------------------------------
+# accept_consent
+# ---------------------------------------------------------------------------
+
+
+class TestAcceptConsent:
+    def _make_user(self) -> MagicMock:
+        user = MagicMock()
+        user.id = "00000000-0000-0000-0000-000000000001"
+        user.trakt_username = "testuser"
+        user.created_at = datetime(2024, 1, 1, tzinfo=timezone.utc)
+        user.sync_ratings_to_trakt = False
+        user.privacy_policy_accepted = False
+        return user
+
+    @pytest.mark.asyncio
+    async def test_accept_consent_sets_fields_and_commits(self, monkeypatch):
+        """Accepting consent sets accepted=True, records timestamp/version, commits."""
+        monkeypatch.setattr(limiter, "enabled", False)
+        user = self._make_user()
+        db = AsyncMock()
+
+        result = await accept_consent(
+            body=ConsentAccept(version=CURRENT_PRIVACY_POLICY_VERSION),
+            request=_make_starlette_request(),
+            current_user=user,
+            db=db,
+        )
+
+        assert user.privacy_policy_accepted is True
+        assert user.privacy_policy_version == CURRENT_PRIVACY_POLICY_VERSION
+        assert user.privacy_policy_accepted_at is not None
+        db.commit.assert_awaited_once()
+        assert result.privacy_policy_accepted is True
+
+    @pytest.mark.asyncio
+    async def test_accept_consent_returns_updated_user_response(self, monkeypatch):
+        """Response includes privacy_policy_accepted=True after acceptance."""
+        monkeypatch.setattr(limiter, "enabled", False)
+        user = self._make_user()
+        db = AsyncMock()
+
+        result = await accept_consent(
+            body=ConsentAccept(version=CURRENT_PRIVACY_POLICY_VERSION),
+            request=_make_starlette_request(),
+            current_user=user,
+            db=db,
+        )
+
+        assert result.privacy_policy_accepted is True
+        assert result.trakt_username == "testuser"
+
+    @pytest.mark.asyncio
+    async def test_accept_consent_rejects_wrong_version(self, monkeypatch):
+        """Submitting a wrong policy version returns 400."""
+        from fastapi import HTTPException as FastAPIHTTPException
+        monkeypatch.setattr(limiter, "enabled", False)
+        user = self._make_user()
+        db = AsyncMock()
+
+        with pytest.raises(FastAPIHTTPException) as exc_info:
+            await accept_consent(
+                body=ConsentAccept(version="99.0"),
+                request=_make_starlette_request(),
+                current_user=user,
+                db=db,
+            )
+
+        assert exc_info.value.status_code == 400
+        assert "99.0" in exc_info.value.detail
+        db.commit.assert_not_awaited()
