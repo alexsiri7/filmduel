@@ -82,6 +82,9 @@ class User(Base):
     sync_ratings_to_trakt: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    is_admin: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
 
     user_movies: Mapped[list[UserMovie]] = relationship(
         back_populates="user", cascade="all, delete-orphan"

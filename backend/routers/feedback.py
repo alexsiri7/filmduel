@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.db import get_db
 from backend.db_models import FeedbackReport, User
 from backend.rate_limit import limiter
-from backend.routers.auth import get_current_user
+from backend.routers.auth import get_admin_user, get_current_user
 from backend.schemas import FeedbackAdminResponse, FeedbackReportResponse
 from backend.services.token_crypto import decrypt_token, encrypt_token
 
@@ -151,10 +151,9 @@ async def submit_feedback(
 
 @router.get("/admin", response_model=list[FeedbackAdminResponse])
 async def list_feedback(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    # TODO: replace with proper role check when admin roles are implemented
     result = await db.execute(
         select(FeedbackReport).order_by(FeedbackReport.created_at.desc()).limit(100)
     )
@@ -176,10 +175,9 @@ async def list_feedback(
 @router.delete("/admin/{report_id}/screenshot", status_code=204)
 async def scrub_screenshot(
     report_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    # TODO: replace with proper role check when admin roles are implemented
     result = await db.execute(
         select(FeedbackReport).where(FeedbackReport.id == report_id)
     )
@@ -197,10 +195,9 @@ async def scrub_screenshot(
 
 @router.delete("/admin/purge-expired-screenshots", status_code=200)
 async def purge_expired_screenshots(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    # TODO: replace with proper role check when admin roles are implemented
     now = datetime.now(timezone.utc)
     result = await db.execute(
         update(FeedbackReport)
