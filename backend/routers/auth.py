@@ -42,30 +42,59 @@ COOKIE_NAME = "filmduel_session"
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_HOURS = 72  # 3-day absolute lifetime per issued token
 REFRESH_INTERVAL = timedelta(hours=12)  # re-issue cookie at most once per 12h
+SESSION_MAX_DAYS = 30  # absolute hard cap on total session lifetime
+SESSION_MAX_LIFETIME = timedelta(days=SESSION_MAX_DAYS)
 
 
-def create_jwt(user_id: str, settings: Settings) -> str:
-    """Create a signed JWT for session management."""
+def create_jwt(
+    user_id: str,
+    settings: Settings,
+    orig_iat: datetime | None = None,
+) -> str:
+    """Create a signed JWT for session management.
+
+    orig_iat: the original login timestamp (datetime), carried forward across
+    refreshes. Stored as a Unix timestamp float in the JWT payload.
+    Defaults to now on initial login.
+    """
+    now = datetime.now(timezone.utc)
     payload = {
         "sub": user_id,
         "jti": secrets.token_hex(16),
         "iss": "filmduel",
         "aud": "filmduel",
-        "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRY_HOURS),
-        "iat": datetime.now(timezone.utc),
+        "exp": now + timedelta(hours=JWT_EXPIRY_HOURS),
+        "iat": now,
+        "orig_iat": (orig_iat or now).timestamp(),
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 
-def set_session_cookie(response: Response, user_id: str, settings: Settings) -> None:
-    """Issue a fresh session cookie for user_id."""
+def set_session_cookie(
+    response: Response,
+    user_id: str,
+    settings: Settings,
+    orig_iat: datetime | None = None,
+) -> None:
+    """Issue a fresh session cookie for user_id.
+
+    orig_iat: original login time forwarded on refresh; None for a new login.
+    Cookie max_age is bounded by the shorter of the per-token JWT expiry
+    (72 h) and the remaining session lifetime (30-day cap - elapsed).
+    """
+    now = datetime.now(timezone.utc)
+    session_start = orig_iat or now
+    remaining = SESSION_MAX_LIFETIME - (now - session_start)
+    if remaining <= timedelta(0):
+        return  # session cap already reached; do not issue new credentials
+    max_age = min(JWT_EXPIRY_HOURS * 3600, int(remaining.total_seconds()))
     response.set_cookie(
         COOKIE_NAME,
-        create_jwt(user_id, settings),
+        create_jwt(user_id, settings, orig_iat=session_start),
         httponly=True,
         secure=settings.is_https,
         samesite="lax",
-        max_age=JWT_EXPIRY_HOURS * 3600,
+        max_age=max_age,
     )
 
 
@@ -94,6 +123,14 @@ async def get_current_user_id(
         )
         user_id = payload.get("sub")
         iat = datetime.fromtimestamp(payload["iat"], tz=timezone.utc)
+        raw_orig = payload.get("orig_iat")
+        if raw_orig is not None and not isinstance(raw_orig, (int, float)):
+            raise HTTPException(status_code=401, detail="Invalid session")
+        orig_iat = (
+            datetime.fromtimestamp(float(raw_orig), tz=timezone.utc)
+            if raw_orig is not None
+            else iat  # legacy tokens: treat iat as orig_iat
+        )
         if not user_id:
             raise HTTPException(
                 status_code=401, detail="Invalid session — missing subject"
@@ -114,9 +151,15 @@ async def get_current_user_id(
     if iat < invalid_before:
         raise HTTPException(status_code=401, detail="Session revoked")
 
+    now = datetime.now(timezone.utc)
+
+    # Hard cap: absolute 30-day session lifetime regardless of activity.
+    if now - orig_iat > SESSION_MAX_LIFETIME:
+        raise HTTPException(status_code=401, detail="Session expired")
+
     # Sliding refresh: only re-issue if the token is older than REFRESH_INTERVAL.
-    if datetime.now(timezone.utc) - iat > REFRESH_INTERVAL:
-        set_session_cookie(response, user_id, settings)
+    if now - iat > REFRESH_INTERVAL:
+        set_session_cookie(response, user_id, settings, orig_iat=orig_iat)
     return user_id
 
 
