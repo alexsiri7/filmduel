@@ -13,7 +13,6 @@ import TournamentBracket from "./pages/TournamentBracket";
 
 function ProtectedRoute({ children }) {
   const [status, setStatus] = useState("loading");
-  const [user, setUser] = useState(null);
   const [showConsent, setShowConsent] = useState(false);
 
   useEffect(() => {
@@ -24,7 +23,6 @@ function ProtectedRoute({ children }) {
       })
       .then((data) => {
         if (!data) return;
-        setUser(data);
         if (!data.privacy_policy_accepted) {
           setShowConsent(true);
         }
@@ -48,11 +46,10 @@ function ProtectedRoute({ children }) {
   if (status === "unauthenticated") {
     return <Navigate to="/login" replace />;
   }
-  return (
-    <>
-      {showConsent && <ConsentModal onAccepted={() => setShowConsent(false)} />}
-      {!showConsent && children}
-    </>
+  return showConsent ? (
+    <ConsentModal onAccepted={() => setShowConsent(false)} />
+  ) : (
+    children
   );
 }
 

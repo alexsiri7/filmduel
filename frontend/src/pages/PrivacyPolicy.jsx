@@ -1,3 +1,5 @@
+const Divider = () => <div className="w-full h-[1px] bg-[#514534]/20 mb-10" />;
+
 export default function PrivacyPolicy() {
   return (
     <div className="min-h-screen bg-[#0F0E0D] text-[#F5F0E8]">
@@ -21,7 +23,7 @@ export default function PrivacyPolicy() {
           </ul>
         </section>
 
-        <div className="w-full h-[1px] bg-[#514534]/20 mb-10" />
+        <Divider />
 
         <section className="mb-10">
           <h2 className="font-headline font-bold text-lg text-[#F5F0E8] uppercase tracking-wider mb-4">
@@ -34,7 +36,7 @@ export default function PrivacyPolicy() {
           </p>
         </section>
 
-        <div className="w-full h-[1px] bg-[#514534]/20 mb-10" />
+        <Divider />
 
         <section className="mb-10">
           <h2 className="font-headline font-bold text-lg text-[#F5F0E8] uppercase tracking-wider mb-4">
@@ -48,7 +50,7 @@ export default function PrivacyPolicy() {
           </ul>
         </section>
 
-        <div className="w-full h-[1px] bg-[#514534]/20 mb-10" />
+        <Divider />
 
         <section className="mb-10">
           <h2 className="font-headline font-bold text-lg text-[#F5F0E8] uppercase tracking-wider mb-4">
@@ -61,7 +63,7 @@ export default function PrivacyPolicy() {
           </p>
         </section>
 
-        <div className="w-full h-[1px] bg-[#514534]/20 mb-10" />
+        <Divider />
 
         <section className="mb-10">
           <h2 className="font-headline font-bold text-lg text-[#F5F0E8] uppercase tracking-wider mb-4">
@@ -78,7 +80,7 @@ export default function PrivacyPolicy() {
           </ul>
         </section>
 
-        <div className="w-full h-[1px] bg-[#514534]/20 mb-10" />
+        <Divider />
 
         <section className="mb-10">
           <h2 className="font-headline font-bold text-lg text-[#F5F0E8] uppercase tracking-wider mb-4">
@@ -98,7 +100,7 @@ export default function PrivacyPolicy() {
           </p>
         </section>
 
-        <div className="w-full h-[1px] bg-[#514534]/20 mb-10" />
+        <Divider />
 
         <p className="text-[#6B6760] text-xs font-body">
           Last updated: May 2026
