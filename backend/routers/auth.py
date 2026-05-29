@@ -133,6 +133,15 @@ async def get_current_user(
     return user
 
 
+async def get_admin_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Require the current user to have admin privileges."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
+
+
 async def ensure_fresh_token(user: User, db: AsyncSession) -> User:
     """Refresh the Trakt access token if it expires within 1 hour.
 

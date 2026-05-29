@@ -78,7 +78,14 @@ if settings.SENTRY_DSN:
         before_send=_scrub_sensitive,
     )
 
-app = FastAPI(title="FilmDuel", version="0.1.0")
+_is_dev = settings.BASE_URL.startswith("http://localhost")
+app = FastAPI(
+    title="FilmDuel",
+    version="0.1.0",
+    docs_url="/docs" if _is_dev else None,
+    redoc_url="/redoc" if _is_dev else None,
+    openapi_url="/openapi.json" if _is_dev else None,
+)
 
 
 def _scrub_validation_errors(errors: list[dict]) -> list[dict]:
@@ -106,7 +113,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         request.url.path,
         _scrub_validation_errors(exc.errors()),
     )
-    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+    return JSONResponse(status_code=422, content={"detail": _scrub_validation_errors(exc.errors())})
 
 
 # Rate limiting
