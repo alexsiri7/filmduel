@@ -120,7 +120,8 @@ TMDB_API_KEY=
 SENTRY_DSN=
 
 # App
-SECRET_KEY=       # openssl rand -hex 32
+SECRET_KEY=       # openssl rand -hex 32 — required in production
+TOKEN_ENC_KEY=    # openssl rand -hex 32 — required in production (must be ≥ 32 chars)
 BASE_URL=https://filmduel.interstellarai.net
 ```
 

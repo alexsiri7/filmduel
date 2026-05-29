@@ -4,8 +4,9 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
-_SECRET_KEY_PLACEHOLDERS = frozenset({
-    "secret", "changeme", "your-secret-key", "your_secret_key",
+_WEAK_KEY_PLACEHOLDERS = frozenset({
+    "secret", "changeme", "change-me", "change-me-in-production",
+    "your-secret-key", "your_secret_key",
     "example", "insecure", "placeholder", "default", "password",
     "replace-me", "replace_me", "mysecretkey", "mysecret",
 })
@@ -24,12 +25,12 @@ class Settings(BaseSettings):
 
     # App secrets
     SECRET_KEY: str
-    TOKEN_ENC_KEY: str = ""  # ≥32 bytes; rotate independently of SECRET_KEY
+    TOKEN_ENC_KEY: str = ""  # ≥32 chars; rotate independently of SECRET_KEY
 
     @field_validator("SECRET_KEY", mode="before")
     @classmethod
     def validate_secret_key(cls, v: str) -> str:
-        if v.lower() in _SECRET_KEY_PLACEHOLDERS:
+        if v.lower() in _WEAK_KEY_PLACEHOLDERS:
             raise ValueError(
                 "SECRET_KEY appears to be a placeholder value; "
                 "set a strong random secret"
@@ -37,6 +38,22 @@ class Settings(BaseSettings):
         if len(v) < 32:
             raise ValueError(
                 f"SECRET_KEY must be at least 32 characters; got {len(v)}"
+            )
+        return v
+
+    @field_validator("TOKEN_ENC_KEY", mode="before")
+    @classmethod
+    def validate_token_enc_key(cls, v: str) -> str:
+        if v == "":
+            return v  # empty string is allowed; runtime check in token_crypto handles it
+        if v.lower() in _WEAK_KEY_PLACEHOLDERS:
+            raise ValueError(
+                "TOKEN_ENC_KEY appears to be a placeholder value; "
+                "set a strong random secret"
+            )
+        if len(v) < 32:
+            raise ValueError(
+                f"TOKEN_ENC_KEY must be at least 32 characters; got {len(v)}"
             )
         return v
 
