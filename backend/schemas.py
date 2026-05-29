@@ -23,7 +23,7 @@ class UserSettingsUpdate(BaseModel):
 
 
 class ConsentAccept(BaseModel):
-    version: str
+    version: str = Field(..., min_length=1, max_length=20)
 
 
 MediaType = Literal["movie", "show"]

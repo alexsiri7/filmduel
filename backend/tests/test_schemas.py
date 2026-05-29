@@ -386,9 +386,9 @@ class TestConsentAccept:
         ca = ConsentAccept(version="1.0")
         assert ca.version == "1.0"
 
-    def test_empty_version_accepted(self):
-        ca = ConsentAccept(version="")
-        assert ca.version == ""
+    def test_empty_version_rejected(self):
+        with pytest.raises(ValidationError):
+            ConsentAccept(version="")
 
     def test_missing_version_rejected(self):
         with pytest.raises(ValidationError):

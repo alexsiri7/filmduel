@@ -400,6 +400,7 @@ async def update_settings(
     )
 
 
+# Must match the version string sent by frontend/src/components/ConsentModal.jsx
 CURRENT_PRIVACY_POLICY_VERSION = "1.0"
 
 
