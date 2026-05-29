@@ -38,10 +38,16 @@ class TestDuelOutcome:
         assert DuelOutcome.a_only == "a_only"
         assert DuelOutcome.b_only == "b_only"
         assert DuelOutcome.neither == "neither"
-        assert DuelOutcome.draw == "draw"
 
-    def test_has_exactly_six_members(self):
-        assert len(DuelOutcome) == 6
+    def test_has_exactly_five_members(self):
+        assert len(DuelOutcome) == 5
+
+    def test_draw_outcome_rejected(self):
+        """'draw' is not a valid outcome; it must not exist in the enum."""
+        with pytest.raises(AttributeError):
+            _ = DuelOutcome.draw
+        with pytest.raises(ValueError):
+            _ = DuelOutcome("draw")
 
     def test_is_string_enum(self):
         assert isinstance(DuelOutcome.a_wins, str)
@@ -104,6 +110,15 @@ class TestDuelSubmit:
                 movie_a_id="550e8400-e29b-41d4-a716-446655440000",
                 movie_b_id="550e8400-e29b-41d4-a716-446655440001",
                 outcome="invalid_outcome",
+            )
+
+    def test_draw_outcome_rejected_by_schema(self):
+        """'draw' is not a valid outcome; DuelSubmit must reject it."""
+        with pytest.raises(ValidationError):
+            DuelSubmit(
+                movie_a_id="550e8400-e29b-41d4-a716-446655440000",
+                movie_b_id="550e8400-e29b-41d4-a716-446655440001",
+                outcome="draw",
             )
 
     def test_missing_movie_ids_rejected(self):
