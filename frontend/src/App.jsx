@@ -19,7 +19,10 @@ function ProtectedRoute({ children }) {
     const checkAuth = async () => {
       try {
         const r = await fetch("/api/me", { credentials: "include" });
-        if (!r.ok) { setStatus("unauthenticated"); return; }
+        if (!r.ok) {
+          setStatus("unauthenticated");
+          return;
+        }
         const data = await r.json();
         if (!data.privacy_policy_accepted) setShowConsent(true);
         setStatus("authenticated");
