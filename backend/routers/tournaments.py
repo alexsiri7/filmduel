@@ -194,6 +194,8 @@ async def create_tournament(
     ai_llm_response = None
 
     if body.ai_curated:
+        if not current_user.privacy_policy_accepted:
+            raise HTTPException(status_code=403, detail="Privacy policy consent required to use AI curation")
         try:
             seeded_films, llm_result = await curate_and_select_films(
                 user_movies=user_movies,
@@ -267,6 +269,9 @@ async def regenerate_tournament(
         raise HTTPException(
             status_code=400, detail="Maximum regeneration attempts (3) reached"
         )
+
+    if not current_user.privacy_policy_accepted:
+        raise HTTPException(status_code=403, detail="Privacy policy consent required to use AI curation")
 
     try:
         user_movies = await get_filtered_ranked_films(
