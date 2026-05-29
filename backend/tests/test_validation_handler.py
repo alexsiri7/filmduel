@@ -70,8 +70,8 @@ class TestScrubValidationErrors:
         finally:
             app.dependency_overrides.pop(get_current_user, None)
 
-    def test_422_response_still_includes_input(self):
-        """The client 422 response must contain the raw 'input' value (only the log is scrubbed)."""
+    def test_422_response_does_not_include_input(self):
+        """The client 422 response must NOT contain the raw 'input' value (SEC-003)."""
         fake_user = _make_fake_user()
         app.dependency_overrides[get_current_user] = lambda: fake_user
         try:
@@ -81,9 +81,8 @@ class TestScrubValidationErrors:
             )
             assert response.status_code == 422
             detail = response.json()["detail"]
-            # The response body must still carry the raw input value — only the log is scrubbed
-            assert any(e.get("input") == "x" * 200 for e in detail), (
-                "422 response must include raw input for client debugging"
-            )
+            # The response body must not carry the raw input value — scrubbed to prevent user data leaks
+            for error in detail:
+                assert "input" not in error, "422 response must not include raw input (SEC-003)"
         finally:
             app.dependency_overrides.pop(get_current_user, None)
