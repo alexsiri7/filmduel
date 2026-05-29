@@ -114,7 +114,9 @@ async def _load_tournament(
 
 
 @router.get("/genres", response_model=list[str])
+@limiter.limit("30/minute")
 async def get_available_genres(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     media_type: MediaType = Query(default="movie"),
@@ -132,7 +134,9 @@ async def get_available_genres(
 
 
 @router.get("/pool-count")
+@limiter.limit("30/minute")
 async def get_pool_count(
+    request: Request,
     filter_type: Optional[str] = None,
     filter_value: Optional[str] = None,
     media_type: MediaType = Query(default="movie"),
@@ -376,7 +380,9 @@ async def list_tournaments(
 
 
 @router.get("/{tournament_id}", response_model=TournamentSchema)
+@limiter.limit("30/minute")
 async def get_tournament(
+    request: Request,
     tournament_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -387,7 +393,9 @@ async def get_tournament(
 
 
 @router.get("/{tournament_id}/next")
+@limiter.limit("30/minute")
 async def get_next_match(
+    request: Request,
     tournament_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -417,7 +425,9 @@ class MatchResult(BaseModel):
 
 
 @router.post("/{tournament_id}/matches/{match_id}")
+@limiter.limit("60/minute")
 async def submit_match_result_endpoint(
+    request: Request,
     tournament_id: uuid.UUID,
     match_id: uuid.UUID,
     body: MatchResult,
@@ -452,7 +462,9 @@ async def submit_match_result_endpoint(
 
 
 @router.delete("/{tournament_id}")
+@limiter.limit("10/minute")
 async def abandon_tournament(
+    request: Request,
     tournament_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

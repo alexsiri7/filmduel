@@ -11,7 +11,11 @@ from backend.main import _scrub_sensitive  # noqa: E402
 
 
 def _make_event_with_frame_vars(vars_: dict) -> dict:
-    return {"exception": {"values": [{"stacktrace": {"frames": [{"vars": vars_}]}}]}}
+    return {
+        "exception": {
+            "values": [{"stacktrace": {"frames": [{"vars": vars_}]}}]
+        }
+    }
 
 
 def _get_frame_vars(event: dict) -> dict:
