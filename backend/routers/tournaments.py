@@ -249,6 +249,10 @@ async def regenerate_tournament(
     uid = current_user.id
     tournament = await _load_tournament(tournament_id, uid, db)
 
+    # Enforce consent before revealing any business-logic details
+    if not current_user.privacy_policy_accepted:
+        raise HTTPException(status_code=403, detail="Privacy policy consent required to use AI curation")
+
     if not tournament.is_ai_curated:
         raise HTTPException(
             status_code=400, detail="Only AI-curated tournaments can be regenerated"
@@ -269,9 +273,6 @@ async def regenerate_tournament(
         raise HTTPException(
             status_code=400, detail="Maximum regeneration attempts (3) reached"
         )
-
-    if not current_user.privacy_policy_accepted:
-        raise HTTPException(status_code=403, detail="Privacy policy consent required to use AI curation")
 
     try:
         user_movies = await get_filtered_ranked_films(
