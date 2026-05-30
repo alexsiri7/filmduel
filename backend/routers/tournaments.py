@@ -110,6 +110,14 @@ async def _load_tournament(
     return tournament
 
 
+def _require_consent(user: User) -> None:
+    if not user.privacy_policy_accepted:
+        raise HTTPException(
+            status_code=403,
+            detail="Privacy policy consent required to use AI curation",
+        )
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────
 
 
@@ -194,8 +202,7 @@ async def create_tournament(
     ai_llm_response = None
 
     if body.ai_curated:
-        if not current_user.privacy_policy_accepted:
-            raise HTTPException(status_code=403, detail="Privacy policy consent required to use AI curation")
+        _require_consent(current_user)
         try:
             seeded_films, llm_result = await curate_and_select_films(
                 user_movies=user_movies,
@@ -250,8 +257,7 @@ async def regenerate_tournament(
     tournament = await _load_tournament(tournament_id, uid, db)
 
     # Enforce consent before revealing any business-logic details
-    if not current_user.privacy_policy_accepted:
-        raise HTTPException(status_code=403, detail="Privacy policy consent required to use AI curation")
+    _require_consent(current_user)
 
     if not tournament.is_ai_curated:
         raise HTTPException(
