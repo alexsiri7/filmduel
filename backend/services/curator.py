@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 def _sanitize_llm_input(text: str, max_len: int = 200) -> str:
     """Strip potential prompt injection from user-controlled or DB-sourced strings."""
     text = text[:max_len]
-    text = re.sub(r"[{}\[\]<>]", "", text)
+    text = re.sub(r"""[{}\[\]<>"']""", "", text)
     text = text.replace("\n", " ").replace("\r", " ")
     return text.strip()
 
