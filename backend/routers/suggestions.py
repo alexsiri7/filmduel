@@ -129,6 +129,14 @@ async def _create_suggestions(
     return await _get_active_suggestions(user_id, db, media_type)
 
 
+def _require_consent(user: User) -> None:
+    if not user.privacy_policy_accepted:
+        raise HTTPException(
+            status_code=403,
+            detail="Privacy policy consent required to use AI suggestions",
+        )
+
+
 @router.get("", response_model=SuggestionsResponse)
 @limiter.limit("10/minute")
 async def get_suggestions(
@@ -139,6 +147,8 @@ async def get_suggestions(
 ):
     """Return current suggestions. Generate if stale (>24h) or missing."""
     uid = current_user.id
+
+    _require_consent(current_user)
 
     # Check if user has enough ranked films
     if not await has_enough_ranked(uid, db, media_type=media_type):
@@ -187,6 +197,8 @@ async def regenerate_suggestions(
 ):
     """Force regeneration. Rate-limited: 3 per day."""
     uid = current_user.id
+
+    _require_consent(current_user)
 
     if not await has_enough_ranked(uid, db, media_type=media_type):
         return SuggestionsResponse(suggestions=[], status="not_enough_films")
