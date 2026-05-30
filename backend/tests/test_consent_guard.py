@@ -188,7 +188,6 @@ class TestTournamentConsentGuard:
 
         # Non-AI tournaments must not be blocked by consent guard
         assert resp.status_code == 200
-        assert resp.status_code < 500, f"Unexpected server error: {resp.status_code}"
 
     def test_create_ai_tournament_allowed_with_consent(self):
         """POST /api/tournaments with ai_curated=true proceeds when consent given."""
