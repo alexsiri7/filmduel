@@ -52,23 +52,20 @@ def _make_fake_execute(
             else:
                 result.scalar_one.return_value = total_seen
             return result
-        # UserMovie select queries — extract movie_id from WHERE clause.
-        # We introspect the SQLAlchemy AST (.whereclause.clauses[1].right.value)
-        # because sorted lock order makes call-order dispatch incorrect.
-        # If SQLAlchemy changes its AST layout, the except raises loudly so the
-        # failure is immediately visible rather than producing a confusing ValueError.
+        # UserMovie select queries — match movie_id by UUID hex in rendered SQL.
+        # This avoids fragile SQLAlchemy AST introspection that breaks on
+        # internal layout changes.
         try:
-            movie_id = stmt.whereclause.clauses[1].right.value
-            if movie_id in movie_map:
-                result.scalar_one_or_none.return_value = movie_map[movie_id]
+            stmt_str = str(stmt.compile(compile_kwargs={"literal_binds": True}))
+        except Exception:
+            stmt_str = str(stmt)
+        for mid, um in movie_map.items():
+            if str(mid).replace("-", "") in stmt_str.replace("-", ""):
+                result.scalar_one_or_none.return_value = um
                 return result
-            raise AssertionError(
-                f"movie_id {movie_id!r} not in movie_map {list(movie_map)}"
-            )
-        except (AttributeError, IndexError) as exc:
-            raise AssertionError(
-                f"Failed to extract movie_id from WHERE clause — SQLAlchemy AST may have changed: {exc}"
-            ) from exc
+        raise AssertionError(
+            f"No movie_id matched in rendered SQL. movie_map keys: {list(movie_map)}"
+        )
 
     return fake_execute
 
@@ -158,6 +155,8 @@ async def test_process_duel_a_wins_elo():
 
     assert result.api_result.movie_a_elo_delta > 0, "Winner A should gain ELO"
     assert result.api_result.movie_b_elo_delta < 0, "Loser B should lose ELO"
+    # Equal-ELO K=32 matchup: expected delta ~16, bounded by [10, 32]
+    assert 10 <= result.api_result.movie_a_elo_delta <= 32
     assert um_a.battles == 6
     assert um_b.battles == 6
     assert um_a.seen is True
@@ -402,6 +401,9 @@ async def test_process_duel_neither_skips_elo():
     assert result.api_result.movie_b_elo_delta == 0
     assert um_a.seen is False
     assert um_b.seen is False
+    # Battles should NOT be incremented for neither outcome
+    assert um_a.battles == 5
+    assert um_b.battles == 5
 
 
 # ---------------------------------------------------------------------------
