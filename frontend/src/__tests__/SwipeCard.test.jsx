@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import SwipeCard from "../components/SwipeCard";
 
 const baseMovie = {
@@ -12,6 +12,10 @@ const baseMovie = {
 };
 
 describe("SwipeCard", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("renders movie poster with correct alt text", () => {
     render(<SwipeCard movie={baseMovie} onSwipe={() => {}} />);
     const img = screen.getByAltText("The Matrix poster");
@@ -55,7 +59,7 @@ describe("SwipeCard", () => {
     const onSwipe = vi.fn();
     render(<SwipeCard movie={baseMovie} onSwipe={onSwipe} />);
 
-    const card = screen.getByText("The Matrix").closest("[class*='select-none']");
+    const card = screen.getByTestId("swipe-card");
 
     fireEvent.mouseDown(card, { clientX: 0 });
     fireEvent.mouseMove(card, { clientX: 100 }); // past 80px threshold
@@ -63,7 +67,6 @@ describe("SwipeCard", () => {
 
     vi.advanceTimersByTime(400);
     expect(onSwipe).toHaveBeenCalledWith(true);
-    vi.useRealTimers();
   });
 
   it("calls onSwipe(false) on left drag past threshold", () => {
@@ -71,7 +74,7 @@ describe("SwipeCard", () => {
     const onSwipe = vi.fn();
     render(<SwipeCard movie={baseMovie} onSwipe={onSwipe} />);
 
-    const card = screen.getByText("The Matrix").closest("[class*='select-none']");
+    const card = screen.getByTestId("swipe-card");
 
     fireEvent.mouseDown(card, { clientX: 200 });
     fireEvent.mouseMove(card, { clientX: 50 }); // -150px, past threshold
@@ -79,14 +82,13 @@ describe("SwipeCard", () => {
 
     vi.advanceTimersByTime(400);
     expect(onSwipe).toHaveBeenCalledWith(false);
-    vi.useRealTimers();
   });
 
   it("snaps back when drag does not reach threshold", () => {
     const onSwipe = vi.fn();
     render(<SwipeCard movie={baseMovie} onSwipe={onSwipe} />);
 
-    const card = screen.getByText("The Matrix").closest("[class*='select-none']");
+    const card = screen.getByTestId("swipe-card");
 
     fireEvent.mouseDown(card, { clientX: 0 });
     fireEvent.mouseMove(card, { clientX: 30 }); // below 80px threshold

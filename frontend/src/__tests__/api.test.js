@@ -224,9 +224,10 @@ describe("api", () => {
 
       await submitFeedback("Title", "Desc", "data:image/jpeg;base64,FAKE");
 
-      const [, secondCallArgs] = fetch.mock.calls;
-      expect(secondCallArgs[0]).toBe("/api/feedback");
-      const body = secondCallArgs[1].body;
+      expect(fetch.mock.calls).toHaveLength(2);
+      const feedbackCall = fetch.mock.calls.find(call => call[0] === "/api/feedback");
+      expect(feedbackCall).toBeDefined();
+      const body = feedbackCall[1].body;
       expect(body.get("screenshot")).toBeInstanceOf(Blob);
     });
   });

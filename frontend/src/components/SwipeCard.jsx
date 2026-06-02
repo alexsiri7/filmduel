@@ -62,6 +62,7 @@ export default function SwipeCard({ movie, onSwipe }) {
 
   return (
     <div
+      data-testid="swipe-card"
       className="relative w-full max-w-[380px] mx-auto select-none touch-none"
       style={{
         transform: exitTransform,

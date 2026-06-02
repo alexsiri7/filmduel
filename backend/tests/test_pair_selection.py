@@ -289,14 +289,14 @@ class TestPickBootstrapPair:
             movie_id=uuid.UUID("00000000-0000-0000-0000-000000000003")
         )
         last_ids = {str(f1.movie_id), str(f2.movie_id)}
-        # With 3 films and one pair excluded, should find a different pair
-        random.seed(42)
-        a, b = _pick_bootstrap_pair([f1, f2, f3], last_ids)
+        # Patch random.choices to deterministically return [f1, f3]
+        with unittest.mock.patch(
+            "backend.services.pair_selection.random.choices",
+            return_value=[f1, f3],
+        ):
+            a, b = _pick_bootstrap_pair([f1, f2, f3], last_ids)
         pair_ids = {str(a.movie_id), str(b.movie_id)}
-        # Should not repeat the last pair (high probability with 3 films)
-        # Note: there's a small chance of repetition after 5 retries
-        # but with seed=42 this should work
-        assert pair_ids != last_ids or len([f1, f2, f3]) == 2
+        assert pair_ids != last_ids
 
     def test_only_2_films(self):
         f1 = _make_user_movie()

@@ -16,6 +16,10 @@ describe("ReportIssueModal", () => {
     submitFeedback.mockReset();
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   const renderModal = () => render(<ReportIssueModal onClose={onClose} />);
 
   const fillForm = () => {
@@ -58,7 +62,6 @@ describe("ReportIssueModal", () => {
     await waitFor(() => expect(screen.getByText("Thank you for your feedback!")).toBeInTheDocument());
     act(() => vi.advanceTimersByTime(1500));
     expect(onClose).toHaveBeenCalledOnce();
-    vi.useRealTimers();
   });
 
   it("shows error message when submitFeedback rejects", async () => {
