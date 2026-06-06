@@ -20,16 +20,18 @@ from starlette.requests import Request as StarletteRequest
 
 from backend.routers.auth import (
     COOKIE_NAME,
-    CURRENT_PRIVACY_POLICY_VERSION,
     JWT_ALGORITHM,
     JWT_EXPIRY_HOURS,
     REFRESH_INTERVAL,
     SESSION_MAX_LIFETIME,
     _TRAKT_TOKEN_DEFAULT_TTL_SECONDS,
-    accept_consent,
     create_jwt,
     ensure_fresh_token,
     get_current_user_id,
+)
+from backend.routers.users import (
+    CURRENT_PRIVACY_POLICY_VERSION,
+    accept_consent,
     update_settings,
 )
 

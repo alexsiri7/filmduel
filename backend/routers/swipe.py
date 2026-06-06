@@ -15,6 +15,7 @@ from backend.db_models import Movie, SwipeResult, User, UserMovie
 from backend.rate_limit import limiter
 from backend.routers.auth import get_current_user
 from backend.schemas import MediaType, SwipeCardSchema, SwipeResponse, SwipeSubmit
+from backend.services.duel import should_suggest_swipe
 from backend.services.expand import expand_pool
 from backend.services.pair_selection import BANDS
 
@@ -233,7 +234,7 @@ async def submit_swipe_results(
     )
     total_seen = (await db.execute(total_seen_stmt)).scalar() or 0
 
-    next_action = "duel" if (total_seen >= 10 and seen_unranked >= 3) else "swipe"
+    next_action = "swipe" if should_suggest_swipe(seen_unranked, total_seen) else "duel"
 
     logger.info(
         "swipe_submit user_id=%s seen_count=%d unseen_count=%d next_action=%s total_seen=%d seen_unranked=%d",

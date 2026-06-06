@@ -44,6 +44,21 @@ class MovieSchema(BaseModel):
     genres: Optional[list[str]] = None
     media_type: MediaType = "movie"
 
+    @classmethod
+    def from_model(cls, movie) -> "MovieSchema":
+        return cls(
+            id=str(movie.id),
+            trakt_id=movie.trakt_id,
+            tmdb_id=movie.tmdb_id,
+            imdb_id=movie.imdb_id,
+            title=movie.title,
+            year=movie.year,
+            poster_url=movie.poster_url,
+            overview=movie.overview,
+            genres=movie.genres,
+            media_type=movie.media_type,
+        )
+
 
 class MovieWithStateSchema(MovieSchema):
     """Movie with user-specific state from user_movies."""

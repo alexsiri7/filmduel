@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import get_settings
+from backend.db import async_session_factory
 from backend.db_models import Movie
 
 logger = logging.getLogger(__name__)
@@ -159,3 +160,9 @@ async def backfill_posters(db: AsyncSession) -> None:
     if filled:
         await db.commit()
         logger.info("Backfilled %d poster URLs", filled)
+
+
+async def backfill_posters_background() -> None:
+    """Run poster backfill in a standalone session (background task)."""
+    async with async_session_factory() as session:
+        await backfill_posters(session)

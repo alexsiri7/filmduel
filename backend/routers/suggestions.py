@@ -15,7 +15,7 @@ from backend.config import get_settings
 from backend.db import async_session_factory, get_db
 from backend.rate_limit import limiter
 from backend.db_models import Movie, Suggestion, User, UserMovie
-from backend.routers.auth import ensure_fresh_token, get_current_user
+from backend.routers.auth import ensure_fresh_token, get_current_user, require_consent
 from backend.schemas import (
     MediaType,
     MovieSchema,
@@ -56,20 +56,9 @@ async def _get_user_suggestion(
 
 
 def _build_suggestion_schema(s: Suggestion) -> SuggestionSchema:
-    m = s.movie
     return SuggestionSchema(
         id=str(s.id),
-        movie=MovieSchema(
-            id=str(m.id),
-            trakt_id=m.trakt_id,
-            tmdb_id=m.tmdb_id,
-            imdb_id=m.imdb_id,
-            title=m.title,
-            year=m.year,
-            poster_url=m.poster_url,
-            overview=m.overview,
-            media_type=m.media_type,
-        ),
+        movie=MovieSchema.from_model(s.movie),
         reason=s.reason,
         generated_at=s.generated_at,
         dismissed_at=s.dismissed_at,
@@ -129,14 +118,6 @@ async def _create_suggestions(
     return await _get_active_suggestions(user_id, db, media_type)
 
 
-def _require_consent(user: User) -> None:
-    if not user.privacy_policy_accepted:
-        raise HTTPException(
-            status_code=403,
-            detail="Privacy policy consent required to use AI suggestions",
-        )
-
-
 @router.get("", response_model=SuggestionsResponse)
 @limiter.limit("10/minute")
 async def get_suggestions(
@@ -148,7 +129,7 @@ async def get_suggestions(
     """Return current suggestions. Generate if stale (>24h) or missing."""
     uid = current_user.id
 
-    _require_consent(current_user)
+    require_consent(current_user)
 
     # Check if user has enough ranked films
     if not await has_enough_ranked(uid, db, media_type=media_type):
@@ -198,7 +179,7 @@ async def regenerate_suggestions(
     """Force regeneration. Rate-limited: 3 per day."""
     uid = current_user.id
 
-    _require_consent(current_user)
+    require_consent(current_user)
 
     if not await has_enough_ranked(uid, db, media_type=media_type):
         return SuggestionsResponse(suggestions=[], status="not_enough_films")

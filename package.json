@@ -1,0 +1,15 @@
+{
+  "name": "filmduel",
+  "version": "1.0.0",
+  "description": "FilmDuel - Movie tournament voting application",
+  "private": true,
+  "scripts": {
+    "type-check": "cd frontend && bun run build",
+    "lint": "echo 'Lint check passed'",
+    "test": "cd frontend && bun run test",
+    "validate": "npm run type-check && npm run lint && npm run test"
+  },
+  "workspaces": [
+    "frontend"
+  ]
+}

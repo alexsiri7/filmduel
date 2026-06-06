@@ -31,21 +31,9 @@ router = APIRouter(prefix="/api/rankings", tags=["rankings"])
 
 
 def _build_ranked_movie(um: UserMovie, rank: int) -> RankedMovie:
-    movie = um.movie
     return RankedMovie(
         rank=rank,
-        movie=MovieSchema(
-            id=str(movie.id),
-            trakt_id=movie.trakt_id,
-            tmdb_id=movie.tmdb_id,
-            imdb_id=movie.imdb_id,
-            title=movie.title,
-            year=movie.year,
-            poster_url=movie.poster_url,
-            overview=movie.overview,
-            genres=movie.genres,
-            media_type=movie.media_type,
-        ),
+        movie=MovieSchema.from_model(um.movie),
         elo=um.elo,
         battles=um.battles,
         trakt_rating=elo_to_trakt_rating(um.elo),
