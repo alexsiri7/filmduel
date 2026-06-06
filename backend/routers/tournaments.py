@@ -14,7 +14,7 @@ from sqlalchemy.orm import joinedload
 from backend.db import get_db
 from backend.rate_limit import limiter
 from backend.db_models import Movie, Tournament, TournamentMatch, User
-from backend.routers.auth import get_current_user
+from backend.routers.auth import get_current_user, require_consent
 from backend.schemas import (
     MediaType,
     MovieSchema,
@@ -41,17 +41,7 @@ router = APIRouter(prefix="/api/tournaments", tags=["tournaments"])
 def _movie_schema(movie: Optional[Movie]) -> Optional[MovieSchema]:
     if movie is None:
         return None
-    return MovieSchema(
-        id=str(movie.id),
-        trakt_id=movie.trakt_id,
-        tmdb_id=movie.tmdb_id,
-        imdb_id=movie.imdb_id,
-        title=movie.title,
-        year=movie.year,
-        poster_url=movie.poster_url,
-        overview=movie.overview,
-        media_type=movie.media_type,
-    )
+    return MovieSchema.from_model(movie)
 
 
 def _match_schema(m: TournamentMatch) -> TournamentMatchSchema:
@@ -108,14 +98,6 @@ async def _load_tournament(
     if tournament.user_id != user_id:
         raise HTTPException(status_code=404, detail="Tournament not found")
     return tournament
-
-
-def _require_consent(user: User) -> None:
-    if not user.privacy_policy_accepted:
-        raise HTTPException(
-            status_code=403,
-            detail="Privacy policy consent required to use AI curation",
-        )
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────
@@ -202,7 +184,7 @@ async def create_tournament(
     ai_llm_response = None
 
     if body.ai_curated:
-        _require_consent(current_user)
+        require_consent(current_user)
         try:
             seeded_films, llm_result = await curate_and_select_films(
                 user_movies=user_movies,
@@ -257,7 +239,7 @@ async def regenerate_tournament(
     tournament = await _load_tournament(tournament_id, uid, db)
 
     # Enforce consent before revealing any business-logic details
-    _require_consent(current_user)
+    require_consent(current_user)
 
     if not tournament.is_ai_curated:
         raise HTTPException(

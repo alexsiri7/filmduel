@@ -27,6 +27,7 @@ from backend.routers import (
     swipe,
     tournaments,
     feedback,
+    users,
 )
 from backend.schemas import SELF_DUEL_ERROR_MSG
 
@@ -203,6 +204,7 @@ async def add_security_headers(request: Request, call_next):
 
 # Register API routers
 app.include_router(auth.router)
+app.include_router(users.router)
 app.include_router(movies.router)
 app.include_router(duels.router)
 app.include_router(rankings.router)

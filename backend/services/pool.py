@@ -9,6 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.db import async_session_factory
+
 from backend.config import get_settings
 from backend.db_models import Movie, User, UserMovie
 from backend.services.elo import trakt_rating_to_seeded_elo
@@ -195,3 +197,20 @@ async def _upsert_pool(
         await db.execute(stmt)
 
     await db.flush()
+
+
+async def sync_pool_background(user_id, force: bool = False) -> None:
+    """Run pool sync in a background task with its own DB session."""
+    try:
+        async with async_session_factory() as session:
+            stmt = select(User).where(User.id == user_id)
+            result = await session.execute(stmt)
+            user = result.scalar_one_or_none()
+            if user:
+                if force:
+                    user.last_seen_at = datetime.now(timezone.utc) - timedelta(hours=2)
+                    await session.flush()
+                await populate_movie_pool(user, session)
+                await session.commit()
+    except Exception:
+        logger.exception("Background pool sync failed for user %s", user_id)
