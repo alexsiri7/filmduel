@@ -164,5 +164,8 @@ async def backfill_posters(db: AsyncSession) -> None:
 
 async def backfill_posters_background() -> None:
     """Run poster backfill in a standalone session (background task)."""
-    async with async_session_factory() as session:
-        await backfill_posters(session)
+    try:
+        async with async_session_factory() as session:
+            await backfill_posters(session)
+    except Exception:
+        logger.exception("Background poster backfill failed")

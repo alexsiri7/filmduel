@@ -8,7 +8,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from backend.services.duel import get_user_movie, process_duel
+from backend.services.duel import (
+    MIN_SEEN_UNRANKED,
+    MIN_TOTAL_SEEN,
+    get_user_movie,
+    process_duel,
+    should_suggest_swipe,
+)
 
 
 def _make_user_movie(
@@ -457,3 +463,22 @@ async def test_pair_type_ranked_vs_unranked():
     ]
     assert len(duel_adds) == 1
     assert duel_adds[0].pair_type == "ranked_vs_unranked"
+
+
+class TestShouldSuggestSwipe:
+    """Boundary tests for the swipe-suggestion threshold function."""
+
+    @pytest.mark.parametrize(
+        "seen_unranked, total_seen, expected",
+        [
+            (0, 0, True),
+            (MIN_SEEN_UNRANKED - 1, MIN_TOTAL_SEEN, True),
+            (MIN_SEEN_UNRANKED, MIN_TOTAL_SEEN - 1, True),
+            (MIN_SEEN_UNRANKED, MIN_TOTAL_SEEN, False),
+            (MIN_SEEN_UNRANKED + 5, MIN_TOTAL_SEEN + 50, False),
+            (0, MIN_TOTAL_SEEN + 50, True),
+            (MIN_SEEN_UNRANKED + 5, 0, True),
+        ],
+    )
+    def test_boundary_conditions(self, seen_unranked, total_seen, expected):
+        assert should_suggest_swipe(seen_unranked, total_seen) is expected

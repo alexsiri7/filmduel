@@ -14,6 +14,12 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.db_models import Duel, UserMovie
+from backend.schemas import DuelOutcome, DuelResult
+from backend.services.elo import get_initial_elo, update_elo
+
+logger = logging.getLogger(__name__)
+
 MIN_SEEN_UNRANKED = 3
 MIN_TOTAL_SEEN = 10
 
@@ -21,12 +27,6 @@ MIN_TOTAL_SEEN = 10
 def should_suggest_swipe(seen_unranked: int, total_seen: int) -> bool:
     """Return True if the user needs more swipes before dueling."""
     return seen_unranked < MIN_SEEN_UNRANKED or total_seen < MIN_TOTAL_SEEN
-
-from backend.db_models import Duel, UserMovie
-from backend.schemas import DuelOutcome, DuelResult
-from backend.services.elo import get_initial_elo, update_elo
-
-logger = logging.getLogger(__name__)
 
 
 async def apply_elo_result(
