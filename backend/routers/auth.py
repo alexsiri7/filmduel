@@ -29,12 +29,16 @@ from backend.db_models import User
 from backend.services.pool import sync_pool_background
 from backend.services.tmdb import backfill_posters_background
 from backend.services.trakt import TraktClient
+from backend.services.simkl import SimklClient
 
 logger = logging.getLogger(__name__)
 
 # Trakt's documented token lifetime is 90 days (7776000 s).
 # Used as a fallback when expires_in is absent from the API response.
 _TRAKT_TOKEN_DEFAULT_TTL_SECONDS = 7776000
+
+# SIMKL tokens are long-lived (no documented expiry; default to 1 year).
+_SIMKL_TOKEN_DEFAULT_TTL_SECONDS = 31536000
 
 router = APIRouter(tags=["auth"])
 
@@ -203,6 +207,9 @@ async def ensure_fresh_token(user: User, db: AsyncSession) -> User:
     Call this before any Trakt API request that needs a valid token.
     Returns the user with up-to-date tokens (already flushed to the session).
     """
+    if not user.trakt_token_expires_at or not user.trakt_access_token_enc:
+        return user  # no Trakt token to refresh
+
     now = datetime.now(timezone.utc)
     expires_at = user.trakt_token_expires_at
     if expires_at.tzinfo is None:
@@ -232,7 +239,22 @@ async def ensure_fresh_token(user: User, db: AsyncSession) -> User:
     return user
 
 
+async def ensure_fresh_simkl_token(user: User, db: AsyncSession) -> User:
+    """Check SIMKL token expiry. SIMKL may not support refresh — log warning."""
+    if not user.simkl_token_expires_at or not user.simkl_access_token_enc:
+        return user
+    now = datetime.now(timezone.utc)
+    expires_at = user.simkl_token_expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at - now > timedelta(hours=1):
+        return user
+    logger.warning("SIMKL token near expiry for user %s", user.id)
+    return user
+
+
 OAUTH_STATE_COOKIE = "filmduel_oauth_state"
+OAUTH_SIMKL_STATE_COOKIE = "filmduel_oauth_simkl_state"
 
 
 @router.get("/auth/login")
@@ -331,6 +353,102 @@ async def callback(
     response = RedirectResponse(url=settings.BASE_URL)
     set_session_cookie(response, str(user.id), settings)
     response.delete_cookie(OAUTH_STATE_COOKIE)
+    return response
+
+
+@router.get("/auth/simkl/login")
+@limiter.limit("10/minute")
+async def simkl_login(request: Request, settings: Settings = Depends(get_settings)):
+    """Redirect the user to SIMKL's OAuth authorization page."""
+    state = secrets.token_urlsafe(32)
+    params = urlencode(
+        {
+            "response_type": "code",
+            "client_id": settings.SIMKL_CLIENT_ID,
+            "redirect_uri": settings.SIMKL_REDIRECT_URI,
+            "state": state,
+        }
+    )
+    response = RedirectResponse(f"https://simkl.com/oauth/authorize?{params}")
+    response.set_cookie(
+        OAUTH_SIMKL_STATE_COOKIE,
+        state,
+        httponly=True,
+        secure=settings.is_https,
+        samesite="lax",
+        max_age=300,
+    )
+    return response
+
+
+@router.get("/auth/simkl/callback")
+@limiter.limit("10/minute")
+async def simkl_callback(
+    code: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    state: str | None = None,
+    settings: Settings = Depends(get_settings),
+    db: AsyncSession = Depends(get_db),
+):
+    """Handle the OAuth callback from SIMKL."""
+    expected_state = request.cookies.get(OAUTH_SIMKL_STATE_COOKIE)
+    if not expected_state or not state or state != expected_state:
+        raise HTTPException(status_code=400, detail="Invalid OAuth state")
+
+    client = SimklClient(client_id=settings.SIMKL_CLIENT_ID)
+    tokens = await client.exchange_code(
+        code,
+        client_secret=settings.SIMKL_CLIENT_SECRET,
+        redirect_uri=settings.SIMKL_REDIRECT_URI,
+    )
+
+    authed_client = SimklClient(
+        client_id=settings.SIMKL_CLIENT_ID,
+        access_token=tokens["access_token"],
+    )
+    profile = await authed_client.get_profile()
+
+    try:
+        simkl_user_id = str(profile["user"]["ids"]["simkl"])
+        simkl_username = profile["user"].get("name", simkl_user_id)
+    except (KeyError, TypeError) as exc:
+        logger.error("Unexpected SIMKL profile response: %s", profile, exc_info=True)
+        raise HTTPException(
+            status_code=502,
+            detail="Unexpected response from SIMKL profile API",
+        ) from exc
+    ttl = tokens.get("expires_in", _SIMKL_TOKEN_DEFAULT_TTL_SECONDS)
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl)
+
+    stmt = select(User).where(User.simkl_user_id == simkl_user_id)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+
+    if user:
+        user.simkl_username = simkl_username
+        user.simkl_access_token = tokens["access_token"]
+        user.simkl_refresh_token = tokens.get("refresh_token", "")
+        user.simkl_token_expires_at = expires_at
+    else:
+        user = User(
+            simkl_user_id=simkl_user_id,
+            simkl_username=simkl_username,
+            simkl_access_token=tokens["access_token"],
+            simkl_refresh_token=tokens.get("refresh_token", ""),
+            simkl_token_expires_at=expires_at,
+        )
+        db.add(user)
+
+    await db.flush()
+
+    user_id = user.id
+    background_tasks.add_task(sync_pool_background, user_id, force=True)
+    background_tasks.add_task(backfill_posters_background)
+
+    response = RedirectResponse(url=settings.BASE_URL)
+    set_session_cookie(response, str(user.id), settings)
+    response.delete_cookie(OAUTH_SIMKL_STATE_COOKIE)
     return response
 
 

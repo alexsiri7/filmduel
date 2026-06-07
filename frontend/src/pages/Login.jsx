@@ -29,6 +29,13 @@ export default function Login() {
             Sign in with Trakt
           </a>
 
+          <a
+            href="/auth/simkl/login"
+            className="group flex items-center gap-4 border border-[#514534]/40 bg-[#1d1b1a] px-10 py-4 font-headline font-bold text-[#d6c4ae] tracking-widest uppercase transition-all duration-300 hover:scale-105 active:scale-95 text-base mt-3"
+          >
+            Sign in with SIMKL
+          </a>
+
           {/* Scroll hint */}
           <div className="mt-16 animate-bounce text-[#6B6760]">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -52,7 +59,7 @@ export default function Login() {
               <span className="font-headline font-black text-5xl text-[#E8A020]/20 mb-4">01</span>
               <h3 className="font-headline font-bold text-[#F5F0E8] uppercase tracking-wider text-sm mb-3">Import</h3>
               <p className="font-body text-[#d6c4ae] text-sm leading-relaxed">
-                Connect your Trakt account to import your watched films. Your history becomes your catalog.
+                Connect your Trakt or SIMKL account to import your watched films. Your history becomes your catalog.
               </p>
             </div>
 
@@ -135,6 +142,13 @@ export default function Login() {
             className="group flex items-center gap-4 bg-[#ffbe5b] px-10 py-5 font-headline font-bold text-[#442b00] tracking-widest uppercase transition-all duration-300 hover:scale-105 active:scale-95 shadow-[0_0_40px_rgba(232,160,32,0.2)] text-lg"
           >
             Sign in with Trakt
+          </a>
+
+          <a
+            href="/auth/simkl/login"
+            className="group flex items-center gap-4 border border-[#514534]/40 bg-[#1d1b1a] px-10 py-4 font-headline font-bold text-[#d6c4ae] tracking-widest uppercase transition-all duration-300 hover:scale-105 active:scale-95 text-base mt-3"
+          >
+            Sign in with SIMKL
           </a>
 
           <div className="w-12 h-[1px] bg-[#514534]/20 mx-auto mt-16" />

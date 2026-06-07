@@ -12,14 +12,17 @@ from pydantic import BaseModel, Field, model_validator
 
 class UserResponse(BaseModel):
     id: str
-    trakt_username: str
+    trakt_username: Optional[str] = None
+    simkl_username: Optional[str] = None
     created_at: datetime
     sync_ratings_to_trakt: bool
+    sync_ratings_to_simkl: bool = False
     privacy_policy_accepted: bool
 
 
 class UserSettingsUpdate(BaseModel):
-    sync_ratings_to_trakt: bool
+    sync_ratings_to_trakt: Optional[bool] = None
+    sync_ratings_to_simkl: Optional[bool] = None
 
 
 class ConsentAccept(BaseModel):

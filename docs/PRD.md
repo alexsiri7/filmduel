@@ -2,7 +2,7 @@
 
 ## Overview
 
-FilmDuel is a web app that helps users discover and rank movies and TV shows through pairwise comparisons. Users authenticate with their Trakt account, toggle between Movies and TV Shows via the nav bar, classify films rapidly via a Tinder-style swipe session, then duel seen films against each other to build an ELO-ranked library. ELO ratings can optionally sync back to Trakt in real time when the user enables the "Sync to Trakt" toggle.
+FilmDuel is a web app that helps users discover and rank movies and TV shows through pairwise comparisons. Users authenticate with their Trakt or SIMKL account, toggle between Movies and TV Shows via the nav bar, classify films rapidly via a Tinder-style swipe session, then duel seen films against each other to build an ELO-ranked library. ELO ratings can optionally sync back to Trakt in real time when the user enables the "Sync to Trakt" toggle.
 
 The experience has two distinct modes that alternate naturally:
 - **Swipe** — fast, mindless sorting. Seen it or not?
@@ -32,7 +32,7 @@ The experience should feel like a game — fast, opinionated, oddly compelling.
 | ORM | SQLAlchemy 2.0 (async, declarative `mapped_column` style) |
 | Migrations | Alembic (async, runs automatically on deploy) |
 | Database | Supabase PostgreSQL (direct connection via asyncpg, NOT supabase-py SDK) |
-| Auth | Trakt OAuth2 (Authorization Code flow), JWT httpOnly cookies |
+| Auth | Trakt OAuth2, SIMKL OAuth2 (Authorization Code flow), JWT httpOnly cookies |
 | Frontend | React 18, Vite, Tailwind CSS, shadcn/ui components |
 | Deployment | Railway (single service, auto-deploy from `main` branch) |
 | DNS | Cloudflare (filmduel.interstellarai.net → Railway) |
@@ -74,6 +74,7 @@ filmduel/
 │   │   └── rankings.py    # ELO rankings, CSV export, stats
 │   └── services/
 │       ├── trakt.py       # Async httpx Trakt API client
+│       ├── simkl.py       # Async httpx SIMKL API client
 │       ├── elo.py         # ELO + K-factor logic
 │       ├── pool.py        # Film pool management, pair selection
 │       └── sync.py        # Push ratings to Trakt
@@ -114,6 +115,11 @@ TRAKT_CLIENT_ID=
 TRAKT_CLIENT_SECRET=
 TRAKT_REDIRECT_URI=https://filmduel.interstellarai.net/auth/callback
 
+# SIMKL OAuth2 (optional) — https://simkl.com/settings/developer
+SIMKL_CLIENT_ID=
+SIMKL_CLIENT_SECRET=
+SIMKL_REDIRECT_URI=https://filmduel.interstellarai.net/auth/simkl/callback
+
 # TMDB — https://www.themoviedb.org/settings/api
 TMDB_API_KEY=
 
@@ -136,11 +142,18 @@ Managed via Alembic. The SQL below is reference only — do not run manually.
 -- Users
 create table users (
   id uuid primary key default gen_random_uuid(),
-  trakt_user_id text unique not null,
-  trakt_username text not null,
-  trakt_access_token text not null,
-  trakt_refresh_token text not null,
-  trakt_token_expires_at timestamptz not null,
+  trakt_user_id text unique,           -- nullable: SIMKL-only users have no Trakt ID
+  trakt_username text,
+  trakt_access_token text,             -- encrypted at rest
+  trakt_refresh_token text,            -- encrypted at rest
+  trakt_token_expires_at timestamptz,
+  simkl_user_id text unique,           -- nullable: Trakt-only users have no SIMKL ID
+  simkl_username text,
+  simkl_access_token text,             -- encrypted at rest
+  simkl_refresh_token text,            -- encrypted at rest
+  simkl_token_expires_at timestamptz,
+  sync_ratings_to_simkl boolean not null default false,
+  sync_ratings_to_trakt boolean not null default false,
   created_at timestamptz default now(),
   last_seen_at timestamptz default now()
 );

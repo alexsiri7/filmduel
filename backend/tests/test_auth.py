@@ -22,12 +22,14 @@ from backend.routers.auth import (
     COOKIE_NAME,
     JWT_ALGORITHM,
     JWT_EXPIRY_HOURS,
+    OAUTH_SIMKL_STATE_COOKIE,
     REFRESH_INTERVAL,
     SESSION_MAX_LIFETIME,
     _TRAKT_TOKEN_DEFAULT_TTL_SECONDS,
     create_jwt,
     ensure_fresh_token,
     get_current_user_id,
+    simkl_callback,
 )
 from backend.routers.users import (
     CURRENT_PRIVACY_POLICY_VERSION,
@@ -567,14 +569,19 @@ class TestEnsureFreshToken:
 # ---------------------------------------------------------------------------
 
 
-def _make_starlette_request() -> StarletteRequest:
-    """Create a minimal real Starlette Request for rate-limited endpoints."""
+def _make_starlette_request(cookies: dict | None = None) -> StarletteRequest:
+    """Create a minimal real Starlette Request for rate-limited endpoints.
+
+    cookies: optional dict of cookie name→value to include in the request.
+    """
+    cookie_header = "; ".join(f"{k}={v}" for k, v in (cookies or {}).items())
+    headers = [(b"cookie", cookie_header.encode())] if cookie_header else []
     scope = {
         "type": "http",
         "method": "PATCH",
         "path": "/api/me/settings",
         "query_string": b"",
-        "headers": [],
+        "headers": headers,
         "client": ("127.0.0.1", 12345),
         "app": MagicMock(),
     }
@@ -587,8 +594,10 @@ class TestUpdateSettings:
         user = MagicMock()
         user.id = "00000000-0000-0000-0000-000000000001"
         user.trakt_username = "testuser"
+        user.simkl_username = None
         user.created_at = datetime(2024, 1, 1, tzinfo=timezone.utc)
         user.sync_ratings_to_trakt = sync_ratings
+        user.sync_ratings_to_simkl = False
         return user
 
     @pytest.mark.asyncio
@@ -640,8 +649,10 @@ class TestAcceptConsent:
         user = MagicMock()
         user.id = "00000000-0000-0000-0000-000000000001"
         user.trakt_username = "testuser"
+        user.simkl_username = None
         user.created_at = datetime(2024, 1, 1, tzinfo=timezone.utc)
         user.sync_ratings_to_trakt = False
+        user.sync_ratings_to_simkl = False
         user.privacy_policy_accepted = False
         return user
 
@@ -701,3 +712,94 @@ class TestAcceptConsent:
         assert exc_info.value.status_code == 400
         assert "99.0" in exc_info.value.detail
         db.commit.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# TestSimklCallback
+# ---------------------------------------------------------------------------
+
+
+class TestSimklCallback:
+    @pytest.mark.asyncio
+    async def test_rejects_missing_state_cookie(self, monkeypatch):
+        """Returns 400 when OAuth state cookie is absent."""
+        monkeypatch.setattr(limiter, "enabled", False)
+        request = _make_starlette_request(cookies={})  # no state cookie
+        db = AsyncMock()
+        with pytest.raises(HTTPException) as exc:
+            await simkl_callback(
+                code="code123",
+                state="somestate",
+                request=request,
+                background_tasks=MagicMock(),
+                settings=SETTINGS,
+                db=db,
+            )
+        assert exc.value.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_rejects_mismatched_state(self, monkeypatch):
+        """Returns 400 when state param does not match cookie."""
+        monkeypatch.setattr(limiter, "enabled", False)
+        request = _make_starlette_request(cookies={OAUTH_SIMKL_STATE_COOKIE: "abc"})
+        db = AsyncMock()
+        with pytest.raises(HTTPException) as exc:
+            await simkl_callback(
+                code="code123",
+                state="xyz",
+                request=request,
+                background_tasks=MagicMock(),
+                settings=SETTINGS,
+                db=db,
+            )
+        assert exc.value.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# Additional update_settings SIMKL tests
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateSettingsSimkl:
+    def _make_user(self) -> MagicMock:
+        user = MagicMock()
+        user.id = "00000000-0000-0000-0000-000000000001"
+        user.trakt_username = "testuser"
+        user.simkl_username = None
+        user.created_at = datetime(2024, 1, 1, tzinfo=timezone.utc)
+        user.sync_ratings_to_trakt = False
+        user.sync_ratings_to_simkl = False
+        return user
+
+    @pytest.mark.asyncio
+    async def test_update_settings_enables_simkl_sync(self, monkeypatch):
+        """Enables SIMKL sync: sets flag to True and returns updated response."""
+        monkeypatch.setattr(limiter, "enabled", False)
+        user = self._make_user()
+        db = AsyncMock()
+        result = await update_settings(
+            body=UserSettingsUpdate(sync_ratings_to_simkl=True),
+            request=_make_starlette_request(),
+            current_user=user,
+            db=db,
+        )
+        assert user.sync_ratings_to_simkl is True
+        db.commit.assert_awaited_once()
+        assert result.sync_ratings_to_simkl is True
+
+    @pytest.mark.asyncio
+    async def test_update_settings_dual_field_payload(self, monkeypatch):
+        """Both trakt and simkl flags can be updated in one request."""
+        monkeypatch.setattr(limiter, "enabled", False)
+        user = self._make_user()
+        db = AsyncMock()
+        result = await update_settings(
+            body=UserSettingsUpdate(sync_ratings_to_trakt=True, sync_ratings_to_simkl=True),
+            request=_make_starlette_request(),
+            current_user=user,
+            db=db,
+        )
+        assert user.sync_ratings_to_trakt is True
+        assert user.sync_ratings_to_simkl is True
+        assert result.sync_ratings_to_trakt is True
+        assert result.sync_ratings_to_simkl is True

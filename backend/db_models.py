@@ -30,15 +30,17 @@ class User(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    trakt_user_id: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
-    trakt_username: Mapped[str] = mapped_column(Text, nullable=False)
+    trakt_user_id: Mapped[Optional[str]] = mapped_column(
+        Text, unique=True, nullable=True
+    )
+    trakt_username: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Stored encrypted at rest. Access via the trakt_access_token /
     # trakt_refresh_token properties which transparently decrypt/encrypt.
-    trakt_access_token_enc: Mapped[str] = mapped_column(
-        "trakt_access_token", Text, nullable=False
+    trakt_access_token_enc: Mapped[Optional[str]] = mapped_column(
+        "trakt_access_token", Text, nullable=True
     )
-    trakt_refresh_token_enc: Mapped[str] = mapped_column(
-        "trakt_refresh_token", Text, nullable=False
+    trakt_refresh_token_enc: Mapped[Optional[str]] = mapped_column(
+        "trakt_refresh_token", Text, nullable=True
     )
 
     @property
@@ -65,8 +67,52 @@ class User(Base):
 
         self.trakt_refresh_token_enc = encrypt_token(value)
 
-    trakt_token_expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
+    trakt_token_expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # SIMKL provider fields — tokens stored encrypted at rest. Access via
+    # simkl_access_token / simkl_refresh_token properties (transparent decrypt/encrypt).
+    simkl_user_id: Mapped[Optional[str]] = mapped_column(
+        Text, unique=True, nullable=True
+    )
+    simkl_username: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    simkl_access_token_enc: Mapped[Optional[str]] = mapped_column(
+        "simkl_access_token", Text, nullable=True
+    )
+    simkl_refresh_token_enc: Mapped[Optional[str]] = mapped_column(
+        "simkl_refresh_token", Text, nullable=True
+    )
+
+    @property
+    def simkl_access_token(self) -> str:
+        from backend.services.token_crypto import decrypt_token
+
+        return decrypt_token(self.simkl_access_token_enc)
+
+    @simkl_access_token.setter
+    def simkl_access_token(self, value: str) -> None:
+        from backend.services.token_crypto import encrypt_token
+
+        self.simkl_access_token_enc = encrypt_token(value)
+
+    @property
+    def simkl_refresh_token(self) -> str:
+        from backend.services.token_crypto import decrypt_token
+
+        return decrypt_token(self.simkl_refresh_token_enc)
+
+    @simkl_refresh_token.setter
+    def simkl_refresh_token(self, value: str) -> None:
+        from backend.services.token_crypto import encrypt_token
+
+        self.simkl_refresh_token_enc = encrypt_token(value)
+
+    simkl_token_expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    sync_ratings_to_simkl: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
@@ -115,6 +161,7 @@ class Movie(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     trakt_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    simkl_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     media_type: Mapped[str] = mapped_column(
         Text, nullable=False, server_default="movie", index=True
     )

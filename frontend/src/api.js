@@ -63,6 +63,10 @@ export function logout() { return request("/auth/logout", { method: "POST" }); }
 
 export function syncTrakt() { return request("/api/sync", { method: "POST" }); }
 
+// POST /api/sync is provider-agnostic — it syncs all connected providers.
+// syncSimkl is kept as a separate export for call-site clarity.
+export function syncSimkl() { return request("/api/sync", { method: "POST" }); }
+
 export function updateSettings(payload) {
   return request("/api/me/settings", {
     method: "PATCH",

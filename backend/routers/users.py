@@ -16,12 +16,14 @@ from backend.db_models import User, UserMovie
 from backend.routers.auth import (
     COOKIE_NAME,
     ensure_fresh_token,
+    ensure_fresh_simkl_token,
     get_current_user,
 )
 from backend.schemas import ConsentAccept, UserResponse, UserSettingsUpdate
 from backend.services.pool import populate_movie_pool, sync_pool_background
 from backend.services.tmdb import backfill_posters_background
 from backend.services.trakt import TraktClient
+from backend.services.simkl import SimklClient
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +37,10 @@ def _build_user_response(user: User) -> UserResponse:
     return UserResponse(
         id=str(user.id),
         trakt_username=user.trakt_username,
+        simkl_username=user.simkl_username,
         created_at=user.created_at,
         sync_ratings_to_trakt=user.sync_ratings_to_trakt,
+        sync_ratings_to_simkl=user.sync_ratings_to_simkl,
         privacy_policy_accepted=user.privacy_policy_accepted,
     )
 
@@ -56,7 +60,10 @@ async def update_settings(
     db: AsyncSession = Depends(get_db),
 ):
     """Update user preferences."""
-    current_user.sync_ratings_to_trakt = body.sync_ratings_to_trakt
+    if body.sync_ratings_to_trakt is not None:
+        current_user.sync_ratings_to_trakt = body.sync_ratings_to_trakt
+    if body.sync_ratings_to_simkl is not None:
+        current_user.sync_ratings_to_simkl = body.sync_ratings_to_simkl
     await db.commit()
     return _build_user_response(current_user)
 
@@ -95,11 +102,18 @@ async def delete_account(
     cascade-deletes the User row (and all dependent rows via ON DELETE CASCADE).
     """
     settings = get_settings()
-    client = TraktClient(client_id=settings.TRAKT_CLIENT_ID)
-    await client.revoke_token(
-        current_user.trakt_access_token,
-        client_secret=settings.TRAKT_CLIENT_SECRET,
-    )
+    if current_user.trakt_access_token_enc:
+        trakt_client = TraktClient(client_id=settings.TRAKT_CLIENT_ID)
+        await trakt_client.revoke_token(
+            current_user.trakt_access_token,
+            client_secret=settings.TRAKT_CLIENT_SECRET,
+        )
+    if current_user.simkl_access_token_enc:
+        simkl_client = SimklClient(client_id=settings.SIMKL_CLIENT_ID)
+        await simkl_client.revoke_token(
+            current_user.simkl_access_token,
+            client_secret=settings.SIMKL_CLIENT_SECRET,
+        )
 
     await db.execute(delete(User).where(User.id == current_user.id))
     await db.commit()
@@ -117,7 +131,7 @@ async def sync_trakt(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Trigger a manual Trakt re-sync, bypassing the 1-hour cooldown.
+    """Trigger a manual re-sync, bypassing the 1-hour cooldown.
 
     Rate limited to 3 calls per hour per user.
     """
@@ -130,8 +144,11 @@ async def sync_trakt(
     )
     before_count = before_count_result.scalar() or 0
 
-    # Ensure fresh Trakt token
-    current_user = await ensure_fresh_token(current_user, db)
+    # Ensure fresh tokens for connected providers
+    if current_user.trakt_access_token_enc:
+        current_user = await ensure_fresh_token(current_user, db)
+    if current_user.simkl_access_token_enc:
+        current_user = await ensure_fresh_simkl_token(current_user, db)
 
     # Force sync (bypass cooldown by resetting last_seen_at)
     current_user.last_seen_at = datetime.now(timezone.utc) - timedelta(hours=2)
