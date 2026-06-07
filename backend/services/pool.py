@@ -10,7 +10,6 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db import async_session_factory
-
 from backend.config import get_settings
 from backend.db_models import Movie, User, UserMovie
 from backend.services.elo import trakt_rating_to_seeded_elo

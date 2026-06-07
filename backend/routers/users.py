@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -94,8 +94,6 @@ async def delete_account(
     Best-effort revokes the Trakt access token at the upstream, then
     cascade-deletes the User row (and all dependent rows via ON DELETE CASCADE).
     """
-    from fastapi import Response
-
     settings = get_settings()
     client = TraktClient(client_id=settings.TRAKT_CLIENT_ID)
     await client.revoke_token(
