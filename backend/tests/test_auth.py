@@ -587,8 +587,10 @@ class TestUpdateSettings:
         user = MagicMock()
         user.id = "00000000-0000-0000-0000-000000000001"
         user.trakt_username = "testuser"
+        user.simkl_username = None
         user.created_at = datetime(2024, 1, 1, tzinfo=timezone.utc)
         user.sync_ratings_to_trakt = sync_ratings
+        user.sync_ratings_to_simkl = False
         return user
 
     @pytest.mark.asyncio
@@ -640,8 +642,10 @@ class TestAcceptConsent:
         user = MagicMock()
         user.id = "00000000-0000-0000-0000-000000000001"
         user.trakt_username = "testuser"
+        user.simkl_username = None
         user.created_at = datetime(2024, 1, 1, tzinfo=timezone.utc)
         user.sync_ratings_to_trakt = False
+        user.sync_ratings_to_simkl = False
         user.privacy_policy_accepted = False
         return user
 

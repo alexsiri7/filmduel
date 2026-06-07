@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     TRAKT_CLIENT_SECRET: str = ""
     TRAKT_REDIRECT_URI: str = "http://localhost:8000/auth/callback"
 
+    # SIMKL OAuth
+    SIMKL_CLIENT_ID: str = ""
+    SIMKL_CLIENT_SECRET: str = ""
+    SIMKL_REDIRECT_URI: str = "http://localhost:8000/auth/simkl/callback"
+
     # Database (Supabase Postgres via connection string)
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
 

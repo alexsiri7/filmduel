@@ -15,14 +15,22 @@ export default function Nav({ mediaType, setMediaType }) {
   const location = useLocation();
   const [showFeedback, setShowFeedback] = useState(false);
   const [syncRatings, setSyncRatings] = useState(false);
+  const [syncRatingsSimkl, setSyncRatingsSimkl] = useState(false);
+  const [hasTrakt, setHasTrakt] = useState(false);
+  const [hasSimkl, setHasSimkl] = useState(false);
 
   useEffect(() => {
     getMe()
       .then((user) => {
-        if (user) setSyncRatings(user.sync_ratings_to_trakt);
+        if (user) {
+          setSyncRatings(user.sync_ratings_to_trakt);
+          setSyncRatingsSimkl(user.sync_ratings_to_simkl ?? false);
+          setHasTrakt(!!user.trakt_username);
+          setHasSimkl(!!user.simkl_username);
+        }
       })
       .catch(() => {
-        // Leave syncRatings at false (safe default).
+        // Leave defaults (safe).
       });
   }, []);
 
@@ -33,6 +41,16 @@ export default function Nav({ mediaType, setMediaType }) {
       await updateSettings({ sync_ratings_to_trakt: next });
     } catch {
       setSyncRatings(!next); // rollback on failure
+    }
+  };
+
+  const handleSimklSyncToggle = async () => {
+    const next = !syncRatingsSimkl;
+    setSyncRatingsSimkl(next);
+    try {
+      await updateSettings({ sync_ratings_to_simkl: next });
+    } catch {
+      setSyncRatingsSimkl(!next);
     }
   };
 
@@ -125,26 +143,50 @@ export default function Nav({ mediaType, setMediaType }) {
         >
           Privacy Policy
         </Link>
-        <div className="flex items-center justify-between w-full py-2 group">
-          <span className="text-[#F5F0E8]/30 group-hover:text-[#F5F0E8]/60 font-headline font-bold uppercase text-xs tracking-widest transition-colors cursor-default">
-            Sync to Trakt
-          </span>
-          <button
-            role="switch"
-            aria-checked={syncRatings}
-            aria-label="Sync to Trakt"
-            onClick={handleSyncToggle}
-            className={`relative w-9 h-5 rounded-full transition-colors cursor-pointer ${
-              syncRatings ? "bg-primary-container" : "bg-[#F5F0E8]/20"
-            }`}
-          >
-            <span
-              className={`absolute top-0.5 left-0.5 w-4 h-4 bg-[#0F0E0D] rounded-full transition-transform ${
-                syncRatings ? "translate-x-4" : ""
+        {hasTrakt && (
+          <div className="flex items-center justify-between w-full py-2 group">
+            <span className="text-[#F5F0E8]/30 group-hover:text-[#F5F0E8]/60 font-headline font-bold uppercase text-xs tracking-widest transition-colors cursor-default">
+              Sync to Trakt
+            </span>
+            <button
+              role="switch"
+              aria-checked={syncRatings}
+              aria-label="Sync to Trakt"
+              onClick={handleSyncToggle}
+              className={`relative w-9 h-5 rounded-full transition-colors cursor-pointer ${
+                syncRatings ? "bg-primary-container" : "bg-[#F5F0E8]/20"
               }`}
-            />
-          </button>
-        </div>
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-4 h-4 bg-[#0F0E0D] rounded-full transition-transform ${
+                  syncRatings ? "translate-x-4" : ""
+                }`}
+              />
+            </button>
+          </div>
+        )}
+        {hasSimkl && (
+          <div className="flex items-center justify-between w-full py-2 group">
+            <span className="text-[#F5F0E8]/30 group-hover:text-[#F5F0E8]/60 font-headline font-bold uppercase text-xs tracking-widest transition-colors cursor-default">
+              Sync to SIMKL
+            </span>
+            <button
+              role="switch"
+              aria-checked={syncRatingsSimkl}
+              aria-label="Sync to SIMKL"
+              onClick={handleSimklSyncToggle}
+              className={`relative w-9 h-5 rounded-full transition-colors cursor-pointer ${
+                syncRatingsSimkl ? "bg-primary-container" : "bg-[#F5F0E8]/20"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-4 h-4 bg-[#0F0E0D] rounded-full transition-transform ${
+                  syncRatingsSimkl ? "translate-x-4" : ""
+                }`}
+              />
+            </button>
+          </div>
+        )}
         <button
           onClick={handleLogout}
           className="w-full text-[#F5F0E8]/30 hover:text-[#F5F0E8]/60 font-headline font-bold uppercase text-xs tracking-widest py-2 transition-colors"
