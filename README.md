@@ -4,7 +4,7 @@ Rank your movies and TV shows through head-to-head duels. Powered by ELO ratings
 
 ## Stack
 
-- **Backend**: FastAPI + SQLAlchemy 2.0 (async) + Alembic + Trakt OAuth2
+- **Backend**: FastAPI + SQLAlchemy 2.0 (async) + Alembic + Trakt OAuth2, SIMKL OAuth2
 - **Database**: PostgreSQL (Supabase via direct connection string)
 - **Frontend**: React 18 + Vite + Tailwind CSS + shadcn/ui
 - **Hosting**: Railway (Docker)
@@ -17,6 +17,7 @@ Rank your movies and TV shows through head-to-head duels. Powered by ELO ratings
 - Node.js 20+
 - A PostgreSQL database (e.g. [Supabase](https://supabase.com))
 - A [Trakt](https://trakt.tv/oauth/applications) OAuth application
+- _(Optional)_ A [SIMKL](https://simkl.com/settings/developer) OAuth application
 - A [TMDB](https://www.themoviedb.org/settings/api) API key
 
 ### 1. Environment

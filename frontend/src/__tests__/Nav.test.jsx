@@ -91,6 +91,78 @@ describe("Nav — Sync to Trakt toggle", () => {
   });
 });
 
+describe("Nav — Sync to SIMKL toggle", () => {
+  const renderNav = () =>
+    render(
+      <MemoryRouter>
+        <Nav />
+      </MemoryRouter>
+    );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("renders toggle in OFF state when user has SIMKL sync disabled", async () => {
+    getMe.mockResolvedValueOnce({ sync_ratings_to_simkl: false, simkl_username: "simkluser" });
+    renderNav();
+    await waitFor(() => {
+      const toggle = screen.getByRole("switch", { name: /sync to simkl/i });
+      expect(toggle).toHaveAttribute("aria-checked", "false");
+    });
+  });
+
+  it("renders toggle in ON state when user has SIMKL sync enabled", async () => {
+    getMe.mockResolvedValueOnce({ sync_ratings_to_simkl: true, simkl_username: "simkluser" });
+    renderNav();
+    await waitFor(() => {
+      const toggle = screen.getByRole("switch", { name: /sync to simkl/i });
+      expect(toggle).toHaveAttribute("aria-checked", "true");
+    });
+  });
+
+  it("toggles ON and calls updateSettings when clicked while OFF", async () => {
+    getMe.mockResolvedValueOnce({ sync_ratings_to_simkl: false, simkl_username: "simkluser" });
+    renderNav();
+    await waitFor(() => screen.getByRole("switch", { name: /sync to simkl/i }));
+    fireEvent.click(screen.getByRole("switch", { name: /sync to simkl/i }));
+    await waitFor(() => {
+      expect(screen.getByRole("switch", { name: /sync to simkl/i })).toHaveAttribute("aria-checked", "true");
+      expect(updateSettings).toHaveBeenCalledWith({ sync_ratings_to_simkl: true });
+    });
+  });
+
+  it("toggles OFF and calls updateSettings when clicked while ON", async () => {
+    getMe.mockResolvedValueOnce({ sync_ratings_to_simkl: true, simkl_username: "simkluser" });
+    renderNav();
+    await waitFor(() => screen.getByRole("switch", { name: /sync to simkl/i }));
+    fireEvent.click(screen.getByRole("switch", { name: /sync to simkl/i }));
+    await waitFor(() => {
+      expect(screen.getByRole("switch", { name: /sync to simkl/i })).toHaveAttribute("aria-checked", "false");
+      expect(updateSettings).toHaveBeenCalledWith({ sync_ratings_to_simkl: false });
+    });
+  });
+
+  it("does not render SIMKL toggle when user has no SIMKL account", async () => {
+    getMe.mockResolvedValueOnce(null);
+    renderNav();
+    await waitFor(() => {
+      expect(screen.queryByRole("switch", { name: /sync to simkl/i })).not.toBeInTheDocument();
+    });
+  });
+
+  it("rolls back toggle state when updateSettings fails", async () => {
+    getMe.mockResolvedValueOnce({ sync_ratings_to_simkl: false, simkl_username: "simkluser" });
+    updateSettings.mockRejectedValueOnce(new Error("Network error"));
+    renderNav();
+    await waitFor(() => screen.getByRole("switch", { name: /sync to simkl/i }));
+    fireEvent.click(screen.getByRole("switch", { name: /sync to simkl/i }));
+    await waitFor(() => {
+      expect(screen.getByRole("switch", { name: /sync to simkl/i })).toHaveAttribute("aria-checked", "false");
+    });
+  });
+});
+
 describe("Nav", () => {
   beforeEach(() => {
     vi.clearAllMocks();

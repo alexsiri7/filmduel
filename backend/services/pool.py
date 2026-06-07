@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, update as sa_update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -58,14 +58,16 @@ def build_simkl_movie_upsert(
 ):
     """Build a PostgreSQL INSERT...ON CONFLICT upsert for a SIMKL movie dict.
 
-    Uses imdb_id cross-reference: if a movie with the same imdb_id exists,
-    update it. Otherwise, store the SIMKL ID in the trakt_id column.
+    Stores the SIMKL ID in both the trakt_id column (for compatibility) and
+    the dedicated simkl_id column. Callers are responsible for imdb_id
+    cross-reference deduplication before calling this.
     """
     ids = movie_data.get("ids", {})
     # SIMKL uses its own numeric ID; store in trakt_id column for now
     simkl_id = ids.get("simkl", 0)
     values = dict(
         trakt_id=simkl_id,
+        simkl_id=simkl_id,
         media_type=media_type,
         imdb_id=ids.get("imdb"),
         tmdb_id=ids.get("tmdb"),
@@ -344,8 +346,15 @@ async def _upsert_simkl_pool(
     for simkl_id, item_data in pool.items():
         imdb_id = item_data.get("ids", {}).get("imdb")
         if imdb_id and imdb_id in existing_by_imdb:
-            # Movie already exists (from Trakt or prior import)
-            simkl_id_to_movie_uuid[simkl_id] = existing_by_imdb[imdb_id][0]
+            # Movie already exists (from Trakt or prior import) — record the SIMKL ID
+            movie_uuid = existing_by_imdb[imdb_id][0]
+            simkl_id_to_movie_uuid[simkl_id] = movie_uuid
+            # Persist the simkl_id on the matched movie row if not set
+            await db.execute(
+                sa_update(Movie.__table__)
+                .where(Movie.__table__.c.id == movie_uuid)
+                .values(simkl_id=simkl_id)
+            )
             continue
 
         # New movie — insert using SIMKL ID in trakt_id column
@@ -387,7 +396,7 @@ async def _upsert_simkl_pool(
                 elo=None,
                 seeded_elo=seeded_elo,
                 battles=0,
-                trakt_rating=rating,
+                trakt_rating=rating,  # column reused for provider-agnostic rating (rename deferred)
                 updated_at=now,
             )
             .on_conflict_do_update(

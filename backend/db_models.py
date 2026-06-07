@@ -71,7 +71,8 @@ class User(Base):
         DateTime(timezone=True), nullable=True
     )
 
-    # SIMKL provider fields
+    # SIMKL provider fields — tokens stored encrypted at rest. Access via
+    # simkl_access_token / simkl_refresh_token properties (transparent decrypt/encrypt).
     simkl_user_id: Mapped[Optional[str]] = mapped_column(
         Text, unique=True, nullable=True
     )
@@ -160,6 +161,7 @@ class Movie(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     trakt_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    simkl_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     media_type: Mapped[str] = mapped_column(
         Text, nullable=False, server_default="movie", index=True
     )

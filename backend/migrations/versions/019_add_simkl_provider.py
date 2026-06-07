@@ -48,8 +48,17 @@ def upgrade() -> None:
         ),
     )
 
+    # Add simkl_id to movies for correct ID tracking (avoids trakt_id collision)
+    op.add_column("movies", sa.Column("simkl_id", sa.Integer(), nullable=True))
+    op.create_index("ix_movies_simkl_id", "movies", ["simkl_id"])
+
 
 def downgrade() -> None:
+    # NOTE: Cannot safely restore nullable=False on Trakt columns if SIMKL-only
+    # users exist (their trakt_* fields are NULL). Downgrade is not safe once
+    # any SIMKL-only user has registered. Manual data cleanup required.
+    op.drop_index("ix_movies_simkl_id", table_name="movies")
+    op.drop_column("movies", "simkl_id")
     op.drop_column("users", "sync_ratings_to_simkl")
     op.drop_column("users", "simkl_token_expires_at")
     op.drop_column("users", "simkl_refresh_token")

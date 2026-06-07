@@ -59,7 +59,7 @@ export default function Login() {
               <span className="font-headline font-black text-5xl text-[#E8A020]/20 mb-4">01</span>
               <h3 className="font-headline font-bold text-[#F5F0E8] uppercase tracking-wider text-sm mb-3">Import</h3>
               <p className="font-body text-[#d6c4ae] text-sm leading-relaxed">
-                Connect your Trakt account to import your watched films. Your history becomes your catalog.
+                Connect your Trakt or SIMKL account to import your watched films. Your history becomes your catalog.
               </p>
             </div>
 

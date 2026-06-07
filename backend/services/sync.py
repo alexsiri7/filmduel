@@ -138,7 +138,7 @@ async def sync_post_duel_simkl(
     movie_ratings: list[tuple[int, int]],
     media_type: str = "movie",
 ) -> None:
-    """Fire-and-forget: sync two specific movie/show ratings to SIMKL after a duel."""
+    """Sync a list of (simkl_id, elo) pairs to SIMKL as ratings after a duel."""
     settings = get_settings()
     client = SimklClient(
         client_id=settings.SIMKL_CLIENT_ID, access_token=access_token
@@ -178,15 +178,18 @@ async def sync_ratings_to_simkl(
     failed = 0
 
     for um in user_movies:
+        if um.movie.simkl_id is None:
+            continue  # Can't rate on SIMKL without a SIMKL ID
         simkl_rating = elo_to_trakt_rating(um.elo)
         try:
-            await client.rate(
-                um.movie.trakt_id, simkl_rating, media_type=um.movie.media_type
+            await _rate_with_retry_simkl(
+                client, um.movie.simkl_id, simkl_rating,
+                media_type=um.movie.media_type,
             )
             synced += 1
         except Exception:
             logger.exception(
-                "Failed to sync SIMKL rating for trakt_id=%s", um.movie.trakt_id
+                "Failed to sync SIMKL rating for simkl_id=%s", um.movie.simkl_id
             )
             failed += 1
 

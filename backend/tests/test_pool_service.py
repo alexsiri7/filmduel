@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from backend.services.pool import populate_movie_pool
+from backend.services.pool import populate_movie_pool, build_simkl_movie_upsert
 
 
 def _make_user(last_seen_at=None):
@@ -98,3 +98,56 @@ class TestPopulateMoviePool:
 
         # No DB execute calls since we skipped
         db.execute.assert_not_awaited()
+
+
+class TestBuildSimklMovieUpsert:
+    """Tests for the build_simkl_movie_upsert helper."""
+
+    def _make_movie_data(self, simkl_id=12345, imdb_id="tt0000001", tmdb_id=999):
+        return {
+            "title": "Test Film",
+            "year": 2024,
+            "ids": {
+                "simkl": simkl_id,
+                "imdb": imdb_id,
+                "tmdb": tmdb_id,
+            },
+            "genres": ["Drama"],
+            "overview": "A test film.",
+            "runtime": 120,
+        }
+
+    def test_stores_simkl_id_in_both_columns(self):
+        """build_simkl_movie_upsert sets simkl_id and trakt_id to the SIMKL numeric ID."""
+        now = datetime.now(timezone.utc)
+        movie_data = self._make_movie_data(simkl_id=42)
+        stmt = build_simkl_movie_upsert(movie_data, now, media_type="movie")
+        # The statement's compiled values should contain both trakt_id and simkl_id
+        params = stmt.compile().params
+        assert params["trakt_id"] == 42
+        assert params["simkl_id"] == 42
+
+    def test_imdb_id_propagated(self):
+        """build_simkl_movie_upsert preserves imdb_id in values."""
+        now = datetime.now(timezone.utc)
+        movie_data = self._make_movie_data(imdb_id="tt9876543")
+        stmt = build_simkl_movie_upsert(movie_data, now, media_type="movie")
+        params = stmt.compile().params
+        assert params["imdb_id"] == "tt9876543"
+
+    def test_missing_simkl_id_defaults_to_zero(self):
+        """If SIMKL ID is absent from ids, trakt_id defaults to 0."""
+        now = datetime.now(timezone.utc)
+        movie_data = {"title": "No ID Film", "ids": {}}
+        stmt = build_simkl_movie_upsert(movie_data, now, media_type="movie")
+        params = stmt.compile().params
+        assert params["trakt_id"] == 0
+        assert params["simkl_id"] == 0
+
+    def test_media_type_stored(self):
+        """build_simkl_movie_upsert stores the correct media_type."""
+        now = datetime.now(timezone.utc)
+        movie_data = self._make_movie_data()
+        stmt = build_simkl_movie_upsert(movie_data, now, media_type="show")
+        params = stmt.compile().params
+        assert params["media_type"] == "show"

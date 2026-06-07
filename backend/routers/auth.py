@@ -409,8 +409,15 @@ async def simkl_callback(
     )
     profile = await authed_client.get_profile()
 
-    simkl_user_id = str(profile["user"]["ids"]["simkl"])
-    simkl_username = profile["user"].get("name", simkl_user_id)
+    try:
+        simkl_user_id = str(profile["user"]["ids"]["simkl"])
+        simkl_username = profile["user"].get("name", simkl_user_id)
+    except (KeyError, TypeError) as exc:
+        logger.error("Unexpected SIMKL profile response: %s", profile, exc_info=True)
+        raise HTTPException(
+            status_code=502,
+            detail="Unexpected response from SIMKL profile API",
+        ) from exc
     ttl = tokens.get("expires_in", _SIMKL_TOKEN_DEFAULT_TTL_SECONDS)
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl)
 

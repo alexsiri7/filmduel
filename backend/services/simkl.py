@@ -8,8 +8,6 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-_SIMKL_TOKEN_DEFAULT_TTL_SECONDS = 31536000  # SIMKL tokens are long-lived
-
 
 class SimklClient:
     """Async client for the SIMKL API."""
@@ -86,7 +84,12 @@ class SimklClient:
             resp = await client.get(f"/sync/all-items/{media_type}s/watched")
             resp.raise_for_status()
             data = resp.json()
-            return data.get(f"{media_type}s", [])
+            # Unwrap wrapper objects — each item is {"last_watched_at": ..., "movie": {...}}
+            return [
+                entry[media_type]
+                for entry in data.get(f"{media_type}s", [])
+                if media_type in entry
+            ]
 
     async def get_user_ratings(self, media_type: str = "movie") -> list[dict]:
         """Fetch user ratings. Returns [{rating, simkl_id}, ...]."""
