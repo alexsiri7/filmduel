@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Optional
 
@@ -33,6 +34,7 @@ from backend.services.tournament import (
 )
 
 router = APIRouter(prefix="/api/tournaments", tags=["tournaments"])
+logger = logging.getLogger(__name__)
 
 
 # ── Response helpers ──────────────────────────────────────────────────
@@ -196,7 +198,8 @@ async def create_tournament(
                 theme_hint=body.name.strip() if body.name else "",
             )
         except ValueError as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            logger.error("AI curation failed: %s", e)
+            raise HTTPException(status_code=500, detail="AI curation failed. Please try again.")
 
         ai_name = llm_result["name"]
         ai_tagline = llm_result.get("tagline")
