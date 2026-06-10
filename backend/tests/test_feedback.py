@@ -217,6 +217,21 @@ class TestSubmitFeedback:
         response = self._post(client, description="x" * 5000)
         assert response.status_code == 201
 
+    def test_log_does_not_contain_title_content(self, client):
+        """SEC-17: feedback log must not contain user-supplied title text."""
+        pii_title = "Bug: missing from Alice Smith's watchlist"
+        with patch("backend.routers.feedback.logger") as mock_logger:
+            response = self._post(client, title=pii_title)
+        assert response.status_code == 201
+        # Collect all string args passed to logger.info
+        logged_text = " ".join(
+            str(arg)
+            for call in mock_logger.info.call_args_list
+            for arg in call.args + tuple(call.kwargs.values())
+        )
+        assert pii_title not in logged_text
+        assert "Alice Smith" not in logged_text
+
 
 class TestAdminListFeedback:
     def _get(self, client, reports=None):
