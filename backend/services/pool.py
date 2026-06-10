@@ -422,9 +422,7 @@ async def sync_pool_background(user_id, force: bool = False) -> None:
     """Run pool sync in a background task with its own DB session."""
     try:
         async with async_session_factory() as session:
-            stmt = select(User).where(User.id == user_id)
-            result = await session.execute(stmt)
-            user = result.scalar_one_or_none()
+            user = await session.get(User, user_id)
             if user:
                 if force:
                     user.last_seen_at = datetime.now(timezone.utc) - timedelta(hours=2)
