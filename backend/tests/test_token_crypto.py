@@ -66,3 +66,13 @@ class TestTokenCrypto:
         first = _fernet()
         second = _fernet()
         assert first is second
+
+    @patch("backend.services.token_crypto.get_settings")
+    def test_key_derivation_is_deterministic(self, mock_get_settings):
+        """Same TOKEN_ENC_KEY always produces the same Fernet key (HKDF is deterministic)."""
+        mock_get_settings.return_value = _mock_settings()
+        ciphertext = encrypt_token("determinism-check")
+
+        # Clear cache and re-derive — must still decrypt successfully
+        _fernet.cache_clear()
+        assert decrypt_token(ciphertext) == "determinism-check"
