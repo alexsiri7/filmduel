@@ -44,7 +44,7 @@ def _make_fernets(token_enc_key: str) -> tuple[Fernet, Fernet]:
 
 
 def _rekey(value: str | None, old: Fernet, new: Fernet) -> str | None:
-    """Decrypt with old key, re-encrypt with new key. Passes through unchanged if value is None or empty."""
+    """Decrypt with old key, re-encrypt with new key. Returns value unchanged if None or empty."""
     if not value:
         return value
     try:
@@ -62,17 +62,8 @@ def _rekey(value: str | None, old: Fernet, new: Fernet) -> str | None:
     return new.encrypt(plaintext).decode()
 
 
-def upgrade() -> None:
-    from backend.config import get_settings
-
-    settings = get_settings()
-    if not settings.TOKEN_ENC_KEY:
-        raise RuntimeError("TOKEN_ENC_KEY must be set to run this migration")
-
-    old_fernet, new_fernet = _make_fernets(settings.TOKEN_ENC_KEY)
-    conn = op.get_bind()
-
-    # Re-key user OAuth tokens (trakt + simkl)
+def _rekey_all_users(conn, source: Fernet, dest: Fernet) -> None:
+    """Re-encrypt all user OAuth tokens from source key to dest key."""
     rows = conn.execute(
         sa.text(
             "SELECT id, trakt_access_token, trakt_refresh_token, "
@@ -82,10 +73,10 @@ def upgrade() -> None:
 
     for row in rows:
         try:
-            ta = _rekey(row.trakt_access_token, old_fernet, new_fernet)
-            tr = _rekey(row.trakt_refresh_token, old_fernet, new_fernet)
-            sa_tok = _rekey(row.simkl_access_token, old_fernet, new_fernet)
-            sr = _rekey(row.simkl_refresh_token, old_fernet, new_fernet)
+            ta = _rekey(row.trakt_access_token, source, dest)
+            tr = _rekey(row.trakt_refresh_token, source, dest)
+            simkl_at = _rekey(row.simkl_access_token, source, dest)
+            simkl_rt = _rekey(row.simkl_refresh_token, source, dest)
         except RuntimeError as exc:
             raise RuntimeError(f"Re-key failed for user id={row.id}: {exc}") from exc
         conn.execute(
@@ -95,8 +86,19 @@ def upgrade() -> None:
                 "simkl_access_token = :sa, simkl_refresh_token = :sr "
                 "WHERE id = :id"
             ),
-            {"id": row.id, "ta": ta, "tr": tr, "sa": sa_tok, "sr": sr},
+            {"id": row.id, "ta": ta, "tr": tr, "sa": simkl_at, "sr": simkl_rt},
         )
+
+
+def upgrade() -> None:
+    from backend.config import get_settings
+
+    settings = get_settings()
+    if not settings.TOKEN_ENC_KEY:
+        raise RuntimeError("TOKEN_ENC_KEY must be set to run this migration")
+
+    old_fernet, new_fernet = _make_fernets(settings.TOKEN_ENC_KEY)
+    _rekey_all_users(op.get_bind(), old_fernet, new_fernet)
 
     # Note: feedback screenshot_data_enc was NULLed in migration 015 (no re-keying needed)
     # Note: movie pair tokens are ephemeral and regenerated on next request
@@ -116,29 +118,4 @@ def downgrade() -> None:
         raise RuntimeError("TOKEN_ENC_KEY must be set to run this migration")
 
     old_fernet, new_fernet = _make_fernets(settings.TOKEN_ENC_KEY)
-    conn = op.get_bind()
-
-    rows = conn.execute(
-        sa.text(
-            "SELECT id, trakt_access_token, trakt_refresh_token, "
-            "simkl_access_token, simkl_refresh_token FROM users"
-        )
-    ).fetchall()
-
-    for row in rows:
-        try:
-            ta = _rekey(row.trakt_access_token, new_fernet, old_fernet)
-            tr = _rekey(row.trakt_refresh_token, new_fernet, old_fernet)
-            sa_tok = _rekey(row.simkl_access_token, new_fernet, old_fernet)
-            sr = _rekey(row.simkl_refresh_token, new_fernet, old_fernet)
-        except RuntimeError as exc:
-            raise RuntimeError(f"Re-key failed for user id={row.id}: {exc}") from exc
-        conn.execute(
-            sa.text(
-                "UPDATE users SET "
-                "trakt_access_token = :ta, trakt_refresh_token = :tr, "
-                "simkl_access_token = :sa, simkl_refresh_token = :sr "
-                "WHERE id = :id"
-            ),
-            {"id": row.id, "ta": ta, "tr": tr, "sa": sa_tok, "sr": sr},
-        )
+    _rekey_all_users(op.get_bind(), new_fernet, old_fernet)
