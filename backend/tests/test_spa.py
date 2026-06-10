@@ -104,3 +104,26 @@ def test_sibling_directory_is_blocked_via_symlink(tmp_path):
     assert response.status_code == 200
     assert "SECRET" not in response.text
     assert "app" in response.text
+
+
+def test_log_injection_newlines_are_escaped(tmp_path, caplog):
+    """Newlines in full_path must be escaped before logging to prevent log injection."""
+    import logging
+
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<html>app</html>")
+    # Place a file outside dist to trigger the out-of-bounds warning
+    outside = tmp_path / "outside.txt"
+    outside.write_text("OUTSIDE")
+    # Symlink inside dist pointing outside to trigger the warning log
+    (dist / "escape").symlink_to("../outside.txt")
+
+    with patch.object(main_module, "STATIC_DIR", dist):
+        with caplog.at_level(logging.WARNING, logger="backend.main"):
+            client.get("/escape%0a%0dFAKE_LOG_LINE")
+
+    # The literal newline/CR must not appear in the log record
+    for record in caplog.records:
+        assert "\n" not in record.getMessage()
+        assert "\r" not in record.getMessage()

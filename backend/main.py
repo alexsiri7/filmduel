@@ -244,9 +244,10 @@ async def spa_fallback(full_path: str):
     if file_path.is_file():
         if file_path.is_relative_to(STATIC_DIR):
             return FileResponse(file_path)
+        safe_path = full_path.replace("\n", "\\n").replace("\r", "\\r")
         logger.warning(
             "spa_fallback blocked out-of-bounds access: requested=%s resolved=%s",
-            full_path,
+            safe_path,
             file_path,
         )
     return FileResponse(index_html)
