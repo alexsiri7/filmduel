@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db_models import Tournament, TournamentMatch, UserMovie
+from backend.schemas import FilterType
 from backend.services.curator import curate_tournament
 from backend.services.duel import apply_elo_result
 from backend.services.ranking import ranked_user_movies_stmt
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
 async def curate_and_select_films(
     user_movies: list[UserMovie],
     bracket_size: int,
-    filter_type: Optional[str],
+    filter_type: Optional[FilterType],
     filter_value: Optional[str],
     theme_hint: str,
 ) -> tuple[list[UserMovie], dict]:
@@ -115,7 +116,7 @@ def _num_rounds(bracket_size: int) -> int:
 async def get_filtered_ranked_films(
     db: AsyncSession,
     user_id: uuid.UUID,
-    filter_type: Optional[str] = None,
+    filter_type: Optional[FilterType] = None,
     filter_value: Optional[str] = None,
     media_type: str = "movie",
 ) -> list[UserMovie]:
