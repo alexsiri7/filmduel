@@ -30,6 +30,7 @@ class ConsentAccept(BaseModel):
 
 
 MediaType = Literal["movie", "show"]
+FilterType = Literal["genre", "decade"]
 SwipeNextAction = Literal["duel", "swipe"]
 TournamentStatus = Literal["active", "completed", "abandoned"]
 SuggestionsStatus = Literal["ready", "not_enough_films", "no_candidates"]
@@ -166,7 +167,7 @@ class StatsResponse(BaseModel):
 
 class TournamentCreate(BaseModel):
     name: str = Field(default="", max_length=100)
-    filter_type: Optional[str] = None
+    filter_type: Optional[FilterType] = None
     filter_value: Optional[str] = None
     bracket_size: Literal[8, 16, 32, 64]
     ai_curated: bool = False
