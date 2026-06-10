@@ -284,5 +284,10 @@ async def purge_old_swipe_results(
         delete(SwipeResult).where(SwipeResult.created_at < cutoff).returning(SwipeResult.id)
     )
     purged_ids = result.fetchall()
-    logger.info("purged_swipe_results count=%d retention_days=%d", len(purged_ids), settings.SWIPE_RETENTION_DAYS)
+    logger.info(
+        "purged_swipe_results count=%d retention_days=%d triggered_by=%s",
+        len(purged_ids),
+        settings.SWIPE_RETENTION_DAYS,
+        current_user.id,
+    )
     return {"purged": len(purged_ids)}

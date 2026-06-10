@@ -95,6 +95,26 @@ class TestCorsOriginsValidation:
         assert s.CORS_ORIGINS == ["http://localhost:5173"]
 
 
+class TestRetentionDefaults:
+    def test_duel_retention_days_default(self):
+        """DUEL_RETENTION_DAYS defaults to 180 (compliance window)."""
+        s = _make_settings()
+        assert s.DUEL_RETENTION_DAYS == 180
+
+    def test_swipe_retention_days_default(self):
+        """SWIPE_RETENTION_DAYS defaults to 180 (compliance window)."""
+        s = _make_settings()
+        assert s.SWIPE_RETENTION_DAYS == 180
+
+    def test_duel_retention_days_override(self):
+        s = _make_settings(DUEL_RETENTION_DAYS=90)
+        assert s.DUEL_RETENTION_DAYS == 90
+
+    def test_swipe_retention_days_override(self):
+        s = _make_settings(SWIPE_RETENTION_DAYS=365)
+        assert s.SWIPE_RETENTION_DAYS == 365
+
+
 class TestTokenEncKeyValidation:
     def test_empty_string_accepted(self):
         """Empty TOKEN_ENC_KEY is allowed at config load; runtime check handles it."""

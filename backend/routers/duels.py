@@ -5,9 +5,9 @@ from __future__ import annotations
 import logging
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from datetime import datetime, timedelta, timezone
 
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -127,5 +127,10 @@ async def purge_old_duels(
         delete(Duel).where(Duel.created_at < cutoff).returning(Duel.id)
     )
     purged_ids = result.fetchall()
-    logger.info("purged_duels count=%d retention_days=%d", len(purged_ids), settings.DUEL_RETENTION_DAYS)
+    logger.info(
+        "purged_duels count=%d retention_days=%d triggered_by=%s",
+        len(purged_ids),
+        settings.DUEL_RETENTION_DAYS,
+        current_user.id,
+    )
     return {"purged": len(purged_ids)}

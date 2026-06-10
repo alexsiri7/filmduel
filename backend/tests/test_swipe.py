@@ -1,4 +1,4 @@
-"""Tests for swipe logic — band indexing, community rating range, next_action."""
+"""Tests for swipe logic (band indexing, community rating, next_action) and purge endpoint."""
 
 import uuid
 from unittest.mock import AsyncMock, MagicMock
@@ -13,6 +13,7 @@ from backend.routers.swipe import (
     _community_rating_range,
     _elo_to_band_index,
 )
+from backend.services.duel import should_suggest_swipe
 
 
 # ---------------------------------------------------------------------------
@@ -128,17 +129,24 @@ class TestBandsStructure:
 class TestNextActionLogic:
     """Tests for the next_action determination in swipe results.
 
-    The rule: next_action = "duel" if total_seen >= 2 else "swipe"
+    The rule: suggest swipe when seen_unranked < MIN_SEEN_UNRANKED (3)
+              or total_seen < MIN_TOTAL_SEEN (10).
     """
 
-    def test_threshold_logic(self):
-        # total_seen >= 2 -> duel
-        assert ("duel" if 2 >= 2 else "swipe") == "duel"
-        assert ("duel" if 100 >= 2 else "swipe") == "duel"
+    def test_threshold_met_suggests_duel(self):
+        # enough seen_unranked AND enough total_seen -> duel (should_suggest_swipe returns False)
+        assert should_suggest_swipe(3, 10) is False
+        assert should_suggest_swipe(5, 100) is False
 
-    def test_below_threshold(self):
-        assert ("duel" if 0 >= 2 else "swipe") == "swipe"
-        assert ("duel" if 1 >= 2 else "swipe") == "swipe"
+    def test_below_seen_unranked_threshold_suggests_swipe(self):
+        # seen_unranked < 3 -> swipe
+        assert should_suggest_swipe(0, 10) is True
+        assert should_suggest_swipe(2, 10) is True
+
+    def test_below_total_seen_threshold_suggests_swipe(self):
+        # total_seen < 10 -> swipe
+        assert should_suggest_swipe(3, 0) is True
+        assert should_suggest_swipe(3, 9) is True
 
 
 # ---------------------------------------------------------------------------
@@ -186,3 +194,23 @@ class TestPurgeSwipeResults:
         response = self._delete(client, purged_ids=[])
         assert response.status_code == 200
         assert response.json() == {"purged": 0}
+
+    def test_non_admin_returns_403(self):
+        user = _make_user()
+        user.is_admin = False
+        db = _make_db()
+        client = TestClient(app)
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: db
+        try:
+            response = client.delete("/api/swipe/admin/purge-old-records")
+        finally:
+            app.dependency_overrides.clear()
+        assert response.status_code == 403
+        assert "admin" in response.json()["detail"].lower()
+
+    def test_unauthenticated_returns_401(self):
+        client = TestClient(app)
+        # No dependency overrides — auth stack runs normally
+        response = client.delete("/api/swipe/admin/purge-old-records")
+        assert response.status_code == 401
