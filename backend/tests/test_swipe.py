@@ -1,5 +1,13 @@
 """Tests for swipe logic — band indexing, community rating range, next_action."""
 
+import uuid
+from unittest.mock import AsyncMock, MagicMock
+
+from fastapi.testclient import TestClient
+
+from backend.db import get_db
+from backend.main import app
+from backend.routers.auth import get_current_user
 from backend.routers.swipe import (
     BANDS,
     _community_rating_range,
@@ -131,3 +139,50 @@ class TestNextActionLogic:
     def test_below_threshold(self):
         assert ("duel" if 0 >= 2 else "swipe") == "swipe"
         assert ("duel" if 1 >= 2 else "swipe") == "swipe"
+
+
+# ---------------------------------------------------------------------------
+# Purge old swipe results
+# ---------------------------------------------------------------------------
+
+
+def _make_user():
+    user = MagicMock()
+    user.id = uuid.uuid4()
+    user.is_admin = True
+    return user
+
+
+def _make_db():
+    return AsyncMock()
+
+
+class TestPurgeSwipeResults:
+    def _delete(self, client, purged_ids=None):
+        user = _make_user()
+        db = _make_db()
+        purged_ids = purged_ids or []
+        db.execute = AsyncMock(
+            return_value=MagicMock(
+                fetchall=MagicMock(return_value=[(pid,) for pid in purged_ids])
+            )
+        )
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: db
+        try:
+            return client.delete("/api/swipe/admin/purge-old-records")
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_returns_purged_count(self):
+        purged = [uuid.uuid4(), uuid.uuid4()]
+        client = TestClient(app)
+        response = self._delete(client, purged_ids=purged)
+        assert response.status_code == 200
+        assert response.json() == {"purged": 2}
+
+    def test_returns_zero_when_nothing_to_purge(self):
+        client = TestClient(app)
+        response = self._delete(client, purged_ids=[])
+        assert response.status_code == 200
+        assert response.json() == {"purged": 0}

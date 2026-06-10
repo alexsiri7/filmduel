@@ -132,3 +132,35 @@ class TestSubmitDuel:
         )
         # Without auth override, should fail with 401
         assert response.status_code == 401
+
+
+class TestPurgeDuels:
+    def _delete(self, client, purged_ids=None):
+        user = _make_user()
+        user.is_admin = True
+        db = _make_db()
+        purged_ids = purged_ids or []
+        db.execute = AsyncMock(
+            return_value=MagicMock(
+                fetchall=MagicMock(return_value=[(pid,) for pid in purged_ids])
+            )
+        )
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: db
+        try:
+            return client.delete("/api/duels/admin/purge-old-records")
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_returns_purged_count(self):
+        purged = [uuid.uuid4(), uuid.uuid4()]
+        client = TestClient(app)
+        response = self._delete(client, purged_ids=purged)
+        assert response.status_code == 200
+        assert response.json() == {"purged": 2}
+
+    def test_returns_zero_when_nothing_to_purge(self):
+        client = TestClient(app)
+        response = self._delete(client, purged_ids=[])
+        assert response.status_code == 200
+        assert response.json() == {"purged": 0}

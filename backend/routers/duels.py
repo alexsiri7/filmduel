@@ -6,14 +6,17 @@ import logging
 import uuid
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
-from sqlalchemy import select
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db import async_session_factory, get_db
 from backend.rate_limit import limiter
-from backend.db_models import Movie, User
+from backend.config import get_settings
+from backend.db_models import Duel, Movie, User
 from backend.schemas import DuelSubmit, DuelResult
-from backend.routers.auth import get_current_user, ensure_fresh_token
+from backend.routers.auth import get_admin_user, get_current_user, ensure_fresh_token
 from backend.services.duel import process_duel
 from backend.services.sync import sync_post_duel
 
@@ -111,3 +114,18 @@ async def submit_duel(
         )
 
     return result.api_result
+
+
+@router.delete("/admin/purge-old-records", status_code=200)
+async def purge_old_duels(
+    current_user: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    settings = get_settings()
+    cutoff = datetime.now(timezone.utc) - timedelta(days=settings.DUEL_RETENTION_DAYS)
+    result = await db.execute(
+        delete(Duel).where(Duel.created_at < cutoff).returning(Duel.id)
+    )
+    purged_ids = result.fetchall()
+    logger.info("purged_duels count=%d retention_days=%d", len(purged_ids), settings.DUEL_RETENTION_DAYS)
+    return {"purged": len(purged_ids)}

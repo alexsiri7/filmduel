@@ -4,16 +4,17 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db import get_db
 from backend.db_models import Movie, SwipeResult, User, UserMovie
 from backend.rate_limit import limiter
-from backend.routers.auth import get_current_user
+from backend.config import get_settings
+from backend.routers.auth import get_admin_user, get_current_user
 from backend.schemas import MediaType, SwipeCardSchema, SwipeResponse, SwipeSubmit
 from backend.services.duel import should_suggest_swipe
 from backend.services.expand import expand_pool
@@ -270,3 +271,18 @@ async def submit_swipe_results(
     return SwipeResponse(
         seen_count=seen_count, unseen_count=unseen_count, next_action=next_action
     )
+
+
+@router.delete("/admin/purge-old-records", status_code=200)
+async def purge_old_swipe_results(
+    current_user: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    settings = get_settings()
+    cutoff = datetime.now(timezone.utc) - timedelta(days=settings.SWIPE_RETENTION_DAYS)
+    result = await db.execute(
+        delete(SwipeResult).where(SwipeResult.created_at < cutoff).returning(SwipeResult.id)
+    )
+    purged_ids = result.fetchall()
+    logger.info("purged_swipe_results count=%d retention_days=%d", len(purged_ids), settings.SWIPE_RETENTION_DAYS)
+    return {"purged": len(purged_ids)}

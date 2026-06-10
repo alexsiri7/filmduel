@@ -98,6 +98,10 @@ class Settings(BaseSettings):
             )
         return entries
 
+    # Data retention (days)
+    DUEL_RETENTION_DAYS: int = 180
+    SWIPE_RETENTION_DAYS: int = 180
+
     # Sentry
     SENTRY_DSN: str = ""
 
