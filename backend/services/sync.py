@@ -181,16 +181,10 @@ async def sync_ratings_to_simkl(
         if um.movie.simkl_id is None:
             continue  # Can't rate on SIMKL without a SIMKL ID
         simkl_rating = elo_to_trakt_rating(um.elo)
-        try:
-            await _rate_with_retry_simkl(
-                client, um.movie.simkl_id, simkl_rating,
-                media_type=um.movie.media_type,
-            )
-            synced += 1
-        except Exception:
-            logger.exception(
-                "Failed to sync SIMKL rating for simkl_id=%s", um.movie.simkl_id
-            )
-            failed += 1
+        await _rate_with_retry_simkl(
+            client, um.movie.simkl_id, simkl_rating,
+            media_type=um.movie.media_type,
+        )
+        synced += 1
 
     return {"synced": synced, "failed": failed}
