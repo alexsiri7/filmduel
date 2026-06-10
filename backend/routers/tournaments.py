@@ -158,6 +158,9 @@ async def create_tournament(
     """Create and seed a new tournament bracket."""
     uid = current_user.id
 
+    if body.ai_curated:
+        require_consent(current_user)
+
     try:
         user_movies = await get_filtered_ranked_films(
             db,
@@ -184,7 +187,6 @@ async def create_tournament(
     ai_llm_response = None
 
     if body.ai_curated:
-        require_consent(current_user)
         try:
             seeded_films, llm_result = await curate_and_select_films(
                 user_movies=user_movies,

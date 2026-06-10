@@ -119,19 +119,14 @@ class TestTournamentConsentGuard:
         app.dependency_overrides[get_current_user] = lambda: user
         app.dependency_overrides[get_db] = lambda: mock_db
 
-        with patch(
-            "backend.routers.tournaments.get_filtered_ranked_films",
-            new_callable=AsyncMock,
-            return_value=[MagicMock() for _ in range(16)],
-        ):
-            with TestClient(app, raise_server_exceptions=False) as client:
-                resp = client.post(
-                    "/api/tournaments",
-                    json={
-                        "ai_curated": True,
-                        "bracket_size": 8,
-                    },
-                )
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.post(
+                "/api/tournaments",
+                json={
+                    "ai_curated": True,
+                    "bracket_size": 8,
+                },
+            )
 
         assert resp.status_code == 403
         assert "consent" in resp.json()["detail"].lower()
