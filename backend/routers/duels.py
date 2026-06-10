@@ -126,11 +126,11 @@ async def purge_old_duels(
     result = await db.execute(
         delete(Duel).where(Duel.created_at < cutoff).returning(Duel.id)
     )
-    purged_ids = result.fetchall()
+    count = len(result.fetchall())
     logger.info(
         "purged_duels count=%d retention_days=%d triggered_by=%s",
-        len(purged_ids),
+        count,
         settings.DUEL_RETENTION_DAYS,
         current_user.id,
     )
-    return {"purged": len(purged_ids)}
+    return {"purged": count}
