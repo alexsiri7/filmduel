@@ -125,7 +125,7 @@ async def delete_account(
 
 @router.post("/api/sync")
 @limiter.limit("3/hour")
-async def sync_trakt(
+async def sync_providers(
     request: Request,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),

@@ -46,8 +46,7 @@ COOKIE_NAME = "filmduel_session"
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_HOURS = 72  # 3-day absolute lifetime per issued token
 REFRESH_INTERVAL = timedelta(hours=12)  # re-issue cookie at most once per 12h
-SESSION_MAX_DAYS = 30  # absolute hard cap on total session lifetime
-SESSION_MAX_LIFETIME = timedelta(days=SESSION_MAX_DAYS)
+SESSION_MAX_LIFETIME = timedelta(days=30)  # absolute hard cap on total session lifetime
 
 
 def create_jwt(

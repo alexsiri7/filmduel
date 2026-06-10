@@ -119,22 +119,39 @@ class TestTournamentConsentGuard:
         app.dependency_overrides[get_current_user] = lambda: user
         app.dependency_overrides[get_db] = lambda: mock_db
 
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.post(
+                "/api/tournaments",
+                json={
+                    "ai_curated": True,
+                    "bracket_size": 8,
+                },
+            )
+
+        assert resp.status_code == 403
+        assert "consent" in resp.json()["detail"].lower()
+
+    def test_create_ai_tournament_consent_fires_before_db(self):
+        """Consent check must execute before DB query for AI tournament creation."""
+        user = _make_user(privacy_policy_accepted=False)
+        mock_db = AsyncMock()
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
         with patch(
             "backend.routers.tournaments.get_filtered_ranked_films",
             new_callable=AsyncMock,
             return_value=[MagicMock() for _ in range(16)],
-        ):
+        ) as mock_db_query:
             with TestClient(app, raise_server_exceptions=False) as client:
                 resp = client.post(
                     "/api/tournaments",
-                    json={
-                        "ai_curated": True,
-                        "bracket_size": 8,
-                    },
+                    json={"ai_curated": True, "bracket_size": 8},
                 )
 
         assert resp.status_code == 403
-        assert "consent" in resp.json()["detail"].lower()
+        mock_db_query.assert_not_called()
 
     def test_create_non_ai_tournament_no_consent_required(self):
         """POST /api/tournaments with ai_curated=false does not require consent."""
@@ -336,6 +353,5 @@ class TestTournamentConsentGuard:
             with TestClient(app, raise_server_exceptions=False) as client:
                 resp = client.post(f"/api/tournaments/{tournament_id}/regenerate")
 
-        # Consenting user must not be blocked by the consent guard (403)
-        assert resp.status_code != 403
-        assert resp.status_code < 500, f"Unexpected server error: {resp.status_code}"
+        # Consenting user must not be blocked by the consent guard
+        assert resp.status_code == 200

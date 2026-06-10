@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Optional
 
@@ -33,6 +34,7 @@ from backend.services.tournament import (
 )
 
 router = APIRouter(prefix="/api/tournaments", tags=["tournaments"])
+logger = logging.getLogger(__name__)
 
 
 # ── Response helpers ──────────────────────────────────────────────────
@@ -158,6 +160,9 @@ async def create_tournament(
     """Create and seed a new tournament bracket."""
     uid = current_user.id
 
+    if body.ai_curated:
+        require_consent(current_user)
+
     try:
         user_movies = await get_filtered_ranked_films(
             db,
@@ -184,7 +189,6 @@ async def create_tournament(
     ai_llm_response = None
 
     if body.ai_curated:
-        require_consent(current_user)
         try:
             seeded_films, llm_result = await curate_and_select_films(
                 user_movies=user_movies,
@@ -194,7 +198,8 @@ async def create_tournament(
                 theme_hint=body.name.strip() if body.name else "",
             )
         except ValueError as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            logger.error("AI curation failed: %s", e)
+            raise HTTPException(status_code=500, detail="AI curation failed. Please try again.")
 
         ai_name = llm_result["name"]
         ai_tagline = llm_result.get("tagline")
