@@ -30,7 +30,7 @@ jobs:
           fi
 
       - name: Install Railway CLI
-        run: npm install -g @railway/cli
+        run: npm install -g @railway/cli@5.8.0  # pinned 2026-06-10, latest stable — update when upgrading Railway CLI
 
       - name: Deploy to staging
         env:
@@ -103,7 +103,7 @@ jobs:
           ref: ${{ needs.deploy-staging.outputs.deploy_sha }}
 
       - name: Install Railway CLI
-        run: npm install -g @railway/cli
+        run: npm install -g @railway/cli@5.8.0  # pinned 2026-06-10, latest stable — update when upgrading Railway CLI
 
       - name: Deploy to production
         env:
