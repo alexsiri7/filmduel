@@ -44,7 +44,7 @@ def _make_fernets(token_enc_key: str) -> tuple[Fernet, Fernet]:
 
 
 def _rekey(value: str | None, old: Fernet, new: Fernet) -> str | None:
-    """Decrypt with old key, re-encrypt with new key. Returns None if value is None/empty."""
+    """Decrypt with old key, re-encrypt with new key. Passes through unchanged if value is None or empty."""
     if not value:
         return value
     try:
@@ -81,6 +81,13 @@ def upgrade() -> None:
     ).fetchall()
 
     for row in rows:
+        try:
+            ta = _rekey(row.trakt_access_token, old_fernet, new_fernet)
+            tr = _rekey(row.trakt_refresh_token, old_fernet, new_fernet)
+            sa_tok = _rekey(row.simkl_access_token, old_fernet, new_fernet)
+            sr = _rekey(row.simkl_refresh_token, old_fernet, new_fernet)
+        except RuntimeError as exc:
+            raise RuntimeError(f"Re-key failed for user id={row.id}: {exc}") from exc
         conn.execute(
             sa.text(
                 "UPDATE users SET "
@@ -88,13 +95,7 @@ def upgrade() -> None:
                 "simkl_access_token = :sa, simkl_refresh_token = :sr "
                 "WHERE id = :id"
             ),
-            {
-                "id": row.id,
-                "ta": _rekey(row.trakt_access_token, old_fernet, new_fernet),
-                "tr": _rekey(row.trakt_refresh_token, old_fernet, new_fernet),
-                "sa": _rekey(row.simkl_access_token, old_fernet, new_fernet),
-                "sr": _rekey(row.simkl_refresh_token, old_fernet, new_fernet),
-            },
+            {"id": row.id, "ta": ta, "tr": tr, "sa": sa_tok, "sr": sr},
         )
 
     # Note: feedback screenshot_data_enc was NULLed in migration 015 (no re-keying needed)
@@ -102,6 +103,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """Revert HKDF-keyed tokens back to SHA-256 keyed.
+
+    IMPORTANT: Roll back the application code (token_crypto.py) to the SHA-256
+    version BEFORE running this downgrade, otherwise live instances will fail
+    to decrypt reverted tokens.
+    """
     from backend.config import get_settings
 
     settings = get_settings()
@@ -119,6 +126,13 @@ def downgrade() -> None:
     ).fetchall()
 
     for row in rows:
+        try:
+            ta = _rekey(row.trakt_access_token, new_fernet, old_fernet)
+            tr = _rekey(row.trakt_refresh_token, new_fernet, old_fernet)
+            sa_tok = _rekey(row.simkl_access_token, new_fernet, old_fernet)
+            sr = _rekey(row.simkl_refresh_token, new_fernet, old_fernet)
+        except RuntimeError as exc:
+            raise RuntimeError(f"Re-key failed for user id={row.id}: {exc}") from exc
         conn.execute(
             sa.text(
                 "UPDATE users SET "
@@ -126,11 +140,5 @@ def downgrade() -> None:
                 "simkl_access_token = :sa, simkl_refresh_token = :sr "
                 "WHERE id = :id"
             ),
-            {
-                "id": row.id,
-                "ta": _rekey(row.trakt_access_token, new_fernet, old_fernet),
-                "tr": _rekey(row.trakt_refresh_token, new_fernet, old_fernet),
-                "sa": _rekey(row.simkl_access_token, new_fernet, old_fernet),
-                "sr": _rekey(row.simkl_refresh_token, new_fernet, old_fernet),
-            },
+            {"id": row.id, "ta": ta, "tr": tr, "sa": sa_tok, "sr": sr},
         )

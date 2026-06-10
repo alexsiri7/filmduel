@@ -1,4 +1,4 @@
-"""Authenticated encryption for Trakt OAuth tokens stored in the database.
+"""Authenticated encryption for OAuth tokens stored in the database.
 
 Tokens are encrypted with Fernet (AES-128-CBC + HMAC-SHA256). The key is
 derived from TOKEN_ENC_KEY (not SECRET_KEY) so token encryption can be
