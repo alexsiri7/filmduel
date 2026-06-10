@@ -131,7 +131,7 @@ async def get_available_genres(
 async def get_pool_count(
     request: Request,
     filter_type: Optional[FilterType] = Query(default=None),
-    filter_value: Optional[str] = None,
+    filter_value: Optional[str] = Query(default=None),
     media_type: MediaType = Query(default="movie"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 async def curate_and_select_films(
     user_movies: list[UserMovie],
     bracket_size: int,
-    filter_type: Optional[str],
+    filter_type: Optional[FilterType],
     filter_value: Optional[str],
     theme_hint: str,
 ) -> tuple[list[UserMovie], dict]:

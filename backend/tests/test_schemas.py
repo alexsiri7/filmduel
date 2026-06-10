@@ -26,6 +26,26 @@ from backend.schemas import (
     UserSettingsUpdate,
 )
 
+# ---------------------------------------------------------------------------
+# TournamentCreate.filter_type constraint (SEC-12 regression guard)
+# ---------------------------------------------------------------------------
+
+
+class TestTournamentCreateFilterType:
+    @pytest.mark.parametrize("valid_type", ["genre", "decade"])
+    def test_valid_filter_types_accepted(self, valid_type):
+        tc = TournamentCreate(bracket_size=16, filter_type=valid_type)
+        assert tc.filter_type == valid_type
+
+    def test_filter_type_defaults_to_none(self):
+        tc = TournamentCreate(bracket_size=16)
+        assert tc.filter_type is None
+
+    @pytest.mark.parametrize("invalid_type", ["year", "rating", "studio", "", "GENRE"])
+    def test_invalid_filter_type_rejected(self, invalid_type):
+        with pytest.raises(ValidationError):
+            TournamentCreate(bracket_size=16, filter_type=invalid_type)
+
 
 # ---------------------------------------------------------------------------
 # DuelOutcome enum
