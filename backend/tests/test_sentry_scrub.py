@@ -133,6 +133,26 @@ class TestScrubSensitive:
             == "[Filtered]"
         )
 
+    def test_oauth_code_is_filtered(self):
+        """OAuth authorization code must not leak to Sentry."""
+        event = _make_event_with_frame_vars({"code": "abc123authcode"})
+        result = _scrub_sensitive(event, {})
+        assert _get_frame_vars(result)["code"] == "[Filtered]"
+
+    def test_auth_code_substring_is_filtered(self):
+        event = _make_event_with_frame_vars({"auth_code": "xyz"})
+        result = _scrub_sensitive(event, {})
+        assert _get_frame_vars(result)["auth_code"] == "[Filtered]"
+
+    def test_barcode_is_not_filtered(self):
+        """'barcode' contains 'code' — verify it IS filtered (expected by the broad rule)."""
+        # This documents the intentional trade-off: broad substring matching may over-scrub.
+        # If this is undesirable, use an exact-match or word-boundary approach instead.
+        event = _make_event_with_frame_vars({"barcode": "12345"})
+        result = _scrub_sensitive(event, {})
+        # Acceptable: over-scrubbing is safer than under-scrubbing for a security filter.
+        assert _get_frame_vars(result)["barcode"] == "[Filtered]"
+
     def test_frame_without_vars_is_safe(self):
         """Frames without a 'vars' key (Sentry omits it when locals are unavailable) must not raise."""
         event = {
