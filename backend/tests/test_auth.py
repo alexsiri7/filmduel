@@ -752,6 +752,73 @@ class TestSimklCallback:
             )
         assert exc.value.status_code == 400
 
+    @pytest.mark.asyncio
+    async def test_malformed_profile_dict_raises_502_and_redacts_pii(
+        self, monkeypatch, caplog
+    ):
+        """502 is raised and log contains only dict keys, not values, when profile is malformed."""
+        import logging
+
+        monkeypatch.setattr(limiter, "enabled", False)
+
+        mock_tokens = AsyncMock(return_value={"access_token": "tok"})
+        mock_client = AsyncMock()
+        mock_client.get_profile = AsyncMock(
+            return_value={"secret_token": "PII_VALUE", "user": None}
+        )
+
+        monkeypatch.setattr("backend.routers.auth.SimklClient.exchange_code", mock_tokens)
+        monkeypatch.setattr("backend.routers.auth.SimklClient", lambda **kw: mock_client)
+
+        request = _make_starlette_request(cookies={OAUTH_SIMKL_STATE_COOKIE: "state123"})
+
+        with caplog.at_level(logging.ERROR, logger="backend.routers.auth"):
+            with pytest.raises(HTTPException) as exc_info:
+                await simkl_callback(
+                    code="code123",
+                    state="state123",
+                    request=request,
+                    background_tasks=MagicMock(),
+                    settings=SETTINGS,
+                    db=AsyncMock(),
+                )
+
+        assert exc_info.value.status_code == 502
+        assert "PII_VALUE" not in caplog.text  # value must NOT appear
+        assert "secret_token" in caplog.text  # key is acceptable
+
+    @pytest.mark.asyncio
+    async def test_non_dict_profile_raises_502_and_logs_type_name(
+        self, monkeypatch, caplog
+    ):
+        """502 is raised and log contains type name when profile is not a dict."""
+        import logging
+
+        monkeypatch.setattr(limiter, "enabled", False)
+
+        mock_tokens = AsyncMock(return_value={"access_token": "tok"})
+        mock_client = AsyncMock()
+        mock_client.get_profile = AsyncMock(return_value=None)  # non-dict
+
+        monkeypatch.setattr("backend.routers.auth.SimklClient.exchange_code", mock_tokens)
+        monkeypatch.setattr("backend.routers.auth.SimklClient", lambda **kw: mock_client)
+
+        request = _make_starlette_request(cookies={OAUTH_SIMKL_STATE_COOKIE: "state123"})
+
+        with caplog.at_level(logging.ERROR, logger="backend.routers.auth"):
+            with pytest.raises(HTTPException) as exc_info:
+                await simkl_callback(
+                    code="code123",
+                    state="state123",
+                    request=request,
+                    background_tasks=MagicMock(),
+                    settings=SETTINGS,
+                    db=AsyncMock(),
+                )
+
+        assert exc_info.value.status_code == 502
+        assert "NoneType" in caplog.text
+
 
 # ---------------------------------------------------------------------------
 # Additional update_settings SIMKL tests
