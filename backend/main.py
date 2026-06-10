@@ -215,7 +215,8 @@ app.include_router(feedback.router)
 
 
 @app.get("/health")
-async def health():
+@limiter.limit("1000/minute")
+async def health(request: Request):
     return {"status": "ok"}
 
 

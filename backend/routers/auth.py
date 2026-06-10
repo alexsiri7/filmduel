@@ -421,21 +421,24 @@ async def simkl_callback(
     ttl = tokens.get("expires_in", _SIMKL_TOKEN_DEFAULT_TTL_SECONDS)
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl)
 
+    access_token = tokens["access_token"]
+    refresh_token = tokens.get("refresh_token", "")
+
     stmt = select(User).where(User.simkl_user_id == simkl_user_id)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
 
     if user:
         user.simkl_username = simkl_username
-        user.simkl_access_token = tokens["access_token"]
-        user.simkl_refresh_token = tokens.get("refresh_token", "")
+        user.simkl_access_token = access_token
+        user.simkl_refresh_token = refresh_token
         user.simkl_token_expires_at = expires_at
     else:
         user = User(
             simkl_user_id=simkl_user_id,
             simkl_username=simkl_username,
-            simkl_access_token=tokens["access_token"],
-            simkl_refresh_token=tokens.get("refresh_token", ""),
+            simkl_access_token=access_token,
+            simkl_refresh_token=refresh_token,
             simkl_token_expires_at=expires_at,
         )
         db.add(user)

@@ -560,3 +560,22 @@ def test_abandon_tournament_endpoint_reachable():
     app.dependency_overrides.clear()
     # 404 expected (tournament not found); confirms endpoint + Request param works
     assert resp.status_code != 500
+
+
+# ---------------------------------------------------------------------------
+# Rate limit — /health endpoint (issue #301)
+# ---------------------------------------------------------------------------
+
+
+def test_health_is_registered_with_rate_limiter():
+    """health endpoint must be registered in the slowapi limiter."""
+    assert "backend.main.health" in limiter._Limiter__marked_for_limiting
+
+
+def test_health_rate_limit_is_1000_per_minute():
+    """health rate limit must be exactly 1000/minute."""
+    limits = limiter._route_limits.get("backend.main.health", [])
+    limit_strings = [str(lim.limit) for lim in limits]
+    assert any("1000 per 1 minute" in s for s in limit_strings), (
+        f"Expected '1000/minute' limit on health, got: {limit_strings}"
+    )
