@@ -133,6 +133,39 @@ class TestScrubSensitive:
             == "[Filtered]"
         )
 
+    def test_oauth_code_is_filtered(self):
+        """OAuth authorization code must not leak to Sentry."""
+        event = _make_event_with_frame_vars({"code": "abc123authcode"})
+        result = _scrub_sensitive(event, {})
+        assert _get_frame_vars(result)["code"] == "[Filtered]"
+
+    def test_auth_code_substring_is_filtered(self):
+        event = _make_event_with_frame_vars({"auth_code": "xyz"})
+        result = _scrub_sensitive(event, {})
+        assert _get_frame_vars(result)["auth_code"] == "[Filtered]"
+
+    def test_broad_code_substring_over_scrubs_barcode(self):
+        """'barcode' contains 'code' — verify it IS filtered (expected by the broad rule)."""
+        # This documents the intentional trade-off: broad substring matching may over-scrub.
+        # If this is undesirable, use an exact-match or word-boundary approach instead.
+        event = _make_event_with_frame_vars({"barcode": "12345"})
+        result = _scrub_sensitive(event, {})
+        # Acceptable: over-scrubbing is safer than under-scrubbing for a security filter.
+        assert _get_frame_vars(result)["barcode"] == "[Filtered]"
+
+    def test_code_key_is_filtered_case_insensitive(self):
+        """Key matching for 'code' is case-insensitive via key.lower()."""
+        for key in ("CODE", "Code", "OAuth_CODE"):
+            event = _make_event_with_frame_vars({key: "sensitive-value"})
+            result = _scrub_sensitive(event, {})
+            assert _get_frame_vars(result)[key] == "[Filtered]", f"Expected {key!r} to be filtered"
+
+    def test_code_verifier_pkce_is_filtered(self):
+        """PKCE code_verifier must not leak to Sentry (contains 'code' substring)."""
+        event = _make_event_with_frame_vars({"code_verifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"})
+        result = _scrub_sensitive(event, {})
+        assert _get_frame_vars(result)["code_verifier"] == "[Filtered]"
+
     def test_frame_without_vars_is_safe(self):
         """Frames without a 'vars' key (Sentry omits it when locals are unavailable) must not raise."""
         event = {

@@ -56,7 +56,7 @@ def _scrub_sensitive(event: dict, hint: dict) -> dict:
 
     Scrubs using two strategies:
     - Exact match against _SCRUB_KEYS (denylist of known sensitive fields)
-    - Substring match: any local variable whose name contains "token" or "secret"
+    - Substring match: any local variable whose name contains "token", "secret", or "code"
       (case-insensitive) is also filtered, covering future fields automatically.
 
     Filtered values are replaced with "[Filtered]".
@@ -66,7 +66,7 @@ def _scrub_sensitive(event: dict, hint: dict) -> dict:
             vars_ = frame.get("vars") or {}
             for key in list(vars_):
                 lower = key.lower()
-                if key in _SCRUB_KEYS or "token" in lower or "secret" in lower:
+                if key in _SCRUB_KEYS or "token" in lower or "secret" in lower or "code" in lower:
                     vars_[key] = "[Filtered]"
     return event
 
