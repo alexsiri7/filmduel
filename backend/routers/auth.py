@@ -412,7 +412,9 @@ async def simkl_callback(
         simkl_user_id = str(profile["user"]["ids"]["simkl"])
         simkl_username = profile["user"].get("name", simkl_user_id)
     except (KeyError, TypeError) as exc:
-        profile_summary = list(profile.keys()) if isinstance(profile, dict) else type(profile).__name__
+        profile_summary = (
+            list(profile.keys()) if isinstance(profile, dict) else type(profile).__name__
+        )
         logger.error("Unexpected SIMKL profile response. Keys: %s", profile_summary, exc_info=True)
         raise HTTPException(
             status_code=502,
