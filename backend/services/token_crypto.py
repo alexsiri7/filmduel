@@ -1,8 +1,8 @@
 """Authenticated encryption for OAuth tokens stored in the database.
 
 Tokens are encrypted with Fernet (AES-128-CBC + HMAC-SHA256). The key is
-derived from TOKEN_ENC_KEY (not SECRET_KEY) so token encryption can be
-rotated independently of JWT signing.
+derived from TOKEN_ENC_KEY via HKDF (not SECRET_KEY) so token encryption
+can be rotated independently of JWT signing.
 """
 
 from __future__ import annotations
