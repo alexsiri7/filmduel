@@ -144,7 +144,12 @@ async def submit_feedback(
     db.add(report)
     await db.flush()
 
-    logger.info("feedback_submitted user_id=%s title=%r", current_user.id, title[:50])
+    logger.info(
+        "feedback_submitted id=%s user_id=%s title_len=%d",
+        report.id,
+        current_user.id,
+        len(title.strip()),
+    )
 
     return FeedbackReportResponse(id=str(report.id), created_at=report.created_at)
 
