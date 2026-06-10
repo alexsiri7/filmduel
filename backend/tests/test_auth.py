@@ -390,9 +390,7 @@ class TestGetCurrentUserId:
         """Refreshing a legacy token should set orig_iat = iat in the new token."""
         monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
         old_iat = datetime.now(timezone.utc) - REFRESH_INTERVAL - timedelta(hours=1)
-        payload = _make_jwt_payload(
-            iat=old_iat
-        )  # no orig_iat — simulates a pre-fix token
+        payload = _make_jwt_payload(iat=old_iat)  # no orig_iat — simulates a pre-fix token
         token = pyjwt.encode(payload, SETTINGS.SECRET_KEY, algorithm=JWT_ALGORITHM)
         request = _make_request({COOKIE_NAME: token})
         response = _make_response()
