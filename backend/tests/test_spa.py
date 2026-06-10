@@ -104,3 +104,47 @@ def test_sibling_directory_is_blocked_via_symlink(tmp_path):
     assert response.status_code == 200
     assert "SECRET" not in response.text
     assert "app" in response.text
+
+
+def test_log_injection_newlines_are_escaped(tmp_path, caplog):
+    """Newlines in full_path must be escaped before logging to prevent log injection.
+
+    Starlette rejects HTTP paths containing decoded newlines at the routing layer,
+    so we call spa_fallback directly with a path containing literal newline/CR
+    characters to exercise the sanitization code path.
+    """
+    import asyncio
+    import logging
+
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<html>app</html>")
+    # Place a file outside dist to trigger the out-of-bounds warning
+    outside = tmp_path / "outside.txt"
+    outside.write_text("OUTSIDE")
+    # Symlink name contains literal newline/CR — matches the full_path value
+    # that spa_fallback would receive for a URL-encoded path like /escape%0a%0dFAKE_LOG_LINE
+    link_name = "escape\n\rFAKE_LOG_LINE"
+    (dist / link_name).symlink_to("../outside.txt")
+
+    with patch.object(main_module, "STATIC_DIR", dist):
+        with caplog.at_level(logging.WARNING, logger="backend.main"):
+            # Call the handler directly since Starlette normalises newlines in
+            # HTTP paths before they reach the route — the injection vector is
+            # the decoded full_path value, not the raw wire bytes.
+            asyncio.run(main_module.spa_fallback("escape\n\rFAKE_LOG_LINE"))
+
+    # Guard: ensure the warning was actually emitted (non-vacuous assertion)
+    warning_records = [r for r in caplog.records if "out-of-bounds" in r.getMessage()]
+    assert warning_records, (
+        "expected at least one out-of-bounds warning log record; "
+        "the sanitization code path was never reached"
+    )
+    # The literal newline/CR must not appear in any log record
+    for record in warning_records:
+        assert "\n" not in record.getMessage(), (
+            "raw newline found in log — sanitization is broken"
+        )
+        assert "\r" not in record.getMessage(), (
+            "raw CR found in log — sanitization is broken"
+        )
