@@ -56,7 +56,7 @@ def _scrub_sensitive(event: dict, hint: dict) -> dict:
 
     Scrubs using two strategies:
     - Exact match against _SCRUB_KEYS (denylist of known sensitive fields)
-    - Substring match: any local variable whose name contains "token" or "secret"
+    - Substring match: any local variable whose name contains "token", "secret", or "code"
       (case-insensitive) is also filtered, covering future fields automatically.
 
     Filtered values are replaced with "[Filtered]".
