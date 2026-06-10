@@ -223,14 +223,19 @@ class TestSubmitFeedback:
         with patch("backend.routers.feedback.logger") as mock_logger:
             response = self._post(client, title=pii_title)
         assert response.status_code == 201
+        assert mock_logger.info.called, "Expected at least one logger.info call after feedback submission"
         # Collect all string args passed to logger.info
         logged_text = " ".join(
             str(arg)
             for call in mock_logger.info.call_args_list
             for arg in call.args + tuple(call.kwargs.values())
         )
+        # Negative: no PII
         assert pii_title not in logged_text
         assert "Alice Smith" not in logged_text
+        # Positive: safe metadata is present
+        assert "feedback_submitted" in logged_text
+        assert "title_len" in logged_text
 
 
 class TestAdminListFeedback:
