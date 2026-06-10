@@ -1,0 +1,121 @@
+"""Re-encrypt stored tokens using HKDF instead of SHA-256 key derivation.
+
+Revision ID: 020
+Revises: 019
+Create Date: 2026-06-10
+"""
+
+from __future__ import annotations
+
+import base64
+import hashlib
+from typing import Sequence, Union
+
+import sqlalchemy as sa
+from alembic import op
+from cryptography.fernet import Fernet, InvalidToken
+from cryptography.hazmat.primitives.hashes import SHA256
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+
+revision: str = "020"
+down_revision: Union[str, None] = "019"
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def _make_fernets(token_enc_key: str) -> tuple[Fernet, Fernet]:
+    """Return (old_fernet using sha256, new_fernet using hkdf)."""
+    raw = token_enc_key.encode()
+
+    # Old derivation: SHA-256 direct hash
+    old_key = base64.urlsafe_b64encode(hashlib.sha256(raw).digest())
+
+    # New derivation: HKDF
+    new_key = base64.urlsafe_b64encode(
+        HKDF(
+            algorithm=SHA256(),
+            length=32,
+            salt=b"filmduel-token-enc",
+            info=b"fernet-key-v2",
+        ).derive(raw)
+    )
+
+    return Fernet(old_key), Fernet(new_key)
+
+
+def _rekey(value: str | None, old: Fernet, new: Fernet) -> str | None:
+    """Decrypt with old key, re-encrypt with new key. Returns value unchanged if None or empty."""
+    if not value:
+        return value
+    try:
+        plaintext = old.decrypt(value.encode())
+    except InvalidToken:
+        # Already re-keyed (e.g., migration run twice) — try new key, leave as-is
+        try:
+            new.decrypt(value.encode())
+            return value  # already re-keyed
+        except InvalidToken:
+            raise RuntimeError(
+                "Token cannot be decrypted with either old or new key. "
+                "Check TOKEN_ENC_KEY matches the key used during encryption."
+            )
+    return new.encrypt(plaintext).decode()
+
+
+def _rekey_all_users(conn, source: Fernet, dest: Fernet) -> None:
+    """Re-encrypt all user OAuth tokens from source key to dest key."""
+    rows = conn.execute(
+        sa.text(
+            "SELECT id, trakt_access_token, trakt_refresh_token, "
+            "simkl_access_token, simkl_refresh_token FROM users"
+        )
+    ).fetchall()
+
+    for row in rows:
+        try:
+            ta = _rekey(row.trakt_access_token, source, dest)
+            tr = _rekey(row.trakt_refresh_token, source, dest)
+            simkl_at = _rekey(row.simkl_access_token, source, dest)
+            simkl_rt = _rekey(row.simkl_refresh_token, source, dest)
+        except RuntimeError as exc:
+            raise RuntimeError(f"Re-key failed for user id={row.id}: {exc}") from exc
+        conn.execute(
+            sa.text(
+                "UPDATE users SET "
+                "trakt_access_token = :ta, trakt_refresh_token = :tr, "
+                "simkl_access_token = :sa, simkl_refresh_token = :sr "
+                "WHERE id = :id"
+            ),
+            {"id": row.id, "ta": ta, "tr": tr, "sa": simkl_at, "sr": simkl_rt},
+        )
+
+
+def upgrade() -> None:
+    from backend.config import get_settings
+
+    settings = get_settings()
+    if not settings.TOKEN_ENC_KEY:
+        raise RuntimeError("TOKEN_ENC_KEY must be set to run this migration")
+
+    old_fernet, new_fernet = _make_fernets(settings.TOKEN_ENC_KEY)
+    _rekey_all_users(op.get_bind(), old_fernet, new_fernet)
+
+    # Note: feedback screenshot_data_enc was NULLed in migration 015 (no re-keying needed)
+    # Note: movie pair tokens are ephemeral and regenerated on next request
+
+
+def downgrade() -> None:
+    """Revert HKDF-keyed tokens back to SHA-256 keyed.
+
+    IMPORTANT: Roll back the application code (token_crypto.py) to the SHA-256
+    version BEFORE running this downgrade, otherwise live instances will fail
+    to decrypt reverted tokens.
+    """
+    from backend.config import get_settings
+
+    settings = get_settings()
+    if not settings.TOKEN_ENC_KEY:
+        raise RuntimeError("TOKEN_ENC_KEY must be set to run this migration")
+
+    old_fernet, new_fernet = _make_fernets(settings.TOKEN_ENC_KEY)
+    _rekey_all_users(op.get_bind(), new_fernet, old_fernet)

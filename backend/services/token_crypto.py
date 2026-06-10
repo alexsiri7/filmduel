@@ -1,17 +1,18 @@
-"""Authenticated encryption for Trakt OAuth tokens stored in the database.
+"""Authenticated encryption for OAuth tokens stored in the database.
 
 Tokens are encrypted with Fernet (AES-128-CBC + HMAC-SHA256). The key is
-derived from TOKEN_ENC_KEY (not SECRET_KEY) so token encryption can be
-rotated independently of JWT signing.
+derived from TOKEN_ENC_KEY via HKDF (not SECRET_KEY) so token encryption
+can be rotated independently of JWT signing.
 """
 
 from __future__ import annotations
 
 import base64
-import hashlib
 from functools import lru_cache
 
 from cryptography.fernet import Fernet, InvalidToken
+from cryptography.hazmat.primitives.hashes import SHA256
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 from backend.config import get_settings
 
@@ -24,7 +25,12 @@ def _fernet() -> Fernet:
             "TOKEN_ENC_KEY is not set — required for token encryption at rest"
         )
     raw = settings.TOKEN_ENC_KEY.encode()
-    derived = hashlib.sha256(raw).digest()
+    derived = HKDF(
+        algorithm=SHA256(),
+        length=32,
+        salt=b"filmduel-token-enc",
+        info=b"fernet-key-v2",
+    ).derive(raw)
     return Fernet(base64.urlsafe_b64encode(derived))
 
 
