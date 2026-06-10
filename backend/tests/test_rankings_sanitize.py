@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 
 from backend.services.rankings import (
     _sanitize_csv_cell,

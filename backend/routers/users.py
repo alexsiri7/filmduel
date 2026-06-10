@@ -20,7 +20,7 @@ from backend.routers.auth import (
     get_current_user,
 )
 from backend.schemas import ConsentAccept, UserResponse, UserSettingsUpdate
-from backend.services.pool import populate_movie_pool, sync_pool_background
+from backend.services.pool import populate_movie_pool
 from backend.services.tmdb import backfill_posters_background
 from backend.services.trakt import TraktClient
 from backend.services.simkl import SimklClient
