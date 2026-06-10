@@ -364,9 +364,7 @@ async def _upsert_simkl_pool(
     await db.flush()
 
     # Map remaining SIMKL IDs to movie UUIDs
-    remaining_ids = [
-        sid for sid in pool if sid not in simkl_id_to_movie_uuid
-    ]
+    remaining_ids = [sid for sid in pool if sid not in simkl_id_to_movie_uuid]
     if remaining_ids:
         result = await db.execute(
             select(Movie.id, Movie.trakt_id).where(
