@@ -402,9 +402,12 @@ async def simkl_callback(
         redirect_uri=settings.SIMKL_REDIRECT_URI,
     )
 
+    access_token = tokens["access_token"]
+    refresh_token = tokens.get("refresh_token", "")
+
     authed_client = SimklClient(
         client_id=settings.SIMKL_CLIENT_ID,
-        access_token=tokens["access_token"],
+        access_token=access_token,
     )
     profile = await authed_client.get_profile()
 
@@ -422,9 +425,6 @@ async def simkl_callback(
         ) from exc
     ttl = tokens.get("expires_in", _SIMKL_TOKEN_DEFAULT_TTL_SECONDS)
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl)
-
-    access_token = tokens["access_token"]
-    refresh_token = tokens.get("refresh_token", "")
 
     stmt = select(User).where(User.simkl_user_id == simkl_user_id)
     result = await db.execute(stmt)
