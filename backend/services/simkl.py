@@ -32,7 +32,11 @@ class SimklClient:
     async def exchange_code(
         self, code: str, client_secret: str, redirect_uri: str, code_verifier: str | None = None
     ) -> dict:
-        """Exchange an OAuth authorization code for tokens."""
+        """Exchange an OAuth authorization code for tokens.
+
+        Pass ``code_verifier`` to include PKCE proof in the token request (RFC 7636).
+        Omit it for non-PKCE flows.
+        """
         body: dict = {
             "code": code,
             "client_id": self._client_id,

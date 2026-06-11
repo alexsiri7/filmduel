@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 from typing import NoReturn
 from urllib.parse import urlencode
 
+import httpx
 import jwt
 from fastapi import (
     APIRouter,
@@ -263,7 +264,7 @@ OAUTH_SIMKL_PKCE_COOKIE = "filmduel_oauth_simkl_pkce"
 def _generate_pkce_pair() -> tuple[str, str]:
     """Return (code_verifier, code_challenge) per RFC 7636 S256 method.
 
-    code_verifier: 43-128 URL-safe characters
+    code_verifier: 43 URL-safe characters (RFC 7636 §4.1 allows 43-128)
     code_challenge: BASE64URL(SHA256(ASCII(code_verifier)))
     """
     code_verifier = secrets.token_urlsafe(32)  # 43 URL-safe characters
@@ -327,12 +328,23 @@ async def callback(
     if not code_verifier:
         raise HTTPException(status_code=400, detail="Missing PKCE verifier")
     client = TraktClient(client_id=settings.TRAKT_CLIENT_ID)
-    tokens = await client.exchange_code(
-        code,
-        client_secret=settings.TRAKT_CLIENT_SECRET,
-        redirect_uri=settings.TRAKT_REDIRECT_URI,
-        code_verifier=code_verifier,
-    )
+    try:
+        tokens = await client.exchange_code(
+            code,
+            client_secret=settings.TRAKT_CLIENT_SECRET,
+            redirect_uri=settings.TRAKT_REDIRECT_URI,
+            code_verifier=code_verifier,
+        )
+    except httpx.HTTPStatusError as exc:
+        logger.error(
+            "Trakt token exchange failed (status=%s); possible PKCE rejection",
+            exc.response.status_code,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="Token exchange with Trakt failed",
+        ) from exc
 
     # Fetch user profile
     authed_client = TraktClient(
@@ -442,12 +454,23 @@ async def simkl_callback(
     if not code_verifier:
         raise HTTPException(status_code=400, detail="Missing PKCE verifier")
     client = SimklClient(client_id=settings.SIMKL_CLIENT_ID)
-    tokens = await client.exchange_code(
-        code,
-        client_secret=settings.SIMKL_CLIENT_SECRET,
-        redirect_uri=settings.SIMKL_REDIRECT_URI,
-        code_verifier=code_verifier,
-    )
+    try:
+        tokens = await client.exchange_code(
+            code,
+            client_secret=settings.SIMKL_CLIENT_SECRET,
+            redirect_uri=settings.SIMKL_REDIRECT_URI,
+            code_verifier=code_verifier,
+        )
+    except httpx.HTTPStatusError as exc:
+        logger.error(
+            "SIMKL token exchange failed (status=%s); possible PKCE rejection",
+            exc.response.status_code,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="Token exchange with SIMKL failed",
+        ) from exc
 
     access_token = tokens["access_token"]
     refresh_token = tokens.get("refresh_token", "")
