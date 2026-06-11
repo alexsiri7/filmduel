@@ -403,3 +403,40 @@ class TestTournamentConsentGuard:
         assert internal_uuid not in resp.text
         assert "candidate pool" not in resp.text
         assert resp.json()["detail"] == "AI curation failed. Please try again."
+        # Guard against regressions where execution continues past the ValueError
+        # and db writes (delete matches, flush, update metadata) are silently triggered
+        mock_db.execute.assert_not_called()
+        mock_db.flush.assert_not_called()
+
+    def test_create_ai_tournament_curation_error_does_not_leak_details(self):
+        """POST /api/tournaments must not expose internal ValueError details from AI curation."""
+        user = _make_user(privacy_policy_accepted=True)
+        mock_db = AsyncMock()
+        mock_count_result = MagicMock()
+        mock_count_result.scalar_one.return_value = 0  # daily cap below limit
+        mock_db.execute.return_value = mock_count_result
+
+        internal_uuid = str(uuid.uuid4())
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with patch(
+            "backend.routers.tournaments.get_filtered_ranked_films",
+            new_callable=AsyncMock,
+            return_value=[MagicMock() for _ in range(8)],
+        ), patch(
+            "backend.routers.tournaments.curate_and_select_films",
+            new_callable=AsyncMock,
+            side_effect=ValueError(f"AI selected films not in candidate pool: {{{internal_uuid}}}"),
+        ):
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.post(
+                    "/api/tournaments",
+                    json={"name": "Test", "bracket_size": 8, "ai_curated": True},
+                )
+
+        assert resp.status_code == 500
+        assert internal_uuid not in resp.text
+        assert "candidate pool" not in resp.text
+        assert resp.json()["detail"] == "AI curation failed. Please try again."
