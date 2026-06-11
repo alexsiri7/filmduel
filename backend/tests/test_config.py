@@ -148,3 +148,23 @@ class TestTokenEncKeyValidation:
     def test_valid_long_key_accepted(self):
         s = _make_settings(TOKEN_ENC_KEY="x" * 64)
         assert len(s.TOKEN_ENC_KEY) == 64
+
+
+class TestCookieSecure:
+    def test_defaults_to_is_https_when_unset(self):
+        """cookie_secure mirrors is_https when SECURE_COOKIES is not set."""
+        s = _make_settings(BASE_URL="http://localhost:8000")
+        assert s.cookie_secure is False
+
+        s_https = _make_settings(BASE_URL="https://example.com")
+        assert s_https.cookie_secure is True
+
+    def test_explicit_true_overrides_http_base_url(self):
+        """SECURE_COOKIES=true forces Secure flag even with http:// BASE_URL."""
+        s = _make_settings(BASE_URL="http://localhost:8000", SECURE_COOKIES=True)
+        assert s.cookie_secure is True
+
+    def test_explicit_false_overrides_https_base_url(self):
+        """SECURE_COOKIES=false disables Secure flag even with https:// BASE_URL."""
+        s = _make_settings(BASE_URL="https://example.com", SECURE_COOKIES=False)
+        assert s.cookie_secure is False

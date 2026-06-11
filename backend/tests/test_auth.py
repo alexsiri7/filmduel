@@ -219,7 +219,7 @@ class TestGetCurrentUserId:
         response.set_cookie.assert_called_once()
         kwargs = response.set_cookie.call_args.kwargs
         assert kwargs.get("httponly") is True
-        assert kwargs.get("secure") is SETTINGS.is_https
+        assert kwargs.get("secure") is SETTINGS.cookie_secure
         assert kwargs.get("samesite") == "lax"
 
     @pytest.mark.asyncio
