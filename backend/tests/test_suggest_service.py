@@ -7,7 +7,23 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from backend.services.suggest import MIN_RANKED, _build_taste_profile, has_enough_ranked
+from backend.services.suggest import MIN_RANKED, _build_taste_profile, _elo_tier, has_enough_ranked
+
+
+class TestEloTier:
+    @pytest.mark.parametrize("elo,expected", [
+        (1300, "highly preferred"),
+        (1500, "highly preferred"),
+        (1299, "preferred"),
+        (1100, "preferred"),
+        (1099, "neutral"),
+        (900,  "neutral"),
+        (899,  "less preferred"),
+        (800,  "less preferred"),
+        (0,    "less preferred"),
+    ])
+    def test_elo_tier_thresholds(self, elo, expected):
+        assert _elo_tier(elo) == expected
 
 
 def _mock_count_result(count: int):

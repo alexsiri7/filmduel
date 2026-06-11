@@ -64,13 +64,16 @@ Return format:
 User taste profile:
 
 Top 10 ranked films:
-{top_10: [{title, year, genres, director, elo}]}
+{top_10: [{title, year, genres, director, preference_tier: "highly preferred" | "preferred" | "neutral" | "less preferred"}]}
 
 Bottom 5 ranked films (films they've seen and rated lowest):
-{bottom_5: [{title, year, genres, director, elo}]}
+{bottom_5: [{title, year, genres, director, preference_tier: "highly preferred" | "preferred" | "neutral" | "less preferred"}]}
 
-Genres by average ELO (descending):
-{genre_affinities: [{"genre": "mystery", "avg_elo": 1280, "count": 8}, ...]}
+Genres by preference tier (descending):
+{genre_affinities: [{"genre": "mystery", "preference": "highly preferred"}, ...]}
+
+Note: Raw ELO values are never transmitted to the LLM — they are converted to preference tiers
+(highly preferred / preferred / neutral / less preferred) via `_elo_tier()` before inclusion in the prompt.
 
 Candidate unseen films (from personalised Trakt recommendations + TMDB similar):
 {candidates: [{trakt_id, title, year, genres, director, community_rating}]}
@@ -80,11 +83,11 @@ Candidate unseen films (from personalised Trakt recommendations + TMDB similar):
 
 Built server-side before the LLM call. Never send raw ranked films — distill into signal:
 
-**Top 10 by ELO** — the clearest positive signal. Include title, year, genres, director.
+**Top 10 by ELO (sent as preference tiers)** — the clearest positive signal. Include title, year, genres, director. Raw ELO is bucketed into preference tiers before the LLM call.
 
-**Bottom 5 by ELO** — the clearest negative signal. Prevents the LLM from recommending films in a style the user has demonstrably rejected.
+**Bottom 5 by ELO (sent as preference tiers)** — the clearest negative signal. Prevents the LLM from recommending films in a style the user has demonstrably rejected.
 
-**Genre affinities** — aggregate ELO by genre across all ranked films. `avg_elo` per genre tells the LLM which genres this user tends to love vs tolerate. Only include genres with ≥ 3 ranked films (otherwise the signal is noise).
+**Genre affinities** — aggregate ELO by genre across all ranked films, bucketed into preference tiers. Tells the LLM which genres this user tends to love vs tolerate. Only include genres with ≥ 3 ranked films (otherwise the signal is noise).
 
 **Candidate list** — 40–60 unseen films from the pool. Prioritise candidates from TMDB similar (seeded from user's top 10 ranked films) over generic popular/trending, as those are more taste-matched.
 

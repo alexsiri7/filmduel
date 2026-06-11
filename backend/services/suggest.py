@@ -164,7 +164,7 @@ async def _call_llm(taste_profile: dict, candidates: list[dict]) -> list[dict]:
 
     def _safe_film_line(f: dict) -> str:
         title = _sanitize_llm_input(f["title"], max_len=150)
-        return f"- {title} ({f['year']}) [{_safe_genres(f)}] preference: {_elo_tier(f['elo'])}"
+        return f"- {title} ({f['year']}) [{_safe_genres(f)}] preference: {_elo_tier(f.get('elo', 1000))}"
 
     def _safe_candidate_line(c: dict) -> str:
         title = _sanitize_llm_input(c["title"], max_len=150)
@@ -173,11 +173,11 @@ async def _call_llm(taste_profile: dict, candidates: list[dict]) -> list[dict]:
 
     user_message = (
         "## User Taste Profile\n\n"
-        "**Top 10 favorites (highest ELO):**\n"
+        "**Top 10 favorites (most preferred):**\n"
         + "\n".join(_safe_film_line(f) for f in taste_profile["top_10"])
-        + "\n\n**Bottom 5 (lowest ELO):**\n"
+        + "\n\n**Bottom 5 (least preferred):**\n"
         + "\n".join(_safe_film_line(f) for f in taste_profile["bottom_5"])
-        + "\n\n**Genre affinities (avg ELO):**\n"
+        + "\n\n**Genre affinities (preference tier):**\n"
         + "\n".join(
             f"- {_sanitize_llm_input(g, max_len=50)}: {_elo_tier(elo)}"
             for g, elo in taste_profile["genre_affinities"].items()

@@ -372,6 +372,20 @@ class TestResponseModels:
         assert ur.trakt_username == "testuser"
         assert ur.sync_ratings_to_trakt is False
         assert ur.privacy_policy_accepted is False
+        assert ur.privacy_policy_version is None
+
+    def test_user_response_privacy_policy_version_set(self):
+        from datetime import datetime, timezone
+
+        ur = UserResponse(
+            id="abc",
+            trakt_username="testuser",
+            created_at=datetime.now(timezone.utc),
+            sync_ratings_to_trakt=False,
+            privacy_policy_accepted=True,
+            privacy_policy_version="2.0",
+        )
+        assert ur.privacy_policy_version == "2.0"
 
     def test_movie_pair_response(self):
         ma = MovieWithStateSchema(id="1", trakt_id=1, title="A")

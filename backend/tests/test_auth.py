@@ -654,6 +654,7 @@ class TestAcceptConsent:
         user.sync_ratings_to_trakt = False
         user.sync_ratings_to_simkl = False
         user.privacy_policy_accepted = False
+        user.privacy_policy_version = None
         return user
 
     @pytest.mark.asyncio
@@ -675,6 +676,7 @@ class TestAcceptConsent:
         assert user.privacy_policy_accepted_at is not None
         db.commit.assert_awaited_once()
         assert result.privacy_policy_accepted is True
+        assert result.privacy_policy_version == CURRENT_PRIVACY_POLICY_VERSION
 
     @pytest.mark.asyncio
     async def test_accept_consent_returns_updated_user_response(self, monkeypatch):
