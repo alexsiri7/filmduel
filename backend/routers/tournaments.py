@@ -9,7 +9,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -228,7 +228,7 @@ async def create_tournament(
     # Create tournament record
     tournament = Tournament(
         user_id=uid,
-        name=ai_name if ai_name else body.name,
+        name=ai_name or body.name,
         filter_type=body.filter_type,
         filter_value=body.filter_value,
         bracket_size=body.bracket_size,
@@ -311,8 +311,6 @@ async def regenerate_tournament(
         raise HTTPException(status_code=500, detail="AI curation failed. Please try again.")
 
     # Delete existing matches
-    from sqlalchemy import delete
-
     await db.execute(
         delete(TournamentMatch).where(TournamentMatch.tournament_id == tournament_id)
     )
