@@ -1078,8 +1078,6 @@ class TestPKCE:
     @pytest.mark.asyncio
     async def test_callback_deletes_pkce_cookie_on_success(self, monkeypatch):
         """PKCE verifier cookie is deleted after a successful Trakt callback."""
-        import httpx as _httpx
-
         monkeypatch.setattr(limiter, "enabled", False)
 
         mock_exchange = AsyncMock(return_value={
