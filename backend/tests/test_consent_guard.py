@@ -361,3 +361,45 @@ class TestTournamentConsentGuard:
 
         # Consenting user must not be blocked by the consent guard
         assert resp.status_code == 200
+
+    def test_regenerate_tournament_curation_error_does_not_leak_details(self):
+        """POST /api/tournaments/{id}/regenerate must not expose internal ValueError details."""
+        user = _make_user(privacy_policy_accepted=True)
+        mock_db = AsyncMock()
+
+        tournament_id = uuid.uuid4()
+        internal_uuid = str(uuid.uuid4())
+
+        mock_tournament = MagicMock()
+        mock_tournament.id = tournament_id
+        mock_tournament.user_id = user.id
+        mock_tournament.is_ai_curated = True
+        mock_tournament.matches = []
+        mock_tournament.llm_response = {"_regen_count": 0, "_theme_hint": ""}
+        mock_tournament.bracket_size = 8
+        mock_tournament.filter_type = None
+        mock_tournament.filter_value = None
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with patch(
+            "backend.routers.tournaments._load_tournament",
+            new_callable=AsyncMock,
+            return_value=mock_tournament,
+        ), patch(
+            "backend.routers.tournaments.get_filtered_ranked_films",
+            new_callable=AsyncMock,
+            return_value=[MagicMock() for _ in range(8)],
+        ), patch(
+            "backend.routers.tournaments.curate_and_select_films",
+            new_callable=AsyncMock,
+            side_effect=ValueError(f"AI selected films not in candidate pool: {{{internal_uuid}}}"),
+        ):
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.post(f"/api/tournaments/{tournament_id}/regenerate")
+
+        assert resp.status_code == 500
+        assert internal_uuid not in resp.text
+        assert "candidate pool" not in resp.text
+        assert resp.json()["detail"] == "AI curation failed. Please try again."

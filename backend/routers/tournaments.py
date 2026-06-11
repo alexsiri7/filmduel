@@ -307,7 +307,8 @@ async def regenerate_tournament(
             theme_hint=original_hint,
         )
     except ValueError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("AI curation failed during regeneration: %s", e)
+        raise HTTPException(status_code=500, detail="AI curation failed. Please try again.")
 
     # Delete existing matches
     from sqlalchemy import delete
