@@ -71,6 +71,42 @@ class TestSimklClientExchangeCode:
         assert body["redirect_uri"] == "http://redirect"
         assert body["grant_type"] == "authorization_code"
 
+    @pytest.mark.asyncio
+    async def test_exchange_code_includes_verifier_when_provided(self):
+        """exchange_code includes code_verifier in body when provided (PKCE)."""
+        mock_resp = _mock_response({"access_token": "tok"})
+
+        mock_client = AsyncMock()
+        mock_client.post.return_value = mock_resp
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        client = SimklClient(client_id="test-client-id")
+        with patch.object(client, "_client", return_value=mock_client):
+            await client.exchange_code(
+                "auth-code", "secret", "http://redirect", code_verifier="verifier456"
+            )
+
+        body = mock_client.post.call_args[1]["json"]
+        assert body["code_verifier"] == "verifier456"
+
+    @pytest.mark.asyncio
+    async def test_exchange_code_omits_verifier_when_none(self):
+        """exchange_code omits code_verifier from body when not provided (non-PKCE)."""
+        mock_resp = _mock_response({"access_token": "tok"})
+
+        mock_client = AsyncMock()
+        mock_client.post.return_value = mock_resp
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        client = SimklClient(client_id="test-client-id")
+        with patch.object(client, "_client", return_value=mock_client):
+            await client.exchange_code("auth-code", "secret", "http://redirect")
+
+        body = mock_client.post.call_args[1]["json"]
+        assert "code_verifier" not in body
+
 
 class TestSimklClientRate:
     @pytest.mark.asyncio

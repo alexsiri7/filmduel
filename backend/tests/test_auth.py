@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import os
+from urllib.parse import parse_qs, urlparse
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
 
@@ -22,11 +25,15 @@ from backend.routers.auth import (
     COOKIE_NAME,
     JWT_ALGORITHM,
     JWT_EXPIRY_HOURS,
+    OAUTH_PKCE_COOKIE,
+    OAUTH_SIMKL_PKCE_COOKIE,
     OAUTH_SIMKL_STATE_COOKIE,
     OAUTH_STATE_COOKIE,
     REFRESH_INTERVAL,
     SESSION_MAX_LIFETIME,
     _TRAKT_TOKEN_DEFAULT_TTL_SECONDS,
+    _generate_pkce_pair,
+    callback,
     create_jwt,
     ensure_fresh_token,
     get_current_user_id,
@@ -777,7 +784,10 @@ class TestSimklCallback:
         monkeypatch.setattr("backend.routers.auth.SimklClient.exchange_code", mock_tokens)
         monkeypatch.setattr("backend.routers.auth.SimklClient", lambda **kw: mock_client)
 
-        request = _make_starlette_request(cookies={OAUTH_SIMKL_STATE_COOKIE: "state123"})
+        request = _make_starlette_request(cookies={
+            OAUTH_SIMKL_STATE_COOKIE: "state123",
+            OAUTH_SIMKL_PKCE_COOKIE: "fake-verifier",
+        })
 
         with caplog.at_level(logging.ERROR, logger="backend.routers.auth"):
             with pytest.raises(HTTPException) as exc_info:
@@ -810,7 +820,10 @@ class TestSimklCallback:
         monkeypatch.setattr("backend.routers.auth.SimklClient.exchange_code", mock_tokens)
         monkeypatch.setattr("backend.routers.auth.SimklClient", lambda **kw: mock_client)
 
-        request = _make_starlette_request(cookies={OAUTH_SIMKL_STATE_COOKIE: "state123"})
+        request = _make_starlette_request(cookies={
+            OAUTH_SIMKL_STATE_COOKIE: "state123",
+            OAUTH_SIMKL_PKCE_COOKIE: "fake-verifier",
+        })
 
         with caplog.at_level(logging.ERROR, logger="backend.routers.auth"):
             with pytest.raises(HTTPException) as exc_info:
@@ -928,3 +941,302 @@ class TestStateCookieSecureFlag:
             BASE_URL="http://localhost:8000",
         )
         assert "Secure" not in cookie
+
+    @pytest.mark.asyncio
+    async def test_login_pkce_cookie_secure_when_proxy_override(self, monkeypatch):
+        """login PKCE cookie is Secure when SECURE_COOKIES=True even with http:// BASE_URL."""
+        cookie = await self._get_state_cookie(
+            monkeypatch, login, OAUTH_PKCE_COOKIE,
+            BASE_URL="http://localhost:8000", SECURE_COOKIES=True,
+        )
+        assert "Secure" in cookie
+
+    @pytest.mark.asyncio
+    async def test_login_pkce_cookie_not_secure_when_http_no_override(self, monkeypatch):
+        """login PKCE cookie has no Secure flag when http:// BASE_URL and no override."""
+        cookie = await self._get_state_cookie(
+            monkeypatch, login, OAUTH_PKCE_COOKIE,
+            BASE_URL="http://localhost:8000",
+        )
+        assert "Secure" not in cookie
+
+    @pytest.mark.asyncio
+    async def test_simkl_login_pkce_cookie_secure_when_proxy_override(self, monkeypatch):
+        """simkl_login PKCE cookie is Secure when SECURE_COOKIES=True even with http:// BASE_URL."""
+        cookie = await self._get_state_cookie(
+            monkeypatch, simkl_login, OAUTH_SIMKL_PKCE_COOKIE,
+            BASE_URL="http://localhost:8000", SECURE_COOKIES=True,
+        )
+        assert "Secure" in cookie
+
+    @pytest.mark.asyncio
+    async def test_simkl_login_pkce_cookie_not_secure_when_http_no_override(self, monkeypatch):
+        """simkl_login PKCE cookie has no Secure flag when http:// BASE_URL and no override."""
+        cookie = await self._get_state_cookie(
+            monkeypatch, simkl_login, OAUTH_SIMKL_PKCE_COOKIE,
+            BASE_URL="http://localhost:8000",
+        )
+        assert "Secure" not in cookie
+
+
+# ---------------------------------------------------------------------------
+# TestPKCE
+# ---------------------------------------------------------------------------
+
+
+class TestPKCE:
+    """Unit tests for PKCE helper and login/callback PKCE integration."""
+
+    def test_generate_pkce_pair_verifier_length(self):
+        """code_verifier must be 43-128 characters per RFC 7636 §4.1."""
+        code_verifier, _ = _generate_pkce_pair()
+        assert 43 <= len(code_verifier) <= 128
+
+    def test_generate_pkce_pair_challenge_is_s256(self):
+        """code_challenge must equal BASE64URL(SHA256(ASCII(code_verifier))) per RFC 7636 §4.2."""
+        code_verifier, code_challenge = _generate_pkce_pair()
+        digest = hashlib.sha256(code_verifier.encode()).digest()
+        expected = base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
+        assert code_challenge == expected
+
+    def test_generate_pkce_pair_unique(self):
+        """Each call produces a distinct verifier."""
+        v1, _ = _generate_pkce_pair()
+        v2, _ = _generate_pkce_pair()
+        assert v1 != v2
+
+    @pytest.mark.asyncio
+    async def test_login_sets_pkce_verifier_cookie(self, monkeypatch):
+        """login() sets the PKCE verifier cookie alongside the state cookie."""
+        monkeypatch.setattr(limiter, "enabled", False)
+        response = await login(_make_starlette_request(), settings=_make_settings())
+        headers = response.headers.getlist("set-cookie")
+        pkce_cookie = next((h for h in headers if OAUTH_PKCE_COOKIE in h), None)
+        assert pkce_cookie is not None
+        assert "HttpOnly" in pkce_cookie
+        assert "Max-Age=300" in pkce_cookie
+        # Redirect URL must carry PKCE challenge parameters
+        location = response.headers["location"]
+        params = parse_qs(urlparse(location).query)
+        assert params.get("code_challenge_method") == ["S256"]
+        assert "code_challenge" in params
+        assert len(params["code_challenge"][0]) > 0
+
+    @pytest.mark.asyncio
+    async def test_simkl_login_sets_pkce_verifier_cookie(self, monkeypatch):
+        """simkl_login() sets the SIMKL PKCE verifier cookie."""
+        monkeypatch.setattr(limiter, "enabled", False)
+        response = await simkl_login(_make_starlette_request(), settings=_make_settings())
+        headers = response.headers.getlist("set-cookie")
+        pkce_cookie = next((h for h in headers if OAUTH_SIMKL_PKCE_COOKIE in h), None)
+        assert pkce_cookie is not None
+        assert "HttpOnly" in pkce_cookie
+        assert "Max-Age=300" in pkce_cookie
+        # Redirect URL must carry PKCE challenge parameters
+        location = response.headers["location"]
+        params = parse_qs(urlparse(location).query)
+        assert params.get("code_challenge_method") == ["S256"]
+        assert "code_challenge" in params
+        assert len(params["code_challenge"][0]) > 0
+
+    @pytest.mark.asyncio
+    async def test_callback_rejects_missing_pkce_cookie(self, monkeypatch):
+        """callback() returns 400 when PKCE verifier cookie is absent."""
+        monkeypatch.setattr(limiter, "enabled", False)
+        state = "test-state"
+        request = _make_request(cookies={OAUTH_STATE_COOKIE: state})
+        with pytest.raises(HTTPException) as exc_info:
+            await callback(
+                code="auth-code",
+                request=request,
+                background_tasks=MagicMock(),
+                state=state,
+                settings=_make_settings(),
+                db=AsyncMock(),
+            )
+        assert exc_info.value.status_code == 400
+        assert "PKCE" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_simkl_callback_rejects_missing_pkce_cookie(self, monkeypatch):
+        """simkl_callback() returns 400 when PKCE verifier cookie is absent."""
+        monkeypatch.setattr(limiter, "enabled", False)
+        state = "test-state"
+        request = _make_request(cookies={OAUTH_SIMKL_STATE_COOKIE: state})
+        with pytest.raises(HTTPException) as exc_info:
+            await simkl_callback(
+                code="auth-code",
+                request=request,
+                background_tasks=MagicMock(),
+                state=state,
+                settings=_make_settings(),
+                db=AsyncMock(),
+            )
+        assert exc_info.value.status_code == 400
+        assert "PKCE" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_callback_deletes_pkce_cookie_on_success(self, monkeypatch):
+        """PKCE verifier cookie is deleted after a successful Trakt callback."""
+        import httpx as _httpx
+
+        monkeypatch.setattr(limiter, "enabled", False)
+
+        mock_exchange = AsyncMock(return_value={
+            "access_token": "tok",
+            "refresh_token": "ref",
+            "expires_in": 7776000,
+        })
+        mock_profile = AsyncMock(return_value={
+            "username": "alice",
+            "ids": {"slug": "alice"},
+        })
+        mock_client = AsyncMock()
+        mock_client.exchange_code = mock_exchange
+        mock_client.get_profile = mock_profile
+
+        monkeypatch.setattr("backend.routers.auth.TraktClient", lambda **kw: mock_client)
+
+        state = "test-state"
+        request = _make_starlette_request(cookies={
+            OAUTH_STATE_COOKIE: state,
+            OAUTH_PKCE_COOKIE: "verifier123",
+        })
+
+        existing_user = MagicMock()
+        existing_user.id = "00000000-0000-0000-0000-000000000001"
+        db = AsyncMock()
+        db_result = MagicMock()
+        db_result.scalar_one_or_none.return_value = existing_user
+        db.execute.return_value = db_result
+
+        from starlette.background import BackgroundTasks as BG
+        response = await callback(
+            code="auth-code",
+            request=request,
+            background_tasks=BG(),
+            state=state,
+            settings=_make_settings(),
+            db=db,
+        )
+
+        cookie_headers = response.headers.getlist("set-cookie")
+        pkce_deleted = any(
+            OAUTH_PKCE_COOKIE in h and ("Max-Age=0" in h or "expires=" in h.lower())
+            for h in cookie_headers
+        )
+        assert pkce_deleted, "PKCE verifier cookie was not cleared after successful Trakt callback"
+
+    @pytest.mark.asyncio
+    async def test_simkl_callback_deletes_pkce_cookie_on_success(self, monkeypatch):
+        """PKCE verifier cookie is deleted after a successful SIMKL callback."""
+        monkeypatch.setattr(limiter, "enabled", False)
+
+        mock_exchange = AsyncMock(return_value={
+            "access_token": "tok",
+            "refresh_token": "ref",
+        })
+        mock_profile = AsyncMock(return_value={
+            "user": {"ids": {"simkl": 42}, "name": "bob"},
+        })
+        mock_client = AsyncMock()
+        mock_client.exchange_code = mock_exchange
+        mock_client.get_profile = mock_profile
+
+        monkeypatch.setattr("backend.routers.auth.SimklClient", lambda **kw: mock_client)
+
+        state = "test-state"
+        request = _make_starlette_request(cookies={
+            OAUTH_SIMKL_STATE_COOKIE: state,
+            OAUTH_SIMKL_PKCE_COOKIE: "verifier456",
+        })
+
+        existing_user = MagicMock()
+        existing_user.id = "00000000-0000-0000-0000-000000000002"
+        db = AsyncMock()
+        db_result = MagicMock()
+        db_result.scalar_one_or_none.return_value = existing_user
+        db.execute.return_value = db_result
+
+        from starlette.background import BackgroundTasks as BG
+        response = await simkl_callback(
+            code="auth-code",
+            request=request,
+            background_tasks=BG(),
+            state=state,
+            settings=_make_settings(),
+            db=db,
+        )
+
+        cookie_headers = response.headers.getlist("set-cookie")
+        pkce_deleted = any(
+            OAUTH_SIMKL_PKCE_COOKIE in h and ("Max-Age=0" in h or "expires=" in h.lower())
+            for h in cookie_headers
+        )
+        assert pkce_deleted, "PKCE verifier cookie was not cleared after successful SIMKL callback"
+
+    @pytest.mark.asyncio
+    async def test_callback_raises_502_on_trakt_exchange_error(self, monkeypatch):
+        """callback() raises 502 when Trakt rejects the token exchange."""
+        import httpx as _httpx
+
+        monkeypatch.setattr(limiter, "enabled", False)
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 400
+        mock_client = AsyncMock()
+        mock_client.exchange_code.side_effect = _httpx.HTTPStatusError(
+            "Bad Request", request=MagicMock(), response=mock_resp
+        )
+        monkeypatch.setattr("backend.routers.auth.TraktClient", lambda **kw: mock_client)
+
+        state = "test-state"
+        request = _make_starlette_request(cookies={
+            OAUTH_STATE_COOKIE: state,
+            OAUTH_PKCE_COOKIE: "verifier123",
+        })
+
+        with pytest.raises(HTTPException) as exc_info:
+            await callback(
+                code="auth-code",
+                request=request,
+                background_tasks=MagicMock(),
+                state=state,
+                settings=_make_settings(),
+                db=AsyncMock(),
+            )
+        assert exc_info.value.status_code == 502
+        assert "Trakt" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_simkl_callback_raises_502_on_simkl_exchange_error(self, monkeypatch):
+        """simkl_callback() raises 502 when SIMKL rejects the token exchange."""
+        import httpx as _httpx
+
+        monkeypatch.setattr(limiter, "enabled", False)
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 400
+        mock_client = AsyncMock()
+        mock_client.exchange_code.side_effect = _httpx.HTTPStatusError(
+            "Bad Request", request=MagicMock(), response=mock_resp
+        )
+        monkeypatch.setattr("backend.routers.auth.SimklClient", lambda **kw: mock_client)
+
+        state = "test-state"
+        request = _make_starlette_request(cookies={
+            OAUTH_SIMKL_STATE_COOKIE: state,
+            OAUTH_SIMKL_PKCE_COOKIE: "verifier456",
+        })
+
+        with pytest.raises(HTTPException) as exc_info:
+            await simkl_callback(
+                code="auth-code",
+                request=request,
+                background_tasks=MagicMock(),
+                state=state,
+                settings=_make_settings(),
+                db=AsyncMock(),
+            )
+        assert exc_info.value.status_code == 502
+        assert "SIMKL" in exc_info.value.detail

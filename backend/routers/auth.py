@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import logging
 import secrets
 import uuid
@@ -9,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 from typing import NoReturn
 from urllib.parse import urlencode
 
+import httpx
 import jwt
 from fastapi import (
     APIRouter,
@@ -254,6 +257,20 @@ async def ensure_fresh_simkl_token(user: User, db: AsyncSession) -> User:
 
 OAUTH_STATE_COOKIE = "filmduel_oauth_state"
 OAUTH_SIMKL_STATE_COOKIE = "filmduel_oauth_simkl_state"
+OAUTH_PKCE_COOKIE = "filmduel_oauth_pkce"
+OAUTH_SIMKL_PKCE_COOKIE = "filmduel_oauth_simkl_pkce"
+
+
+def _generate_pkce_pair() -> tuple[str, str]:
+    """Return (code_verifier, code_challenge) per RFC 7636 S256 method.
+
+    code_verifier: 43 URL-safe characters (RFC 7636 §4.1 allows 43-128)
+    code_challenge: BASE64URL(SHA256(ASCII(code_verifier)))
+    """
+    code_verifier = secrets.token_urlsafe(32)  # 43 URL-safe characters
+    digest = hashlib.sha256(code_verifier.encode()).digest()
+    code_challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
+    return code_verifier, code_challenge
 
 
 @router.get("/auth/login")
@@ -261,18 +278,29 @@ OAUTH_SIMKL_STATE_COOKIE = "filmduel_oauth_simkl_state"
 async def login(request: Request, settings: Settings = Depends(get_settings)):
     """Redirect the user to Trakt's OAuth authorization page."""
     state = secrets.token_urlsafe(32)
+    code_verifier, code_challenge = _generate_pkce_pair()
     params = urlencode(
         {
             "response_type": "code",
             "client_id": settings.TRAKT_CLIENT_ID,
             "redirect_uri": settings.TRAKT_REDIRECT_URI,
             "state": state,
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
         }
     )
     response = RedirectResponse(f"https://trakt.tv/oauth/authorize?{params}")
     response.set_cookie(
         OAUTH_STATE_COOKIE,
         state,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="lax",
+        max_age=300,
+    )
+    response.set_cookie(
+        OAUTH_PKCE_COOKIE,
+        code_verifier,
         httponly=True,
         secure=settings.cookie_secure,
         samesite="lax",
@@ -296,12 +324,27 @@ async def callback(
     expected_state = request.cookies.get(OAUTH_STATE_COOKIE)
     if not expected_state or not state or state != expected_state:
         raise HTTPException(status_code=400, detail="Invalid OAuth state")
+    code_verifier = request.cookies.get(OAUTH_PKCE_COOKIE)
+    if not code_verifier:
+        raise HTTPException(status_code=400, detail="Missing PKCE verifier")
     client = TraktClient(client_id=settings.TRAKT_CLIENT_ID)
-    tokens = await client.exchange_code(
-        code,
-        client_secret=settings.TRAKT_CLIENT_SECRET,
-        redirect_uri=settings.TRAKT_REDIRECT_URI,
-    )
+    try:
+        tokens = await client.exchange_code(
+            code,
+            client_secret=settings.TRAKT_CLIENT_SECRET,
+            redirect_uri=settings.TRAKT_REDIRECT_URI,
+            code_verifier=code_verifier,
+        )
+    except httpx.HTTPStatusError as exc:
+        logger.error(
+            "Trakt token exchange failed (status=%s); possible PKCE rejection",
+            exc.response.status_code,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="Token exchange with Trakt failed",
+        ) from exc
 
     # Fetch user profile
     authed_client = TraktClient(
@@ -352,6 +395,7 @@ async def callback(
     response = RedirectResponse(url=settings.BASE_URL)
     set_session_cookie(response, str(user.id), settings)
     response.delete_cookie(OAUTH_STATE_COOKIE)
+    response.delete_cookie(OAUTH_PKCE_COOKIE)
     return response
 
 
@@ -360,18 +404,29 @@ async def callback(
 async def simkl_login(request: Request, settings: Settings = Depends(get_settings)):
     """Redirect the user to SIMKL's OAuth authorization page."""
     state = secrets.token_urlsafe(32)
+    code_verifier, code_challenge = _generate_pkce_pair()
     params = urlencode(
         {
             "response_type": "code",
             "client_id": settings.SIMKL_CLIENT_ID,
             "redirect_uri": settings.SIMKL_REDIRECT_URI,
             "state": state,
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
         }
     )
     response = RedirectResponse(f"https://simkl.com/oauth/authorize?{params}")
     response.set_cookie(
         OAUTH_SIMKL_STATE_COOKIE,
         state,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="lax",
+        max_age=300,
+    )
+    response.set_cookie(
+        OAUTH_SIMKL_PKCE_COOKIE,
+        code_verifier,
         httponly=True,
         secure=settings.cookie_secure,
         samesite="lax",
@@ -395,12 +450,27 @@ async def simkl_callback(
     if not expected_state or not state or state != expected_state:
         raise HTTPException(status_code=400, detail="Invalid OAuth state")
 
+    code_verifier = request.cookies.get(OAUTH_SIMKL_PKCE_COOKIE)
+    if not code_verifier:
+        raise HTTPException(status_code=400, detail="Missing PKCE verifier")
     client = SimklClient(client_id=settings.SIMKL_CLIENT_ID)
-    tokens = await client.exchange_code(
-        code,
-        client_secret=settings.SIMKL_CLIENT_SECRET,
-        redirect_uri=settings.SIMKL_REDIRECT_URI,
-    )
+    try:
+        tokens = await client.exchange_code(
+            code,
+            client_secret=settings.SIMKL_CLIENT_SECRET,
+            redirect_uri=settings.SIMKL_REDIRECT_URI,
+            code_verifier=code_verifier,
+        )
+    except httpx.HTTPStatusError as exc:
+        logger.error(
+            "SIMKL token exchange failed (status=%s); possible PKCE rejection",
+            exc.response.status_code,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="Token exchange with SIMKL failed",
+        ) from exc
 
     access_token = tokens["access_token"]
     refresh_token = tokens.get("refresh_token", "")
@@ -456,6 +526,7 @@ async def simkl_callback(
     response = RedirectResponse(url=settings.BASE_URL)
     set_session_cookie(response, str(user.id), settings)
     response.delete_cookie(OAUTH_SIMKL_STATE_COOKIE)
+    response.delete_cookie(OAUTH_SIMKL_PKCE_COOKIE)
     return response
 
 

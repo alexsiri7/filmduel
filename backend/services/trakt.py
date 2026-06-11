@@ -31,20 +31,24 @@ class TraktClient:
         )
 
     async def exchange_code(
-        self, code: str, client_secret: str, redirect_uri: str
+        self, code: str, client_secret: str, redirect_uri: str, code_verifier: str | None = None
     ) -> dict:
-        """Exchange an OAuth authorization code for tokens."""
+        """Exchange an OAuth authorization code for tokens.
+
+        Pass ``code_verifier`` to include PKCE proof in the token request (RFC 7636).
+        Omit it for non-PKCE flows.
+        """
+        body: dict = {
+            "code": code,
+            "client_id": self._client_id,
+            "client_secret": client_secret,
+            "redirect_uri": redirect_uri,
+            "grant_type": "authorization_code",
+        }
+        if code_verifier is not None:
+            body["code_verifier"] = code_verifier
         async with self._client() as client:
-            resp = await client.post(
-                "/oauth/token",
-                json={
-                    "code": code,
-                    "client_id": self._client_id,
-                    "client_secret": client_secret,
-                    "redirect_uri": redirect_uri,
-                    "grant_type": "authorization_code",
-                },
-            )
+            resp = await client.post("/oauth/token", json=body)
             resp.raise_for_status()
             return resp.json()
 
