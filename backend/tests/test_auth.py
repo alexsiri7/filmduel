@@ -596,6 +596,8 @@ class TestUpdateSettings:
         user.created_at = datetime(2024, 1, 1, tzinfo=timezone.utc)
         user.sync_ratings_to_trakt = sync_ratings
         user.sync_ratings_to_simkl = False
+        user.privacy_policy_accepted = True
+        user.privacy_policy_version = "2.0"
         return user
 
     @pytest.mark.asyncio
@@ -834,6 +836,8 @@ class TestUpdateSettingsSimkl:
         user.created_at = datetime(2024, 1, 1, tzinfo=timezone.utc)
         user.sync_ratings_to_trakt = False
         user.sync_ratings_to_simkl = False
+        user.privacy_policy_accepted = True
+        user.privacy_policy_version = "2.0"
         return user
 
     @pytest.mark.asyncio

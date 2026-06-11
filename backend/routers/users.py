@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["users"])
 
 # Must match the version string sent by frontend/src/components/ConsentModal.jsx
-CURRENT_PRIVACY_POLICY_VERSION = "1.0"
+CURRENT_PRIVACY_POLICY_VERSION = "2.0"
 
 
 def _build_user_response(user: User) -> UserResponse:
@@ -42,6 +42,7 @@ def _build_user_response(user: User) -> UserResponse:
         sync_ratings_to_trakt=user.sync_ratings_to_trakt,
         sync_ratings_to_simkl=user.sync_ratings_to_simkl,
         privacy_policy_accepted=user.privacy_policy_accepted,
+        privacy_policy_version=user.privacy_policy_version,
     )
 
 

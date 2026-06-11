@@ -403,8 +403,8 @@ class TestResponseModels:
 
 class TestConsentAccept:
     def test_valid_version_accepted(self):
-        ca = ConsentAccept(version="1.0")
-        assert ca.version == "1.0"
+        ca = ConsentAccept(version="2.0")
+        assert ca.version == "2.0"
 
     def test_empty_version_rejected(self):
         with pytest.raises(ValidationError):

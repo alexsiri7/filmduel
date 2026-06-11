@@ -21,9 +21,20 @@ def _sanitize_llm_input(text: str, max_len: int = 200) -> str:
     return text.strip()
 
 
+def _elo_tier(elo: int) -> str:
+    """Convert raw ELO to a preference tier for privacy-preserving LLM prompts."""
+    if elo >= 1300:
+        return "highly preferred"
+    if elo >= 1100:
+        return "preferred"
+    if elo >= 900:
+        return "neutral"
+    return "less preferred"
+
+
 SYSTEM_PROMPT = """\
 You are a film curator for a movie ranking app. Given a list of candidate films \
-(with titles, years, genres, and user ELO ratings), select exactly {bracket_size} \
+(with titles, years, genres, and user preference tiers), select exactly {bracket_size} \
 films that form a compelling, thematic tournament bracket.
 
 Rules:
@@ -76,7 +87,7 @@ async def curate_tournament(
         )
         lines.append(
             f'- ID: {c["id"]} | "{safe_title}" ({c.get("year", "?")})'
-            f" | Genres: {safe_genres} | ELO: {c.get('elo', '?')}"
+            f" | Genres: {safe_genres} | preference: {_elo_tier(c.get('elo', 1000))}"
             f" | Battles: {c.get('battles', 0)}"
         )
     candidates_text = "\n".join(lines)
