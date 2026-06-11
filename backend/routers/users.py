@@ -142,12 +142,11 @@ async def sync_providers(
     """
 
     # Count movies before sync so we can report new additions
-    before_count_result = await db.execute(
+    before_count = await db.scalar(
         select(func.count())
         .select_from(UserMovie)
         .where(UserMovie.user_id == current_user.id)
-    )
-    before_count = before_count_result.scalar() or 0
+    ) or 0
 
     # Ensure fresh tokens for connected providers
     if current_user.trakt_access_token_enc:
@@ -163,12 +162,11 @@ async def sync_providers(
     await db.commit()
 
     # Count movies after sync
-    after_count_result = await db.execute(
+    after_count = await db.scalar(
         select(func.count())
         .select_from(UserMovie)
         .where(UserMovie.user_id == current_user.id)
-    )
-    after_count = after_count_result.scalar() or 0
+    ) or 0
     new_movies = max(0, after_count - before_count)
 
     # Backfill posters in background
