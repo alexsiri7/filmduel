@@ -23,13 +23,16 @@ from backend.routers.auth import (
     JWT_ALGORITHM,
     JWT_EXPIRY_HOURS,
     OAUTH_SIMKL_STATE_COOKIE,
+    OAUTH_STATE_COOKIE,
     REFRESH_INTERVAL,
     SESSION_MAX_LIFETIME,
     _TRAKT_TOKEN_DEFAULT_TTL_SECONDS,
     create_jwt,
     ensure_fresh_token,
     get_current_user_id,
+    login,
     simkl_callback,
+    simkl_login,
 )
 from backend.routers.users import (
     CURRENT_PRIVACY_POLICY_VERSION,
@@ -219,7 +222,7 @@ class TestGetCurrentUserId:
         response.set_cookie.assert_called_once()
         kwargs = response.set_cookie.call_args.kwargs
         assert kwargs.get("httponly") is True
-        assert kwargs.get("secure") is SETTINGS.is_https
+        assert kwargs.get("secure") is SETTINGS.cookie_secure
         assert kwargs.get("samesite") == "lax"
 
     @pytest.mark.asyncio
@@ -874,3 +877,54 @@ class TestUpdateSettingsSimkl:
         assert user.sync_ratings_to_simkl is True
         assert result.sync_ratings_to_trakt is True
         assert result.sync_ratings_to_simkl is True
+
+
+# ---------------------------------------------------------------------------
+# TestStateCookieSecureFlag
+# ---------------------------------------------------------------------------
+
+
+class TestStateCookieSecureFlag:
+    """Verify OAuth state cookies honour cookie_secure, not just is_https."""
+
+    async def _get_state_cookie(self, monkeypatch, func, cookie_name, **settings_kwargs):
+        monkeypatch.setattr(limiter, "enabled", False)
+        response = await func(_make_starlette_request(), settings=_make_settings(**settings_kwargs))
+        headers = response.headers.getlist("set-cookie")
+        return next((h for h in headers if cookie_name in h), "")
+
+    @pytest.mark.asyncio
+    async def test_login_state_cookie_secure_when_proxy_override(self, monkeypatch):
+        """login state cookie is Secure when SECURE_COOKIES=True even with http:// BASE_URL."""
+        cookie = await self._get_state_cookie(
+            monkeypatch, login, OAUTH_STATE_COOKIE,
+            BASE_URL="http://localhost:8000", SECURE_COOKIES=True,
+        )
+        assert "Secure" in cookie
+
+    @pytest.mark.asyncio
+    async def test_login_state_cookie_not_secure_when_http_no_override(self, monkeypatch):
+        """login state cookie has no Secure flag when http:// BASE_URL and no override."""
+        cookie = await self._get_state_cookie(
+            monkeypatch, login, OAUTH_STATE_COOKIE,
+            BASE_URL="http://localhost:8000",
+        )
+        assert "Secure" not in cookie
+
+    @pytest.mark.asyncio
+    async def test_simkl_login_state_cookie_secure_when_proxy_override(self, monkeypatch):
+        """simkl_login state cookie is Secure when SECURE_COOKIES=True even with http:// BASE_URL."""
+        cookie = await self._get_state_cookie(
+            monkeypatch, simkl_login, OAUTH_SIMKL_STATE_COOKIE,
+            BASE_URL="http://localhost:8000", SECURE_COOKIES=True,
+        )
+        assert "Secure" in cookie
+
+    @pytest.mark.asyncio
+    async def test_simkl_login_state_cookie_not_secure_when_http_no_override(self, monkeypatch):
+        """simkl_login state cookie has no Secure flag when http:// BASE_URL and no override."""
+        cookie = await self._get_state_cookie(
+            monkeypatch, simkl_login, OAUTH_SIMKL_STATE_COOKIE,
+            BASE_URL="http://localhost:8000",
+        )
+        assert "Secure" not in cookie

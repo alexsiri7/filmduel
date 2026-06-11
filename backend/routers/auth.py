@@ -95,7 +95,7 @@ def set_session_cookie(
         COOKIE_NAME,
         create_jwt(user_id, settings, orig_iat=session_start),
         httponly=True,
-        secure=settings.is_https,
+        secure=settings.cookie_secure,
         samesite="lax",
         max_age=max_age,
     )
@@ -274,7 +274,7 @@ async def login(request: Request, settings: Settings = Depends(get_settings)):
         OAUTH_STATE_COOKIE,
         state,
         httponly=True,
-        secure=settings.is_https,
+        secure=settings.cookie_secure,
         samesite="lax",
         max_age=300,
     )
@@ -373,7 +373,7 @@ async def simkl_login(request: Request, settings: Settings = Depends(get_setting
         OAUTH_SIMKL_STATE_COOKIE,
         state,
         httponly=True,
-        secure=settings.is_https,
+        secure=settings.cookie_secure,
         samesite="lax",
         max_age=300,
     )

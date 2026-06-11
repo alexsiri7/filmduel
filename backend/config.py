@@ -105,11 +105,27 @@ class Settings(BaseSettings):
     # Sentry
     SENTRY_DSN: str = ""
 
+    # Explicit override for cookie Secure flag.
+    # Set SECURE_COOKIES=true when behind a TLS-terminating proxy with BASE_URL=http://.
+    # Defaults to None (auto-detect from BASE_URL).
+    SECURE_COOKIES: bool | None = None
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
     @property
     def is_https(self) -> bool:
         return self.BASE_URL.startswith("https://")
+
+    @property
+    def cookie_secure(self) -> bool:
+        """Whether to set the Secure flag on session cookies.
+
+        Explicit SECURE_COOKIES env var takes precedence; otherwise falls back
+        to BASE_URL inference so existing deployments are unaffected.
+        """
+        if self.SECURE_COOKIES is not None:
+            return self.SECURE_COOKIES
+        return self.is_https
 
 
 @lru_cache
