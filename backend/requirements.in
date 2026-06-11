@@ -16,7 +16,7 @@ asyncpg>=0.29.0
 alembic>=1.13.0
 greenlet>=3.5.1
 PyJWT>=2.13.0
-python-multipart>=0.0.7   # CVE-2024-24762 (ReDoS) affects <=0.0.6
+python-multipart>=0.0.32   # CVE-2024-24762 (ReDoS) affects <=0.0.6
 sentry-sdk[fastapi]>=2.0.0
 slowapi>=0.1.9
 litellm>=1.40.0
