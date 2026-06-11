@@ -579,3 +579,75 @@ def test_health_rate_limit_is_1000_per_minute():
     assert any("1000 per 1 minute" in s for s in limit_strings), (
         f"Expected '1000/minute' limit on health, got: {limit_strings}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Per-user daily cap — create_tournament limited to 100 per 24 hours (SEC-03)
+# ---------------------------------------------------------------------------
+
+
+def test_create_tournament_daily_cap_enforced():
+    """create_tournament must return 429 when user has already created 100 tournaments in 24h."""
+    fake_user = _make_user()
+    mock_db = AsyncMock()
+
+    # Simulate scalar_one() returning 100 (at cap)
+    mock_count_result = MagicMock()
+    mock_count_result.scalar_one.return_value = 100
+    mock_db.execute.return_value = mock_count_result
+
+    app.dependency_overrides[get_current_user] = lambda: fake_user
+    app.dependency_overrides[get_db] = lambda: mock_db
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        resp = client.post(
+            "/api/tournaments",
+            json={
+                "name": "Test",
+                "bracket_size": 8,
+                "filter_type": None,
+                "filter_value": None,
+                "media_type": "movie",
+                "ai_curated": False,
+            },
+        )
+
+    app.dependency_overrides.clear()
+    assert resp.status_code == 429
+    assert "Daily tournament creation limit" in resp.json().get("detail", "")
+
+
+def test_create_tournament_daily_cap_allows_below_limit():
+    """create_tournament must proceed normally when user is under the 100/day cap."""
+    fake_user = _make_user()
+    mock_db = AsyncMock()
+
+    # Simulate scalar_one() returning 99 (one below cap)
+    mock_count_result = MagicMock()
+    mock_count_result.scalar_one.return_value = 99
+    mock_db.execute.return_value = mock_count_result
+
+    app.dependency_overrides[get_current_user] = lambda: fake_user
+    app.dependency_overrides[get_db] = lambda: mock_db
+
+    with patch(
+        "backend.routers.tournaments.get_filtered_ranked_films",
+        new_callable=AsyncMock,
+    ) as mock_films:
+        mock_films.side_effect = Exception("stop early — cap passed")
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.post(
+                "/api/tournaments",
+                json={
+                    "name": "Test",
+                    "bracket_size": 8,
+                    "filter_type": None,
+                    "filter_value": None,
+                    "media_type": "movie",
+                    "ai_curated": False,
+                },
+            )
+
+    app.dependency_overrides.clear()
+    # 500 means cap was NOT hit (we passed through to the next step which we forced to fail)
+    assert resp.status_code != 429

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -163,6 +164,20 @@ async def create_tournament(
 
     if body.ai_curated:
         require_consent(current_user)
+
+    # Per-user daily cap: prevent database bloat DoS (SEC-03)
+    window_start = datetime.now(timezone.utc) - timedelta(hours=24)
+    count_stmt = select(func.count()).where(
+        Tournament.user_id == uid,
+        Tournament.created_at >= window_start,
+    )
+    result = await db.execute(count_stmt)
+    daily_count = result.scalar_one()
+    if daily_count >= 100:
+        raise HTTPException(
+            status_code=429,
+            detail="Daily tournament creation limit reached (100 per 24 hours). Please try again later.",
+        )
 
     try:
         user_movies = await get_filtered_ranked_films(
