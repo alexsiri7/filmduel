@@ -167,16 +167,19 @@ async def create_tournament(
 
     # Per-user daily cap: prevent database bloat DoS (SEC-03)
     window_start = datetime.now(timezone.utc) - timedelta(hours=24)
-    count_stmt = select(func.count()).where(
-        Tournament.user_id == uid,
-        Tournament.created_at >= window_start,
-    )
-    result = await db.execute(count_stmt)
-    daily_count = result.scalar_one()
+    daily_count = (
+        await db.scalar(
+            select(func.count()).where(
+                Tournament.user_id == uid,
+                Tournament.created_at >= window_start,
+            )
+        )
+    ) or 0
     if daily_count >= 100:
         raise HTTPException(
             status_code=429,
             detail="Daily tournament creation limit reached (100 per 24 hours). Please try again later.",
+            headers={"Retry-After": "86400"},
         )
 
     try:

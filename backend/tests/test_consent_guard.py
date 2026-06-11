@@ -161,9 +161,7 @@ class TestTournamentConsentGuard:
         mock_db.refresh = AsyncMock()
         mock_db.add = MagicMock()
         mock_db.flush = AsyncMock()
-        mock_count_result = MagicMock()
-        mock_count_result.scalar_one.return_value = 0  # daily cap below limit
-        mock_db.execute.return_value = mock_count_result
+        mock_db.scalar.return_value = 0  # daily cap below limit
 
         mock_films = [MagicMock() for _ in range(8)]
 
@@ -214,9 +212,7 @@ class TestTournamentConsentGuard:
         user = _make_user(privacy_policy_accepted=True)
         mock_db = AsyncMock()
         mock_db.flush = AsyncMock()
-        mock_count_result = MagicMock()
-        mock_count_result.scalar_one.return_value = 0  # daily cap below limit
-        mock_db.execute.return_value = mock_count_result
+        mock_db.scalar.return_value = 0  # daily cap below limit
 
         mock_films = [MagicMock() for _ in range(8)]
         mock_llm_result = {

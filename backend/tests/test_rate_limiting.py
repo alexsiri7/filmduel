@@ -591,10 +591,8 @@ def test_create_tournament_daily_cap_enforced():
     fake_user = _make_user()
     mock_db = AsyncMock()
 
-    # Simulate scalar_one() returning 100 (at cap)
-    mock_count_result = MagicMock()
-    mock_count_result.scalar_one.return_value = 100
-    mock_db.execute.return_value = mock_count_result
+    # Simulate db.scalar() returning 100 (at cap)
+    mock_db.scalar.return_value = 100
 
     app.dependency_overrides[get_current_user] = lambda: fake_user
     app.dependency_overrides[get_db] = lambda: mock_db
@@ -622,10 +620,8 @@ def test_create_tournament_daily_cap_allows_below_limit():
     fake_user = _make_user()
     mock_db = AsyncMock()
 
-    # Simulate scalar_one() returning 99 (one below cap)
-    mock_count_result = MagicMock()
-    mock_count_result.scalar_one.return_value = 99
-    mock_db.execute.return_value = mock_count_result
+    # Simulate db.scalar() returning 99 (one below cap)
+    mock_db.scalar.return_value = 99
 
     app.dependency_overrides[get_current_user] = lambda: fake_user
     app.dependency_overrides[get_db] = lambda: mock_db
@@ -650,4 +646,4 @@ def test_create_tournament_daily_cap_allows_below_limit():
 
     app.dependency_overrides.clear()
     # 500 means cap was NOT hit (we passed through to the next step which we forced to fail)
-    assert resp.status_code != 429
+    assert resp.status_code == 500
