@@ -880,65 +880,51 @@ class TestUpdateSettingsSimkl:
 
 
 # ---------------------------------------------------------------------------
-# TestStateCoookieSecureFlag
+# TestStateCookieSecureFlag
 # ---------------------------------------------------------------------------
 
 
 class TestStateCookieSecureFlag:
     """Verify OAuth state cookies honour cookie_secure, not just is_https."""
 
+    async def _get_state_cookie(self, monkeypatch, func, cookie_name, **settings_kwargs):
+        monkeypatch.setattr(limiter, "enabled", False)
+        response = await func(_make_starlette_request(), settings=_make_settings(**settings_kwargs))
+        headers = response.headers.getlist("set-cookie")
+        return next((h for h in headers if cookie_name in h), "")
+
     @pytest.mark.asyncio
     async def test_login_state_cookie_secure_when_proxy_override(self, monkeypatch):
         """login state cookie is Secure when SECURE_COOKIES=True even with http:// BASE_URL."""
-        monkeypatch.setattr(limiter, "enabled", False)
-        proxy_settings = _make_settings(
-            BASE_URL="http://localhost:8000", SECURE_COOKIES=True
+        cookie = await self._get_state_cookie(
+            monkeypatch, login, OAUTH_STATE_COOKIE,
+            BASE_URL="http://localhost:8000", SECURE_COOKIES=True,
         )
-        request = _make_starlette_request()
-        response = await login(request, settings=proxy_settings)
-        set_cookie_headers = response.headers.getlist("set-cookie")
-        state_cookie = next(
-            (h for h in set_cookie_headers if OAUTH_STATE_COOKIE in h), ""
-        )
-        assert "Secure" in state_cookie
+        assert "Secure" in cookie
 
     @pytest.mark.asyncio
     async def test_login_state_cookie_not_secure_when_http_no_override(self, monkeypatch):
         """login state cookie has no Secure flag when http:// BASE_URL and no override."""
-        monkeypatch.setattr(limiter, "enabled", False)
-        http_settings = _make_settings(BASE_URL="http://localhost:8000")
-        request = _make_starlette_request()
-        response = await login(request, settings=http_settings)
-        set_cookie_headers = response.headers.getlist("set-cookie")
-        state_cookie = next(
-            (h for h in set_cookie_headers if OAUTH_STATE_COOKIE in h), ""
+        cookie = await self._get_state_cookie(
+            monkeypatch, login, OAUTH_STATE_COOKIE,
+            BASE_URL="http://localhost:8000",
         )
-        assert "Secure" not in state_cookie
+        assert "Secure" not in cookie
 
     @pytest.mark.asyncio
     async def test_simkl_login_state_cookie_secure_when_proxy_override(self, monkeypatch):
         """simkl_login state cookie is Secure when SECURE_COOKIES=True even with http:// BASE_URL."""
-        monkeypatch.setattr(limiter, "enabled", False)
-        proxy_settings = _make_settings(
-            BASE_URL="http://localhost:8000", SECURE_COOKIES=True
+        cookie = await self._get_state_cookie(
+            monkeypatch, simkl_login, OAUTH_SIMKL_STATE_COOKIE,
+            BASE_URL="http://localhost:8000", SECURE_COOKIES=True,
         )
-        request = _make_starlette_request()
-        response = await simkl_login(request, settings=proxy_settings)
-        set_cookie_headers = response.headers.getlist("set-cookie")
-        state_cookie = next(
-            (h for h in set_cookie_headers if OAUTH_SIMKL_STATE_COOKIE in h), ""
-        )
-        assert "Secure" in state_cookie
+        assert "Secure" in cookie
 
     @pytest.mark.asyncio
     async def test_simkl_login_state_cookie_not_secure_when_http_no_override(self, monkeypatch):
         """simkl_login state cookie has no Secure flag when http:// BASE_URL and no override."""
-        monkeypatch.setattr(limiter, "enabled", False)
-        http_settings = _make_settings(BASE_URL="http://localhost:8000")
-        request = _make_starlette_request()
-        response = await simkl_login(request, settings=http_settings)
-        set_cookie_headers = response.headers.getlist("set-cookie")
-        state_cookie = next(
-            (h for h in set_cookie_headers if OAUTH_SIMKL_STATE_COOKIE in h), ""
+        cookie = await self._get_state_cookie(
+            monkeypatch, simkl_login, OAUTH_SIMKL_STATE_COOKIE,
+            BASE_URL="http://localhost:8000",
         )
-        assert "Secure" not in state_cookie
+        assert "Secure" not in cookie
