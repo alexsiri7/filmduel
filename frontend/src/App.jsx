@@ -24,7 +24,9 @@ function ProtectedRoute({ children }) {
           return;
         }
         const data = await r.json();
-        if (!data.privacy_policy_accepted) setShowConsent(true);
+        // "2.0" must match CURRENT_PRIVACY_POLICY_VERSION in backend/routers/users.py
+        // and the version sent by frontend/src/components/ConsentModal.jsx
+        if (!data.privacy_policy_accepted || data.privacy_policy_version !== "2.0") setShowConsent(true);
         setStatus("authenticated");
       } catch (err) {
         console.error("Auth check failed:", err);

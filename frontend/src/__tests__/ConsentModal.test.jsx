@@ -24,7 +24,7 @@ describe("ConsentModal", () => {
     render(<ConsentModal onAccepted={onAccepted} />);
     fireEvent.click(screen.getByRole("button", { name: /i accept/i }));
     await waitFor(() => {
-      expect(acceptConsent).toHaveBeenCalledWith("1.0");
+      expect(acceptConsent).toHaveBeenCalledWith("2.0");
       expect(onAccepted).toHaveBeenCalledOnce();
     });
   });

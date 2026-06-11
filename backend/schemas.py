@@ -18,6 +18,7 @@ class UserResponse(BaseModel):
     sync_ratings_to_trakt: bool
     sync_ratings_to_simkl: bool = False
     privacy_policy_accepted: bool
+    privacy_policy_version: Optional[str] = None
 
 
 class UserSettingsUpdate(BaseModel):

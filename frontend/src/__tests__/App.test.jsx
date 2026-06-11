@@ -165,6 +165,56 @@ describe("App", () => {
     });
   });
 
+  it("shows ConsentModal when user has old privacy policy version", async () => {
+    vi.stubGlobal("fetch", vi.fn((url) => {
+      if (url === "/api/me") {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({
+            sync_ratings_to_trakt: false,
+            privacy_policy_accepted: true,
+            privacy_policy_version: "1.0",
+          }),
+        });
+      }
+      return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve(null) });
+    }));
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>
+    );
+    await waitFor(() => {
+      expect(screen.getByText(/before you continue/i)).toBeInTheDocument();
+    });
+  });
+
+  it("shows ConsentModal when user has null privacy policy version", async () => {
+    vi.stubGlobal("fetch", vi.fn((url) => {
+      if (url === "/api/me") {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({
+            sync_ratings_to_trakt: false,
+            privacy_policy_accepted: true,
+            privacy_policy_version: null,
+          }),
+        });
+      }
+      return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve(null) });
+    }));
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>
+    );
+    await waitFor(() => {
+      expect(screen.getByText(/before you continue/i)).toBeInTheDocument();
+    });
+  });
+
   it("renders /privacy page without auth redirect", () => {
     render(
       <MemoryRouter initialEntries={["/privacy"]}>
@@ -179,7 +229,7 @@ describe("App", () => {
       "fetch",
       vi.fn((url) => {
         if (url === "/api/me") {
-          return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ sync_ratings_to_trakt: false, privacy_policy_accepted: true }) });
+          return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ sync_ratings_to_trakt: false, privacy_policy_accepted: true, privacy_policy_version: "2.0" }) });
         }
         if (url.includes("/api/rankings") && !url.includes("stats")) {
           return Promise.resolve({

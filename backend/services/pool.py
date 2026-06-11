@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select, update as sa_update
@@ -342,7 +343,7 @@ async def _upsert_simkl_pool(
             existing_by_imdb[row.imdb_id] = (row.id, row.trakt_id)
 
     # Upsert movies — skip those already in DB via imdb cross-ref
-    simkl_id_to_movie_uuid: dict[int, str] = {}
+    simkl_id_to_movie_uuid: dict[int, uuid.UUID] = {}
     for simkl_id, item_data in pool.items():
         imdb_id = item_data.get("ids", {}).get("imdb")
         if imdb_id and imdb_id in existing_by_imdb:

@@ -120,12 +120,15 @@ Where `{candidate_list}` is a JSON array:
     "year": 2001,
     "genres": ["mystery", "drama"],
     "director": "David Lynch",
-    "elo": 1380,
+    "preference": "highly preferred",
     "battles": 14
   },
   ...
 ]
 ```
+
+Note: Raw ELO values are never sent to the LLM — they are converted to preference tiers
+(highly preferred / preferred / neutral / less preferred) before inclusion in the prompt.
 
 And `{filter_context}` is something like ` (filtered to horror films, sorted by your ranking)` or empty string if no filter.
 

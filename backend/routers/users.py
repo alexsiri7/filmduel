@@ -29,8 +29,12 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["users"])
 
-# Must match the version string sent by frontend/src/components/ConsentModal.jsx
-CURRENT_PRIVACY_POLICY_VERSION = "1.0"
+# When updating the privacy policy:
+# 1. Update this constant to the new version string
+# 2. Update the hardcoded version in frontend/src/components/ConsentModal.jsx to match
+# 3. Update the privacy policy text in frontend/src/pages/PrivacyPolicy.jsx
+# Mismatch between this constant and the stored user value triggers re-consent for existing users.
+CURRENT_PRIVACY_POLICY_VERSION = "2.0"
 
 
 def _build_user_response(user: User) -> UserResponse:
@@ -42,6 +46,7 @@ def _build_user_response(user: User) -> UserResponse:
         sync_ratings_to_trakt=user.sync_ratings_to_trakt,
         sync_ratings_to_simkl=user.sync_ratings_to_simkl,
         privacy_policy_accepted=user.privacy_policy_accepted,
+        privacy_policy_version=user.privacy_policy_version,
     )
 
 

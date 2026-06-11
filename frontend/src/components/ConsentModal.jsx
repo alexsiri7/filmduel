@@ -9,7 +9,7 @@ export default function ConsentModal({ onAccepted }) {
     setLoading(true);
     setError(null);
     try {
-      await acceptConsent("1.0");
+      await acceptConsent("2.0");
       onAccepted();
     } catch (err) {
       console.error("Failed to record consent:", err);
@@ -32,7 +32,7 @@ export default function ConsentModal({ onAccepted }) {
           <li>• OAuth tokens from Trakt (stored encrypted)</li>
           <li>• Your watched film history from Trakt</li>
           <li>• Duel choices and ELO rankings</li>
-          <li>• Taste profiles sent to AI for recommendations</li>
+          <li>• Film titles, years, genres &amp; preference tiers sent to Requesty.ai for AI recommendations</li>
           <li>• Error reports sent to Sentry</li>
         </ul>
         <a
