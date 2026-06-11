@@ -179,7 +179,7 @@ describe("App", () => {
       "fetch",
       vi.fn((url) => {
         if (url === "/api/me") {
-          return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ sync_ratings_to_trakt: false, privacy_policy_accepted: true }) });
+          return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ sync_ratings_to_trakt: false, privacy_policy_accepted: true, privacy_policy_version: "2.0" }) });
         }
         if (url.includes("/api/rankings") && !url.includes("stats")) {
           return Promise.resolve({
