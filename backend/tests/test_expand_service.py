@@ -47,14 +47,10 @@ class TestExpandPoolInner:
         insert_result = MagicMock()
         insert_result.rowcount = 1
 
-        call_idx = 0
-
         async def fake_execute(stmt):
-            nonlocal call_idx
-            call_idx += 1
             result = MagicMock()
             stmt_str = str(stmt)
-            if "pool_expansion" in stmt_str.lower() or call_idx == 1:
+            if "pool_expansion" in stmt_str.lower():
                 result.all.return_value = []
                 return result
             if "movie" in stmt_str.lower() and "select" in stmt_str.lower():
@@ -86,7 +82,7 @@ class TestExpandPoolInner:
             )
             result = await _expand_pool_inner(user_id, "movie")
 
-        assert result >= 0
+        assert result == 1
         trakt_mock.get_recommendations.assert_awaited_once()
 
     @pytest.mark.asyncio

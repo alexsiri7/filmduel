@@ -421,9 +421,20 @@ class TestGetCurrentUserId:
     async def test_cookie_max_age_capped_near_session_limit(self, monkeypatch):
         """Cookie max_age must be capped to remaining session lifetime, not full JWT expiry."""
         monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
+
+        # Freeze time so the test is deterministic (no wall-clock drift)
+        fixed_now = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+        class _FrozenDatetime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return fixed_now
+
+        monkeypatch.setattr("backend.routers.auth.datetime", _FrozenDatetime)
+
         # Session started 29d 23h ago — 1h left before hard cap
-        orig = datetime.now(timezone.utc) - SESSION_MAX_LIFETIME + timedelta(hours=1)
-        old_iat = datetime.now(timezone.utc) - REFRESH_INTERVAL - timedelta(hours=1)
+        orig = fixed_now - SESSION_MAX_LIFETIME + timedelta(hours=1)
+        old_iat = fixed_now - REFRESH_INTERVAL - timedelta(hours=1)
         payload = _make_jwt_payload(iat=old_iat, orig_iat=orig.timestamp())
         token = pyjwt.encode(payload, SETTINGS.SECRET_KEY, algorithm=JWT_ALGORITHM)
         request = _make_request({COOKIE_NAME: token})
@@ -433,9 +444,8 @@ class TestGetCurrentUserId:
         kwargs = response.set_cookie.call_args.kwargs
         max_age = kwargs.get("max_age")
         assert max_age is not None
-        # Should be capped to ~1h (3600s), not the full JWT_EXPIRY_HOURS * 3600
-        assert max_age <= 3600 + 30  # 30s tolerance for test execution time
-        assert max_age > 0  # not yet expired
+        # With frozen time, max_age is exactly 3600 (1 hour remaining)
+        assert max_age == 3600
 
     @pytest.mark.asyncio
     async def test_refreshes_old_token_max_age_is_full_jwt_expiry(self, monkeypatch):

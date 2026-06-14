@@ -477,7 +477,7 @@ def test_get_rankings_endpoint_reachable():
         resp = client.get("/api/rankings")
 
     app.dependency_overrides.clear()
-    assert resp.status_code != 500
+    assert resp.status_code == 200
 
 
 def test_get_stats_endpoint_reachable():
@@ -503,7 +503,7 @@ def test_get_stats_endpoint_reachable():
             resp = client.get("/api/rankings/stats")
 
     app.dependency_overrides.clear()
-    assert resp.status_code != 500
+    assert resp.status_code == 200
 
 
 def test_dismiss_suggestion_endpoint_reachable():
@@ -522,7 +522,7 @@ def test_dismiss_suggestion_endpoint_reachable():
 
     app.dependency_overrides.clear()
     # 404 expected (suggestion not found); confirms endpoint + Request param works
-    assert resp.status_code != 500
+    assert resp.status_code == 404
 
 
 def test_get_available_genres_endpoint_reachable():
@@ -540,7 +540,7 @@ def test_get_available_genres_endpoint_reachable():
         resp = client.get("/api/tournaments/genres")
 
     app.dependency_overrides.clear()
-    assert resp.status_code != 500
+    assert resp.status_code == 200
 
 
 def test_abandon_tournament_endpoint_reachable():
@@ -559,7 +559,7 @@ def test_abandon_tournament_endpoint_reachable():
 
     app.dependency_overrides.clear()
     # 404 expected (tournament not found); confirms endpoint + Request param works
-    assert resp.status_code != 500
+    assert resp.status_code == 404
 
 
 # ---------------------------------------------------------------------------

@@ -119,8 +119,10 @@ async def test_get_user_movie_with_for_update():
     um = await get_user_movie(db, uid, mid, for_update=True)
     assert um is existing
     assert len(captured_stmts) == 1
-    # SQLAlchemy Select.__str__() includes "FOR UPDATE" when with_for_update() is applied
-    assert "FOR UPDATE" in str(captured_stmts[0]).upper()
+    from sqlalchemy.dialects import postgresql
+
+    compiled = captured_stmts[0].compile(dialect=postgresql.dialect())
+    assert "FOR UPDATE" in str(compiled).upper()
 
 
 @pytest.mark.asyncio

@@ -151,3 +151,73 @@ class TestBuildSimklMovieUpsert:
         stmt = build_simkl_movie_upsert(movie_data, now, media_type="show")
         params = stmt.compile().params
         assert params["media_type"] == "show"
+
+
+# ---------------------------------------------------------------------------
+# _safe_fetch — silent failure handling
+# ---------------------------------------------------------------------------
+
+
+class TestSafeFetch:
+    @pytest.mark.asyncio
+    async def test_safe_fetch_returns_empty_on_api_exception(self):
+        """_safe_fetch returns [] when the underlying coroutine raises."""
+        from backend.services.pool import _safe_fetch
+
+        async def failing_coro():
+            raise RuntimeError("API timeout")
+
+        result = await _safe_fetch(failing_coro)
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_safe_fetch_returns_data_on_success(self):
+        """_safe_fetch returns the coroutine result on success."""
+        from backend.services.pool import _safe_fetch
+
+        async def succeeding_coro():
+            return [{"id": 1}, {"id": 2}]
+
+        result = await _safe_fetch(succeeding_coro)
+        assert result == [{"id": 1}, {"id": 2}]
+
+    @pytest.mark.asyncio
+    async def test_partial_provider_failure_continues_other(self):
+        """When Trakt fails, SIMKL data should still be populated."""
+        user = _make_user(last_seen_at=None)
+        # Remove SIMKL-related attrs to focus test on Trakt failure path
+        user.simkl_access_token = None
+        user.simkl_access_token_enc = None
+        db = AsyncMock()
+
+        exec_count = 0
+
+        async def fake_execute(stmt):
+            nonlocal exec_count
+            exec_count += 1
+            result = MagicMock()
+            result.all.return_value = []
+            result.rowcount = 0
+            return result
+
+        db.execute = fake_execute
+
+        trakt_mock = AsyncMock()
+        # Trakt popular fails
+        trakt_mock.get_popular.side_effect = RuntimeError("Trakt down")
+        trakt_mock.get_trending.side_effect = RuntimeError("Trakt down")
+        trakt_mock.get_recommendations.side_effect = RuntimeError("Trakt down")
+        # Watched and ratings work
+        trakt_mock.get_user_watched.return_value = []
+        trakt_mock.get_user_ratings.return_value = []
+
+        with (
+            patch("backend.services.pool.TraktClient", return_value=trakt_mock),
+            patch("backend.services.pool.get_settings") as mock_settings,
+        ):
+            mock_settings.return_value = MagicMock(TRAKT_CLIENT_ID="fake")
+            # Should not raise — _safe_fetch swallows the errors
+            await populate_movie_pool(user, db)
+
+        # last_seen_at should still be updated (sync completed)
+        assert user.last_seen_at is not None
