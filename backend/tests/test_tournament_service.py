@@ -1,7 +1,7 @@
 """Tests for tournament service pure functions and bracket logic."""
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -304,3 +304,157 @@ class TestTournamentSchemaFields:
         assert "llm_response" not in TournamentSchema.model_fields, (
             "llm_response must not be part of the public TournamentSchema"
         )
+
+
+# ---------------------------------------------------------------------------
+# record_match_winner — propagation and tournament completion
+# ---------------------------------------------------------------------------
+
+
+class TestRecordMatchWinner:
+    @pytest.mark.asyncio
+    async def test_propagates_winner_to_next_round(self):
+        """record_match_winner should propagate the winner into the next round match."""
+        from backend.services.tournament import record_match_winner
+
+        tournament_id = uuid.uuid4()
+        match_id = uuid.uuid4()
+        winner_id = uuid.uuid4()
+        loser_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+
+        # Round 1 match (position 0) — should propagate to round 2
+        match_obj = MagicMock()
+        match_obj.winner_movie_id = None
+        match_obj.round = 1
+        match_obj.position = 0
+        match_obj.id = match_id
+
+        # Next round match (round 2, position 0)
+        next_match = MagicMock()
+        next_match.movie_a_id = None
+        next_match.movie_b_id = None
+
+        # Winner and loser UserMovies
+        um_w = MagicMock()
+        um_w.elo = 1000
+        um_w.seeded_elo = None
+        um_w.battles = 5
+        um_l = MagicMock()
+        um_l.elo = 1000
+        um_l.seeded_elo = None
+        um_l.battles = 5
+
+        call_count = 0
+
+        async def fake_execute(stmt):
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            stmt_str = str(stmt)
+            if "with_for_update" in stmt_str.lower() or call_count == 1:
+                # First call: match row lock
+                if call_count <= 1:
+                    result.scalar_one.return_value = match_obj
+                    return result
+            if call_count == 2:
+                # Second call: next round match lookup
+                result.scalar_one.return_value = next_match
+                return result
+            # UserMovie lookups for ELO
+            if "user_movie" in stmt_str.lower() or call_count in (3, 4):
+                if call_count == 3:
+                    result.scalar_one.return_value = um_w
+                else:
+                    result.scalar_one.return_value = um_l
+                return result
+            result.scalar_one.return_value = MagicMock()
+            return result
+
+        db = AsyncMock()
+        db.execute = fake_execute
+
+        with patch(
+            "backend.services.tournament.apply_elo_result",
+            new_callable=AsyncMock,
+        ) as mock_elo:
+            mock_elo.return_value = MagicMock(id=uuid.uuid4())
+            await record_match_winner(
+                db, tournament_id, 4, match_id, winner_id, loser_id, user_id
+            )
+
+        # Winner propagated to next round (position 0 is even → movie_a)
+        assert next_match.movie_a_id == winner_id
+        assert match_obj.winner_movie_id == winner_id
+
+    @pytest.mark.asyncio
+    async def test_completes_tournament_on_final_match(self):
+        """record_match_winner sets champion and status='completed' on the final round."""
+        from backend.services.tournament import record_match_winner
+
+        tournament_id = uuid.uuid4()
+        match_id = uuid.uuid4()
+        winner_id = uuid.uuid4()
+        loser_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+
+        # Final round match (round 1 of a 2-player bracket)
+        match_obj = MagicMock()
+        match_obj.winner_movie_id = None
+        match_obj.round = 1  # _num_rounds(2) == 1, so this is the final
+        match_obj.position = 0
+        match_obj.id = match_id
+
+        # Tournament object for completion
+        tournament_obj = MagicMock()
+        tournament_obj.champion_movie_id = None
+        tournament_obj.status = "active"
+        tournament_obj.completed_at = None
+
+        um_w = MagicMock()
+        um_w.elo = 1000
+        um_w.seeded_elo = None
+        um_w.battles = 5
+        um_l = MagicMock()
+        um_l.elo = 1000
+        um_l.seeded_elo = None
+        um_l.battles = 5
+
+        call_count = 0
+
+        async def fake_execute(stmt):
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            if call_count == 1:
+                # Match row lock
+                result.scalar_one.return_value = match_obj
+                return result
+            if call_count == 2:
+                # Tournament lookup (for completion)
+                result.scalar_one.return_value = tournament_obj
+                return result
+            if call_count == 3:
+                result.scalar_one.return_value = um_w
+                return result
+            if call_count == 4:
+                result.scalar_one.return_value = um_l
+                return result
+            result.scalar_one.return_value = MagicMock()
+            return result
+
+        db = AsyncMock()
+        db.execute = fake_execute
+
+        with patch(
+            "backend.services.tournament.apply_elo_result",
+            new_callable=AsyncMock,
+        ) as mock_elo:
+            mock_elo.return_value = MagicMock(id=uuid.uuid4())
+            # bracket_size=2 → _num_rounds(2)=1 → round 1 is final
+            await record_match_winner(
+                db, tournament_id, 2, match_id, winner_id, loser_id, user_id
+            )
+
+        assert tournament_obj.champion_movie_id == winner_id
+        assert tournament_obj.status == "completed"
