@@ -6,11 +6,13 @@ import json
 import logging
 import re
 
-from fastapi import HTTPException
-
 from backend.services.llm import chat_completion, parse_json_response
 
 logger = logging.getLogger(__name__)
+
+
+class CurationError(Exception):
+    """Raised when LLM-based curation fails (API error, bad JSON, etc.)."""
 
 
 def _sanitize_llm_input(text: str, max_len: int = 200) -> str:
@@ -73,7 +75,7 @@ async def curate_tournament(
         Dict with keys: name, tagline, theme_description, film_ids
 
     Raises:
-        HTTPException on API or parsing errors.
+        CurationError on API or parsing errors.
     """
     # Build candidate text
     lines = []
@@ -110,16 +112,10 @@ async def curate_tournament(
         )
     except ValueError as exc:
         # LLM_API_KEY not configured
-        raise HTTPException(
-            status_code=500,
-            detail=f"AI curation is not configured ({exc})",
-        )
+        raise CurationError(f"AI curation is not configured ({exc})")
     except Exception as exc:
         logger.error("LLM request failed during tournament curation: %s", exc)
-        raise HTTPException(
-            status_code=500,
-            detail="AI curation request failed. Please try again.",
-        )
+        raise CurationError("AI curation request failed. Please try again.")
 
     # Parse the JSON from the LLM output
     try:
@@ -132,32 +128,20 @@ async def curate_tournament(
                 result = json.loads(match.group(1))
             except Exception:
                 logger.error("Failed to parse LLM JSON output: %s", text_content[:500])
-                raise HTTPException(
-                    status_code=500,
-                    detail="AI curation returned invalid JSON. Please try again.",
-                )
+                raise CurationError("AI curation returned invalid JSON. Please try again.")
         else:
             logger.error("Failed to parse LLM JSON output: %s", text_content[:500])
-            raise HTTPException(
-                status_code=500,
-                detail="AI curation returned invalid JSON. Please try again.",
-            )
+            raise CurationError("AI curation returned invalid JSON. Please try again.")
 
     # Validate required fields
     required_keys = {"name", "tagline", "theme_description", "film_ids"}
     missing = required_keys - set(result.keys())
     if missing:
         logger.error("LLM response missing keys %s: %s", missing, result)
-        raise HTTPException(
-            status_code=500,
-            detail=f"AI curation response missing fields: {', '.join(missing)}",
-        )
+        raise CurationError(f"AI curation response missing fields: {', '.join(missing)}")
 
     if not isinstance(result["film_ids"], list):
-        raise HTTPException(
-            status_code=500,
-            detail="AI curation returned invalid film_ids (expected list)",
-        )
+        raise CurationError("AI curation returned invalid film_ids (expected list)")
 
     if len(result["film_ids"]) != bracket_size:
         logger.warning(
@@ -169,9 +153,8 @@ async def curate_tournament(
         if len(result["film_ids"]) > bracket_size:
             result["film_ids"] = result["film_ids"][:bracket_size]
         else:
-            raise HTTPException(
-                status_code=500,
-                detail=f"AI selected {len(result['film_ids'])} films but bracket needs {bracket_size}. Please try again.",
+            raise CurationError(
+                f"AI selected {len(result['film_ids'])} films but bracket needs {bracket_size}. Please try again."
             )
 
     return result

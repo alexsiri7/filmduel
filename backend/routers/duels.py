@@ -93,8 +93,12 @@ async def submit_duel(
         mode,
     )
 
+    media_type = (
+        await db.execute(select(Movie.media_type).where(Movie.id == movie_a_id))
+    ).scalar_one()
+
     try:
-        result = await process_duel(db, uid, movie_a_id, movie_b_id, outcome, mode)
+        result = await process_duel(db, uid, movie_a_id, movie_b_id, outcome, mode, media_type)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

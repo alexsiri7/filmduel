@@ -16,7 +16,7 @@ from backend.rate_limit import limiter
 from backend.config import get_settings
 from backend.routers.auth import get_admin_user, get_current_user
 from backend.schemas import MediaType, SwipeCardSchema, SwipeResponse, SwipeSubmit
-from backend.services.duel import should_suggest_swipe
+from backend.services.duel import compute_next_action
 from backend.services.expand import expand_pool
 from backend.services.pair_selection import BANDS
 
@@ -208,34 +208,7 @@ async def submit_swipe_results(
         else:
             unseen_count += 1
 
-    # Check if user has enough seen films to duel (scoped by media_type)
-    seen_unranked_stmt = (
-        select(func.count())
-        .select_from(UserMovie)
-        .join(Movie, UserMovie.movie_id == Movie.id)
-        .where(
-            UserMovie.user_id == uid,
-            UserMovie.seen.is_(True),
-            UserMovie.battles == 0,
-            Movie.media_type == media_type,
-        )
-    )
-    seen_unranked = (await db.execute(seen_unranked_stmt)).scalar() or 0
-
-    # Also count total seen (ranked + unranked) — need at least 2 to duel
-    total_seen_stmt = (
-        select(func.count())
-        .select_from(UserMovie)
-        .join(Movie, UserMovie.movie_id == Movie.id)
-        .where(
-            UserMovie.user_id == uid,
-            UserMovie.seen.is_(True),
-            Movie.media_type == media_type,
-        )
-    )
-    total_seen = (await db.execute(total_seen_stmt)).scalar() or 0
-
-    next_action = "swipe" if should_suggest_swipe(seen_unranked, total_seen) else "duel"
+    next_action = await compute_next_action(db, uid, media_type)
 
     logger.info(
         "swipe_submit user_id=%s seen_count=%d unseen_count=%d next_action=%s total_seen=%d seen_unranked=%d",

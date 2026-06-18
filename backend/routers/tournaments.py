@@ -27,6 +27,7 @@ from backend.schemas import (
     TournamentSchema,
 )
 from backend.services.ranking import ranked_user_movies_stmt
+from backend.services.curator import CurationError
 from backend.services.tournament import (
     create_tournament_bracket,
     curate_and_select_films,
@@ -213,9 +214,11 @@ async def create_tournament(
                 filter_value=body.filter_value,
                 theme_hint=body.name.strip() if body.name else "",
             )
-        except ValueError as e:
+        except (ValueError, CurationError) as e:
             logger.error("AI curation failed: %s", e)
-            raise HTTPException(status_code=500, detail="AI curation failed. Please try again.")
+            raise HTTPException(
+                status_code=500, detail="AI curation failed. Please try again."
+            )
 
         ai_name = llm_result["name"]
         ai_tagline = llm_result.get("tagline")
@@ -306,9 +309,11 @@ async def regenerate_tournament(
             filter_value=tournament.filter_value,
             theme_hint=original_hint,
         )
-    except ValueError as e:
+    except (ValueError, CurationError) as e:
         logger.error("AI curation failed during regeneration: %s", e)
-        raise HTTPException(status_code=500, detail="AI curation failed. Please try again.")
+        raise HTTPException(
+            status_code=500, detail="AI curation failed. Please try again."
+        )
 
     # Delete existing matches
     await db.execute(
