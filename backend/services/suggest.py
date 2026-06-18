@@ -15,22 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from backend.db_models import Movie, UserMovie
-from backend.services.curator import _sanitize_llm_input
+from backend.services.curator import _elo_tier, _sanitize_llm_input
 from backend.services.llm import chat_completion, parse_json_response
 from backend.services.ranking import ranked_user_movies_stmt
 
 logger = logging.getLogger(__name__)
 
-
-def _elo_tier(elo: int) -> str:
-    """Convert raw ELO to a preference tier for privacy-preserving LLM prompts."""
-    if elo >= 1300:
-        return "highly preferred"
-    if elo >= 1100:
-        return "preferred"
-    if elo >= 900:
-        return "neutral"
-    return "less preferred"
 
 MIN_RANKED = 20
 NUM_PICKS = 6

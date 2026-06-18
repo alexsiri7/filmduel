@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.db_models import Duel, UserMovie
+from backend.db_models import Duel, Movie, UserMovie
 from backend.schemas import DuelOutcome, DuelResult
 from backend.services.elo import get_initial_elo, update_elo
 
@@ -27,6 +27,38 @@ MIN_TOTAL_SEEN = 10
 def should_suggest_swipe(seen_unranked: int, total_seen: int) -> bool:
     """Return True if the user needs more swipes before dueling."""
     return seen_unranked < MIN_SEEN_UNRANKED or total_seen < MIN_TOTAL_SEEN
+
+
+async def compute_next_action(
+    db: AsyncSession, user_id: uuid.UUID, media_type: str
+) -> str:
+    """Determine whether user should swipe or duel next, scoped by media_type."""
+    seen_unranked_stmt = (
+        select(func.count())
+        .select_from(UserMovie)
+        .join(Movie, UserMovie.movie_id == Movie.id)
+        .where(
+            UserMovie.user_id == user_id,
+            UserMovie.seen.is_(True),
+            UserMovie.battles == 0,
+            Movie.media_type == media_type,
+        )
+    )
+    seen_unranked = (await db.execute(seen_unranked_stmt)).scalar_one()
+
+    total_seen_stmt = (
+        select(func.count())
+        .select_from(UserMovie)
+        .join(Movie, UserMovie.movie_id == Movie.id)
+        .where(
+            UserMovie.user_id == user_id,
+            UserMovie.seen.is_(True),
+            Movie.media_type == media_type,
+        )
+    )
+    total_seen = (await db.execute(total_seen_stmt)).scalar_one()
+
+    return "swipe" if should_suggest_swipe(seen_unranked, total_seen) else "duel"
 
 
 async def apply_elo_result(
@@ -103,6 +135,7 @@ async def process_duel(
     movie_b_id: uuid.UUID,
     outcome: str,
     mode: str,
+    media_type: str = "movie",
 ) -> ProcessDuelResult:
     """Run the full duel pipeline: ELO math, DB mutations, duel record.
 
@@ -192,28 +225,12 @@ async def process_duel(
     )
 
     # ── next_action ─────────────────────────────────────────────────
-    seen_unranked_stmt = select(func.count()).where(
-        UserMovie.user_id == user_id,
-        UserMovie.seen.is_(True),
-        UserMovie.battles == 0,
-    )
-    seen_unranked_result = await db.execute(seen_unranked_stmt)
-    seen_unranked = seen_unranked_result.scalar_one()
-
-    total_seen_stmt = select(func.count()).where(
-        UserMovie.user_id == user_id,
-        UserMovie.seen.is_(True),
-    )
-    total_seen_result = await db.execute(total_seen_stmt)
-    total_seen = total_seen_result.scalar_one()
-
-    next_action = "swipe" if should_suggest_swipe(seen_unranked, total_seen) else "duel"
+    next_action = await compute_next_action(db, user_id, media_type)
 
     logger.info(
-        "duel_next_action user_id=%s next_action=%s seen_unranked=%d",
+        "duel_next_action user_id=%s next_action=%s",
         user_id,
         next_action,
-        seen_unranked,
     )
 
     return ProcessDuelResult(
