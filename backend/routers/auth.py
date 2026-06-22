@@ -339,7 +339,6 @@ async def callback(
         logger.error(
             "Trakt token exchange failed (status=%s); possible PKCE rejection",
             exc.response.status_code,
-            exc_info=True,
         )
         raise HTTPException(
             status_code=502,
@@ -465,7 +464,6 @@ async def simkl_callback(
         logger.error(
             "SIMKL token exchange failed (status=%s); possible PKCE rejection",
             exc.response.status_code,
-            exc_info=True,
         )
         raise HTTPException(
             status_code=502,
@@ -489,7 +487,6 @@ async def simkl_callback(
             "Unexpected SIMKL profile response (type=%s, keys=%s)",
             type(profile).__name__,
             list(profile.keys()) if isinstance(profile, dict) else "N/A",
-            exc_info=True,
         )
         raise HTTPException(
             status_code=502,

@@ -1184,9 +1184,10 @@ class TestPKCE:
         assert pkce_deleted, "PKCE verifier cookie was not cleared after successful SIMKL callback"
 
     @pytest.mark.asyncio
-    async def test_callback_raises_502_on_trakt_exchange_error(self, monkeypatch):
-        """callback() raises 502 when Trakt rejects the token exchange."""
+    async def test_callback_raises_502_on_trakt_exchange_error(self, monkeypatch, caplog):
+        """callback() raises 502 when Trakt rejects the token exchange; no stack trace logged."""
         import httpx as _httpx
+        import logging
 
         monkeypatch.setattr(limiter, "enabled", False)
 
@@ -1204,22 +1205,25 @@ class TestPKCE:
             OAUTH_PKCE_COOKIE: "verifier123",
         })
 
-        with pytest.raises(HTTPException) as exc_info:
-            await callback(
-                code="auth-code",
-                request=request,
-                background_tasks=MagicMock(),
-                state=state,
-                settings=_make_settings(),
-                db=AsyncMock(),
-            )
+        with caplog.at_level(logging.ERROR, logger="backend.routers.auth"):
+            with pytest.raises(HTTPException) as exc_info:
+                await callback(
+                    code="auth-code",
+                    request=request,
+                    background_tasks=MagicMock(),
+                    state=state,
+                    settings=_make_settings(),
+                    db=AsyncMock(),
+                )
         assert exc_info.value.status_code == 502
         assert "Trakt" in exc_info.value.detail
+        assert "Traceback" not in caplog.text
 
     @pytest.mark.asyncio
-    async def test_simkl_callback_raises_502_on_simkl_exchange_error(self, monkeypatch):
-        """simkl_callback() raises 502 when SIMKL rejects the token exchange."""
+    async def test_simkl_callback_raises_502_on_simkl_exchange_error(self, monkeypatch, caplog):
+        """simkl_callback() raises 502 when SIMKL rejects the token exchange; no stack trace logged."""
         import httpx as _httpx
+        import logging
 
         monkeypatch.setattr(limiter, "enabled", False)
 
@@ -1237,14 +1241,16 @@ class TestPKCE:
             OAUTH_SIMKL_PKCE_COOKIE: "verifier456",
         })
 
-        with pytest.raises(HTTPException) as exc_info:
-            await simkl_callback(
-                code="auth-code",
-                request=request,
-                background_tasks=MagicMock(),
-                state=state,
-                settings=_make_settings(),
-                db=AsyncMock(),
-            )
+        with caplog.at_level(logging.ERROR, logger="backend.routers.auth"):
+            with pytest.raises(HTTPException) as exc_info:
+                await simkl_callback(
+                    code="auth-code",
+                    request=request,
+                    background_tasks=MagicMock(),
+                    state=state,
+                    settings=_make_settings(),
+                    db=AsyncMock(),
+                )
         assert exc_info.value.status_code == 502
         assert "SIMKL" in exc_info.value.detail
+        assert "Traceback" not in caplog.text
