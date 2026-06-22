@@ -45,6 +45,7 @@ def _build_user_response(user: User) -> UserResponse:
         created_at=user.created_at,
         sync_ratings_to_trakt=user.sync_ratings_to_trakt,
         sync_ratings_to_simkl=user.sync_ratings_to_simkl,
+        use_ai_features=user.use_ai_features,
         privacy_policy_accepted=user.privacy_policy_accepted,
         privacy_policy_version=user.privacy_policy_version,
     )
@@ -69,6 +70,8 @@ async def update_settings(
         current_user.sync_ratings_to_trakt = body.sync_ratings_to_trakt
     if body.sync_ratings_to_simkl is not None:
         current_user.sync_ratings_to_simkl = body.sync_ratings_to_simkl
+    if body.use_ai_features is not None:
+        current_user.use_ai_features = body.use_ai_features
     await db.commit()
     return _build_user_response(current_user)
 

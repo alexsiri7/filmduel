@@ -15,7 +15,7 @@ from backend.config import get_settings
 from backend.db import async_session_factory, get_db
 from backend.rate_limit import limiter
 from backend.db_models import Movie, Suggestion, User, UserMovie
-from backend.routers.auth import ensure_fresh_token, get_current_user, require_consent
+from backend.routers.auth import ensure_fresh_token, get_current_user, require_ai_consent
 from backend.schemas import (
     MediaType,
     MovieSchema,
@@ -129,7 +129,7 @@ async def get_suggestions(
     """Return current suggestions. Generate if stale (>24h) or missing."""
     uid = current_user.id
 
-    require_consent(current_user)
+    require_ai_consent(current_user)
 
     # Check if user has enough ranked films
     if not await has_enough_ranked(uid, db, media_type=media_type):
@@ -179,7 +179,7 @@ async def regenerate_suggestions(
     """Force regeneration. Rate-limited: 3 per day."""
     uid = current_user.id
 
-    require_consent(current_user)
+    require_ai_consent(current_user)
 
     if not await has_enough_ranked(uid, db, media_type=media_type):
         return SuggestionsResponse(suggestions=[], status="not_enough_films")

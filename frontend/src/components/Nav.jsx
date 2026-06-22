@@ -18,6 +18,7 @@ export default function Nav({ mediaType, setMediaType }) {
   const [syncRatingsSimkl, setSyncRatingsSimkl] = useState(false);
   const [hasTrakt, setHasTrakt] = useState(false);
   const [hasSimkl, setHasSimkl] = useState(false);
+  const [useAiFeatures, setUseAiFeatures] = useState(true);
 
   useEffect(() => {
     getMe()
@@ -25,6 +26,7 @@ export default function Nav({ mediaType, setMediaType }) {
         if (user) {
           setSyncRatings(user.sync_ratings_to_trakt);
           setSyncRatingsSimkl(user.sync_ratings_to_simkl ?? false);
+          setUseAiFeatures(user.use_ai_features ?? true);
           setHasTrakt(!!user.trakt_username);
           setHasSimkl(!!user.simkl_username);
         }
@@ -51,6 +53,16 @@ export default function Nav({ mediaType, setMediaType }) {
       await updateSettings({ sync_ratings_to_simkl: next });
     } catch {
       setSyncRatingsSimkl(!next);
+    }
+  };
+
+  const handleAiToggle = async () => {
+    const next = !useAiFeatures;
+    setUseAiFeatures(next);
+    try {
+      await updateSettings({ use_ai_features: next });
+    } catch {
+      setUseAiFeatures(!next); // rollback on failure
     }
   };
 
@@ -187,6 +199,26 @@ export default function Nav({ mediaType, setMediaType }) {
             </button>
           </div>
         )}
+        <div className="flex items-center justify-between w-full py-2 group">
+          <span className="text-[#F5F0E8]/30 group-hover:text-[#F5F0E8]/60 font-headline font-bold uppercase text-xs tracking-widest transition-colors cursor-default">
+            AI Suggestions
+          </span>
+          <button
+            role="switch"
+            aria-checked={useAiFeatures}
+            aria-label="AI Suggestions"
+            onClick={handleAiToggle}
+            className={`relative w-9 h-5 rounded-full transition-colors cursor-pointer ${
+              useAiFeatures ? "bg-primary-container" : "bg-[#F5F0E8]/20"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 w-4 h-4 bg-[#0F0E0D] rounded-full transition-transform ${
+                useAiFeatures ? "translate-x-4" : ""
+              }`}
+            />
+          </button>
+        </div>
         <button
           onClick={handleLogout}
           className="w-full text-[#F5F0E8]/30 hover:text-[#F5F0E8]/60 font-headline font-bold uppercase text-xs tracking-widest py-2 transition-colors"

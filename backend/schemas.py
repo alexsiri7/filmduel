@@ -17,6 +17,7 @@ class UserResponse(BaseModel):
     created_at: datetime
     sync_ratings_to_trakt: bool
     sync_ratings_to_simkl: bool = False
+    use_ai_features: bool = True
     privacy_policy_accepted: bool
     privacy_policy_version: Optional[str] = None
 
@@ -24,6 +25,7 @@ class UserResponse(BaseModel):
 class UserSettingsUpdate(BaseModel):
     sync_ratings_to_trakt: Optional[bool] = None
     sync_ratings_to_simkl: Optional[bool] = None
+    use_ai_features: Optional[bool] = None
 
 
 class ConsentAccept(BaseModel):
