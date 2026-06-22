@@ -137,9 +137,7 @@ class Settings(BaseSettings):
         Explicit SECURE_COOKIES env var takes precedence; otherwise falls back
         to BASE_URL inference so existing deployments are unaffected.
         """
-        if self.SECURE_COOKIES is not None:
-            return self.SECURE_COOKIES
-        return self.is_https
+        return self.SECURE_COOKIES if self.SECURE_COOKIES is not None else self.is_https
 
 
 @lru_cache

@@ -274,6 +274,20 @@ def _generate_pkce_pair() -> tuple[str, str]:
     return code_verifier, code_challenge
 
 
+def _set_oauth_cookies(
+    response: Response,
+    state_cookie: str,
+    state: str,
+    pkce_cookie: str,
+    code_verifier: str,
+    secure: bool,
+) -> None:
+    """Set the OAuth state and PKCE verifier cookies on a redirect response."""
+    cookie_kwargs = {"httponly": True, "secure": secure, "samesite": "lax", "max_age": 300}
+    response.set_cookie(state_cookie, state, **cookie_kwargs)
+    response.set_cookie(pkce_cookie, code_verifier, **cookie_kwargs)
+
+
 @router.get("/auth/login")
 @limiter.limit("10/minute")
 async def login(request: Request, settings: Settings = Depends(get_settings)):
@@ -291,21 +305,8 @@ async def login(request: Request, settings: Settings = Depends(get_settings)):
         }
     )
     response = RedirectResponse(f"https://trakt.tv/oauth/authorize?{params}")
-    response.set_cookie(
-        OAUTH_STATE_COOKIE,
-        state,
-        httponly=True,
-        secure=settings.cookie_secure,
-        samesite="lax",
-        max_age=300,
-    )
-    response.set_cookie(
-        OAUTH_PKCE_COOKIE,
-        code_verifier,
-        httponly=True,
-        secure=settings.cookie_secure,
-        samesite="lax",
-        max_age=300,
+    _set_oauth_cookies(
+        response, OAUTH_STATE_COOKIE, state, OAUTH_PKCE_COOKIE, code_verifier, settings.cookie_secure
     )
     return response
 
@@ -416,21 +417,8 @@ async def simkl_login(request: Request, settings: Settings = Depends(get_setting
         }
     )
     response = RedirectResponse(f"https://simkl.com/oauth/authorize?{params}")
-    response.set_cookie(
-        OAUTH_SIMKL_STATE_COOKIE,
-        state,
-        httponly=True,
-        secure=settings.cookie_secure,
-        samesite="lax",
-        max_age=300,
-    )
-    response.set_cookie(
-        OAUTH_SIMKL_PKCE_COOKIE,
-        code_verifier,
-        httponly=True,
-        secure=settings.cookie_secure,
-        samesite="lax",
-        max_age=300,
+    _set_oauth_cookies(
+        response, OAUTH_SIMKL_STATE_COOKIE, state, OAUTH_SIMKL_PKCE_COOKIE, code_verifier, settings.cookie_secure
     )
     return response
 
