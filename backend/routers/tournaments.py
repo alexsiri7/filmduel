@@ -104,6 +104,23 @@ async def _load_tournament(
     return tournament
 
 
+def _active_progress(matches: list[TournamentMatch]) -> str:
+    """Return a human-readable progress string for an in-progress tournament."""
+    matches_by_round: dict[int, list[TournamentMatch]] = {}
+    for m in matches:
+        matches_by_round.setdefault(m.round, []).append(m)
+
+    for rnd in sorted(matches_by_round.keys()):
+        round_matches = matches_by_round[rnd]
+        played = sum(1 for m in round_matches if m.winner_movie_id is not None)
+        if played < len(round_matches):
+            return f"Round {rnd} \u2014 {played}/{len(round_matches)} matches played"
+
+    # All matches played (shouldn't normally reach here for active tournaments)
+    last_round = max(matches_by_round.keys()) if matches_by_round else 1
+    return f"Round {last_round} \u2014 0/0 matches played"
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────
 
 
@@ -277,9 +294,8 @@ async def regenerate_tournament(
             status_code=400, detail="Cannot regenerate after matches have been played"
         )
 
-    regen_count = 0
-    if tournament.llm_response and isinstance(tournament.llm_response, dict):
-        regen_count = tournament.llm_response.get("_regen_count", 0)
+    llm_response = tournament.llm_response if isinstance(tournament.llm_response, dict) else {}
+    regen_count = llm_response.get("_regen_count", 0)
     if regen_count >= 3:
         raise HTTPException(
             status_code=400, detail="Maximum regeneration attempts (3) reached"
@@ -295,11 +311,7 @@ async def regenerate_tournament(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid decade format")
 
-    original_hint = (
-        tournament.llm_response.get("_theme_hint", "")
-        if tournament.llm_response
-        else ""
-    )
+    original_hint = llm_response.get("_theme_hint", "")
     try:
         selected_ums, llm_result = await curate_and_select_films(
             user_movies=user_movies,
@@ -362,26 +374,7 @@ async def list_tournaments(
         elif t.status == "abandoned":
             progress = "Abandoned"
         else:
-            matches_by_round: dict[int, list[TournamentMatch]] = {}
-            for m in t.matches:
-                matches_by_round.setdefault(m.round, []).append(m)
-
-            current_round = 1
-            for rnd in sorted(matches_by_round.keys()):
-                round_matches = matches_by_round[rnd]
-                played = sum(1 for m in round_matches if m.winner_movie_id is not None)
-                if played < len(round_matches):
-                    current_round = rnd
-                    total_in_round = len(round_matches)
-                    break
-            else:
-                current_round = max(matches_by_round.keys()) if matches_by_round else 1
-                played = 0
-                total_in_round = 0
-
-            progress = (
-                f"Round {current_round} \u2014 {played}/{total_in_round} matches played"
-            )
+            progress = _active_progress(t.matches)
 
         items.append(
             TournamentListItem(

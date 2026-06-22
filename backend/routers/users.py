@@ -85,7 +85,7 @@ async def accept_consent(
     if body.version != CURRENT_PRIVACY_POLICY_VERSION:
         raise HTTPException(
             status_code=400,
-            detail=f"Unrecognized policy version '{body.version}'. Expected '{CURRENT_PRIVACY_POLICY_VERSION}'.",
+            detail=f"Unrecognized policy version. Expected '{CURRENT_PRIVACY_POLICY_VERSION}'.",
         )
     current_user.privacy_policy_accepted = True
     current_user.privacy_policy_accepted_at = datetime.now(timezone.utc)

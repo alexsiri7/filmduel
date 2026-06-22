@@ -732,7 +732,8 @@ class TestAcceptConsent:
             )
 
         assert exc_info.value.status_code == 400
-        assert "99.0" in exc_info.value.detail
+        assert "Unrecognized policy version" in exc_info.value.detail
+        assert CURRENT_PRIVACY_POLICY_VERSION in exc_info.value.detail  # expected version still present
         db.commit.assert_not_awaited()
 
 
