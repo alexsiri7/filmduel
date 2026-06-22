@@ -233,7 +233,7 @@ async def generate_suggestions(
     results = []
     for pick in picks:
         trakt_id = pick.get("trakt_id")
-        reason = pick.get("reason", "Recommended for you.")
+        reason = pick.get("reason", "Recommended for you.")[:500]
         if trakt_id in trakt_to_movie:
             results.append(
                 {
