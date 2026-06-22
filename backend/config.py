@@ -63,7 +63,8 @@ class Settings(BaseSettings):
         _HARDCODED_DEFAULT = (
             "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
         )
-        if not v or v.strip() == _HARDCODED_DEFAULT:
+        stripped = v.strip() if isinstance(v, str) else ""
+        if not stripped or stripped == _HARDCODED_DEFAULT:
             raise ValueError(
                 "DATABASE_URL must be set to a valid connection string; "
                 "the hardcoded localhost default is not permitted"

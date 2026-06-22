@@ -248,7 +248,12 @@ class TestDatabaseUrlValidation:
         with pytest.raises(ValidationError, match="DATABASE_URL must be set"):
             _make_settings(DATABASE_URL="")
 
-    def test_missing_database_url_rejected(self):
+    def test_whitespace_only_database_url_rejected(self):
+        with pytest.raises(ValidationError, match="DATABASE_URL must be set"):
+            _make_settings(DATABASE_URL="   ")
+
+    def test_missing_database_url_rejected(self, monkeypatch):
         """DATABASE_URL has no default so omitting it raises ValidationError."""
-        with pytest.raises(ValidationError):
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+        with pytest.raises(ValidationError, match="DATABASE_URL"):
             Settings(SECRET_KEY="test-secret-key-for-unit-tests!!")
