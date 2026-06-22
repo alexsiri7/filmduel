@@ -38,7 +38,9 @@ async def _run_retention_purge() -> None:
                 logger.exception("scheduled_retention_purge failed name=%s", name)
     logger.info(
         "scheduled_retention_purge duels=%d swipes=%d screenshots=%d",
-        results.get("duels", -1), results.get("swipes", -1), results.get("screenshots", -1),
+        results.get("duels", -1),
+        results.get("swipes", -1),
+        results.get("screenshots", -1),
     )
 
 

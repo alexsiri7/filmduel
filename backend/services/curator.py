@@ -121,17 +121,18 @@ async def curate_tournament(
     try:
         result = parse_json_response(text_content)
     except Exception:
-        # Try extracting JSON from markdown code block as fallback
+        # Try extracting JSON from a markdown code block as fallback
         match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text_content, re.DOTALL)
+        parsed = None
         if match:
             try:
-                result = json.loads(match.group(1))
+                parsed = json.loads(match.group(1))
             except Exception:
-                logger.error("Failed to parse LLM JSON output: %s", text_content[:500])
-                raise CurationError("AI curation returned invalid JSON. Please try again.")
-        else:
+                pass
+        if parsed is None:
             logger.error("Failed to parse LLM JSON output: %s", text_content[:500])
             raise CurationError("AI curation returned invalid JSON. Please try again.")
+        result = parsed
 
     # Validate required fields
     required_keys = {"name", "tagline", "theme_description", "film_ids"}
