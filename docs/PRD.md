@@ -502,9 +502,12 @@ POST /api/duels
   "movie_a_id": "uuid",
   "movie_b_id": "uuid",
   "outcome": "a_wins" | "b_wins" | "a_only" | "b_only" | "neither",
-  "pair_type": "ranked_vs_ranked" | "ranked_vs_unranked" | "ranked_vs_unknown"
+  "pair_type": "ranked_vs_ranked" | "ranked_vs_unranked" | "ranked_vs_unknown",
+  "pair_token": "string (from GET /api/duels/pair response)"
 }
 ```
+
+`pair_token` is a cryptographic token returned with the duel pair. It binds the submission to the specific pair the server issued, preventing arbitrary movie ID injection.
 
 | Outcome | ELO update | State changes |
 |---|---|---|
