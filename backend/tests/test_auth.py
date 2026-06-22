@@ -1257,3 +1257,69 @@ class TestPKCE:
         assert exc_info.value.status_code == 502
         assert "SIMKL" in exc_info.value.detail
         assert "Traceback" not in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_callback_uses_compare_digest_for_state(self, monkeypatch):
+        """State validation must use hmac.compare_digest (constant-time), not == or !=."""
+        import hmac as _hmac
+
+        monkeypatch.setattr(limiter, "enabled", False)
+
+        compare_digest_calls: list[tuple[str, str]] = []
+        original = _hmac.compare_digest
+
+        def _spy(a: str, b: str) -> bool:
+            compare_digest_calls.append((a, b))
+            return original(a, b)
+
+        monkeypatch.setattr("backend.routers.auth.hmac.compare_digest", _spy)
+
+        state = "valid-state-trakt"
+        request = _make_starlette_request(cookies={OAUTH_STATE_COOKIE: state})
+        with pytest.raises(HTTPException):
+            # Raises after state passes (missing PKCE cookie), but compare_digest must be called
+            await callback(
+                code="code",
+                request=request,
+                background_tasks=MagicMock(),
+                state=state,
+                settings=_make_settings(),
+                db=AsyncMock(),
+            )
+        assert len(compare_digest_calls) == 1, (
+            "hmac.compare_digest was not called — state comparison may have reverted to !="
+        )
+        assert compare_digest_calls[0] == (state, state)
+
+    @pytest.mark.asyncio
+    async def test_simkl_callback_uses_compare_digest_for_state(self, monkeypatch):
+        """SIMKL state validation must use hmac.compare_digest (constant-time), not == or !=."""
+        import hmac as _hmac
+
+        monkeypatch.setattr(limiter, "enabled", False)
+
+        compare_digest_calls: list[tuple[str, str]] = []
+        original = _hmac.compare_digest
+
+        def _spy(a: str, b: str) -> bool:
+            compare_digest_calls.append((a, b))
+            return original(a, b)
+
+        monkeypatch.setattr("backend.routers.auth.hmac.compare_digest", _spy)
+
+        state = "valid-state-simkl"
+        request = _make_starlette_request(cookies={OAUTH_SIMKL_STATE_COOKIE: state})
+        with pytest.raises(HTTPException):
+            # Raises after state passes (missing PKCE cookie), but compare_digest must be called
+            await simkl_callback(
+                code="code",
+                request=request,
+                background_tasks=MagicMock(),
+                state=state,
+                settings=_make_settings(),
+                db=AsyncMock(),
+            )
+        assert len(compare_digest_calls) == 1, (
+            "hmac.compare_digest was not called — SIMKL state comparison may have reverted to !="
+        )
+        assert compare_digest_calls[0] == (state, state)
