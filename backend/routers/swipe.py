@@ -253,5 +253,5 @@ async def purge_old_swipe_results(
     db: AsyncSession = Depends(get_db),
 ):
     count = await _purge_old_swipe_results(db)
-    logger.info("purge_old_swipe_results triggered_by=%s", current_user.id)
+    logger.info("purge_old_swipe_results count=%d triggered_by=%s", count, current_user.id)
     return {"purged": count}

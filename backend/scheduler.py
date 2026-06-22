@@ -18,21 +18,28 @@ logger = logging.getLogger(__name__)
 
 
 async def _run_retention_purge() -> None:
-    """Run all three retention purge jobs within a single DB session."""
-    async with async_session_factory() as session:
-        try:
-            duels = await purge_old_duels(session)
-            swipes = await purge_old_swipe_results(session)
-            screenshots = await purge_expired_screenshots(session)
-            await session.commit()
-            logger.info(
-                "scheduled_retention_purge duels=%d swipes=%d screenshots=%d",
-                duels, swipes, screenshots,
-            )
-        except Exception:
-            await session.rollback()
-            logger.exception("scheduled_retention_purge failed")
-            raise
+    """Run all three retention purge jobs, each in its own DB session.
+
+    Each purge operation commits independently so that a failure in one
+    does not roll back successful deletions from another.
+    """
+    results: dict[str, int] = {}
+    for name, fn in [
+        ("duels", purge_old_duels),
+        ("swipes", purge_old_swipe_results),
+        ("screenshots", purge_expired_screenshots),
+    ]:
+        async with async_session_factory() as session:
+            try:
+                results[name] = await fn(session)
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                logger.exception("scheduled_retention_purge failed name=%s", name)
+    logger.info(
+        "scheduled_retention_purge duels=%d swipes=%d screenshots=%d",
+        results.get("duels", -1), results.get("swipes", -1), results.get("screenshots", -1),
+    )
 
 
 def build_scheduler() -> AsyncIOScheduler:
@@ -46,6 +53,6 @@ def build_scheduler() -> AsyncIOScheduler:
         minute=0,
         id="retention_purge",
         replace_existing=True,
-        misfire_grace_time=3600,
+        misfire_grace_time=3600,  # run the job if missed by up to 1 h (e.g. after restart)
     )
     return scheduler

@@ -114,6 +114,31 @@ class TestRetentionDefaults:
         s = _make_settings(SWIPE_RETENTION_DAYS=365)
         assert s.SWIPE_RETENTION_DAYS == 365
 
+    def test_purge_schedule_hour_default(self):
+        """PURGE_SCHEDULE_HOUR defaults to 2 UTC (low-traffic window)."""
+        s = _make_settings()
+        assert s.PURGE_SCHEDULE_HOUR == 2
+
+    def test_purge_schedule_hour_override(self):
+        s = _make_settings(PURGE_SCHEDULE_HOUR=3)
+        assert s.PURGE_SCHEDULE_HOUR == 3
+
+    def test_purge_schedule_hour_zero_valid(self):
+        s = _make_settings(PURGE_SCHEDULE_HOUR=0)
+        assert s.PURGE_SCHEDULE_HOUR == 0
+
+    def test_purge_schedule_hour_23_valid(self):
+        s = _make_settings(PURGE_SCHEDULE_HOUR=23)
+        assert s.PURGE_SCHEDULE_HOUR == 23
+
+    def test_purge_schedule_hour_negative_rejected(self):
+        with pytest.raises(ValidationError):
+            _make_settings(PURGE_SCHEDULE_HOUR=-1)
+
+    def test_purge_schedule_hour_24_rejected(self):
+        with pytest.raises(ValidationError):
+            _make_settings(PURGE_SCHEDULE_HOUR=24)
+
 
 class TestTokenEncKeyValidation:
     def test_empty_string_accepted(self):

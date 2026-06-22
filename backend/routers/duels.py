@@ -127,5 +127,5 @@ async def purge_old_duels(
     db: AsyncSession = Depends(get_db),
 ):
     count = await _purge_old_duels(db)
-    logger.info("purge_old_duels triggered_by=%s", current_user.id)
+    logger.info("purge_old_duels count=%d triggered_by=%s", count, current_user.id)
     return {"purged": count}

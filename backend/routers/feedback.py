@@ -205,5 +205,5 @@ async def purge_expired_screenshots(
     db: AsyncSession = Depends(get_db),
 ):
     count = await _purge_expired_screenshots(db)
-    logger.info("purge_expired_screenshots triggered_by=%s", current_user.id)
+    logger.info("purge_expired_screenshots count=%d triggered_by=%s", count, current_user.id)
     return {"purged": count}

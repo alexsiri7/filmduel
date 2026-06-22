@@ -15,6 +15,11 @@ logger = logging.getLogger(__name__)
 
 
 async def purge_old_duels(db: AsyncSession) -> int:
+    """Delete duels older than DUEL_RETENTION_DAYS. Does not commit; caller must commit.
+
+    Returns:
+        Number of rows deleted.
+    """
     settings = get_settings()
     cutoff = datetime.now(timezone.utc) - timedelta(days=settings.DUEL_RETENTION_DAYS)
     result = await db.execute(
@@ -26,6 +31,11 @@ async def purge_old_duels(db: AsyncSession) -> int:
 
 
 async def purge_old_swipe_results(db: AsyncSession) -> int:
+    """Delete swipe results older than SWIPE_RETENTION_DAYS. Does not commit; caller must commit.
+
+    Returns:
+        Number of rows deleted.
+    """
     settings = get_settings()
     cutoff = datetime.now(timezone.utc) - timedelta(days=settings.SWIPE_RETENTION_DAYS)
     result = await db.execute(
@@ -37,6 +47,12 @@ async def purge_old_swipe_results(db: AsyncSession) -> int:
 
 
 async def purge_expired_screenshots(db: AsyncSession) -> int:
+    """Null out screenshot_data_enc for FeedbackReports past their purge_after date.
+    Does not commit; caller must commit.
+
+    Returns:
+        Number of rows updated.
+    """
     now = datetime.now(timezone.utc)
     result = await db.execute(
         update(FeedbackReport)
