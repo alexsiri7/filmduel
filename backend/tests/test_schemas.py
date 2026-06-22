@@ -373,6 +373,7 @@ class TestResponseModels:
         assert ur.sync_ratings_to_trakt is False
         assert ur.privacy_policy_accepted is False
         assert ur.privacy_policy_version is None
+        assert ur.use_ai_features is True  # default should be True (opt-in by default)
 
     def test_user_response_privacy_policy_version_set(self):
         from datetime import datetime, timezone
@@ -401,6 +402,14 @@ class TestResponseModels:
     def test_user_settings_update_rejects_non_bool(self):
         with pytest.raises(ValidationError):
             UserSettingsUpdate(sync_ratings_to_trakt="not-a-boolean-value")
+
+    def test_user_settings_update_accepts_use_ai_features(self):
+        s = UserSettingsUpdate(use_ai_features=False)
+        assert s.use_ai_features is False
+
+    def test_user_settings_update_use_ai_features_none_by_default(self):
+        s = UserSettingsUpdate()
+        assert s.use_ai_features is None
 
     def test_feedback_report_response(self):
         from datetime import datetime, timezone

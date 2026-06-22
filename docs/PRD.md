@@ -154,6 +154,9 @@ create table users (
   simkl_token_expires_at timestamptz,
   sync_ratings_to_simkl boolean not null default false,
   sync_ratings_to_trakt boolean not null default false,
+  use_ai_features boolean not null default true,   -- opt-out toggle; false disables AI endpoints
+  privacy_policy_accepted boolean not null default false,
+  privacy_policy_version text,
   created_at timestamptz default now(),
   last_seen_at timestamptz default now()
 );

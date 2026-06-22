@@ -70,6 +70,8 @@ If the filtered pool (before cap) is smaller than `bracket_size`, allow it — b
 
 ### Flow
 
+0. Prerequisites: user must have accepted privacy policy AND have use_ai_features=true.
+   Returns 403 if either condition is not met.
 1. User selects optional pre-filter + bracket size
 2. System builds candidate list (pre-filter → ELO sort → cap)
 3. LLM call: receives candidate list, returns film selection + theme name
@@ -193,6 +195,8 @@ POST /api/tournaments
      Body: { filter_type, filter_value, bracket_size, ai_curated: bool }
      Response: full tournament object with bracket (all matches pre-generated, 
                byes already resolved, future match slots empty)
+     403 { detail: "AI features are disabled. Enable them in settings to use this feature." } — when ai_curated=true and use_ai_features=false
+     403 { detail: "Privacy policy consent required" } — when ai_curated=true and policy not accepted
 
 GET  /api/tournaments
      List user's tournaments (active first, then completed)
@@ -211,6 +215,8 @@ POST /api/tournaments/:id/matches/:match_id
 POST /api/tournaments/:id/regenerate
      AI-curated only. Re-runs LLM with same candidate pool. 
      Returns new tournament preview (not saved until confirmed).
+     Prerequisites: privacy policy accepted AND use_ai_features=true.
+     403 — same conditions as POST /api/tournaments when ai_curated=true
 
 POST /api/tournaments/:id/confirm
      Confirms a regenerated tournament preview and saves it.

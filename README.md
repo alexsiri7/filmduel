@@ -73,3 +73,4 @@ Alembic migrations run automatically on container start.
 6. ELO ratings update after each duel (K=32, default 1000)
 7. View your ranked list and export as Letterboxd-compatible CSV
 8. Ratings sync back to Trakt on a 1-10 scale
+9. Toggle AI Suggestions on/off from the nav settings panel (on by default) — disabling it hides the suggestions page and AI-curated tournament options

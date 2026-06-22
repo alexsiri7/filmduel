@@ -204,6 +204,21 @@ def require_consent(user: User = Depends(get_current_user)) -> User:
     return user
 
 
+def require_ai_consent(user: User = Depends(get_current_user)) -> User:
+    """FastAPI dependency: reject if user hasn't accepted privacy policy or has disabled AI features."""
+    if not user.privacy_policy_accepted:
+        raise HTTPException(
+            status_code=403,
+            detail="Privacy policy consent required",
+        )
+    if not user.use_ai_features:
+        raise HTTPException(
+            status_code=403,
+            detail="AI features are disabled. Enable them in settings to use this feature.",
+        )
+    return user
+
+
 async def ensure_fresh_token(user: User, db: AsyncSession) -> User:
     """Refresh the Trakt access token if it expires within 1 hour.
 

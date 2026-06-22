@@ -17,10 +17,11 @@ from backend.db import get_db
 from backend.routers.auth import get_current_user
 
 
-def _make_user(*, privacy_policy_accepted: bool = False):
+def _make_user(*, privacy_policy_accepted: bool = False, use_ai_features: bool = True):
     user = MagicMock()
     user.id = uuid.uuid4()
     user.privacy_policy_accepted = privacy_policy_accepted
+    user.use_ai_features = use_ai_features
     return user
 
 
@@ -440,3 +441,124 @@ class TestTournamentConsentGuard:
         assert internal_uuid not in resp.text
         assert "candidate pool" not in resp.text
         assert resp.json()["detail"] == "AI curation failed. Please try again."
+
+
+# ---------------------------------------------------------------------------
+# AI consent guard — use_ai_features toggle
+# ---------------------------------------------------------------------------
+
+
+class TestAiConsentGuard:
+    """require_ai_consent() blocks users who have disabled AI features.
+
+    Privacy-policy-denied path is already covered by the existing consent
+    suite above; these tests focus on the new use_ai_features toggle.
+    """
+
+    def setup_method(self):
+        app.dependency_overrides.clear()
+
+    def teardown_method(self):
+        app.dependency_overrides.clear()
+
+    def test_suggestions_blocked_when_privacy_policy_not_accepted(self):
+        """GET /api/suggestions returns 403 when privacy_policy_accepted=False (even if AI toggle is on)."""
+        user = _make_user(privacy_policy_accepted=False, use_ai_features=True)
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.get("/api/suggestions")
+
+        assert resp.status_code == 403
+        assert "Privacy policy consent required" in resp.json()["detail"]
+
+    def test_suggestions_blocked_when_ai_disabled(self):
+        """GET /api/suggestions returns 403 when use_ai_features=False."""
+        user = _make_user(privacy_policy_accepted=True, use_ai_features=False)
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.get("/api/suggestions")
+
+        assert resp.status_code == 403
+        assert "AI features are disabled" in resp.json()["detail"]
+
+    def test_suggestions_allowed_when_ai_enabled(self):
+        """GET /api/suggestions proceeds when use_ai_features=True."""
+        user = _make_user(privacy_policy_accepted=True, use_ai_features=True)
+        mock_db = AsyncMock()
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with patch(
+            "backend.routers.suggestions.has_enough_ranked",
+            new_callable=AsyncMock,
+            return_value=False,
+        ):
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.get("/api/suggestions")
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "not_enough_films"
+
+    def test_regenerate_suggestions_blocked_when_ai_disabled(self):
+        """POST /api/suggestions/regenerate returns 403 when use_ai_features=False."""
+        user = _make_user(privacy_policy_accepted=True, use_ai_features=False)
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.post("/api/suggestions/regenerate")
+
+        assert resp.status_code == 403
+        assert "AI features are disabled" in resp.json()["detail"]
+
+    def test_create_ai_tournament_blocked_when_ai_disabled(self):
+        """POST /api/tournaments with ai_curated=True returns 403 when use_ai_features=False."""
+        user = _make_user(privacy_policy_accepted=True, use_ai_features=False)
+        mock_db = AsyncMock()
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.post(
+                "/api/tournaments",
+                json={"ai_curated": True, "bracket_size": 8},
+            )
+
+        assert resp.status_code == 403
+        assert "AI features are disabled" in resp.json()["detail"]
+
+    def test_regenerate_tournament_blocked_when_ai_disabled(self):
+        """POST /api/tournaments/{id}/regenerate returns 403 when use_ai_features=False."""
+        user = _make_user(privacy_policy_accepted=True, use_ai_features=False)
+        mock_db = AsyncMock()
+
+        tournament_id = uuid.uuid4()
+
+        mock_tournament = MagicMock()
+        mock_tournament.id = tournament_id
+        mock_tournament.user_id = user.id
+        mock_tournament.is_ai_curated = True
+        mock_tournament.matches = []
+        mock_tournament.llm_response = {"_regen_count": 0}
+        mock_tournament.bracket_size = 8
+        mock_tournament.filter_type = None
+        mock_tournament.filter_value = None
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with patch(
+            "backend.routers.tournaments._load_tournament",
+            new_callable=AsyncMock,
+            return_value=mock_tournament,
+        ):
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.post(f"/api/tournaments/{tournament_id}/regenerate")
+
+        assert resp.status_code == 403
+        assert "AI features are disabled" in resp.json()["detail"]

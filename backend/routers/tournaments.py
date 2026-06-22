@@ -15,7 +15,7 @@ from sqlalchemy.orm import joinedload
 from backend.db import get_db
 from backend.rate_limit import limiter
 from backend.db_models import Movie, Tournament, TournamentMatch, User
-from backend.routers.auth import get_current_user, require_consent
+from backend.routers.auth import get_current_user, require_ai_consent
 from backend.schemas import (
     FilterType,
     MediaType,
@@ -180,7 +180,7 @@ async def create_tournament(
     uid = current_user.id
 
     if body.ai_curated:
-        require_consent(current_user)
+        require_ai_consent(current_user)
 
     # Per-user daily cap: prevent database bloat DoS (SEC-03)
     window_start = datetime.now(timezone.utc) - timedelta(hours=24)
@@ -279,7 +279,7 @@ async def regenerate_tournament(
     tournament = await _load_tournament(tournament_id, uid, db)
 
     # Enforce consent before revealing any business-logic details
-    require_consent(current_user)
+    require_ai_consent(current_user)
 
     if not tournament.is_ai_curated:
         raise HTTPException(
