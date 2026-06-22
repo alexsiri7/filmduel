@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -43,7 +42,7 @@ logger = logging.getLogger(__name__)
 # ── Response helpers ──────────────────────────────────────────────────
 
 
-def _movie_schema(movie: Optional[Movie]) -> Optional[MovieSchema]:
+def _movie_schema(movie: Movie | None) -> MovieSchema | None:
     if movie is None:
         return None
     return MovieSchema.from_model(movie)
@@ -132,8 +131,8 @@ async def get_available_genres(
 @limiter.limit("30/minute")
 async def get_pool_count(
     request: Request,
-    filter_type: Optional[FilterType] = Query(default=None),
-    filter_value: Optional[str] = Query(default=None),
+    filter_type: FilterType | None = Query(default=None),
+    filter_value: str | None = Query(default=None),
     media_type: MediaType = Query(default="movie"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

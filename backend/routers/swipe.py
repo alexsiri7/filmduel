@@ -212,13 +212,11 @@ async def submit_swipe_results(
     next_action = await compute_next_action(db, uid, media_type)
 
     logger.info(
-        "swipe_submit user_id=%s seen_count=%d unseen_count=%d next_action=%s total_seen=%d seen_unranked=%d",
+        "swipe_submit user_id=%s seen_count=%d unseen_count=%d next_action=%s",
         uid,
         seen_count,
         unseen_count,
         next_action,
-        total_seen,
-        seen_unranked,
     )
 
     # Check if pool needs expansion (scoped by media_type)

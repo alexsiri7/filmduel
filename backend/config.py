@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
@@ -66,8 +66,18 @@ class Settings(BaseSettings):
     @classmethod
     def validate_token_enc_key(cls, v: str) -> str:
         if v == "":
-            return v  # empty string is allowed; runtime check in token_crypto handles it
+            return v  # strength check deferred; require_token_enc_key_with_oauth enforces presence when OAuth is enabled
         return _validate_key_strength("TOKEN_ENC_KEY", v)
+
+    @model_validator(mode="after")
+    def require_token_enc_key_with_oauth(self) -> "Settings":
+        """Reject startup when TOKEN_ENC_KEY is empty but an OAuth provider is configured."""
+        oauth_enabled = bool(self.TRAKT_CLIENT_ID or self.SIMKL_CLIENT_ID)
+        if oauth_enabled and not self.TOKEN_ENC_KEY:
+            raise ValueError(
+                "TOKEN_ENC_KEY must be set when TRAKT_CLIENT_ID or SIMKL_CLIENT_ID is configured"
+            )
+        return self
 
     BASE_URL: str = "http://localhost:8000"
 
