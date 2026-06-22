@@ -1,6 +1,8 @@
 """Application configuration via environment variables."""
 
-from pydantic import field_validator
+from typing import Annotated
+
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
@@ -101,6 +103,8 @@ class Settings(BaseSettings):
     # Data retention (days)
     DUEL_RETENTION_DAYS: int = 180
     SWIPE_RETENTION_DAYS: int = 180
+    # Hour of day (UTC) at which the scheduled retention purge runs (0-23)
+    PURGE_SCHEDULE_HOUR: Annotated[int, Field(ge=0, le=23)] = 2
 
     # Sentry
     SENTRY_DSN: str = ""

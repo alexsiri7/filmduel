@@ -18,6 +18,7 @@ from backend.db_models import Duel, Movie, User
 from backend.schemas import DuelSubmit, DuelResult
 from backend.routers.auth import get_admin_user, get_current_user, ensure_fresh_token
 from backend.services.duel import process_duel
+from backend.services.retention import purge_old_duels as _purge_old_duels
 from backend.services.sync import sync_post_duel
 
 logger = logging.getLogger(__name__)
@@ -125,16 +126,6 @@ async def purge_old_duels(
     current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    settings = get_settings()
-    cutoff = datetime.now(timezone.utc) - timedelta(days=settings.DUEL_RETENTION_DAYS)
-    result = await db.execute(
-        delete(Duel).where(Duel.created_at < cutoff).returning(Duel.id)
-    )
-    count = len(result.fetchall())
-    logger.info(
-        "purged_duels count=%d retention_days=%d triggered_by=%s",
-        count,
-        settings.DUEL_RETENTION_DAYS,
-        current_user.id,
-    )
+    count = await _purge_old_duels(db)
+    logger.info("purge_old_duels count=%d triggered_by=%s", count, current_user.id)
     return {"purged": count}

@@ -17,6 +17,7 @@ from backend.rate_limit import limiter
 from backend.routers.auth import get_admin_user, get_current_user
 from backend.schemas import FeedbackAdminResponse, FeedbackReportResponse
 from backend.services.token_crypto import decrypt_token, encrypt_token
+from backend.services.retention import purge_expired_screenshots as _purge_expired_screenshots
 
 logger = logging.getLogger(__name__)
 
@@ -203,14 +204,6 @@ async def purge_expired_screenshots(
     current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    now = datetime.now(timezone.utc)
-    result = await db.execute(
-        update(FeedbackReport)
-        .where(FeedbackReport.purge_after <= now)
-        .where(FeedbackReport.screenshot_data_enc.isnot(None))
-        .values(screenshot_data_enc=None)
-        .returning(FeedbackReport.id)
-    )
-    purged_ids = result.fetchall()
-    logger.info("purged_screenshots count=%d", len(purged_ids))
-    return {"purged": len(purged_ids)}
+    count = await _purge_expired_screenshots(db)
+    logger.info("purge_expired_screenshots count=%d triggered_by=%s", count, current_user.id)
+    return {"purged": count}

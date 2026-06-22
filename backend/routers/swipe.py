@@ -18,6 +18,7 @@ from backend.routers.auth import get_admin_user, get_current_user
 from backend.schemas import MediaType, SwipeCardSchema, SwipeResponse, SwipeSubmit
 from backend.services.duel import compute_next_action
 from backend.services.expand import expand_pool
+from backend.services.retention import purge_old_swipe_results as _purge_old_swipe_results
 from backend.services.pair_selection import BANDS
 
 logger = logging.getLogger(__name__)
@@ -251,16 +252,6 @@ async def purge_old_swipe_results(
     current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    settings = get_settings()
-    cutoff = datetime.now(timezone.utc) - timedelta(days=settings.SWIPE_RETENTION_DAYS)
-    result = await db.execute(
-        delete(SwipeResult).where(SwipeResult.created_at < cutoff).returning(SwipeResult.id)
-    )
-    count = len(result.fetchall())
-    logger.info(
-        "purged_swipe_results count=%d retention_days=%d triggered_by=%s",
-        count,
-        settings.SWIPE_RETENTION_DAYS,
-        current_user.id,
-    )
+    count = await _purge_old_swipe_results(db)
+    logger.info("purge_old_swipe_results count=%d triggered_by=%s", count, current_user.id)
     return {"purged": count}
