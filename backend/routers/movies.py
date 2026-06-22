@@ -14,7 +14,7 @@ from backend.rate_limit import limiter
 from backend.routers.auth import get_current_user
 from backend.schemas import MediaType, MovieWithStateSchema, MoviePairResponse
 from backend.services.pair_selection import select_pair
-from backend.services.token_crypto import decrypt_token, encrypt_token
+from backend.utils.tokens import decode_pair_token, encode_pair_token
 
 logger = logging.getLogger(__name__)
 
@@ -46,18 +46,11 @@ def _user_movie_to_schema(um: UserMovie) -> MovieWithStateSchema:
 
 
 def _encode_pair_token(id_a: str, id_b: str) -> str:
-    return encrypt_token(f"{id_a},{id_b}")
+    return encode_pair_token(id_a, id_b)
 
 
 def _decode_pair_token(token: str) -> set[str] | None:
-    try:
-        raw = decrypt_token(token)
-        parts = raw.split(",")
-        if len(parts) == 2:
-            return {parts[0], parts[1]}
-    except Exception:
-        pass
-    return None
+    return decode_pair_token(token)
 
 
 # ---------------------------------------------------------------------------

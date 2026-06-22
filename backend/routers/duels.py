@@ -18,6 +18,7 @@ from backend.db_models import Duel, Movie, User
 from backend.schemas import DuelSubmit, DuelResult
 from backend.routers.auth import get_admin_user, get_current_user, ensure_fresh_token
 from backend.services.duel import process_duel
+from backend.utils.tokens import decode_pair_token
 from backend.services.retention import purge_old_duels as _purge_old_duels
 from backend.services.sync import sync_post_duel
 
@@ -94,12 +95,14 @@ async def submit_duel(
         mode,
     )
 
-    media_type = (
-        await db.execute(select(Movie.media_type).where(Movie.id == movie_a_id))
-    ).scalar_one()
+    # Validate pair token before anything else
+    token_ids = decode_pair_token(body.pair_token)
+    submitted_ids = {str(movie_a_id), str(movie_b_id)}
+    if token_ids is None or token_ids != submitted_ids:
+        raise HTTPException(status_code=400, detail="Invalid pair token")
 
     try:
-        result = await process_duel(db, uid, movie_a_id, movie_b_id, outcome, mode, media_type)
+        result = await process_duel(db, uid, movie_a_id, movie_b_id, outcome, mode)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

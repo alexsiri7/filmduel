@@ -135,7 +135,6 @@ async def process_duel(
     movie_b_id: uuid.UUID,
     outcome: str,
     mode: str,
-    media_type: str = "movie",
 ) -> ProcessDuelResult:
     """Run the full duel pipeline: ELO math, DB mutations, duel record.
 
@@ -149,6 +148,12 @@ async def process_duel(
     um_second = await get_user_movie(db, user_id, second_id, for_update=True)
     um_a = um_first if first_id == movie_a_id else um_second
     um_b = um_second if first_id == movie_a_id else um_first
+
+    # Query media_type AFTER ownership confirmed — um_a.movie_id is trusted
+    media_type_row = await db.execute(
+        select(Movie.media_type).where(Movie.id == um_a.movie_id)
+    )
+    media_type = media_type_row.scalar_one_or_none() or "movie"
 
     um_a_seen_was_none = um_a.seen is None
     um_b_seen_was_none = um_b.seen is None

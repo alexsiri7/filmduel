@@ -86,6 +86,7 @@ class TestDuelSubmit:
             movie_a_id="550e8400-e29b-41d4-a716-446655440000",
             movie_b_id="550e8400-e29b-41d4-a716-446655440001",
             outcome=DuelOutcome.a_wins,
+            pair_token="tok",
         )
         assert ds.movie_a_id == UUID("550e8400-e29b-41d4-a716-446655440000")
         assert ds.outcome == DuelOutcome.a_wins
@@ -97,6 +98,7 @@ class TestDuelSubmit:
             movie_b_id="550e8400-e29b-41d4-a716-446655440001",
             outcome=DuelOutcome.b_wins,
             mode="tournament",
+            pair_token="tok",
         )
         assert ds.mode == DuelMode.tournament
 
@@ -107,6 +109,7 @@ class TestDuelSubmit:
                 movie_b_id="550e8400-e29b-41d4-a716-446655440001",
                 outcome=DuelOutcome.a_wins,
                 mode="invalid_mode",
+                pair_token="tok",
             )
 
     def test_invalid_uuid_rejected(self):
@@ -115,6 +118,7 @@ class TestDuelSubmit:
                 movie_a_id="not-a-uuid",
                 movie_b_id="also-not-a-uuid",
                 outcome=DuelOutcome.a_wins,
+                pair_token="tok",
             )
 
     def test_same_movie_ids_rejected(self):
@@ -123,6 +127,7 @@ class TestDuelSubmit:
                 movie_a_id="550e8400-e29b-41d4-a716-446655440000",
                 movie_b_id="550e8400-e29b-41d4-a716-446655440000",
                 outcome=DuelOutcome.a_wins,
+                pair_token="tok",
             )
 
     def test_invalid_outcome_rejected(self):
@@ -131,6 +136,7 @@ class TestDuelSubmit:
                 movie_a_id="550e8400-e29b-41d4-a716-446655440000",
                 movie_b_id="550e8400-e29b-41d4-a716-446655440001",
                 outcome="invalid_outcome",
+                pair_token="tok",
             )
 
     def test_draw_outcome_rejected_by_schema(self):
@@ -140,11 +146,12 @@ class TestDuelSubmit:
                 movie_a_id="550e8400-e29b-41d4-a716-446655440000",
                 movie_b_id="550e8400-e29b-41d4-a716-446655440001",
                 outcome="draw",
+                pair_token="tok",
             )
 
     def test_missing_movie_ids_rejected(self):
         with pytest.raises(ValidationError):
-            DuelSubmit(outcome=DuelOutcome.a_wins)
+            DuelSubmit(outcome=DuelOutcome.a_wins, pair_token="tok")
 
     def test_all_outcome_values_accepted(self):
         for outcome in DuelOutcome:
@@ -152,6 +159,7 @@ class TestDuelSubmit:
                 movie_a_id="550e8400-e29b-41d4-a716-446655440000",
                 movie_b_id="550e8400-e29b-41d4-a716-446655440001",
                 outcome=outcome,
+                pair_token="tok",
             )
             assert ds.outcome == outcome
 
