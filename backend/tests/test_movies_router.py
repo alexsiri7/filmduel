@@ -20,7 +20,7 @@ from backend.services.token_crypto import _fernet  # noqa: E402
 
 _fernet.cache_clear()
 
-from backend.routers.movies import _decode_pair_token, _encode_pair_token  # noqa: E402
+from backend.utils.tokens import decode_pair_token as _decode_pair_token, encode_pair_token as _encode_pair_token  # noqa: E402
 
 
 def test_pair_token_round_trips():
