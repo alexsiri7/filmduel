@@ -12,7 +12,10 @@ async function request(path, options = {}) {
     headers,
     ...options,
   });
-  if (res.status === 401) { window.location.href = "/login"; return null; }
+  if (res.status === 401) {
+    window.location.href = "/login";
+    return null;
+  }
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: "Request failed" }));
     throw new Error(error.detail || `HTTP ${res.status}`);

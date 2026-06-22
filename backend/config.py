@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     @classmethod
     def validate_token_enc_key(cls, v: str) -> str:
         if v == "":
-            return v  # strength check deferred; require_token_enc_key_with_oauth enforces presence when OAuth is enabled
+            return v  # presence enforced by require_token_enc_key_with_oauth when OAuth is enabled
         return _validate_key_strength("TOKEN_ENC_KEY", v)
 
     @model_validator(mode="after")
