@@ -14,7 +14,7 @@ def decode_pair_token(token: str) -> set[str] | None:
         raw = decrypt_token(token)
         parts = raw.split(",")
         if len(parts) == 2:
-            return {parts[0], parts[1]}
+            return set(parts)
     except Exception:
         pass
     return None

@@ -20,14 +20,14 @@ from backend.services.token_crypto import _fernet  # noqa: E402
 
 _fernet.cache_clear()
 
-from backend.routers.movies import _decode_pair_token, _encode_pair_token  # noqa: E402
+from backend.utils.tokens import decode_pair_token, encode_pair_token  # noqa: E402
 
 
 def test_pair_token_round_trips():
     id_a = str(uuid.uuid4())
     id_b = str(uuid.uuid4())
-    token = _encode_pair_token(id_a, id_b)
-    result = _decode_pair_token(token)
+    token = encode_pair_token(id_a, id_b)
+    result = decode_pair_token(token)
     assert result == {id_a, id_b}
 
 
@@ -35,20 +35,20 @@ def test_pair_token_is_opaque():
     """Token must not contain the raw UUIDs in plaintext (base64 or otherwise)."""
     id_a = str(uuid.uuid4())
     id_b = str(uuid.uuid4())
-    token = _encode_pair_token(id_a, id_b)
+    token = encode_pair_token(id_a, id_b)
     # Strip any base64 padding and check neither UUID appears in the token
     assert id_a not in token
     assert id_b not in token
 
 
 def test_pair_token_invalid_returns_none():
-    assert _decode_pair_token("not-a-valid-token") is None
-    assert _decode_pair_token("") is None
+    assert decode_pair_token("not-a-valid-token") is None
+    assert decode_pair_token("") is None
 
 
 def test_pair_token_tampered_returns_none():
     id_a = str(uuid.uuid4())
     id_b = str(uuid.uuid4())
-    token = _encode_pair_token(id_a, id_b)
+    token = encode_pair_token(id_a, id_b)
     tampered = token[:-4] + "XXXX"
-    assert _decode_pair_token(tampered) is None
+    assert decode_pair_token(tampered) is None

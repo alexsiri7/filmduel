@@ -8,6 +8,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from sqlalchemy.dialects import postgresql
+
 from backend.services.duel import (
     MIN_SEEN_UNRANKED,
     MIN_TOTAL_SEEN,
@@ -119,8 +121,6 @@ async def test_get_user_movie_with_for_update():
     um = await get_user_movie(db, uid, mid, for_update=True)
     assert um is existing
     assert len(captured_stmts) == 1
-    from sqlalchemy.dialects import postgresql
-
     compiled = captured_stmts[0].compile(dialect=postgresql.dialect())
     assert "FOR UPDATE" in str(compiled).upper()
 

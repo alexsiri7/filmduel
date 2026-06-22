@@ -157,9 +157,10 @@ async def get_suggestions(
             suggestions=[_build_suggestion_schema(s) for s in new_suggestions],
             status="ready",
         )
-    except ValueError as e:
+    except ValueError:
         # LLM_API_KEY not configured
-        raise HTTPException(status_code=503, detail=str(e))
+        logger.warning("AI features unavailable (LLM_API_KEY not configured) for user %s", uid)
+        raise HTTPException(status_code=503, detail="AI features are not available")
     except Exception:
         logger.exception("Failed to generate suggestions for user %s", uid)
         raise HTTPException(
@@ -213,8 +214,10 @@ async def regenerate_suggestions(
             suggestions=[_build_suggestion_schema(s) for s in new_suggestions],
             status="ready",
         )
-    except ValueError as e:
-        raise HTTPException(status_code=503, detail=str(e))
+    except ValueError:
+        # LLM_API_KEY not configured
+        logger.warning("AI features unavailable (LLM_API_KEY not configured) for user %s", uid)
+        raise HTTPException(status_code=503, detail="AI features are not available")
     except Exception:
         logger.exception("Failed to regenerate suggestions for user %s", uid)
         raise HTTPException(
