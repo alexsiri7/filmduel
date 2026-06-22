@@ -120,14 +120,19 @@ No need to cache the full LLM response — just persist the individual picks wit
 
 ```
 GET  /api/suggestions
+     Prerequisites: privacy policy accepted AND use_ai_features=true
      Returns current suggestions (up to 6). 
      If none exist or stale (> 24h): triggers generation, 
      returns 202 with { status: "generating" } if async,
      or waits synchronously (< 5s expected).
+     403 { detail: "Privacy policy consent required" } — policy not accepted
+     403 { detail: "AI features are disabled. Enable them in settings to use this feature." } — toggle off
 
 POST /api/suggestions/regenerate
+     Prerequisites: privacy policy accepted AND use_ai_features=true
      Force regeneration. Rate-limited: 3 per day per user.
      Returns 429 with { next_allowed_at } if exceeded.
+     403 — same conditions as above
 
 POST /api/suggestions/:id/dismiss
      Soft-delete — mark dismissed_at. Excluded from future responses.

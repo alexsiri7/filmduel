@@ -658,6 +658,63 @@ class TestUpdateSettings:
         assert user.sync_ratings_to_trakt is False
         assert result.sync_ratings_to_trakt is False
 
+    @pytest.mark.asyncio
+    async def test_update_settings_disables_ai_features(self, monkeypatch):
+        """Disabling AI features writes False to user model and returns it in response."""
+        monkeypatch.setattr(limiter, "enabled", False)
+
+        user = self._make_user()
+        user.use_ai_features = True
+        db = AsyncMock()
+
+        result = await update_settings(
+            body=UserSettingsUpdate(use_ai_features=False),
+            request=_make_starlette_request(),
+            current_user=user,
+            db=db,
+        )
+
+        assert user.use_ai_features is False
+        db.commit.assert_awaited_once()
+        assert result.use_ai_features is False
+
+    @pytest.mark.asyncio
+    async def test_update_settings_enables_ai_features(self, monkeypatch):
+        """Enabling AI features writes True to user model and returns it in response."""
+        monkeypatch.setattr(limiter, "enabled", False)
+
+        user = self._make_user()
+        user.use_ai_features = False
+        db = AsyncMock()
+
+        result = await update_settings(
+            body=UserSettingsUpdate(use_ai_features=True),
+            request=_make_starlette_request(),
+            current_user=user,
+            db=db,
+        )
+
+        assert user.use_ai_features is True
+        assert result.use_ai_features is True
+
+    @pytest.mark.asyncio
+    async def test_update_settings_none_use_ai_features_leaves_field_unchanged(self, monkeypatch):
+        """Omitting use_ai_features from the payload does not alter the field."""
+        monkeypatch.setattr(limiter, "enabled", False)
+
+        user = self._make_user()
+        user.use_ai_features = False
+        db = AsyncMock()
+
+        result = await update_settings(
+            body=UserSettingsUpdate(sync_ratings_to_trakt=True),  # no use_ai_features
+            request=_make_starlette_request(),
+            current_user=user,
+            db=db,
+        )
+
+        assert user.use_ai_features is False  # unchanged
+
 
 # ---------------------------------------------------------------------------
 # accept_consent

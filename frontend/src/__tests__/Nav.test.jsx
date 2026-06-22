@@ -163,6 +163,79 @@ describe("Nav — Sync to SIMKL toggle", () => {
   });
 });
 
+describe("Nav — AI Suggestions toggle", () => {
+  const renderNav = () =>
+    render(
+      <MemoryRouter>
+        <Nav />
+      </MemoryRouter>
+    );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("renders toggle in ON state when user has AI features enabled", async () => {
+    getMe.mockResolvedValueOnce({ use_ai_features: true });
+    renderNav();
+    await waitFor(() => {
+      const toggle = screen.getByRole("switch", { name: /ai suggestions/i });
+      expect(toggle).toHaveAttribute("aria-checked", "true");
+    });
+  });
+
+  it("renders toggle in OFF state when user has AI features disabled", async () => {
+    getMe.mockResolvedValueOnce({ use_ai_features: false });
+    renderNav();
+    await waitFor(() => {
+      const toggle = screen.getByRole("switch", { name: /ai suggestions/i });
+      expect(toggle).toHaveAttribute("aria-checked", "false");
+    });
+  });
+
+  it("defaults to ON when getMe returns null", async () => {
+    getMe.mockResolvedValueOnce(null);
+    renderNav();
+    await waitFor(() => {
+      const toggle = screen.getByRole("switch", { name: /ai suggestions/i });
+      expect(toggle).toHaveAttribute("aria-checked", "true");
+    });
+  });
+
+  it("toggles OFF and calls updateSettings when clicked while ON", async () => {
+    getMe.mockResolvedValueOnce({ use_ai_features: true });
+    renderNav();
+    await waitFor(() => screen.getByRole("switch", { name: /ai suggestions/i }));
+    fireEvent.click(screen.getByRole("switch", { name: /ai suggestions/i }));
+    await waitFor(() => {
+      expect(screen.getByRole("switch", { name: /ai suggestions/i })).toHaveAttribute("aria-checked", "false");
+      expect(updateSettings).toHaveBeenCalledWith({ use_ai_features: false });
+    });
+  });
+
+  it("toggles ON and calls updateSettings when clicked while OFF", async () => {
+    getMe.mockResolvedValueOnce({ use_ai_features: false });
+    renderNav();
+    await waitFor(() => screen.getByRole("switch", { name: /ai suggestions/i }));
+    fireEvent.click(screen.getByRole("switch", { name: /ai suggestions/i }));
+    await waitFor(() => {
+      expect(screen.getByRole("switch", { name: /ai suggestions/i })).toHaveAttribute("aria-checked", "true");
+      expect(updateSettings).toHaveBeenCalledWith({ use_ai_features: true });
+    });
+  });
+
+  it("rolls back toggle state when updateSettings fails", async () => {
+    getMe.mockResolvedValueOnce({ use_ai_features: true });
+    updateSettings.mockRejectedValueOnce(new Error("Network error"));
+    renderNav();
+    await waitFor(() => screen.getByRole("switch", { name: /ai suggestions/i }));
+    fireEvent.click(screen.getByRole("switch", { name: /ai suggestions/i }));
+    await waitFor(() => {
+      expect(screen.getByRole("switch", { name: /ai suggestions/i })).toHaveAttribute("aria-checked", "true");
+    });
+  });
+});
+
 describe("Nav", () => {
   beforeEach(() => {
     vi.clearAllMocks();

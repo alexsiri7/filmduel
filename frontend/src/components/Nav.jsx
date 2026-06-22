@@ -58,11 +58,12 @@ export default function Nav({ mediaType, setMediaType }) {
 
   const handleAiToggle = async () => {
     const next = !useAiFeatures;
-    setUseAiFeatures(next);
+    setUseAiFeatures(next); // optimistic update
     try {
       await updateSettings({ use_ai_features: next });
-    } catch {
+    } catch (err) {
       setUseAiFeatures(!next); // rollback on failure
+      console.error("Failed to update AI features setting:", err);
     }
   };
 

@@ -449,13 +449,29 @@ class TestTournamentConsentGuard:
 
 
 class TestAiConsentGuard:
-    """require_ai_consent() blocks users who have disabled AI features."""
+    """require_ai_consent() blocks users who have disabled AI features.
+
+    Privacy-policy-denied path is already covered by the existing consent
+    suite above; these tests focus on the new use_ai_features toggle.
+    """
 
     def setup_method(self):
         app.dependency_overrides.clear()
 
     def teardown_method(self):
         app.dependency_overrides.clear()
+
+    def test_suggestions_blocked_when_privacy_policy_not_accepted(self):
+        """GET /api/suggestions returns 403 when privacy_policy_accepted=False (even if AI toggle is on)."""
+        user = _make_user(privacy_policy_accepted=False, use_ai_features=True)
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.get("/api/suggestions")
+
+        assert resp.status_code == 403
+        assert "Privacy policy consent required" in resp.json()["detail"]
 
     def test_suggestions_blocked_when_ai_disabled(self):
         """GET /api/suggestions returns 403 when use_ai_features=False."""
