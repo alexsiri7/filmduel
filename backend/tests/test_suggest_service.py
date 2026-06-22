@@ -3,11 +3,24 @@
 from __future__ import annotations
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from backend.services.suggest import MIN_RANKED, _build_taste_profile, _elo_tier, has_enough_ranked
+from backend.services.suggest import MIN_RANKED, _build_taste_profile, _elo_tier, generate_suggestions, has_enough_ranked
+
+
+_FAKE_PROFILE = {
+    "total_ranked": 20,
+    "genre_affinities": {"Drama": 1200},
+    "top_10": [],
+    "bottom_5": [],
+}
+
+_FAKE_CANDIDATES = [
+    {"trakt_id": i, "movie_id": f"00000000-0000-0000-0000-{i:012d}"}
+    for i in range(1, 10)
+]
 
 
 class TestEloTier:
@@ -87,18 +100,36 @@ class TestBuildTasteProfile:
 
 
 class TestReasonTruncation:
-    def test_reason_truncated_to_500_chars(self):
-        """LLM reason strings exceeding 500 chars must be truncated."""
+    @pytest.mark.asyncio
+    async def test_reason_truncated_to_500_chars(self):
+        """generate_suggestions must truncate LLM reason strings to 500 chars."""
         long_reason = "x" * 600
-        pick = {"trakt_id": 1, "reason": long_reason}
-        reason = pick.get("reason", "Recommended for you.")[:500]
-        assert len(reason) == 500
+        fake_picks = [{"trakt_id": 1, "reason": long_reason}]
 
-    def test_reason_default_when_missing(self):
-        """Default reason is applied when LLM omits the field."""
-        pick = {}
-        reason = pick.get("reason", "Recommended for you.")[:500]
-        assert reason == "Recommended for you."
+        with (
+            patch("backend.services.suggest._build_taste_profile", AsyncMock(return_value=_FAKE_PROFILE)),
+            patch("backend.services.suggest._get_candidates", AsyncMock(return_value=_FAKE_CANDIDATES)),
+            patch("backend.services.suggest._call_llm", AsyncMock(return_value=fake_picks)),
+        ):
+            result = await generate_suggestions(uuid.uuid4(), AsyncMock())
+
+        assert len(result) == 1
+        assert len(result[0]["reason"]) == 500
+
+    @pytest.mark.asyncio
+    async def test_reason_default_when_missing(self):
+        """generate_suggestions uses fallback reason when LLM omits the field."""
+        fake_picks = [{"trakt_id": 1}]  # no "reason" key
+
+        with (
+            patch("backend.services.suggest._build_taste_profile", AsyncMock(return_value=_FAKE_PROFILE)),
+            patch("backend.services.suggest._get_candidates", AsyncMock(return_value=_FAKE_CANDIDATES)),
+            patch("backend.services.suggest._call_llm", AsyncMock(return_value=fake_picks)),
+        ):
+            result = await generate_suggestions(uuid.uuid4(), AsyncMock())
+
+        assert len(result) == 1
+        assert result[0]["reason"] == "Recommended for you."
 
 
 class TestHasEnoughRanked:
