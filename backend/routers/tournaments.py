@@ -117,7 +117,7 @@ def _active_progress(matches: list[TournamentMatch]) -> str:
             return f"Round {rnd} \u2014 {played}/{len(round_matches)} matches played"
 
     # All matches played (shouldn't normally reach here for active tournaments)
-    last_round = max(matches_by_round.keys()) if matches_by_round else 1
+    last_round = max(matches_by_round, default=1)
     return f"Round {last_round} \u2014 0/0 matches played"
 
 

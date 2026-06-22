@@ -306,7 +306,12 @@ async def login(request: Request, settings: Settings = Depends(get_settings)):
     )
     response = RedirectResponse(f"https://trakt.tv/oauth/authorize?{params}")
     _set_oauth_cookies(
-        response, OAUTH_STATE_COOKIE, state, OAUTH_PKCE_COOKIE, code_verifier, settings.cookie_secure
+        response,
+        OAUTH_STATE_COOKIE,
+        state,
+        OAUTH_PKCE_COOKIE,
+        code_verifier,
+        settings.cookie_secure,
     )
     return response
 
@@ -418,7 +423,12 @@ async def simkl_login(request: Request, settings: Settings = Depends(get_setting
     )
     response = RedirectResponse(f"https://simkl.com/oauth/authorize?{params}")
     _set_oauth_cookies(
-        response, OAUTH_SIMKL_STATE_COOKIE, state, OAUTH_SIMKL_PKCE_COOKIE, code_verifier, settings.cookie_secure
+        response,
+        OAUTH_SIMKL_STATE_COOKIE,
+        state,
+        OAUTH_SIMKL_PKCE_COOKIE,
+        code_verifier,
+        settings.cookie_secure,
     )
     return response
 
