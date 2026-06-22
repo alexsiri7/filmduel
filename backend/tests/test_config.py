@@ -141,9 +141,9 @@ class TestRetentionDefaults:
 
 
 class TestTokenEncKeyValidation:
-    def test_empty_string_accepted(self):
-        """Empty TOKEN_ENC_KEY is allowed at config load; runtime check handles it."""
-        s = _make_settings(TOKEN_ENC_KEY="")
+    def test_empty_string_accepted_without_oauth(self):
+        """Empty TOKEN_ENC_KEY is allowed when no OAuth client IDs are configured."""
+        s = _make_settings(TOKEN_ENC_KEY="", TRAKT_CLIENT_ID="", SIMKL_CLIENT_ID="")
         assert s.TOKEN_ENC_KEY == ""
 
     def test_valid_32_char_key_accepted(self):
@@ -173,6 +173,36 @@ class TestTokenEncKeyValidation:
     def test_valid_long_key_accepted(self):
         s = _make_settings(TOKEN_ENC_KEY="x" * 64)
         assert len(s.TOKEN_ENC_KEY) == 64
+
+    def test_empty_key_rejected_when_trakt_client_id_set(self):
+        with pytest.raises(ValidationError, match="TOKEN_ENC_KEY must be set"):
+            _make_settings(
+                TOKEN_ENC_KEY="",
+                TRAKT_CLIENT_ID="some-trakt-client-id",
+            )
+
+    def test_empty_key_rejected_when_simkl_client_id_set(self):
+        with pytest.raises(ValidationError, match="TOKEN_ENC_KEY must be set"):
+            _make_settings(
+                TOKEN_ENC_KEY="",
+                SIMKL_CLIENT_ID="some-simkl-client-id",
+                TRAKT_CLIENT_ID="",
+            )
+
+    def test_valid_key_accepted_when_trakt_client_id_set(self):
+        s = _make_settings(
+            TOKEN_ENC_KEY="a" * 32,
+            TRAKT_CLIENT_ID="some-trakt-client-id",
+        )
+        assert s.TOKEN_ENC_KEY == "a" * 32
+
+    def test_valid_key_accepted_when_both_oauth_providers_set(self):
+        s = _make_settings(
+            TOKEN_ENC_KEY="a" * 32,
+            TRAKT_CLIENT_ID="some-trakt-client-id",
+            SIMKL_CLIENT_ID="some-simkl-client-id",
+        )
+        assert s.TOKEN_ENC_KEY == "a" * 32
 
 
 class TestCookieSecure:
