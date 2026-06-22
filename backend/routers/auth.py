@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import logging
 import secrets
 import uuid
@@ -322,7 +323,7 @@ async def callback(
     """Handle the OAuth callback from Trakt."""
     # Validate OAuth state parameter to prevent CSRF
     expected_state = request.cookies.get(OAUTH_STATE_COOKIE)
-    if not expected_state or not state or state != expected_state:
+    if not expected_state or not state or not hmac.compare_digest(state, expected_state):
         raise HTTPException(status_code=400, detail="Invalid OAuth state")
     code_verifier = request.cookies.get(OAUTH_PKCE_COOKIE)
     if not code_verifier:
@@ -446,7 +447,7 @@ async def simkl_callback(
 ):
     """Handle the OAuth callback from SIMKL."""
     expected_state = request.cookies.get(OAUTH_SIMKL_STATE_COOKIE)
-    if not expected_state or not state or state != expected_state:
+    if not expected_state or not state or not hmac.compare_digest(state, expected_state):
         raise HTTPException(status_code=400, detail="Invalid OAuth state")
 
     code_verifier = request.cookies.get(OAUTH_SIMKL_PKCE_COOKIE)
