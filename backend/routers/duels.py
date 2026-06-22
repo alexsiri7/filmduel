@@ -5,16 +5,13 @@ from __future__ import annotations
 import logging
 import uuid
 
-from datetime import datetime, timedelta, timezone
-
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db import async_session_factory, get_db
 from backend.rate_limit import limiter
-from backend.config import get_settings
-from backend.db_models import Duel, Movie, User
+from backend.db_models import Movie, User
 from backend.schemas import DuelSubmit, DuelResult
 from backend.routers.auth import get_admin_user, get_current_user, ensure_fresh_token
 from backend.services.duel import process_duel
