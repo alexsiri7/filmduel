@@ -142,7 +142,6 @@ async def process_duel(
     FastAPI dependency).  Returns a ``DuelResult`` ready to send to the client.
     """
     # ── Fetch user_movies (lock in UUID order to prevent deadlocks) ────────────
-    # Acquire row locks in deterministic UUID order to prevent deadlocks
     first_id, second_id = sorted([movie_a_id, movie_b_id])
     um_first = await get_user_movie(db, user_id, first_id, for_update=True)
     um_second = await get_user_movie(db, user_id, second_id, for_update=True)
