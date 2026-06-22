@@ -73,8 +73,8 @@ async def get_movie_pair(
 
     try:
         pair = await select_pair(db, uid, last_pair_ids, media_type)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=404, detail="No eligible pair found")
 
     movie_a, movie_b = pair
     schema_a = _user_movie_to_schema(movie_a)

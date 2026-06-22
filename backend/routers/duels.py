@@ -100,8 +100,8 @@ async def submit_duel(
 
     try:
         result = await process_duel(db, uid, movie_a_id, movie_b_id, outcome, mode)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid duel submission")
 
     # Trakt sync in background (fire-and-forget)
     if (
