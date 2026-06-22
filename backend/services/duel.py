@@ -226,12 +226,7 @@ async def process_duel(
 
     # ── next_action ─────────────────────────────────────────────────
     next_action = await compute_next_action(db, user_id, media_type)
-
-    logger.info(
-        "duel_next_action user_id=%s next_action=%s",
-        user_id,
-        next_action,
-    )
+    logger.info("duel_next_action user_id=%s next_action=%s", user_id, next_action)
 
     return ProcessDuelResult(
         api_result=DuelResult(
