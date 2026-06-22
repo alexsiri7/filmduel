@@ -66,6 +66,31 @@ class TestGetSuggestions:
         assert body["status"] == "not_enough_films"
         assert body["suggestions"] == []
 
+    def test_get_suggestions_503_when_llm_key_missing(self):
+        """GET /api/suggestions returns 503 with generic detail when LLM key not configured."""
+        user = _make_user(privacy_policy_accepted=True)
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+
+        with patch(
+            "backend.routers.suggestions.has_enough_ranked",
+            new_callable=AsyncMock,
+            return_value=True,
+        ), patch(
+            "backend.routers.suggestions._get_active_suggestions",
+            new_callable=AsyncMock,
+            return_value=[],
+        ), patch(
+            "backend.routers.suggestions._create_suggestions",
+            new_callable=AsyncMock,
+            side_effect=ValueError("LLM_API_KEY not configured"),
+        ):
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.get("/api/suggestions")
+
+        assert resp.status_code == 503
+        assert resp.json()["detail"] == "AI features are not available"
+
 
 # ---------------------------------------------------------------------------
 # Item 6: regenerate daily limit & 503
@@ -137,3 +162,4 @@ class TestRegenerateSuggestions:
                 resp = client.post("/api/suggestions/regenerate")
 
         assert resp.status_code == 503
+        assert resp.json()["detail"] == "AI features are not available"

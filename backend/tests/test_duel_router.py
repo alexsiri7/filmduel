@@ -195,6 +195,30 @@ class TestSubmitDuel:
         )
         assert response.status_code == 422
 
+    def test_process_duel_value_error_returns_generic_400(self):
+        """ValueError from process_duel must return 400 with generic detail — not str(e)."""
+        mid_a = str(uuid.uuid4())
+        mid_b = str(uuid.uuid4())
+        token = encode_pair_token(mid_a, mid_b)
+        with patch(
+            "backend.routers.duels.process_duel", new_callable=AsyncMock
+        ) as mock_pd:
+            mock_pd.side_effect = ValueError("Movie not in your pool: some internal detail")
+            client = TestClient(app)
+            response = client.post(
+                "/api/duels",
+                json={
+                    "movie_a_id": mid_a,
+                    "movie_b_id": mid_b,
+                    "outcome": "a_wins",
+                    "mode": "discovery",
+                    "pair_token": token,
+                },
+            )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Invalid duel submission"
+        assert "pool" not in response.json()["detail"]
+
 
 # ---------------------------------------------------------------------------
 # Purge old duel records

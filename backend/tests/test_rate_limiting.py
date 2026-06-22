@@ -132,6 +132,7 @@ def test_get_movie_pair_endpoint_reachable():
     # 404 is expected (not enough films); confirms endpoint + Request param works
     assert resp.status_code == 404
     assert resp.status_code != 500
+    assert resp.json()["detail"] == "No eligible pair found"
 
 
 def test_export_csv_endpoint_reachable():
