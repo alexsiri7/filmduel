@@ -66,11 +66,12 @@ class Settings(BaseSettings):
     @classmethod
     def validate_token_enc_key(cls, v: str) -> str:
         if v == "":
-            return v  # strength check deferred; cross-field validator enforces requirement
+            return v  # strength check deferred; require_token_enc_key_with_oauth enforces presence when OAuth is enabled
         return _validate_key_strength("TOKEN_ENC_KEY", v)
 
     @model_validator(mode="after")
     def require_token_enc_key_with_oauth(self) -> "Settings":
+        """Reject startup when TOKEN_ENC_KEY is empty but an OAuth provider is configured."""
         oauth_enabled = bool(self.TRAKT_CLIENT_ID or self.SIMKL_CLIENT_ID)
         if oauth_enabled and not self.TOKEN_ENC_KEY:
             raise ValueError(

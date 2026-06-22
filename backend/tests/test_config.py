@@ -196,6 +196,14 @@ class TestTokenEncKeyValidation:
         )
         assert s.TOKEN_ENC_KEY == "a" * 32
 
+    def test_valid_key_accepted_when_simkl_client_id_set(self):
+        s = _make_settings(
+            TOKEN_ENC_KEY="a" * 32,
+            SIMKL_CLIENT_ID="some-simkl-client-id",
+            TRAKT_CLIENT_ID="",
+        )
+        assert s.TOKEN_ENC_KEY == "a" * 32
+
     def test_valid_key_accepted_when_both_oauth_providers_set(self):
         s = _make_settings(
             TOKEN_ENC_KEY="a" * 32,
