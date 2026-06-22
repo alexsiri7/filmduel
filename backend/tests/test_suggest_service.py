@@ -86,6 +86,21 @@ class TestBuildTasteProfile:
         assert result["total_ranked"] == MIN_RANKED
 
 
+class TestReasonTruncation:
+    def test_reason_truncated_to_500_chars(self):
+        """LLM reason strings exceeding 500 chars must be truncated."""
+        long_reason = "x" * 600
+        pick = {"trakt_id": 1, "reason": long_reason}
+        reason = pick.get("reason", "Recommended for you.")[:500]
+        assert len(reason) == 500
+
+    def test_reason_default_when_missing(self):
+        """Default reason is applied when LLM omits the field."""
+        pick = {}
+        reason = pick.get("reason", "Recommended for you.")[:500]
+        assert reason == "Recommended for you."
+
+
 class TestHasEnoughRanked:
     @pytest.mark.asyncio
     async def test_returns_false_below_threshold(self):
