@@ -101,6 +101,8 @@ class Settings(BaseSettings):
     # Data retention (days)
     DUEL_RETENTION_DAYS: int = 180
     SWIPE_RETENTION_DAYS: int = 180
+    # Hour of day (UTC) at which the scheduled retention purge runs (0-23)
+    PURGE_SCHEDULE_HOUR: int = 2
 
     # Sentry
     SENTRY_DSN: str = ""

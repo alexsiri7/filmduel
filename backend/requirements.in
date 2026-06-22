@@ -21,3 +21,4 @@ sentry-sdk[fastapi]>=2.0.0
 slowapi>=0.1.9
 litellm>=1.40.0
 cryptography>=48.0.1
+apscheduler>=3.10.4,<4

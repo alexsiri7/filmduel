@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -18,6 +19,7 @@ from slowapi.errors import RateLimitExceeded
 
 from backend.config import get_settings
 from backend.rate_limit import limiter
+from backend.scheduler import build_scheduler
 from backend.routers import (
     auth,
     movies,
@@ -80,12 +82,26 @@ if settings.SENTRY_DSN:
     )
 
 _is_dev = settings.BASE_URL.startswith("http://localhost")
+
+_scheduler = build_scheduler()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    _scheduler.start()
+    logger.info("retention_scheduler started")
+    yield
+    _scheduler.shutdown(wait=False)
+    logger.info("retention_scheduler stopped")
+
+
 app = FastAPI(
     title="FilmDuel",
     version="0.1.0",
     docs_url="/docs" if _is_dev else None,
     redoc_url="/redoc" if _is_dev else None,
     openapi_url="/openapi.json" if _is_dev else None,
+    lifespan=lifespan,
 )
 
 
