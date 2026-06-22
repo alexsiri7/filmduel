@@ -59,6 +59,10 @@ docker run -p 8000:8000 --env-file .env filmduel
 
 Alembic migrations run automatically on container start.
 
+> **Reverse proxy deployments** (Railway, nginx, etc.): set `FORWARDED_ALLOW_IPS` in your `.env`
+> to your proxy's IP or CIDR — see `.env.example` for details. Without this, rate limiting will
+> not correctly identify client IPs.
+
 ## How It Works
 
 1. Sign in with your Trakt account
