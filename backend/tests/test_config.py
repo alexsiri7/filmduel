@@ -231,3 +231,24 @@ class TestCookieSecure:
         """SECURE_COOKIES=false disables Secure flag even with https:// BASE_URL."""
         s = _make_settings(BASE_URL="https://example.com", SECURE_COOKIES=False)
         assert s.cookie_secure is False
+
+
+class TestDatabaseUrlValidation:
+    def test_valid_database_url_accepted(self):
+        s = _make_settings(DATABASE_URL="postgresql+asyncpg://user:pass@host:5432/db")
+        assert s.DATABASE_URL == "postgresql+asyncpg://user:pass@host:5432/db"
+
+    def test_hardcoded_localhost_default_rejected(self):
+        with pytest.raises(ValidationError, match="hardcoded localhost default"):
+            _make_settings(
+                DATABASE_URL="postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
+            )
+
+    def test_empty_database_url_rejected(self):
+        with pytest.raises(ValidationError, match="DATABASE_URL must be set"):
+            _make_settings(DATABASE_URL="")
+
+    def test_missing_database_url_rejected(self):
+        """DATABASE_URL has no default so omitting it raises ValidationError."""
+        with pytest.raises(ValidationError):
+            Settings(SECRET_KEY="test-secret-key-for-unit-tests!!")
