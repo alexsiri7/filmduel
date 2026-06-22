@@ -12,6 +12,7 @@ from backend.db import get_db
 from backend.routers.auth import get_current_user
 from backend.schemas import DuelOutcome, DuelResult
 from backend.services.duel import ProcessDuelResult
+from backend.utils.tokens import encode_pair_token
 
 
 def _make_user():
@@ -53,6 +54,7 @@ class TestSubmitDuel:
         """Valid duel submission returns 200 with ELO deltas."""
         mid_a = str(uuid.uuid4())
         mid_b = str(uuid.uuid4())
+        token = encode_pair_token(mid_a, mid_b)
 
         fake_result = ProcessDuelResult(
             api_result=DuelResult(
@@ -77,6 +79,7 @@ class TestSubmitDuel:
                     "movie_b_id": mid_b,
                     "outcome": "a_wins",
                     "mode": "discovery",
+                    "pair_token": token,
                 },
             )
 
@@ -97,6 +100,7 @@ class TestSubmitDuel:
                 "movie_b_id": same_id,
                 "outcome": "a_wins",
                 "mode": "discovery",
+                "pair_token": "irrelevant",
             },
         )
         assert response.status_code == 400
@@ -112,6 +116,7 @@ class TestSubmitDuel:
                 # movie_b_id intentionally omitted
                 "outcome": "a_wins",
                 "mode": "discovery",
+                "pair_token": "irrelevant",
             },
         )
         assert response.status_code == 422
@@ -128,10 +133,67 @@ class TestSubmitDuel:
                 "movie_a_id": str(uuid.uuid4()),
                 "movie_b_id": str(uuid.uuid4()),
                 "outcome": "a_wins",
+                "pair_token": "irrelevant",
             },
         )
         # Without auth override, should fail with 401
         assert response.status_code == 401
+
+    def test_invalid_pair_token_returns_400(self):
+        """A duel with an invalid/garbage pair token should return 400."""
+        mid_a = str(uuid.uuid4())
+        mid_b = str(uuid.uuid4())
+        client = TestClient(app)
+        response = client.post(
+            "/api/duels",
+            json={
+                "movie_a_id": mid_a,
+                "movie_b_id": mid_b,
+                "outcome": "a_wins",
+                "mode": "discovery",
+                "pair_token": "invalid_token",
+            },
+        )
+        assert response.status_code == 400
+        assert "pair token" in response.json()["detail"].lower()
+
+    def test_mismatched_pair_token_returns_400(self):
+        """A valid token for different movies should be rejected."""
+        mid_a = str(uuid.uuid4())
+        mid_b = str(uuid.uuid4())
+        # Token is for a completely different pair
+        other_a = str(uuid.uuid4())
+        other_b = str(uuid.uuid4())
+        token = encode_pair_token(other_a, other_b)
+
+        client = TestClient(app)
+        response = client.post(
+            "/api/duels",
+            json={
+                "movie_a_id": mid_a,
+                "movie_b_id": mid_b,
+                "outcome": "a_wins",
+                "mode": "discovery",
+                "pair_token": token,
+            },
+        )
+        assert response.status_code == 400
+        assert "pair token" in response.json()["detail"].lower()
+
+    def test_missing_pair_token_returns_422(self):
+        """Missing pair_token should fail schema validation."""
+        client = TestClient(app)
+        response = client.post(
+            "/api/duels",
+            json={
+                "movie_a_id": str(uuid.uuid4()),
+                "movie_b_id": str(uuid.uuid4()),
+                "outcome": "a_wins",
+                "mode": "discovery",
+                # no pair_token
+            },
+        )
+        assert response.status_code == 422
 
 
 # ---------------------------------------------------------------------------
