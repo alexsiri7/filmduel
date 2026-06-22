@@ -813,6 +813,7 @@ class TestSimklCallback:
         assert exc_info.value.status_code == 502
         assert "PII_VALUE" not in caplog.text  # value must NOT appear
         assert "secret_token" in caplog.text  # key is acceptable
+        assert "Traceback" not in caplog.text  # no stack trace logged
 
     @pytest.mark.asyncio
     async def test_non_dict_profile_raises_502_and_logs_type_name(
@@ -848,6 +849,7 @@ class TestSimklCallback:
 
         assert exc_info.value.status_code == 502
         assert "NoneType" in caplog.text
+        assert "Traceback" not in caplog.text  # no stack trace logged
 
 
 # ---------------------------------------------------------------------------
