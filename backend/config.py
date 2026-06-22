@@ -51,11 +51,25 @@ class Settings(BaseSettings):
     SIMKL_REDIRECT_URI: str = "http://localhost:8000/auth/simkl/callback"
 
     # Database (Supabase Postgres via connection string)
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
+    DATABASE_URL: str
 
     # App secrets
     SECRET_KEY: str
     TOKEN_ENC_KEY: str = ""  # ≥32 chars; rotate independently of SECRET_KEY
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def validate_database_url(cls, v: str) -> str:
+        _HARDCODED_DEFAULT = (
+            "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
+        )
+        stripped = v.strip() if isinstance(v, str) else ""
+        if not stripped or stripped == _HARDCODED_DEFAULT:
+            raise ValueError(
+                "DATABASE_URL must be set to a valid connection string; "
+                "the hardcoded localhost default is not permitted"
+            )
+        return v
 
     @field_validator("SECRET_KEY", mode="before")
     @classmethod
