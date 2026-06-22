@@ -141,7 +141,7 @@ async def process_duel(
     All writes happen on the provided session (committed by the caller /
     FastAPI dependency).  Returns a ``DuelResult`` ready to send to the client.
     """
-    # ── Fetch / create user_movies ──────────────────────────────────
+    # ── Fetch user_movies (lock in UUID order to prevent deadlocks) ────────────
     # Acquire row locks in deterministic UUID order to prevent deadlocks
     first_id, second_id = sorted([movie_a_id, movie_b_id])
     um_first = await get_user_movie(db, user_id, first_id, for_update=True)
@@ -153,7 +153,13 @@ async def process_duel(
     media_type_row = await db.execute(
         select(Movie.media_type).where(Movie.id == um_a.movie_id)
     )
-    media_type = media_type_row.scalar_one_or_none() or "movie"
+    media_type_result = media_type_row.scalar_one_or_none()
+    if media_type_result is None:
+        logger.warning(
+            "process_duel: movie_id=%s has no Movie row; defaulting media_type to 'movie'",
+            um_a.movie_id,
+        )
+    media_type = media_type_result or "movie"
 
     um_a_seen_was_none = um_a.seen is None
     um_b_seen_was_none = um_b.seen is None

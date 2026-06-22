@@ -39,7 +39,11 @@ def _make_user_movie(
 
 
 def _make_fake_execute(
-    um_a: MagicMock, um_b: MagicMock, seen_unranked: int = 5, total_seen: int = 20
+    um_a: MagicMock,
+    um_b: MagicMock,
+    seen_unranked: int = 5,
+    total_seen: int = 20,
+    media_type: str | None = "movie",
 ):
     """Build a fake db.execute that dispatches by movie_id bound parameter."""
     movie_map = {
@@ -58,13 +62,19 @@ def _make_fake_execute(
             else:
                 result.scalar_one.return_value = total_seen
             return result
-        # UserMovie select queries — match movie_id by UUID hex in rendered SQL.
-        # This avoids fragile SQLAlchemy AST introspection that breaks on
-        # internal layout changes.
+        # Render SQL with literal binds for accurate matching.
         try:
             stmt_str = str(stmt.compile(compile_kwargs={"literal_binds": True}))
         except Exception:
             stmt_str = str(stmt)
+        # media_type query (Movie.media_type column) — must be checked before
+        # the movie_id match below so it doesn't get dispatched as a UserMovie lookup.
+        if "media_type" in stmt_str.lower():
+            result.scalar_one_or_none.return_value = media_type
+            return result
+        # UserMovie select queries — match movie_id by UUID hex in rendered SQL.
+        # This avoids fragile SQLAlchemy AST introspection that breaks on
+        # internal layout changes.
         for mid, um in movie_map.items():
             if str(mid).replace("-", "") in stmt_str.replace("-", ""):
                 result.scalar_one_or_none.return_value = um
@@ -465,6 +475,47 @@ async def test_pair_type_ranked_vs_unranked():
     ]
     assert len(duel_adds) == 1
     assert duel_adds[0].pair_type == "ranked_vs_unranked"
+
+
+# ---------------------------------------------------------------------------
+# process_duel — media_type fallback
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_process_duel_media_type_fallback():
+    """media_type falls back to 'movie' when Movie record returns None."""
+    uid = uuid.uuid4()
+    mid_a = uuid.uuid4()
+    mid_b = uuid.uuid4()
+
+    um_a = _make_user_movie(uid, mid_a, elo=1000, battles=3)
+    um_b = _make_user_movie(uid, mid_b, elo=1000, battles=3)
+
+    db = AsyncMock()
+    # Simulate missing Movie row by returning None for media_type query
+    db.execute = _make_fake_execute(um_a, um_b, media_type=None)
+
+    # Should complete without error; media_type defaults to "movie"
+    result = await process_duel(db, uid, mid_a, mid_b, "a_wins", "discovery")
+    assert result is not None
+
+
+@pytest.mark.asyncio
+async def test_process_duel_media_type_tv():
+    """media_type 'tv' is passed through correctly from Movie row."""
+    uid = uuid.uuid4()
+    mid_a = uuid.uuid4()
+    mid_b = uuid.uuid4()
+
+    um_a = _make_user_movie(uid, mid_a, elo=1000, battles=3)
+    um_b = _make_user_movie(uid, mid_b, elo=1000, battles=3)
+
+    db = AsyncMock()
+    db.execute = _make_fake_execute(um_a, um_b, media_type="tv")
+
+    result = await process_duel(db, uid, mid_a, mid_b, "a_wins", "discovery")
+    assert result is not None
 
 
 class TestShouldSuggestSwipe:
