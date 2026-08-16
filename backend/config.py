@@ -60,9 +60,7 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def validate_database_url(cls, v: str) -> str:
-        _HARDCODED_DEFAULT = (
-            "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
-        )
+        _HARDCODED_DEFAULT = "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
         stripped = v.strip() if isinstance(v, str) else ""
         if not stripped or stripped == _HARDCODED_DEFAULT:
             raise ValueError(
