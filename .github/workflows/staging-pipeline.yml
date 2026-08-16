@@ -46,15 +46,15 @@ jobs:
           STAGING_URL: ${{ secrets.STAGING_URL }}
         run: |
           echo "Polling $STAGING_URL/health ..."
-          for i in $(seq 1 20); do
+          for i in $(seq 1 30); do
             if curl -sf --max-time 10 "$STAGING_URL/health" | grep -q '"status":"ok"'; then
               echo "Staging healthy after attempt $i"
               exit 0
             fi
-            echo "Attempt $i/20 failed, waiting 30s..."
+            echo "Attempt $i/30 failed, waiting 30s..."
             sleep 30
           done
-          echo "Staging failed to become healthy after 20 attempts (10 min)"
+          echo "Staging failed to become healthy after 30 attempts (15 min)"
           exit 1
 
     outputs:

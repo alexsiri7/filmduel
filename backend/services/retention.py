@@ -15,7 +15,9 @@ from backend.db_models import Duel, FeedbackReport, SwipeResult
 logger = logging.getLogger(__name__)
 
 
-async def _purge_by_age(db: AsyncSession, model: Any, cutoff: datetime, log_name: str, retention_days: int) -> int:
+async def _purge_by_age(
+    db: AsyncSession, model: Any, cutoff: datetime, log_name: str, retention_days: int
+) -> int:
     """Delete rows from ``model`` with created_at older than ``cutoff``. Returns row count."""
     result = await db.execute(
         delete(model).where(model.created_at < cutoff).returning(model.id)
