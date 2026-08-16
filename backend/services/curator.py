@@ -153,9 +153,8 @@ async def curate_tournament(
         if len(result["film_ids"]) > bracket_size:
             result["film_ids"] = result["film_ids"][:bracket_size]
         else:
-            selected = len(result["film_ids"])
             raise CurationError(
-                f"AI selected {selected} films but bracket needs {bracket_size}. Please try again."
+                f"AI selected {len(result['film_ids'])} films but bracket needs {bracket_size}. Please try again."
             )
 
     return result
