@@ -122,8 +122,8 @@ async def curate_tournament(
         result = parse_json_response(text_content)
     except Exception:
         # Try extracting JSON from a markdown code block as fallback
-        match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text_content, re.DOTALL)
         result = None
+        match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text_content, re.DOTALL)
         if match:
             try:
                 result = json.loads(match.group(1))

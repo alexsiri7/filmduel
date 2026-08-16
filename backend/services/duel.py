@@ -146,8 +146,7 @@ async def process_duel(
     first_id, second_id = sorted([movie_a_id, movie_b_id])
     um_first = await get_user_movie(db, user_id, first_id, for_update=True)
     um_second = await get_user_movie(db, user_id, second_id, for_update=True)
-    um_a = um_first if first_id == movie_a_id else um_second
-    um_b = um_second if first_id == movie_a_id else um_first
+    um_a, um_b = (um_first, um_second) if first_id == movie_a_id else (um_second, um_first)
 
     # Query media_type AFTER ownership confirmed — um_a.movie_id is trusted
     media_type_row = await db.execute(
