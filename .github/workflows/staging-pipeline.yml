@@ -41,7 +41,7 @@ jobs:
           # Verified: Railway CLI detects CI via RAILWAY_TOKEN env + no TTY and waits for
           # healthcheckTimeout (900s) before exiting. See railway.toml for healthcheckTimeout.
           # If this assumption breaks (railway up exits 0 immediately), the post-deploy health
-          # check below will catch it — 10×15s = 150s is insufficient for a cold Docker build.
+          # check below will catch it — 30×30s = 900s covers the full cold Docker build window.
           railway up \
             --service web \
             --environment staging
