@@ -208,7 +208,8 @@ describe("Nav — AI Suggestions toggle", () => {
     await waitFor(() => screen.getByRole("switch", { name: /ai suggestions/i }));
     fireEvent.click(screen.getByRole("switch", { name: /ai suggestions/i }));
     await waitFor(() => {
-      expect(screen.getByRole("switch", { name: /ai suggestions/i })).toHaveAttribute("aria-checked", "false");
+      const toggle = screen.getByRole("switch", { name: /ai suggestions/i });
+      expect(toggle).toHaveAttribute("aria-checked", "false");
       expect(updateSettings).toHaveBeenCalledWith({ use_ai_features: false });
     });
   });
@@ -219,7 +220,8 @@ describe("Nav — AI Suggestions toggle", () => {
     await waitFor(() => screen.getByRole("switch", { name: /ai suggestions/i }));
     fireEvent.click(screen.getByRole("switch", { name: /ai suggestions/i }));
     await waitFor(() => {
-      expect(screen.getByRole("switch", { name: /ai suggestions/i })).toHaveAttribute("aria-checked", "true");
+      const toggle = screen.getByRole("switch", { name: /ai suggestions/i });
+      expect(toggle).toHaveAttribute("aria-checked", "true");
       expect(updateSettings).toHaveBeenCalledWith({ use_ai_features: true });
     });
   });
@@ -231,7 +233,8 @@ describe("Nav — AI Suggestions toggle", () => {
     await waitFor(() => screen.getByRole("switch", { name: /ai suggestions/i }));
     fireEvent.click(screen.getByRole("switch", { name: /ai suggestions/i }));
     await waitFor(() => {
-      expect(screen.getByRole("switch", { name: /ai suggestions/i })).toHaveAttribute("aria-checked", "true");
+      const toggle = screen.getByRole("switch", { name: /ai suggestions/i });
+      expect(toggle).toHaveAttribute("aria-checked", "true");
     });
   });
 });
