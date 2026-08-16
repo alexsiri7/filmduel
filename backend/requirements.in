@@ -1,5 +1,5 @@
 # Abstract requirements. Edit this file, then run:
-#   uv pip compile --generate-hashes --python-version 3.12 \
+#   uv pip compile --generate-hashes --python-version 3.14 \
 #     --python-platform linux backend/requirements.in \
 #     -o backend/requirements.txt
 #
