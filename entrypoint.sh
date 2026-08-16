@@ -3,12 +3,13 @@ set -e
 
 # Fail fast with a clear message if required env vars are absent.
 for _var in DATABASE_URL SECRET_KEY; do
-    eval _val=\$$_var
+    eval "_val=\"\$$_var\""   # quote value to prevent word-splitting on metacharacters; safe: _var is a fixed list of known identifiers
     if [ -z "$_val" ]; then
         echo "ERROR: required env var $_var is not set — aborting"
         exit 1
     fi
 done
+unset _val _var
 
 # Verify Python can import the app before backgrounding uvicorn.
 # A failed import (missing wheel, wrong ABI, bad env var) would otherwise
@@ -35,8 +36,15 @@ trap 'kill "$UVICORN_PID" 2>/dev/null; wait "$UVICORN_PID" 2>/dev/null || true' 
 _port="${PORT:-8080}"
 _ready=0
 for _i in $(seq 1 30); do
-    if curl -sf --max-time 2 "http://localhost:${_port}/health" 2>/dev/null \
-        | grep -q '"status":"ok"'; then
+    if python -c "
+import urllib.request, json, sys
+try:
+    r = urllib.request.urlopen('http://localhost:${_port}/health', timeout=2)
+    d = json.loads(r.read())
+    sys.exit(0 if d.get('status') == 'ok' else 1)
+except Exception:
+    sys.exit(1)
+" 2>/dev/null; then
         _ready=1
         break
     fi
