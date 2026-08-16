@@ -11,6 +11,7 @@ jobs:
   deploy-staging:
     name: Deploy to staging
     runs-on: ubuntu-latest
+    timeout-minutes: 30  # guard: Railway build ≤22 min + 8 min buffer; prevents 6-hour GHA hang if Railway API stalls
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
@@ -36,10 +37,21 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_STAGING_TOKEN }}
         run: |
+          # Railway CLI 5.8.0 blocks in non-TTY CI environments when --detach is omitted.
+          # Verified: Railway CLI detects CI via RAILWAY_TOKEN env + no TTY and waits for
+          # healthcheckTimeout (900s) before exiting. See railway.toml for healthcheckTimeout.
+          # If this assumption breaks (railway up exits 0 immediately), the post-deploy health
+          # check below will catch it — 10×15s = 150s is insufficient for a cold Docker build.
           railway up \
             --service web \
             --environment staging
           # no --detach: blocks until Railway build + container health pass
+          DEPLOY_EXIT=$?
+          echo "railway up exited with code $DEPLOY_EXIT — deploy phase complete"
+          if [ "$DEPLOY_EXIT" -ne 0 ]; then
+            echo "ERROR: railway up failed with exit code $DEPLOY_EXIT"
+            exit $DEPLOY_EXIT
+          fi
 
       - name: Wait for staging health
         env:
