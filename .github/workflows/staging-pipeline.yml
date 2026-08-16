@@ -11,7 +11,7 @@ jobs:
   deploy-staging:
     name: Deploy to staging
     runs-on: ubuntu-latest
-    timeout-minutes: 30  # guard: Railway build ≤22 min + 8 min buffer; prevents 6-hour GHA hang if Railway API stalls
+    timeout-minutes: 45  # guard: Railway build ≤22 min + 16 min health-poll + 7 min buffer
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
@@ -57,16 +57,18 @@ jobs:
         env:
           STAGING_URL: ${{ secrets.STAGING_URL }}
         run: |
+          echo "Waiting 60s for Railway build to complete before polling..."
+          sleep 60
           echo "Polling $STAGING_URL/health ..."
-          for i in $(seq 1 10); do
+          for i in $(seq 1 30); do
             if curl -sf --max-time 10 "$STAGING_URL/health" | grep -q '"status":"ok"'; then
               echo "Staging healthy after attempt $i"
               exit 0
             fi
-            echo "Attempt $i/10 failed, waiting 15s..."
-            sleep 15
+            echo "Attempt $i/30 failed, waiting 30s..."
+            sleep 30
           done
-          echo "Staging failed to become healthy after 10 attempts (~2.5 min post-deploy)"
+          echo "Staging failed to become healthy after 30 attempts (~16 min total: 60s pre-wait + 15 min polling)"
           exit 1
 
     outputs:
