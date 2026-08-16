@@ -4,16 +4,15 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db import get_db
 from backend.db_models import Movie, SwipeResult, User, UserMovie
 from backend.rate_limit import limiter
-from backend.config import get_settings
 from backend.routers.auth import get_admin_user, get_current_user
 from backend.schemas import MediaType, SwipeCardSchema, SwipeResponse, SwipeSubmit
 from backend.services.duel import compute_next_action

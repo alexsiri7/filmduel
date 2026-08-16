@@ -706,7 +706,7 @@ class TestUpdateSettings:
         user.use_ai_features = False
         db = AsyncMock()
 
-        result = await update_settings(
+        await update_settings(
             body=UserSettingsUpdate(sync_ratings_to_trakt=True),  # no use_ai_features
             request=_make_starlette_request(),
             current_user=user,

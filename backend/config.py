@@ -1,10 +1,10 @@
 """Application configuration via environment variables."""
 
+from functools import lru_cache
 from typing import Annotated
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
-from functools import lru_cache
 
 _WEAK_KEY_PLACEHOLDERS = frozenset(
     {
