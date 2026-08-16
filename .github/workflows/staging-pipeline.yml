@@ -56,7 +56,7 @@ jobs:
             echo "Attempt $i/30 failed, waiting 30s..."
             sleep 30
           done
-          echo "Staging failed to become healthy after 30 attempts (15 min)"
+          echo "Staging failed to become healthy after 30 attempts (~16 min total: 60s pre-wait + 15 min polling)"
           exit 1
 
     outputs:
