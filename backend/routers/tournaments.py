@@ -93,13 +93,11 @@ async def _load_tournament(
             joinedload(Tournament.matches).joinedload(TournamentMatch.movie_b),
             joinedload(Tournament.matches).joinedload(TournamentMatch.winner_movie),
         )
-        .where(Tournament.id == tournament_id)
+        .where(Tournament.id == tournament_id, Tournament.user_id == user_id)
     )
     result = await db.execute(stmt)
     tournament = result.unique().scalars().first()
     if not tournament:
-        raise HTTPException(status_code=404, detail="Tournament not found")
-    if tournament.user_id != user_id:
         raise HTTPException(status_code=404, detail="Tournament not found")
     return tournament
 
