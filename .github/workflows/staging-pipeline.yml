@@ -45,6 +45,8 @@ jobs:
         env:
           STAGING_URL: ${{ secrets.STAGING_URL }}
         run: |
+          echo "Waiting 60s for Railway build to complete before polling..."
+          sleep 60
           echo "Polling $STAGING_URL/health ..."
           for i in $(seq 1 30); do
             if curl -sf --max-time 10 "$STAGING_URL/health" | grep -q '"status":"ok"'; then
