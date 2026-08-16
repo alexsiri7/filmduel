@@ -206,11 +206,7 @@ def require_consent(user: User = Depends(get_current_user)) -> User:
 
 def require_ai_consent(user: User = Depends(get_current_user)) -> User:
     """FastAPI dependency: reject if user hasn't accepted privacy policy or has disabled AI features."""
-    if not user.privacy_policy_accepted:
-        raise HTTPException(
-            status_code=403,
-            detail="Privacy policy consent required",
-        )
+    require_consent(user)
     if not user.use_ai_features:
         raise HTTPException(
             status_code=403,
