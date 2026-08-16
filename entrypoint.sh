@@ -1,10 +1,13 @@
 #!/bin/sh
 set -e
 
-# Retry alembic with exponential backoff to handle transient DB connectivity
-# failures (e.g. Railway starting the app container before the DB is ready).
-# 5 retries × (5+10+20+40+80)s max ≈ 155s — well within healthcheckTimeout=900.
-RETRIES=5
+# Retry alembic with exponential backoff (capped) to handle transient DB
+# connectivity failures (Railway starts the app container before the DB addon
+# is ready). Previous 5-retry window (~155s) was insufficient when the DB
+# takes longer to become available; increase to 15 retries with a 60s cap,
+# giving up to ~675s (5+10+20+40+60×10 ≈ 11 min) — well within healthcheckTimeout=900.
+RETRIES=15
+MAX_WAIT=60
 WAIT=5
 for i in $(seq 1 $RETRIES); do
     echo "alembic upgrade head: attempt $i/$RETRIES"
@@ -15,7 +18,7 @@ for i in $(seq 1 $RETRIES); do
     fi
     echo "alembic upgrade head failed; retrying in ${WAIT}s..."
     sleep "$WAIT"
-    WAIT=$((WAIT * 2))
+    WAIT=$(( WAIT * 2 > MAX_WAIT ? MAX_WAIT : WAIT * 2 ))
 done
 
 exec uvicorn backend.main:app \

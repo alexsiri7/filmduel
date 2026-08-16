@@ -6,6 +6,8 @@ from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
+_LOCALHOST_DB_DEFAULT = "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
+
 _WEAK_KEY_PLACEHOLDERS = frozenset(
     {
         "secret",
@@ -60,9 +62,8 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def validate_database_url(cls, v: str) -> str:
-        _HARDCODED_DEFAULT = "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
         stripped = v.strip() if isinstance(v, str) else ""
-        if not stripped or stripped == _HARDCODED_DEFAULT:
+        if not stripped or stripped == _LOCALHOST_DB_DEFAULT:
             raise ValueError(
                 "DATABASE_URL must be set to a valid connection string; "
                 "the hardcoded localhost default is not permitted"
