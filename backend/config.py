@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def validate_database_url(cls, v: str) -> str:
-        if not v or v.strip() == _LOCALHOST_DB_DEFAULT:
+        if not v or not v.strip() or v.strip() == _LOCALHOST_DB_DEFAULT:
             raise ValueError(
                 "DATABASE_URL must be set to a valid connection string; "
                 "the hardcoded localhost default is not permitted"
