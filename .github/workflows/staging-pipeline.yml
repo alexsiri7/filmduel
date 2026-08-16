@@ -38,25 +38,23 @@ jobs:
         run: |
           railway up \
             --service web \
-            --environment staging \
-            --detach
+            --environment staging
+          # no --detach: blocks until Railway build + container health pass
 
       - name: Wait for staging health
         env:
           STAGING_URL: ${{ secrets.STAGING_URL }}
         run: |
-          echo "Waiting 60s for Railway build to complete before polling..."
-          sleep 60
           echo "Polling $STAGING_URL/health ..."
-          for i in $(seq 1 30); do
+          for i in $(seq 1 10); do
             if curl -sf --max-time 10 "$STAGING_URL/health" | grep -q '"status":"ok"'; then
               echo "Staging healthy after attempt $i"
               exit 0
             fi
-            echo "Attempt $i/30 failed, waiting 30s..."
-            sleep 30
+            echo "Attempt $i/10 failed, waiting 15s..."
+            sleep 15
           done
-          echo "Staging failed to become healthy after 30 attempts (~16 min total: 60s pre-wait + 15 min polling)"
+          echo "Staging failed to become healthy after 10 attempts (~2.5 min post-deploy)"
           exit 1
 
     outputs:
