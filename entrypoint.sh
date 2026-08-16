@@ -33,7 +33,9 @@ MAX_WAIT=60
 WAIT=5
 for i in $(seq 1 $RETRIES); do
     echo "alembic upgrade head: attempt $i/$RETRIES"
-    alembic upgrade head && break
+    if alembic upgrade head; then
+        break
+    fi
     if [ "$i" -eq "$RETRIES" ]; then
         echo "alembic upgrade head failed after $RETRIES attempts — aborting"
         kill "$UVICORN_PID" 2>/dev/null || true
