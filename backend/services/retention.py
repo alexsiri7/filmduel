@@ -46,7 +46,9 @@ async def purge_old_swipe_results(db: AsyncSession) -> int:
     """
     settings = get_settings()
     cutoff = datetime.now(timezone.utc) - timedelta(days=settings.SWIPE_RETENTION_DAYS)
-    return await _purge_by_age(db, SwipeResult, cutoff, "swipe_results", settings.SWIPE_RETENTION_DAYS)
+    return await _purge_by_age(
+        db, SwipeResult, cutoff, "swipe_results", settings.SWIPE_RETENTION_DAYS
+    )
 
 
 async def purge_expired_screenshots(db: AsyncSession) -> int:
