@@ -169,13 +169,18 @@ class Settings(BaseSettings):
         init_settings: object,
         env_settings: object,
         dotenv_settings: object,
-        secrets_settings: object,
+        **kwargs: object,
     ) -> tuple[object, ...]:
+        # pydantic-settings renamed secrets_settings → file_secret_settings in ≥2.4;
+        # accept either via **kwargs for forward/backward compatibility.
+        file_secret_settings = kwargs.get("file_secret_settings") or kwargs.get(
+            "secrets_settings"
+        )
         return (
             init_settings,
             _TolerantEnvSource(settings_cls),
             dotenv_settings,
-            secrets_settings,
+            *(([file_secret_settings]) if file_secret_settings else []),
         )
 
     @property
