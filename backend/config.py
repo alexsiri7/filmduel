@@ -3,8 +3,31 @@
 from typing import Annotated
 
 from pydantic import Field, field_validator, model_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, EnvSettingsSource
+from pydantic_settings.exceptions import SettingsError
 from functools import lru_cache
+
+
+class _TolerantEnvSource(EnvSettingsSource):
+    """EnvSettingsSource that falls back to the raw string when a complex
+    field value is not valid JSON.
+
+    pydantic-settings ≥2.4 raises SettingsError for list/dict fields whose
+    env-var value is not JSON (e.g. CORS_ORIGINS=https://foo.com rather than
+    CORS_ORIGINS=["https://foo.com"]).  By catching that error and returning
+    the raw value we let the ``mode="before"`` field validators handle
+    comma-separated strings without requiring operators to wrap values in
+    JSON array syntax.
+    """
+
+    def decode_complex_value(
+        self, field_name: str, field_info: object, value: object
+    ) -> object:
+        try:
+            return super().decode_complex_value(field_name, field_info, value)
+        except SettingsError:
+            return value  # raw string; field validator handles it
+
 
 _LOCALHOST_DB_DEFAULT = "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
 
@@ -138,6 +161,22 @@ class Settings(BaseSettings):
     SECURE_COOKIES: bool | None = None
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: object,
+        env_settings: object,
+        dotenv_settings: object,
+        secrets_settings: object,
+    ) -> tuple[object, ...]:
+        return (
+            init_settings,
+            _TolerantEnvSource(settings_cls),
+            dotenv_settings,
+            secrets_settings,
+        )
 
     @property
     def is_https(self) -> bool:
