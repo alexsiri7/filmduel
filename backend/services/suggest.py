@@ -61,14 +61,17 @@ async def _build_taste_profile(
             for g in um.movie.genres:
                 genre_elos[g].append(um.elo)
 
-    genre_affinities = {
-        g: round(sum(elos) / len(elos))
-        for g, elos in genre_elos.items()
-        if len(elos) >= 3
-    }
-    # Sort by avg ELO descending
+    # Compute avg ELO per genre (only genres with 3+ films), sorted descending
     genre_affinities = dict(
-        sorted(genre_affinities.items(), key=lambda x: x[1], reverse=True)
+        sorted(
+            (
+                (g, round(sum(elos) / len(elos)))
+                for g, elos in genre_elos.items()
+                if len(elos) >= 3
+            ),
+            key=lambda x: x[1],
+            reverse=True,
+        )
     )
 
     def _film_entry(um: UserMovie) -> dict:

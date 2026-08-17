@@ -187,12 +187,14 @@ class Settings(BaseSettings):
         file_secret_settings = kwargs.get("file_secret_settings") or kwargs.get(
             "secrets_settings"
         )
-        return (
+        sources: list[object] = [
             init_settings,
             _TolerantEnvSource(settings_cls),
             dotenv_settings,
-            *(([file_secret_settings]) if file_secret_settings else []),
-        )
+        ]
+        if file_secret_settings:
+            sources.append(file_secret_settings)
+        return tuple(sources)
 
     @property
     def is_https(self) -> bool:
