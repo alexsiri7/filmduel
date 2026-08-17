@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def validate_database_url(cls, v: str) -> str:
-        stripped = v.strip() if v else ""
+        stripped = v.strip()
         if not stripped or stripped == _LOCALHOST_DB_DEFAULT:
             raise ValueError(
                 "DATABASE_URL must be set to a valid connection string; "

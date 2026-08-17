@@ -110,7 +110,7 @@ def _active_progress(matches: list[TournamentMatch]) -> str:
     for m in matches:
         matches_by_round.setdefault(m.round, []).append(m)
 
-    for rnd in sorted(matches_by_round.keys()):
+    for rnd in sorted(matches_by_round):
         round_matches = matches_by_round[rnd]
         played = sum(1 for m in round_matches if m.winner_movie_id is not None)
         if played < len(round_matches):
