@@ -36,6 +36,7 @@ jobs:
       - name: Deploy to staging
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_STAGING_TOKEN }}
+          STAGING_URL: ${{ secrets.STAGING_URL }}
         run: |
           # Railway CLI 5.8.0 blocks in non-TTY CI environments when --detach is omitted.
           # Verified: Railway CLI detects CI via RAILWAY_TOKEN env + no TTY and waits for
@@ -44,13 +45,23 @@ jobs:
           # check below will catch it — 10×15s = 150s is insufficient for a cold Docker build.
           railway up \
             --service web \
-            --environment staging
-          # no --detach: blocks until Railway build + container health pass
-          DEPLOY_EXIT=$?
-          echo "railway up exited with code $DEPLOY_EXIT — deploy phase complete"
-          if [ "$DEPLOY_EXIT" -ne 0 ]; then
-            echo "ERROR: railway up failed with exit code $DEPLOY_EXIT"
-            exit $DEPLOY_EXIT
+            --environment staging \
+          || { echo "ERROR: railway up failed — see Railway logs for details"; exit 1; }
+          # railway up exits 0 even when Railway healthcheck fails (CLI 5.8.0 behaviour).
+          # Perform an immediate post-deploy sanity check to surface crash-loop failures
+          # earlier, before the 16-min "Wait for staging health" polling window starts.
+          echo "railway up complete — deploy phase done"
+          # Quick check: if service is unhealthy 30s after deploy, it's almost certainly a crash loop.
+          sleep 30
+          if [ -z "$STAGING_URL" ]; then
+            echo "SKIP: STAGING_URL secret not set — post-deploy health check skipped."
+          else
+            HEALTH_BODY=$(curl -sf --max-time 10 "$STAGING_URL/health" 2>&1)
+            CURL_EXIT=$?
+            if [ $CURL_EXIT -ne 0 ] || ! echo "$HEALTH_BODY" | grep -q '"status":"ok"'; then
+              echo "WARNING: Service not healthy 30s post-deploy — likely crash-looping. Check Railway logs. (curl exit: $CURL_EXIT)"
+              echo "Common causes: SECRET_KEY not set or is a placeholder; DATABASE_URL missing."
+            fi
           fi
 
       - name: Wait for staging health

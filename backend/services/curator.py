@@ -122,13 +122,11 @@ async def curate_tournament(
         result = parse_json_response(text_content)
     except Exception:
         # Try extracting JSON from a markdown code block as fallback
-        result = None
         match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text_content, re.DOTALL)
-        if match:
-            try:
-                result = json.loads(match.group(1))
-            except Exception:
-                pass
+        try:
+            result = json.loads(match.group(1)) if match else None
+        except Exception:
+            result = None
         if result is None:
             logger.error("Failed to parse LLM JSON output: %s", text_content[:500])
             raise CurationError("AI curation returned invalid JSON. Please try again.")
