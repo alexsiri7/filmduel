@@ -237,17 +237,9 @@ async def _expand_from_anticipated(
         client_id=settings.TRAKT_CLIENT_ID,
         access_token=user.trakt_access_token,
     )
-    endpoint = "/shows/anticipated" if media_type == "show" else "/movies/anticipated"
     item_key = "show" if media_type == "show" else "movie"
     try:
-        async with client._client() as http:
-            resp = await http.get(
-                endpoint,
-                params={"limit": 100, "extended": "full"},
-                timeout=15.0,
-            )
-            resp.raise_for_status()
-            items = resp.json()
+        items = await client.get_anticipated(limit=100, media_type=media_type)
     except Exception:
         logger.exception("Failed to fetch anticipated %ss", media_type)
         return 0
@@ -286,7 +278,6 @@ async def _expand_from_popular_pages(
         client_id=settings.TRAKT_CLIENT_ID,
         access_token=user.trakt_access_token,
     )
-    endpoint = "/shows/popular" if media_type == "show" else "/movies/popular"
     source = f"popular_page_N_{media_type}"
     total = 0
     for page in range(2, 6):
@@ -295,14 +286,9 @@ async def _expand_from_popular_pages(
             continue
 
         try:
-            async with client._client() as http:
-                resp = await http.get(
-                    endpoint,
-                    params={"page": page, "limit": 100, "extended": "full"},
-                    timeout=15.0,
-                )
-                resp.raise_for_status()
-                items = resp.json()
+            items = await client.get_popular_page(
+                page=page, limit=100, media_type=media_type
+            )
         except Exception:
             logger.exception("Failed to fetch popular %s page %d", media_type, page)
             continue
@@ -418,31 +404,14 @@ async def _upsert_film_from_tmdb(
         return False
 
     # Upsert the movie (TMDB expansion is movies-only, so media_type="movie")
-    stmt = (
-        insert(Movie.__table__)
-        .values(
-            trakt_id=trakt_id,
-            media_type="movie",
-            tmdb_id=tmdb_id,
-            title=film.get("title", "Unknown"),
-            year=film.get("year"),
-            genres=film.get("genres"),
-            overview=film.get("overview"),
-            cached_at=now,
-        )
-        .on_conflict_do_update(
-            index_elements=["trakt_id", "media_type"],
-            set_={
-                "tmdb_id": tmdb_id,
-                "title": film.get("title", "Unknown"),
-                "year": film.get("year"),
-                "genres": film.get("genres"),
-                "overview": film.get("overview"),
-                "cached_at": now,
-            },
-        )
-    )
-    await db.execute(stmt)
+    movie_data = {
+        "ids": {"trakt": trakt_id, "tmdb": tmdb_id},
+        "title": film.get("title", "Unknown"),
+        "year": film.get("year"),
+        "genres": film.get("genres"),
+        "overview": film.get("overview"),
+    }
+    await db.execute(build_movie_upsert(movie_data, now, "movie"))
     await db.flush()
 
     movie_result = await db.execute(

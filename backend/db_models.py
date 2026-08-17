@@ -24,6 +24,25 @@ class Base(DeclarativeBase):
     pass
 
 
+class EncryptedToken:
+    """Descriptor that transparently encrypts on write and decrypts on read."""
+
+    def __init__(self, enc_attr: str) -> None:
+        self._enc_attr = enc_attr
+
+    def __get__(self, obj, objtype=None):
+        if obj is None:
+            return self
+        from backend.services.token_crypto import decrypt_token
+
+        return decrypt_token(getattr(obj, self._enc_attr))
+
+    def __set__(self, obj, value):
+        from backend.services.token_crypto import encrypt_token
+
+        setattr(obj, self._enc_attr, encrypt_token(value))
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -43,29 +62,8 @@ class User(Base):
         "trakt_refresh_token", Text, nullable=True
     )
 
-    @property
-    def trakt_access_token(self) -> str:
-        from backend.services.token_crypto import decrypt_token
-
-        return decrypt_token(self.trakt_access_token_enc)
-
-    @trakt_access_token.setter
-    def trakt_access_token(self, value: str) -> None:
-        from backend.services.token_crypto import encrypt_token
-
-        self.trakt_access_token_enc = encrypt_token(value)
-
-    @property
-    def trakt_refresh_token(self) -> str:
-        from backend.services.token_crypto import decrypt_token
-
-        return decrypt_token(self.trakt_refresh_token_enc)
-
-    @trakt_refresh_token.setter
-    def trakt_refresh_token(self, value: str) -> None:
-        from backend.services.token_crypto import encrypt_token
-
-        self.trakt_refresh_token_enc = encrypt_token(value)
+    trakt_access_token = EncryptedToken("trakt_access_token_enc")
+    trakt_refresh_token = EncryptedToken("trakt_refresh_token_enc")
 
     trakt_token_expires_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -84,29 +82,8 @@ class User(Base):
         "simkl_refresh_token", Text, nullable=True
     )
 
-    @property
-    def simkl_access_token(self) -> str:
-        from backend.services.token_crypto import decrypt_token
-
-        return decrypt_token(self.simkl_access_token_enc)
-
-    @simkl_access_token.setter
-    def simkl_access_token(self, value: str) -> None:
-        from backend.services.token_crypto import encrypt_token
-
-        self.simkl_access_token_enc = encrypt_token(value)
-
-    @property
-    def simkl_refresh_token(self) -> str:
-        from backend.services.token_crypto import decrypt_token
-
-        return decrypt_token(self.simkl_refresh_token_enc)
-
-    @simkl_refresh_token.setter
-    def simkl_refresh_token(self, value: str) -> None:
-        from backend.services.token_crypto import encrypt_token
-
-        self.simkl_refresh_token_enc = encrypt_token(value)
+    simkl_access_token = EncryptedToken("simkl_access_token_enc")
+    simkl_refresh_token = EncryptedToken("simkl_refresh_token_enc")
 
     simkl_token_expires_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True

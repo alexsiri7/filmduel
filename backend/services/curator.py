@@ -15,7 +15,7 @@ class CurationError(Exception):
     """Raised when LLM-based curation fails (API error, bad JSON, etc.)."""
 
 
-def _sanitize_llm_input(text: str, max_len: int = 200) -> str:
+def sanitize_llm_input(text: str, max_len: int = 200) -> str:
     """Strip potential prompt injection from user-controlled or DB-sourced strings."""
     text = text[:max_len]
     text = re.sub(r"""[{}\[\]<>"']""", "", text)
@@ -23,7 +23,7 @@ def _sanitize_llm_input(text: str, max_len: int = 200) -> str:
     return text.strip()
 
 
-def _elo_tier(elo: int) -> str:
+def elo_tier(elo: int) -> str:
     """Convert raw ELO to a preference tier for privacy-preserving LLM prompts."""
     if elo >= 1300:
         return "highly preferred"
@@ -80,16 +80,16 @@ async def curate_tournament(
     # Build candidate text
     lines = []
     for c in candidates:
-        safe_title = _sanitize_llm_input(c["title"], max_len=150)
+        safe_title = sanitize_llm_input(c["title"], max_len=150)
         safe_genres = (
             ", ".join(
-                _sanitize_llm_input(g, max_len=50) for g in (c.get("genres") or [])
+                sanitize_llm_input(g, max_len=50) for g in (c.get("genres") or [])
             )
             or "unknown"
         )
         lines.append(
             f'- ID: {c["id"]} | "{safe_title}" ({c.get("year", "?")})'
-            f" | Genres: {safe_genres} | preference: {_elo_tier(c.get('elo', 1000))}"
+            f" | Genres: {safe_genres} | preference: {elo_tier(c.get('elo', 1000))}"
             f" | Battles: {c.get('battles', 0)}"
         )
     candidates_text = "\n".join(lines)
@@ -97,10 +97,10 @@ async def curate_tournament(
     system_prompt = SYSTEM_PROMPT.format(bracket_size=bracket_size)
     user_prompt = USER_PROMPT_TEMPLATE.format(
         bracket_size=bracket_size,
-        filter_context=f"Active filter: {_sanitize_llm_input(filter_context)}"
+        filter_context=f"Active filter: {sanitize_llm_input(filter_context)}"
         if filter_context
         else "No filter applied",
-        theme_hint=f'User theme (use as inspiration): "{_sanitize_llm_input(theme_hint, max_len=100)}"'
+        theme_hint=f'User theme (use as inspiration): "{sanitize_llm_input(theme_hint, max_len=100)}"'
         if theme_hint
         else "",
         candidates_text=candidates_text,

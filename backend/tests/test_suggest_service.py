@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from backend.services.suggest import MIN_RANKED, _build_taste_profile, _elo_tier, generate_suggestions, has_enough_ranked
+from backend.services.suggest import MIN_RANKED, _build_taste_profile, elo_tier, generate_suggestions, has_enough_ranked
 
 
 _FAKE_PROFILE = {
@@ -35,8 +35,8 @@ class TestEloTier:
         (800,  "less preferred"),
         (0,    "less preferred"),
     ])
-    def test_elo_tier_thresholds(self, elo, expected):
-        assert _elo_tier(elo) == expected
+    def testelo_tier_thresholds(self, elo, expected):
+        assert elo_tier(elo) == expected
 
 
 def _mock_count_result(count: int):

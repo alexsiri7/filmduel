@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from backend.db_models import Movie, UserMovie
-from backend.services.curator import _elo_tier, _sanitize_llm_input
+from backend.services.curator import elo_tier, sanitize_llm_input
 from backend.services.llm import chat_completion, parse_json_response
 from backend.services.ranking import ranked_user_movies_stmt
 
@@ -149,15 +149,15 @@ async def _call_llm(taste_profile: dict, candidates: list[dict]) -> list[dict]:
 
     def _safe_genres(item: dict) -> str:
         return ", ".join(
-            _sanitize_llm_input(g, max_len=50) for g in (item.get("genres") or [])
+            sanitize_llm_input(g, max_len=50) for g in (item.get("genres") or [])
         )
 
     def _safe_film_line(f: dict) -> str:
-        title = _sanitize_llm_input(f["title"], max_len=150)
-        return f"- {title} ({f['year']}) [{_safe_genres(f)}] preference: {_elo_tier(f.get('elo', 1000))}"
+        title = sanitize_llm_input(f["title"], max_len=150)
+        return f"- {title} ({f['year']}) [{_safe_genres(f)}] preference: {elo_tier(f.get('elo', 1000))}"
 
     def _safe_candidate_line(c: dict) -> str:
-        title = _sanitize_llm_input(c["title"], max_len=150)
+        title = sanitize_llm_input(c["title"], max_len=150)
         rating = c["community_rating"] or "N/A"
         return f"- trakt_id={c['trakt_id']}: {title} ({c['year']}) [{_safe_genres(c)}] rating={rating}"
 
@@ -169,7 +169,7 @@ async def _call_llm(taste_profile: dict, candidates: list[dict]) -> list[dict]:
         + "\n".join(_safe_film_line(f) for f in taste_profile["bottom_5"])
         + "\n\n**Genre affinities (preference tier):**\n"
         + "\n".join(
-            f"- {_sanitize_llm_input(g, max_len=50)}: {_elo_tier(elo)}"
+            f"- {sanitize_llm_input(g, max_len=50)}: {elo_tier(elo)}"
             for g, elo in taste_profile["genre_affinities"].items()
         )
         + f"\n\nTotal ranked films: {taste_profile['total_ranked']}"
