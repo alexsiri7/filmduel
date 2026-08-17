@@ -45,22 +45,23 @@ jobs:
           # check below will catch it — 10×15s = 150s is insufficient for a cold Docker build.
           railway up \
             --service web \
-            --environment staging
-          # railway up exits 0 even when healthcheck fails (Railway CLI 5.8.0 behaviour).
+            --environment staging \
+          || { echo "ERROR: railway up failed — see Railway logs for details"; exit 1; }
+          # railway up exits 0 even when Railway healthcheck fails (CLI 5.8.0 behaviour).
           # Perform an immediate post-deploy sanity check to surface crash-loop failures
           # earlier, before the 16-min "Wait for staging health" polling window starts.
-          DEPLOY_EXIT=$?
-          echo "railway up exited with code $DEPLOY_EXIT — deploy phase complete"
-          if [ "$DEPLOY_EXIT" -ne 0 ]; then
-            echo "ERROR: railway up failed with exit code $DEPLOY_EXIT"
-            exit $DEPLOY_EXIT
-          fi
-          # Quick check: if service was already healthy before we deployed, but is now
-          # unhealthy after 30s, it's almost certainly a crash loop.
+          echo "railway up complete — deploy phase done"
+          # Quick check: if service is unhealthy 30s after deploy, it's almost certainly a crash loop.
           sleep 30
-          if ! curl -sf --max-time 10 "$STAGING_URL/health" | grep -q '"status":"ok"'; then
-            echo "WARNING: Service not healthy 30s post-deploy — likely crash-looping. Check Railway logs."
-            echo "Common causes: SECRET_KEY not set or is a placeholder; DATABASE_URL missing."
+          if [ -z "$STAGING_URL" ]; then
+            echo "SKIP: STAGING_URL secret not set — post-deploy health check skipped."
+          else
+            HEALTH_BODY=$(curl -sf --max-time 10 "$STAGING_URL/health" 2>&1)
+            CURL_EXIT=$?
+            if [ $CURL_EXIT -ne 0 ] || ! echo "$HEALTH_BODY" | grep -q '"status":"ok"'; then
+              echo "WARNING: Service not healthy 30s post-deploy — likely crash-looping. Check Railway logs. (curl exit: $CURL_EXIT)"
+              echo "Common causes: SECRET_KEY not set or is a placeholder; DATABASE_URL missing."
+            fi
           fi
 
       - name: Wait for staging health
