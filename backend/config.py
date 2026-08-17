@@ -25,7 +25,7 @@ class _TolerantEnvSource(EnvSettingsSource):
     ) -> object:
         try:
             return super().decode_complex_value(field_name, field_info, value)
-        except SettingsError:
+        except (SettingsError, ValueError):
             return value  # raw string; field validator handles it
 
 
