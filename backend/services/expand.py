@@ -169,7 +169,7 @@ async def _expand_from_similar(
     recent_keys: set[tuple[str, str | None]],
     now: datetime,
 ) -> int:
-    """Source A: TMDB recommendations from user's top-ranked films."""
+    """Source B: TMDB recommendations from user's top-ranked films."""
     if not settings.TMDB_API_KEY:
         return 0
 
@@ -458,7 +458,7 @@ async def _lookup_trakt_id(tmdb_id: int, settings) -> int | None:
             if resp.status_code != 200:
                 return None
             data = resp.json()
-            if data and len(data) > 0:
+            if data:
                 movie = data[0].get("movie", {})
                 return movie.get("ids", {}).get("trakt")
     except Exception:
