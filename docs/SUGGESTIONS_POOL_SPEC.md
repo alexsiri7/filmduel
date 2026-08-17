@@ -73,7 +73,7 @@ Genres by preference tier (descending):
 {genre_affinities: [{"genre": "mystery", "preference": "highly preferred"}, ...]}
 
 Note: Raw ELO values are never transmitted to the LLM — they are converted to preference tiers
-(highly preferred / preferred / neutral / less preferred) via `_elo_tier()` before inclusion in the prompt.
+(highly preferred / preferred / neutral / less preferred) via `elo_tier()` before inclusion in the prompt.
 
 Candidate unseen films (from personalised Trakt recommendations + TMDB similar):
 {candidates: [{trakt_id, title, year, genres, director, community_rating}]}

@@ -130,6 +130,82 @@ class TestTraktClientPopular:
         assert call_args[0][0] == "/shows/popular"
 
 
+class TestTraktClientAnticipated:
+    @pytest.mark.asyncio
+    async def test_get_anticipated_movies_url(self):
+        """get_anticipated calls /movies/anticipated with correct params."""
+        mock_resp = _mock_response([{"list_count": 5, "movie": {"ids": {"trakt": 1}}}])
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_resp
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        client = TraktClient(client_id="test-id")
+        with patch.object(client, "_client", return_value=mock_client):
+            result = await client.get_anticipated(limit=100)
+
+        call_args = mock_client.get.call_args
+        assert call_args[0][0] == "/movies/anticipated"
+        assert call_args[1]["params"]["limit"] == 100
+        assert call_args[1]["params"]["extended"] == "full"
+
+    @pytest.mark.asyncio
+    async def test_get_anticipated_shows_url(self):
+        """get_anticipated with media_type='show' calls /shows/anticipated."""
+        mock_resp = _mock_response([{"list_count": 3, "show": {"ids": {"trakt": 2}}}])
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_resp
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        client = TraktClient(client_id="test-id")
+        with patch.object(client, "_client", return_value=mock_client):
+            await client.get_anticipated(limit=50, media_type="show")
+
+        call_args = mock_client.get.call_args
+        assert call_args[0][0] == "/shows/anticipated"
+
+
+class TestTraktClientPopularPage:
+    @pytest.mark.asyncio
+    async def test_get_popular_page_sends_page_param(self):
+        """get_popular_page includes page in params."""
+        mock_resp = _mock_response([{"ids": {"trakt": 1}, "title": "Film"}])
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_resp
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        client = TraktClient(client_id="test-id")
+        with patch.object(client, "_client", return_value=mock_client):
+            result = await client.get_popular_page(page=3, limit=100)
+
+        call_args = mock_client.get.call_args
+        assert call_args[0][0] == "/movies/popular"
+        assert call_args[1]["params"]["page"] == 3
+        assert call_args[1]["params"]["limit"] == 100
+
+    @pytest.mark.asyncio
+    async def test_get_popular_page_shows(self):
+        """get_popular_page with media_type='show' calls /shows/popular."""
+        mock_resp = _mock_response([])
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_resp
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        client = TraktClient(client_id="test-id")
+        with patch.object(client, "_client", return_value=mock_client):
+            await client.get_popular_page(page=2, media_type="show")
+
+        call_args = mock_client.get.call_args
+        assert call_args[0][0] == "/shows/popular"
+
+
 class TestTraktClientAuthHeader:
     def test_auth_header_present_when_token_provided(self):
         """Constructor should add Bearer token when access_token is provided."""

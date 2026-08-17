@@ -54,7 +54,7 @@ class User(Base):
     )
     trakt_username: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Stored encrypted at rest. Access via the trakt_access_token /
-    # trakt_refresh_token properties which transparently decrypt/encrypt.
+    # trakt_refresh_token descriptors which transparently decrypt/encrypt.
     trakt_access_token_enc: Mapped[Optional[str]] = mapped_column(
         "trakt_access_token", Text, nullable=True
     )
@@ -70,7 +70,7 @@ class User(Base):
     )
 
     # SIMKL provider fields — tokens stored encrypted at rest. Access via
-    # simkl_access_token / simkl_refresh_token properties (transparent decrypt/encrypt).
+    # simkl_access_token / simkl_refresh_token descriptors (transparent decrypt/encrypt).
     simkl_user_id: Mapped[Optional[str]] = mapped_column(
         Text, unique=True, nullable=True
     )
