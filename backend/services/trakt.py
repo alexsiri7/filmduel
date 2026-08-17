@@ -166,6 +166,32 @@ class TraktClient:
             resp.raise_for_status()
             return resp.json()
 
+    async def get_anticipated(
+        self, limit: int = 100, media_type: str = "movie"
+    ) -> list[dict]:
+        """Fetch anticipated movies/shows. Returns [{list_count, movie/show}, ...]."""
+        async with self._client() as client:
+            resp = await client.get(
+                f"/{media_type}s/anticipated",
+                params={"limit": limit, "extended": "full"},
+                timeout=15.0,
+            )
+            resp.raise_for_status()
+            return resp.json()
+
+    async def get_popular_page(
+        self, page: int = 1, limit: int = 100, media_type: str = "movie"
+    ) -> list[dict]:
+        """Fetch a specific page of popular movies/shows."""
+        async with self._client() as client:
+            resp = await client.get(
+                f"/{media_type}s/popular",
+                params={"page": page, "limit": limit, "extended": "full"},
+                timeout=15.0,
+            )
+            resp.raise_for_status()
+            return resp.json()
+
     async def add_to_watchlist(self, trakt_id: int, media_type: str = "movie") -> None:
         """Add a movie or show to the user's Trakt watchlist."""
         async with self._client() as client:
