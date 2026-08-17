@@ -36,6 +36,7 @@ jobs:
       - name: Deploy to staging
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_STAGING_TOKEN }}
+          STAGING_URL: ${{ secrets.STAGING_URL }}
         run: |
           # Railway CLI 5.8.0 blocks in non-TTY CI environments when --detach is omitted.
           # Verified: Railway CLI detects CI via RAILWAY_TOKEN env + no TTY and waits for
@@ -45,12 +46,21 @@ jobs:
           railway up \
             --service web \
             --environment staging
-          # no --detach: blocks until Railway build + container health pass
+          # railway up exits 0 even when healthcheck fails (Railway CLI 5.8.0 behaviour).
+          # Perform an immediate post-deploy sanity check to surface crash-loop failures
+          # earlier, before the 16-min "Wait for staging health" polling window starts.
           DEPLOY_EXIT=$?
           echo "railway up exited with code $DEPLOY_EXIT — deploy phase complete"
           if [ "$DEPLOY_EXIT" -ne 0 ]; then
             echo "ERROR: railway up failed with exit code $DEPLOY_EXIT"
             exit $DEPLOY_EXIT
+          fi
+          # Quick check: if service was already healthy before we deployed, but is now
+          # unhealthy after 30s, it's almost certainly a crash loop.
+          sleep 30
+          if ! curl -sf --max-time 10 "$STAGING_URL/health" | grep -q '"status":"ok"'; then
+            echo "WARNING: Service not healthy 30s post-deploy — likely crash-looping. Check Railway logs."
+            echo "Common causes: SECRET_KEY not set or is a placeholder; DATABASE_URL missing."
           fi
 
       - name: Wait for staging health
