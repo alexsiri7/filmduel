@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,7 +54,7 @@ def _user_movie_to_schema(um: UserMovie) -> MovieWithStateSchema:
 async def get_movie_pair(
     request: Request,
     mode: str = Query(default="discovery"),
-    last_pair_token: Optional[str] = Query(default=None),
+    last_pair_token: str | None = Query(default=None),
     media_type: MediaType = Query(default="movie"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
