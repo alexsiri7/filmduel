@@ -11,6 +11,25 @@ for _var in DATABASE_URL SECRET_KEY; do
 done
 unset _val _var
 
+# Validate SECRET_KEY strength before entering Python (fast-fail with actionable message).
+_sk_len="${#SECRET_KEY}"
+if [ "$_sk_len" -lt 32 ]; then
+    echo "ERROR: SECRET_KEY is too short ($_sk_len chars, minimum 32 required) — set a strong random secret in Railway > Variables tab"
+    exit 1
+fi
+unset _sk_len
+
+# Validate TOKEN_ENC_KEY is present when OAuth providers are configured.
+if [ -n "$TRAKT_CLIENT_ID" ] || [ -n "$SIMKL_CLIENT_ID" ]; then
+    if [ -z "$TOKEN_ENC_KEY" ]; then
+        echo "ERROR: TOKEN_ENC_KEY must be set when TRAKT_CLIENT_ID or SIMKL_CLIENT_ID is configured — set a 32+ char random secret in Railway > Variables tab"
+        exit 1
+    fi
+fi
+
+# Emit key lengths to aid log-based diagnosis (values never printed).
+echo "Env check: DATABASE_URL=${#DATABASE_URL}chars SECRET_KEY=${#SECRET_KEY}chars TOKEN_ENC_KEY=${#TOKEN_ENC_KEY}chars"
+
 # Verify Python can import the app before backgrounding uvicorn.
 # A failed import (missing wheel, wrong ABI, bad env var) would otherwise
 # silently crash the background process and leave health checks failing.
