@@ -99,8 +99,6 @@ async def _load_tournament(
     tournament = result.unique().scalars().first()
     if not tournament:
         raise HTTPException(status_code=404, detail="Tournament not found")
-    if tournament.user_id != user_id:
-        raise HTTPException(status_code=404, detail="Tournament not found")
     return tournament
 
 
