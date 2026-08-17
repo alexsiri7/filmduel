@@ -97,7 +97,7 @@ async def _load_tournament(
     )
     result = await db.execute(stmt)
     tournament = result.unique().scalars().first()
-    if not tournament:
+    if not tournament or tournament.user_id != user_id:
         raise HTTPException(status_code=404, detail="Tournament not found")
     return tournament
 
