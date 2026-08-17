@@ -1,10 +1,13 @@
 """Application configuration via environment variables."""
 
+import logging
 from typing import Annotated
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, EnvSettingsSource
 from functools import lru_cache
+
+logger = logging.getLogger(__name__)
 
 
 class _TolerantEnvSource(EnvSettingsSource):
@@ -25,6 +28,11 @@ class _TolerantEnvSource(EnvSettingsSource):
         try:
             return super().decode_complex_value(field_name, field_info, value)
         except ValueError:
+            logger.debug(
+                "JSON decode failed for %s; falling back to raw string %r",
+                field_name,
+                value,
+            )
             return value  # raw string; field validator handles it
 
 
@@ -170,6 +178,10 @@ class Settings(BaseSettings):
         dotenv_settings: object,
         **kwargs: object,
     ) -> tuple[object, ...]:
+        # Replace the default env source with _TolerantEnvSource so that
+        # plain-URL values (e.g. CORS_ORIGINS=https://foo.com) are accepted
+        # for list fields without requiring JSON array syntax.
+        # env_settings is intentionally omitted — _TolerantEnvSource replaces it.
         # pydantic-settings renamed secrets_settings → file_secret_settings in ≥2.4;
         # accept either via **kwargs for forward/backward compatibility.
         file_secret_settings = kwargs.get("file_secret_settings") or kwargs.get(

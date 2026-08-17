@@ -136,6 +136,30 @@ class TestTournamentOwnership:
         assert resp.status_code == 404
         assert "not found" in resp.json()["detail"].lower()
 
+    def test_load_tournament_returns_404_when_db_returns_none(self):
+        """_load_tournament raises 404 when DB returns None (SQL ownership filter).
+
+        Post-refactor, ownership is enforced at the SQL WHERE level so the DB
+        returns None for cross-user access rather than a wrong-user tournament.
+        """
+        user = _make_user()
+        tournament_id = uuid.uuid4()
+        mock_db = AsyncMock()
+
+        mock_result = MagicMock()
+        # DB returns None — tournament doesn't exist or belongs to another user (filtered by SQL)
+        mock_result.unique.return_value.scalars.return_value.first.return_value = None
+        mock_db.execute.return_value = mock_result
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.get(f"/api/tournaments/{tournament_id}")
+
+        assert resp.status_code == 404
+        assert "not found" in resp.json()["detail"].lower()
+
     def test_get_tournament_returns_bracket_data(self):
         """GET /api/tournaments/{id} returns matches array in response."""
         user = _make_user()

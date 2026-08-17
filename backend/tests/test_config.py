@@ -126,6 +126,42 @@ class TestCorsOriginsValidation:
         s = Settings()
         assert s.CORS_ORIGINS == ["https://example.com", "https://other.com"]
 
+    def test_comma_separated_env_var_accepted(self, monkeypatch):
+        """Comma-separated URLs in CORS_ORIGINS env var must be accepted.
+
+        Verifies that _TolerantEnvSource falls back to raw string for multi-URL
+        values so the mode='before' validator can split them by comma.
+        """
+        monkeypatch.setenv("CORS_ORIGINS", "https://example.com,https://other.com")
+        monkeypatch.setenv("SECRET_KEY", "test-secret-key-for-unit-tests!!")
+        monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://localhost/test")
+        monkeypatch.setenv("TRAKT_CLIENT_ID", "")
+        s = Settings()
+        assert s.CORS_ORIGINS == ["https://example.com", "https://other.com"]
+
+
+class TestSettingsCustomiseSources:
+    def test_tolerant_env_source_is_used(self):
+        """settings_customise_sources must swap in _TolerantEnvSource."""
+        from backend.config import _TolerantEnvSource, Settings
+
+        sentinel = object()
+        sources = Settings.settings_customise_sources(
+            Settings,
+            init_settings=sentinel,
+            env_settings=sentinel,
+            dotenv_settings=sentinel,
+            secrets_settings=sentinel,
+        )
+        source_types = [type(s) for s in sources]
+        assert _TolerantEnvSource in source_types, (
+            "_TolerantEnvSource must be present in settings sources"
+        )
+        # env_settings (the default) must NOT be in position 1 — it is replaced
+        assert sources[1] is not sentinel, (
+            "Default env_settings must be replaced by _TolerantEnvSource"
+        )
+
 
 class TestRetentionDefaults:
     def test_duel_retention_days_default(self):
