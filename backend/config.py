@@ -4,7 +4,6 @@ from typing import Annotated
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, EnvSettingsSource
-from pydantic_settings.exceptions import SettingsError
 from functools import lru_cache
 
 
@@ -25,7 +24,7 @@ class _TolerantEnvSource(EnvSettingsSource):
     ) -> object:
         try:
             return super().decode_complex_value(field_name, field_info, value)
-        except SettingsError:
+        except ValueError:
             return value  # raw string; field validator handles it
 
 

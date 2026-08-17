@@ -108,6 +108,15 @@ class TestCorsOriginsValidation:
         s = Settings()
         assert s.CORS_ORIGINS == ["https://example.com"]
 
+    def test_comma_separated_plain_urls_env_var_accepted(self, monkeypatch):
+        """Comma-separated plain URLs (not JSON) in CORS_ORIGINS env var must be accepted."""
+        monkeypatch.setenv("CORS_ORIGINS", "https://example.com,https://other.com")
+        monkeypatch.setenv("SECRET_KEY", "test-secret-key-for-unit-tests!!")
+        monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://localhost/test")
+        monkeypatch.setenv("TRAKT_CLIENT_ID", "")
+        s = Settings()
+        assert s.CORS_ORIGINS == ["https://example.com", "https://other.com"]
+
     def test_json_array_env_var_accepted(self, monkeypatch):
         """A JSON-array CORS_ORIGINS env var is also accepted."""
         monkeypatch.setenv("CORS_ORIGINS", '["https://example.com","https://other.com"]')
