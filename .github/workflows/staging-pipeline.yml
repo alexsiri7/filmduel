@@ -38,31 +38,19 @@ jobs:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_STAGING_TOKEN }}
           STAGING_URL: ${{ secrets.STAGING_URL }}
         run: |
-          # Railway CLI 5.8.0 blocks in non-TTY CI environments when --detach is omitted.
-          # Verified: Railway CLI detects CI via RAILWAY_TOKEN env + no TTY and waits for
-          # healthcheckTimeout (900s) before exiting. See railway.toml for healthcheckTimeout.
-          # If this assumption breaks (railway up exits 0 immediately), the post-deploy health
-          # check below will catch it — 10×15s = 150s is insufficient for a cold Docker build.
+          # --detach added 2026-08-29: Railway CLI 5.8.0 log-streaming fails in CI (~66s timeout)
+          # for this service, causing false negatives. --detach exits 0 immediately after upload;
+          # the "Wait for staging health" step (60s + 30×30s = ~16 min) verifies actual success.
+          # See issue #476 for full root cause analysis.
           railway up \
             --service web \
             --environment staging \
+            --detach \
           || { echo "ERROR: railway up failed — see Railway logs for details"; exit 1; }
-          # railway up exits 0 even when Railway healthcheck fails (CLI 5.8.0 behaviour).
-          # Perform an immediate post-deploy sanity check to surface crash-loop failures
-          # earlier, before the 16-min "Wait for staging health" polling window starts.
+          # With --detach, railway up returns immediately after upload (before build starts).
+          # Health verification is handled by the "Wait for staging health" step below
+          # (60s pre-wait + 30×30s polling = ~16 min), which is the authoritative gate.
           echo "railway up complete — deploy phase done"
-          # Quick check: if service is unhealthy 30s after deploy, it's almost certainly a crash loop.
-          sleep 30
-          if [ -z "$STAGING_URL" ]; then
-            echo "SKIP: STAGING_URL secret not set — post-deploy health check skipped."
-          else
-            CURL_EXIT=0
-            HEALTH_BODY=$(curl -sf --max-time 10 "$STAGING_URL/health" 2>&1) || CURL_EXIT=$?
-            if [ $CURL_EXIT -ne 0 ] || ! echo "$HEALTH_BODY" | grep -q '"status":"ok"'; then
-              echo "WARNING: Service not healthy 30s post-deploy — likely crash-looping. Check Railway logs. (curl exit: $CURL_EXIT)"
-              echo "Common causes: SECRET_KEY not set or is a placeholder; DATABASE_URL missing."
-            fi
-          fi
 
       - name: Wait for staging health
         env:
