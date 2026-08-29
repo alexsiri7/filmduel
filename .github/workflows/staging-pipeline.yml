@@ -47,22 +47,10 @@ jobs:
             --environment staging \
             --detach \
           || { echo "ERROR: railway up failed — see Railway logs for details"; exit 1; }
-          # railway up exits 0 even when Railway healthcheck fails (CLI 5.8.0 behaviour).
-          # Perform an immediate post-deploy sanity check to surface crash-loop failures
-          # earlier, before the 16-min "Wait for staging health" polling window starts.
+          # With --detach, railway up returns immediately after upload (before build starts).
+          # Health verification is handled by the "Wait for staging health" step below
+          # (60s pre-wait + 30×30s polling = ~16 min), which is the authoritative gate.
           echo "railway up complete — deploy phase done"
-          # Quick check: if service is unhealthy 30s after deploy, it's almost certainly a crash loop.
-          sleep 30
-          if [ -z "$STAGING_URL" ]; then
-            echo "SKIP: STAGING_URL secret not set — post-deploy health check skipped."
-          else
-            CURL_EXIT=0
-            HEALTH_BODY=$(curl -sf --max-time 10 "$STAGING_URL/health" 2>&1) || CURL_EXIT=$?
-            if [ $CURL_EXIT -ne 0 ] || ! echo "$HEALTH_BODY" | grep -q '"status":"ok"'; then
-              echo "WARNING: Service not healthy 30s post-deploy — likely crash-looping. Check Railway logs. (curl exit: $CURL_EXIT)"
-              echo "Common causes: SECRET_KEY not set or is a placeholder; DATABASE_URL missing."
-            fi
-          fi
 
       - name: Wait for staging health
         env:
