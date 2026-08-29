@@ -22,13 +22,26 @@ logger = logging.getLogger(__name__)
 SYNC_COOLDOWN = timedelta(hours=1)
 
 
-def build_movie_upsert(movie_data: dict, now: datetime, media_type: str = "movie"):
-    """Build a PostgreSQL INSERT...ON CONFLICT upsert for a Trakt movie dict."""
+def build_movie_upsert(
+    movie_data: dict, now: datetime, media_type: str = "movie", *, simkl_id: int | None = None
+):
+    """Build a PostgreSQL INSERT...ON CONFLICT upsert for a movie dict.
+
+    When *simkl_id* is provided the SIMKL ID is stored in both the trakt_id
+    column (for compatibility) and the dedicated simkl_id column, and
+    community_rating is left as None (SIMKL does not provide it).
+    """
     ids = movie_data.get("ids", {})
-    trakt_rating = movie_data.get("rating", 0)
-    community_rating = round(trakt_rating * 10, 1) if trakt_rating else None
+    if simkl_id is not None:
+        trakt_id = simkl_id
+        community_rating = None
+    else:
+        trakt_id = ids["trakt"]
+        trakt_rating = movie_data.get("rating", 0)
+        community_rating = round(trakt_rating * 10, 1) if trakt_rating else None
     values = dict(
-        trakt_id=ids["trakt"],
+        trakt_id=trakt_id,
+        simkl_id=simkl_id,
         media_type=media_type,
         imdb_id=ids.get("imdb"),
         tmdb_id=ids.get("tmdb"),
@@ -54,44 +67,43 @@ def build_movie_upsert(movie_data: dict, now: datetime, media_type: str = "movie
     return stmt
 
 
-def build_simkl_movie_upsert(
-    movie_data: dict, now: datetime, media_type: str = "movie"
-):
-    """Build a PostgreSQL INSERT...ON CONFLICT upsert for a SIMKL movie dict.
-
-    Stores the SIMKL ID in both the trakt_id column (for compatibility) and
-    the dedicated simkl_id column. Callers are responsible for imdb_id
-    cross-reference deduplication before calling this.
-    """
-    ids = movie_data.get("ids", {})
-    # SIMKL uses its own numeric ID; store in trakt_id column for now
-    simkl_id = ids.get("simkl", 0)
-    values = dict(
-        trakt_id=simkl_id,
-        simkl_id=simkl_id,
-        media_type=media_type,
-        imdb_id=ids.get("imdb"),
-        tmdb_id=ids.get("tmdb"),
-        title=movie_data.get("title", "Unknown"),
-        year=movie_data.get("year"),
-        genres=movie_data.get("genres"),
-        overview=movie_data.get("overview"),
-        runtime=movie_data.get("runtime"),
-        community_rating=None,
-        cached_at=now,
-    )
-    update_set = {
-        k: v for k, v in values.items() if k not in ("trakt_id", "media_type")
-    }
+async def _upsert_user_movie(
+    db: AsyncSession,
+    user_id,
+    movie_id,
+    seen: bool | None,
+    rating: int | None,
+    now: datetime,
+) -> None:
+    """Insert or update a user_movies row, preserving existing non-null values on conflict."""
+    seeded_elo = trakt_rating_to_seeded_elo(rating) if rating is not None else None
     stmt = (
-        insert(Movie.__table__)
-        .values(**values)
+        insert(UserMovie.__table__)
+        .values(
+            user_id=user_id,
+            movie_id=movie_id,
+            seen=seen,
+            elo=None,
+            seeded_elo=seeded_elo,
+            battles=0,
+            trakt_rating=rating,
+            updated_at=now,
+        )
         .on_conflict_do_update(
-            index_elements=["trakt_id", "media_type"],
-            set_=update_set,
+            index_elements=["user_id", "movie_id"],
+            set_={
+                "seen": seen if seen is True else UserMovie.__table__.c.seen,
+                "seeded_elo": seeded_elo
+                if seeded_elo is not None
+                else UserMovie.__table__.c.seeded_elo,
+                "trakt_rating": rating
+                if rating is not None
+                else UserMovie.__table__.c.trakt_rating,
+                "updated_at": now,
+            },
         )
     )
-    return stmt
+    await db.execute(stmt)
 
 
 async def _safe_fetch(coro_func, *args, **kwargs) -> list:
@@ -273,35 +285,7 @@ async def _upsert_pool(
 
         seen = True if trakt_id in seen_trakt_ids else None
         rating = ratings_by_trakt_id.get(trakt_id)
-        seeded_elo = trakt_rating_to_seeded_elo(rating) if rating is not None else None
-
-        stmt = (
-            insert(UserMovie.__table__)
-            .values(
-                user_id=user.id,
-                movie_id=movie_uuid,
-                seen=seen,
-                elo=None,
-                seeded_elo=seeded_elo,
-                battles=0,
-                trakt_rating=rating,
-                updated_at=now,
-            )
-            .on_conflict_do_update(
-                index_elements=["user_id", "movie_id"],
-                set_={
-                    "seen": seen if seen is True else UserMovie.__table__.c.seen,
-                    "seeded_elo": seeded_elo
-                    if seeded_elo is not None
-                    else UserMovie.__table__.c.seeded_elo,
-                    "trakt_rating": rating
-                    if rating is not None
-                    else UserMovie.__table__.c.trakt_rating,
-                    "updated_at": now,
-                },
-            )
-        )
-        await db.execute(stmt)
+        await _upsert_user_movie(db, user.id, movie_uuid, seen, rating, now)
 
     await db.flush()
 
@@ -359,7 +343,7 @@ async def _upsert_simkl_pool(
             continue
 
         # New movie — insert using SIMKL ID in trakt_id column
-        stmt = build_simkl_movie_upsert(item_data, now, media_type)
+        stmt = build_movie_upsert(item_data, now, media_type, simkl_id=simkl_id)
         await db.execute(stmt)
 
     await db.flush()
@@ -384,35 +368,7 @@ async def _upsert_simkl_pool(
 
         seen = True if simkl_id in seen_ids else None
         rating = ratings_by_id.get(simkl_id)
-        seeded_elo = trakt_rating_to_seeded_elo(rating) if rating is not None else None
-
-        stmt = (
-            insert(UserMovie.__table__)
-            .values(
-                user_id=user.id,
-                movie_id=movie_uuid,
-                seen=seen,
-                elo=None,
-                seeded_elo=seeded_elo,
-                battles=0,
-                trakt_rating=rating,  # column reused for provider-agnostic rating (rename deferred)
-                updated_at=now,
-            )
-            .on_conflict_do_update(
-                index_elements=["user_id", "movie_id"],
-                set_={
-                    "seen": seen if seen is True else UserMovie.__table__.c.seen,
-                    "seeded_elo": seeded_elo
-                    if seeded_elo is not None
-                    else UserMovie.__table__.c.seeded_elo,
-                    "trakt_rating": rating
-                    if rating is not None
-                    else UserMovie.__table__.c.trakt_rating,
-                    "updated_at": now,
-                },
-            )
-        )
-        await db.execute(stmt)
+        await _upsert_user_movie(db, user.id, movie_uuid, seen, rating, now)
 
     await db.flush()
 

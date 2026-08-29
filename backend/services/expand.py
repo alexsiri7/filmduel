@@ -7,7 +7,6 @@ import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
-import httpx
 import sentry_sdk
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
@@ -18,6 +17,7 @@ from backend.db import async_session_factory
 from backend.db_models import Movie, PoolExpansion, User, UserMovie
 from backend.services.pool import build_movie_upsert
 from backend.services.tmdb import backfill_posters, fetch_similar_films
+from backend.services.trakt import TraktClient
 from backend.services.trakt import TraktClient
 
 logger = logging.getLogger(__name__)
@@ -441,26 +441,9 @@ async def _upsert_film_from_tmdb(
 
 async def _lookup_trakt_id(tmdb_id: int, settings) -> int | None:
     """Look up a Trakt movie ID from a TMDB ID using the Trakt search API."""
+    client = TraktClient(client_id=settings.TRAKT_CLIENT_ID)
     try:
-        async with httpx.AsyncClient(
-            base_url="https://api.trakt.tv",
-            headers={
-                "Content-Type": "application/json",
-                "trakt-api-version": "2",
-                "trakt-api-key": settings.TRAKT_CLIENT_ID,
-            },
-        ) as client:
-            resp = await client.get(
-                f"/search/tmdb/{tmdb_id}",
-                params={"type": "movie"},
-                timeout=10.0,
-            )
-            if resp.status_code != 200:
-                return None
-            data = resp.json()
-            if data:
-                movie = data[0].get("movie", {})
-                return movie.get("ids", {}).get("trakt")
+        return await client.search_by_tmdb_id(tmdb_id)
     except Exception:
         logger.warning("Trakt search failed for tmdb_id=%d", tmdb_id)
-    return None
+        return None
