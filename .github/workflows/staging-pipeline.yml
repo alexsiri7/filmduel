@@ -38,14 +38,14 @@ jobs:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_STAGING_TOKEN }}
           STAGING_URL: ${{ secrets.STAGING_URL }}
         run: |
-          # Railway CLI 5.8.0 blocks in non-TTY CI environments when --detach is omitted.
-          # Verified: Railway CLI detects CI via RAILWAY_TOKEN env + no TTY and waits for
-          # healthcheckTimeout (900s) before exiting. See railway.toml for healthcheckTimeout.
-          # If this assumption breaks (railway up exits 0 immediately), the post-deploy health
-          # check below will catch it — 10×15s = 150s is insufficient for a cold Docker build.
+          # --detach added 2026-08-29: Railway CLI 5.8.0 log-streaming fails in CI (~66s timeout)
+          # for this service, causing false negatives. --detach exits 0 immediately after upload;
+          # the "Wait for staging health" step (60s + 30×30s = ~16 min) verifies actual success.
+          # See issue #476 for full root cause analysis.
           railway up \
             --service web \
             --environment staging \
+            --detach \
           || { echo "ERROR: railway up failed — see Railway logs for details"; exit 1; }
           # railway up exits 0 even when Railway healthcheck fails (CLI 5.8.0 behaviour).
           # Perform an immediate post-deploy sanity check to surface crash-loop failures
