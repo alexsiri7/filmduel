@@ -201,6 +201,21 @@ class TraktClient:
             )
             resp.raise_for_status()
 
+    async def search_by_tmdb_id(self, tmdb_id: int) -> int | None:
+        """Look up a Trakt movie ID from a TMDB ID using the Trakt search API."""
+        async with self._client() as client:
+            resp = await client.get(
+                f"/search/tmdb/{tmdb_id}",
+                params={"type": "movie"},
+                timeout=10.0,
+            )
+            if resp.status_code != 200:
+                return None
+            data = resp.json()
+            if data:
+                return data[0].get("movie", {}).get("ids", {}).get("trakt")
+            return None
+
     async def revoke_token(self, token: str, *, client_secret: str) -> None:
         """Revoke a Trakt OAuth token. Best-effort — does not raise on failure."""
         try:

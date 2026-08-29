@@ -8,8 +8,9 @@ import hmac
 import logging
 import secrets
 import uuid
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
-from typing import NoReturn
+from typing import NamedTuple, NoReturn
 from urllib.parse import urlencode
 
 import httpx
@@ -327,6 +328,174 @@ async def login(request: Request, settings: Settings = Depends(get_settings)):
     return response
 
 
+class _OAuthProvider(NamedTuple):
+    """Provider-specific config for the shared OAuth callback helper."""
+    name: str
+    state_cookie: str
+    pkce_cookie: str
+    default_ttl: int
+    make_client: Callable[..., TraktClient | SimklClient]
+    exchange_kwargs: Callable[[Settings], dict]
+    extract_user_info: Callable[[dict, dict], tuple[str, str]]
+    user_id_column: str  # User model attribute to look up by (e.g. "trakt_user_id")
+    user_fields: Callable[[str, str, str, str, datetime], dict]
+
+
+def _trakt_extract(tokens: dict, profile: dict) -> tuple[str, str]:
+    return str(profile["ids"]["slug"]), profile["username"]
+
+
+def _simkl_extract(tokens: dict, profile: dict) -> tuple[str, str]:
+    try:
+        user_id = str(profile["user"]["ids"]["simkl"])
+        username = profile["user"].get("name", user_id)
+    except (KeyError, TypeError) as exc:
+        logger.error(
+            "Unexpected SIMKL profile response (type=%s, keys=%s)",
+            type(profile).__name__,
+            list(profile.keys()) if isinstance(profile, dict) else "N/A",
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="Unexpected response from SIMKL profile API",
+        ) from exc
+    return user_id, username
+
+
+def _make_trakt_client(settings: Settings, **kw) -> TraktClient:
+    return TraktClient(client_id=settings.TRAKT_CLIENT_ID, **kw)
+
+
+def _make_simkl_client(settings: Settings, **kw) -> SimklClient:
+    return SimklClient(client_id=settings.SIMKL_CLIENT_ID, **kw)
+
+
+_TRAKT_PROVIDER = _OAuthProvider(
+    name="Trakt",
+    state_cookie=OAUTH_STATE_COOKIE,
+    pkce_cookie=OAUTH_PKCE_COOKIE,
+    default_ttl=_TRAKT_TOKEN_DEFAULT_TTL_SECONDS,
+    make_client=_make_trakt_client,
+    exchange_kwargs=lambda s: {
+        "client_secret": s.TRAKT_CLIENT_SECRET,
+        "redirect_uri": s.TRAKT_REDIRECT_URI,
+    },
+    extract_user_info=_trakt_extract,
+    user_id_column="trakt_user_id",
+    user_fields=lambda uid, uname, access, refresh, exp: {
+        "trakt_user_id": uid,
+        "trakt_username": uname,
+        "trakt_access_token": access,
+        "trakt_refresh_token": refresh,
+        "trakt_token_expires_at": exp,
+    },
+)
+
+_SIMKL_PROVIDER = _OAuthProvider(
+    name="SIMKL",
+    state_cookie=OAUTH_SIMKL_STATE_COOKIE,
+    pkce_cookie=OAUTH_SIMKL_PKCE_COOKIE,
+    default_ttl=_SIMKL_TOKEN_DEFAULT_TTL_SECONDS,
+    make_client=_make_simkl_client,
+    exchange_kwargs=lambda s: {
+        "client_secret": s.SIMKL_CLIENT_SECRET,
+        "redirect_uri": s.SIMKL_REDIRECT_URI,
+    },
+    extract_user_info=_simkl_extract,
+    user_id_column="simkl_user_id",
+    user_fields=lambda uid, uname, access, refresh, exp: {
+        "simkl_user_id": uid,
+        "simkl_username": uname,
+        "simkl_access_token": access,
+        "simkl_refresh_token": refresh,
+        "simkl_token_expires_at": exp,
+    },
+)
+
+
+async def _handle_oauth_callback(
+    provider: _OAuthProvider,
+    code: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    state: str | None,
+    settings: Settings,
+    db: AsyncSession,
+) -> Response:
+    """Shared OAuth callback logic for Trakt and SIMKL."""
+    # Validate state
+    expected_state = request.cookies.get(provider.state_cookie)
+    if not expected_state or not state or not hmac.compare_digest(state, expected_state):
+        raise HTTPException(status_code=400, detail="Invalid OAuth state")
+
+    code_verifier = request.cookies.get(provider.pkce_cookie)
+    if not code_verifier:
+        raise HTTPException(status_code=400, detail="Missing PKCE verifier")
+
+    # Exchange code for tokens
+    client = provider.make_client(settings)
+    try:
+        tokens = await client.exchange_code(
+            code, code_verifier=code_verifier, **provider.exchange_kwargs(settings)
+        )
+    except httpx.HTTPStatusError as exc:
+        logger.error(
+            "%s token exchange failed (status=%s); possible PKCE rejection",
+            provider.name,
+            exc.response.status_code,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail=f"Token exchange with {provider.name} failed",
+        ) from exc
+
+    # Fetch profile
+    access_token = tokens["access_token"]
+    refresh_token = tokens.get("refresh_token", "")
+    authed_client = provider.make_client(settings, access_token=access_token)
+    profile = await authed_client.get_profile()
+
+    # Extract provider-specific user info
+    provider_user_id, username = provider.extract_user_info(tokens, profile)
+
+    ttl = tokens.get("expires_in")
+    if ttl is None:
+        logger.warning(
+            "%s exchange_code response missing expires_in; using default TTL",
+            provider.name,
+        )
+        ttl = provider.default_ttl
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl)
+
+    # Upsert user
+    column = getattr(User, provider.user_id_column)
+    stmt = select(User).where(column == provider_user_id)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+
+    fields = provider.user_fields(
+        provider_user_id, username, access_token, refresh_token, expires_at
+    )
+    if user:
+        for k, v in fields.items():
+            if k != provider.user_id_column:
+                setattr(user, k, v)
+    else:
+        user = User(**fields)
+        db.add(user)
+
+    await db.flush()
+
+    background_tasks.add_task(sync_pool_background, user.id, force=True)
+    background_tasks.add_task(backfill_posters_background)
+
+    response = RedirectResponse(url=settings.BASE_URL)
+    set_session_cookie(response, str(user.id), settings)
+    response.delete_cookie(provider.state_cookie)
+    response.delete_cookie(provider.pkce_cookie)
+    return response
+
+
 @router.get("/auth/callback")
 @limiter.limit("10/minute")
 async def callback(
@@ -338,82 +507,9 @@ async def callback(
     db: AsyncSession = Depends(get_db),
 ):
     """Handle the OAuth callback from Trakt."""
-    # Validate OAuth state parameter to prevent CSRF
-    expected_state = request.cookies.get(OAUTH_STATE_COOKIE)
-    if not expected_state or not state or not hmac.compare_digest(state, expected_state):
-        raise HTTPException(status_code=400, detail="Invalid OAuth state")
-    code_verifier = request.cookies.get(OAUTH_PKCE_COOKIE)
-    if not code_verifier:
-        raise HTTPException(status_code=400, detail="Missing PKCE verifier")
-    client = TraktClient(client_id=settings.TRAKT_CLIENT_ID)
-    try:
-        tokens = await client.exchange_code(
-            code,
-            client_secret=settings.TRAKT_CLIENT_SECRET,
-            redirect_uri=settings.TRAKT_REDIRECT_URI,
-            code_verifier=code_verifier,
-        )
-    except httpx.HTTPStatusError as exc:
-        logger.error(
-            "Trakt token exchange failed (status=%s); possible PKCE rejection",
-            exc.response.status_code,
-        )
-        raise HTTPException(
-            status_code=502,
-            detail="Token exchange with Trakt failed",
-        ) from exc
-
-    # Fetch user profile
-    authed_client = TraktClient(
-        client_id=settings.TRAKT_CLIENT_ID,
-        access_token=tokens["access_token"],
+    return await _handle_oauth_callback(
+        _TRAKT_PROVIDER, code, request, background_tasks, state, settings, db
     )
-    profile = await authed_client.get_profile()
-
-    trakt_user_id = str(profile["ids"]["slug"])
-    ttl = tokens.get("expires_in")
-    if ttl is None:
-        logger.warning(
-            "Trakt exchange_code response missing expires_in; using default TTL"
-        )
-        ttl = _TRAKT_TOKEN_DEFAULT_TTL_SECONDS
-    expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl)
-
-    # Check if user exists
-    stmt = select(User).where(User.trakt_user_id == trakt_user_id)
-    result = await db.execute(stmt)
-    user = result.scalar_one_or_none()
-
-    if user:
-        user.trakt_username = profile["username"]
-        user.trakt_access_token = tokens["access_token"]
-        user.trakt_refresh_token = tokens.get("refresh_token", "")
-        user.trakt_token_expires_at = expires_at
-        # Note: last_seen_at is updated by populate_movie_pool after sync
-    else:
-        user = User(
-            trakt_user_id=trakt_user_id,
-            trakt_username=profile["username"],
-            trakt_access_token=tokens["access_token"],
-            trakt_refresh_token=tokens.get("refresh_token", ""),
-            trakt_token_expires_at=expires_at,
-        )
-        db.add(user)
-
-    await db.flush()
-
-    # Kick off movie pool import in the background (uses its own DB session)
-    user_id = user.id
-    background_tasks.add_task(sync_pool_background, user_id, force=True)
-
-    # Backfill missing poster URLs in the background
-    background_tasks.add_task(backfill_posters_background)
-
-    response = RedirectResponse(url=settings.BASE_URL)
-    set_session_cookie(response, str(user.id), settings)
-    response.delete_cookie(OAUTH_STATE_COOKIE)
-    response.delete_cookie(OAUTH_PKCE_COOKIE)
-    return response
 
 
 @router.get("/auth/simkl/login")
@@ -455,86 +551,9 @@ async def simkl_callback(
     db: AsyncSession = Depends(get_db),
 ):
     """Handle the OAuth callback from SIMKL."""
-    expected_state = request.cookies.get(OAUTH_SIMKL_STATE_COOKIE)
-    if not expected_state or not state or not hmac.compare_digest(state, expected_state):
-        raise HTTPException(status_code=400, detail="Invalid OAuth state")
-
-    code_verifier = request.cookies.get(OAUTH_SIMKL_PKCE_COOKIE)
-    if not code_verifier:
-        raise HTTPException(status_code=400, detail="Missing PKCE verifier")
-    client = SimklClient(client_id=settings.SIMKL_CLIENT_ID)
-    try:
-        tokens = await client.exchange_code(
-            code,
-            client_secret=settings.SIMKL_CLIENT_SECRET,
-            redirect_uri=settings.SIMKL_REDIRECT_URI,
-            code_verifier=code_verifier,
-        )
-    except httpx.HTTPStatusError as exc:
-        logger.error(
-            "SIMKL token exchange failed (status=%s); possible PKCE rejection",
-            exc.response.status_code,
-        )
-        raise HTTPException(
-            status_code=502,
-            detail="Token exchange with SIMKL failed",
-        ) from exc
-
-    access_token = tokens["access_token"]
-    refresh_token = tokens.get("refresh_token", "")
-
-    authed_client = SimklClient(
-        client_id=settings.SIMKL_CLIENT_ID,
-        access_token=access_token,
+    return await _handle_oauth_callback(
+        _SIMKL_PROVIDER, code, request, background_tasks, state, settings, db
     )
-    profile = await authed_client.get_profile()
-
-    try:
-        simkl_user_id = str(profile["user"]["ids"]["simkl"])
-        simkl_username = profile["user"].get("name", simkl_user_id)
-    except (KeyError, TypeError) as exc:
-        logger.error(
-            "Unexpected SIMKL profile response (type=%s, keys=%s)",
-            type(profile).__name__,
-            list(profile.keys()) if isinstance(profile, dict) else "N/A",
-        )
-        raise HTTPException(
-            status_code=502,
-            detail="Unexpected response from SIMKL profile API",
-        ) from exc
-    ttl = tokens.get("expires_in", _SIMKL_TOKEN_DEFAULT_TTL_SECONDS)
-    expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl)
-
-    stmt = select(User).where(User.simkl_user_id == simkl_user_id)
-    result = await db.execute(stmt)
-    user = result.scalar_one_or_none()
-
-    if user:
-        user.simkl_username = simkl_username
-        user.simkl_access_token = access_token
-        user.simkl_refresh_token = refresh_token
-        user.simkl_token_expires_at = expires_at
-    else:
-        user = User(
-            simkl_user_id=simkl_user_id,
-            simkl_username=simkl_username,
-            simkl_access_token=access_token,
-            simkl_refresh_token=refresh_token,
-            simkl_token_expires_at=expires_at,
-        )
-        db.add(user)
-
-    await db.flush()
-
-    user_id = user.id
-    background_tasks.add_task(sync_pool_background, user_id, force=True)
-    background_tasks.add_task(backfill_posters_background)
-
-    response = RedirectResponse(url=settings.BASE_URL)
-    set_session_cookie(response, str(user.id), settings)
-    response.delete_cookie(OAUTH_SIMKL_STATE_COOKIE)
-    response.delete_cookie(OAUTH_SIMKL_PKCE_COOKIE)
-    return response
 
 
 @router.post("/auth/logout")
