@@ -1,6 +1,59 @@
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
-from backend.services.curator import elo_tier, sanitize_llm_input
+from backend.services.curator import CurationError, curate_tournament, elo_tier, sanitize_llm_input
+
+
+# Minimal candidate list for bracket-size validation tests
+_CANDIDATES = [
+    {"id": str(i), "title": f"Film {i}", "year": 2020, "genres": ["Drama"], "elo": 1000, "battles": 5}
+    for i in range(1, 20)
+]
+
+
+def _llm_response(film_ids: list[str]) -> dict:
+    return {
+        "name": "Test Bracket",
+        "tagline": "A test",
+        "theme_description": "Testing bracket size validation",
+        "film_ids": film_ids,
+    }
+
+
+class TestCurateTournamentBracketSize:
+    """Tests for bracket-size validation in curate_tournament."""
+
+    @pytest.mark.asyncio
+    async def test_exact_count_passes_through(self):
+        response = _llm_response(["1", "2", "3", "4", "5", "6", "7", "8"])
+        with (
+            patch("backend.services.curator.chat_completion", new_callable=AsyncMock, return_value="{}"),
+            patch("backend.services.curator.parse_json_response", return_value=response),
+        ):
+            result = await curate_tournament(candidates=_CANDIDATES, bracket_size=8)
+        assert result["film_ids"] == ["1", "2", "3", "4", "5", "6", "7", "8"]
+
+    @pytest.mark.asyncio
+    async def test_trims_excess_films(self):
+        response = _llm_response(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"])
+        with (
+            patch("backend.services.curator.chat_completion", new_callable=AsyncMock, return_value="{}"),
+            patch("backend.services.curator.parse_json_response", return_value=response),
+        ):
+            result = await curate_tournament(candidates=_CANDIDATES, bracket_size=8)
+        assert len(result["film_ids"]) == 8
+        assert result["film_ids"] == ["1", "2", "3", "4", "5", "6", "7", "8"]
+
+    @pytest.mark.asyncio
+    async def test_raises_on_too_few_films(self):
+        response = _llm_response(["1", "2", "3"])
+        with (
+            patch("backend.services.curator.chat_completion", new_callable=AsyncMock, return_value="{}"),
+            patch("backend.services.curator.parse_json_response", return_value=response),
+        ):
+            with pytest.raises(CurationError, match="3 films but bracket needs 8"):
+                await curate_tournament(candidates=_CANDIDATES, bracket_size=8)
 
 
 class TestEloTier:
