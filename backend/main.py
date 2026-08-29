@@ -120,19 +120,19 @@ def _scrub_validation_errors(errors: list[dict]) -> list[dict]:
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    if any(SELF_DUEL_ERROR_MSG in e.get("msg", "") for e in exc.errors()):
+    errors = exc.errors()
+    if any(SELF_DUEL_ERROR_MSG in e.get("msg", "") for e in errors):
         return JSONResponse(
             status_code=400,
             content={"detail": "A movie cannot duel against itself"},
         )
+    scrubbed = _scrub_validation_errors(errors)
     logger.warning(
         "validation_error path=%s errors=%s",
         request.url.path,
-        _scrub_validation_errors(exc.errors()),
+        scrubbed,
     )
-    return JSONResponse(
-        status_code=422, content={"detail": _scrub_validation_errors(exc.errors())}
-    )
+    return JSONResponse(status_code=422, content={"detail": scrubbed})
 
 
 # Rate limiting

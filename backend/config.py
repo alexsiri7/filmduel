@@ -1,11 +1,11 @@
 """Application configuration via environment variables."""
 
+from functools import lru_cache
 from typing import Annotated
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, EnvSettingsSource
 from pydantic_settings.exceptions import SettingsError
-from functools import lru_cache
 
 
 class _TolerantEnvSource(EnvSettingsSource):
