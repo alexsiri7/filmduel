@@ -110,23 +110,17 @@ class TestTournamentOwnership:
 
     def test_load_tournament_returns_404_for_other_user(self):
         """GET /api/tournaments/{id} returns 404 when tournament belongs to another user."""
-        user_a = _make_user()
         user_b = _make_user()
         tournament_id = uuid.uuid4()
 
         mock_db = AsyncMock()
-        # Mock the query to return a tournament owned by user_a
-        mock_tournament = MagicMock()
-        mock_tournament.id = tournament_id
-        mock_tournament.user_id = user_a.id
-
+        # The query filters by user_id, so when requesting another user's
+        # tournament the DB returns None (no matching row).
         mock_result = MagicMock()
-        mock_result.unique.return_value.scalars.return_value.first.return_value = (
-            mock_tournament
-        )
+        mock_result.unique.return_value.scalars.return_value.first.return_value = None
         mock_db.execute.return_value = mock_result
 
-        # Request as user_b
+        # Request as user_b (tournament belongs to someone else)
         app.dependency_overrides[get_current_user] = lambda: user_b
         app.dependency_overrides[get_db] = lambda: mock_db
 

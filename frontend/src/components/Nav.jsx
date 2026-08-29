@@ -3,6 +3,31 @@ import { Link, useLocation } from "react-router-dom";
 import { logout, getMe, updateSettings } from "../api";
 import ReportIssueModal from "./ReportIssueModal";
 
+function ToggleRow({ label, checked, onToggle }) {
+  return (
+    <div className="flex items-center justify-between w-full py-2 group">
+      <span className="text-[#F5F0E8]/30 group-hover:text-[#F5F0E8]/60 font-headline font-bold uppercase text-xs tracking-widest transition-colors cursor-default">
+        {label}
+      </span>
+      <button
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        onClick={onToggle}
+        className={`relative w-9 h-5 rounded-full transition-colors cursor-pointer ${
+          checked ? "bg-primary-container" : "bg-[#F5F0E8]/20"
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 left-0.5 w-4 h-4 bg-[#0F0E0D] rounded-full transition-transform ${
+            checked ? "translate-x-4" : ""
+          }`}
+        />
+      </button>
+    </div>
+  );
+}
+
 const navItems = [
   { path: "/", label: "Current Duel", icon: "swords" },
   { path: "/swipe", label: "Swipe", icon: "swipe" },
@@ -157,69 +182,12 @@ export default function Nav({ mediaType, setMediaType }) {
           Privacy Policy
         </Link>
         {hasTrakt && (
-          <div className="flex items-center justify-between w-full py-2 group">
-            <span className="text-[#F5F0E8]/30 group-hover:text-[#F5F0E8]/60 font-headline font-bold uppercase text-xs tracking-widest transition-colors cursor-default">
-              Sync to Trakt
-            </span>
-            <button
-              role="switch"
-              aria-checked={syncRatings}
-              aria-label="Sync to Trakt"
-              onClick={handleSyncToggle}
-              className={`relative w-9 h-5 rounded-full transition-colors cursor-pointer ${
-                syncRatings ? "bg-primary-container" : "bg-[#F5F0E8]/20"
-              }`}
-            >
-              <span
-                className={`absolute top-0.5 left-0.5 w-4 h-4 bg-[#0F0E0D] rounded-full transition-transform ${
-                  syncRatings ? "translate-x-4" : ""
-                }`}
-              />
-            </button>
-          </div>
+          <ToggleRow label="Sync to Trakt" checked={syncRatings} onToggle={handleSyncToggle} />
         )}
         {hasSimkl && (
-          <div className="flex items-center justify-between w-full py-2 group">
-            <span className="text-[#F5F0E8]/30 group-hover:text-[#F5F0E8]/60 font-headline font-bold uppercase text-xs tracking-widest transition-colors cursor-default">
-              Sync to SIMKL
-            </span>
-            <button
-              role="switch"
-              aria-checked={syncRatingsSimkl}
-              aria-label="Sync to SIMKL"
-              onClick={handleSimklSyncToggle}
-              className={`relative w-9 h-5 rounded-full transition-colors cursor-pointer ${
-                syncRatingsSimkl ? "bg-primary-container" : "bg-[#F5F0E8]/20"
-              }`}
-            >
-              <span
-                className={`absolute top-0.5 left-0.5 w-4 h-4 bg-[#0F0E0D] rounded-full transition-transform ${
-                  syncRatingsSimkl ? "translate-x-4" : ""
-                }`}
-              />
-            </button>
-          </div>
+          <ToggleRow label="Sync to SIMKL" checked={syncRatingsSimkl} onToggle={handleSimklSyncToggle} />
         )}
-        <div className="flex items-center justify-between w-full py-2 group">
-          <span className="text-[#F5F0E8]/30 group-hover:text-[#F5F0E8]/60 font-headline font-bold uppercase text-xs tracking-widest transition-colors cursor-default">
-            AI Suggestions
-          </span>
-          <button
-            role="switch"
-            aria-checked={useAiFeatures}
-            aria-label="AI Suggestions"
-            onClick={handleAiToggle}
-            className={`relative w-9 h-5 rounded-full transition-colors cursor-pointer ${
-              useAiFeatures ? "bg-primary-container" : "bg-[#F5F0E8]/20"
-            }`}
-          >
-            <span
-              className={`absolute top-0.5 left-0.5 w-4 h-4 bg-[#0F0E0D] rounded-full transition-transform ${
-                useAiFeatures ? "translate-x-4" : ""
-              }`}
-            />
-          </button>
-        </div>
+        <ToggleRow label="AI Suggestions" checked={useAiFeatures} onToggle={handleAiToggle} />
         <button
           onClick={handleLogout}
           className="w-full text-[#F5F0E8]/30 hover:text-[#F5F0E8]/60 font-headline font-bold uppercase text-xs tracking-widest py-2 transition-colors"
