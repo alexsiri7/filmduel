@@ -141,18 +141,18 @@ async def curate_tournament(
     if not isinstance(result["film_ids"], list):
         raise CurationError("AI curation returned invalid film_ids (expected list)")
 
-    if len(result["film_ids"]) != bracket_size:
+    if len(result["film_ids"]) < bracket_size:
+        raise CurationError(
+            f"AI selected {len(result['film_ids'])} films but bracket needs {bracket_size}. Please try again."
+        )
+
+    if len(result["film_ids"]) > bracket_size:
         logger.warning(
-            "LLM returned %d films instead of %d, trimming/padding",
+            "LLM returned %d films instead of %d, trimming to %d",
             len(result["film_ids"]),
             bracket_size,
+            bracket_size,
         )
-        # Trim if too many, but if too few that's an error
-        if len(result["film_ids"]) > bracket_size:
-            result["film_ids"] = result["film_ids"][:bracket_size]
-        else:
-            raise CurationError(
-                f"AI selected {len(result['film_ids'])} films but bracket needs {bracket_size}. Please try again."
-            )
+        result["film_ids"] = result["film_ids"][:bracket_size]
 
     return result
