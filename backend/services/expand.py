@@ -18,7 +18,6 @@ from backend.db_models import Movie, PoolExpansion, User, UserMovie
 from backend.services.pool import build_movie_upsert
 from backend.services.tmdb import backfill_posters, fetch_similar_films
 from backend.services.trakt import TraktClient
-from backend.services.trakt import TraktClient
 
 logger = logging.getLogger(__name__)
 
