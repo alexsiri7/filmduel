@@ -85,3 +85,18 @@ class TestHSTS:
         )
         r = client.get("/health")
         assert "strict-transport-security" not in r.headers
+
+    def test_hsts_absent_when_secure_cookies_false_overrides_https(self, monkeypatch):
+        """HSTS header not emitted when SECURE_COOKIES=False overrides an https:// BASE_URL.
+
+        This documents an unusual but reachable branch: an operator who explicitly sets
+        SECURE_COOKIES=False on an HTTPS deployment forces cookie_secure to False, which
+        also suppresses HSTS emission because the guard uses cookie_secure as its signal.
+        """
+        monkeypatch.setattr(
+            backend.main,
+            "settings",
+            _make_settings(BASE_URL="https://filmduel.example.com", SECURE_COOKIES=False),
+        )
+        r = client.get("/health")
+        assert "strict-transport-security" not in r.headers
