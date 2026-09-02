@@ -15,9 +15,10 @@ logger = logging.getLogger(__name__)
 
 
 async def _purge_by_age(
-    db: AsyncSession, model: type, cutoff: datetime, log_name: str, retention_days: int
+    db: AsyncSession, model: type, retention_days: int, log_name: str
 ) -> int:
-    """Delete rows from ``model`` with created_at older than ``cutoff``. Returns row count."""
+    """Delete rows from ``model`` with created_at older than ``retention_days``. Returns row count."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
     result = await db.execute(
         delete(model).where(model.created_at < cutoff).returning(model.id)
     )
@@ -32,9 +33,7 @@ async def purge_old_duels(db: AsyncSession) -> int:
     Returns:
         Number of rows deleted.
     """
-    settings = get_settings()
-    cutoff = datetime.now(timezone.utc) - timedelta(days=settings.DUEL_RETENTION_DAYS)
-    return await _purge_by_age(db, Duel, cutoff, "duels", settings.DUEL_RETENTION_DAYS)
+    return await _purge_by_age(db, Duel, get_settings().DUEL_RETENTION_DAYS, "duels")
 
 
 async def purge_old_swipe_results(db: AsyncSession) -> int:
@@ -43,10 +42,8 @@ async def purge_old_swipe_results(db: AsyncSession) -> int:
     Returns:
         Number of rows deleted.
     """
-    settings = get_settings()
-    cutoff = datetime.now(timezone.utc) - timedelta(days=settings.SWIPE_RETENTION_DAYS)
     return await _purge_by_age(
-        db, SwipeResult, cutoff, "swipe_results", settings.SWIPE_RETENTION_DAYS
+        db, SwipeResult, get_settings().SWIPE_RETENTION_DAYS, "swipe_results"
     )
 
 
@@ -125,8 +122,6 @@ async def purge_old_feedback_reports(db: AsyncSession) -> int:
     Returns:
         Number of rows deleted.
     """
-    settings = get_settings()
-    cutoff = datetime.now(timezone.utc) - timedelta(days=settings.FEEDBACK_RETENTION_DAYS)
     return await _purge_by_age(
-        db, FeedbackReport, cutoff, "feedback_reports", settings.FEEDBACK_RETENTION_DAYS
+        db, FeedbackReport, get_settings().FEEDBACK_RETENTION_DAYS, "feedback_reports"
     )
