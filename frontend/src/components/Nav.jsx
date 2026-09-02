@@ -61,9 +61,9 @@ export default function Nav({ mediaType, setMediaType }) {
       });
   }, []);
 
-  function makeToggleHandler(getter, setter, settingKey, onError) {
+  function makeToggleHandler(currentValue, setter, settingKey, onError) {
     return async () => {
-      const next = !getter;
+      const next = !currentValue;
       setter(next);
       try {
         await updateSettings({ [settingKey]: next });

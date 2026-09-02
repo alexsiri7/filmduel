@@ -18,7 +18,7 @@ class TestEloTier:
         (800,  "less preferred"),
         (0,    "less preferred"),
     ])
-    def testelo_tier_thresholds(self, elo, expected):
+    def test_elo_tier_thresholds(self, elo, expected):
         assert elo_tier(elo) == expected
 
 
