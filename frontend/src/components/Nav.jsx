@@ -61,36 +61,27 @@ export default function Nav({ mediaType, setMediaType }) {
       });
   }, []);
 
-  const handleSyncToggle = async () => {
-    const next = !syncRatings;
-    setSyncRatings(next);
-    try {
-      await updateSettings({ sync_ratings_to_trakt: next });
-    } catch {
-      setSyncRatings(!next); // rollback on failure
-    }
-  };
+  function makeToggleHandler(getter, setter, settingKey, onError) {
+    return async () => {
+      const next = !getter;
+      setter(next);
+      try {
+        await updateSettings({ [settingKey]: next });
+      } catch (err) {
+        setter(!next); // rollback on failure
+        if (onError) onError(err);
+      }
+    };
+  }
 
-  const handleSimklSyncToggle = async () => {
-    const next = !syncRatingsSimkl;
-    setSyncRatingsSimkl(next);
-    try {
-      await updateSettings({ sync_ratings_to_simkl: next });
-    } catch {
-      setSyncRatingsSimkl(!next);
-    }
-  };
-
-  const handleAiToggle = async () => {
-    const next = !useAiFeatures;
-    setUseAiFeatures(next); // optimistic update
-    try {
-      await updateSettings({ use_ai_features: next });
-    } catch (err) {
-      setUseAiFeatures(!next); // rollback on failure
-      console.error("Failed to update AI features setting:", err);
-    }
-  };
+  const handleSyncToggle = makeToggleHandler(syncRatings, setSyncRatings, "sync_ratings_to_trakt");
+  const handleSimklSyncToggle = makeToggleHandler(syncRatingsSimkl, setSyncRatingsSimkl, "sync_ratings_to_simkl");
+  const handleAiToggle = makeToggleHandler(
+    useAiFeatures,
+    setUseAiFeatures,
+    "use_ai_features",
+    (err) => console.error("Failed to update AI features setting:", err),
+  );
 
   const handleLogout = async () => {
     await logout();
