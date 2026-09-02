@@ -313,10 +313,10 @@ class TestCookieSecureStartupWarning:
         test_settings = _make_settings(BASE_URL="http://localhost:8000", SECURE_COOKIES=None)
         with patch.object(main_mod, "settings", test_settings), \
              patch.object(main_mod._scheduler, "start"), \
-             patch.object(main_mod._scheduler, "shutdown"):
-            with caplog.at_level(logging.WARNING, logger="backend.main"):
-                async with main_mod.lifespan(FastAPI()):
-                    pass
+             patch.object(main_mod._scheduler, "shutdown"), \
+             caplog.at_level(logging.WARNING, logger="backend.main"):
+            async with main_mod.lifespan(FastAPI()):
+                pass
 
         assert any(
             "cookie_secure_unset" in r.message and "RAILWAY_ENVIRONMENT" in r.message
@@ -334,10 +334,10 @@ class TestCookieSecureStartupWarning:
         test_settings = _make_settings(BASE_URL="http://localhost:8000", SECURE_COOKIES=True)
         with patch.object(main_mod, "settings", test_settings), \
              patch.object(main_mod._scheduler, "start"), \
-             patch.object(main_mod._scheduler, "shutdown"):
-            with caplog.at_level(logging.WARNING, logger="backend.main"):
-                async with main_mod.lifespan(FastAPI()):
-                    pass
+             patch.object(main_mod._scheduler, "shutdown"), \
+             caplog.at_level(logging.WARNING, logger="backend.main"):
+            async with main_mod.lifespan(FastAPI()):
+                pass
 
         assert "cookie_secure_unset" not in caplog.text
 
@@ -352,10 +352,10 @@ class TestCookieSecureStartupWarning:
         test_settings = _make_settings(BASE_URL="http://localhost:8000", SECURE_COOKIES=False)
         with patch.object(main_mod, "settings", test_settings), \
              patch.object(main_mod._scheduler, "start"), \
-             patch.object(main_mod._scheduler, "shutdown"):
-            with caplog.at_level(logging.WARNING, logger="backend.main"):
-                async with main_mod.lifespan(FastAPI()):
-                    pass
+             patch.object(main_mod._scheduler, "shutdown"), \
+             caplog.at_level(logging.WARNING, logger="backend.main"):
+            async with main_mod.lifespan(FastAPI()):
+                pass
 
         assert "cookie_secure_unset" not in caplog.text
 
@@ -368,10 +368,10 @@ class TestCookieSecureStartupWarning:
         test_settings = _make_settings(BASE_URL="https://example.com", SECURE_COOKIES=None)
         with patch.object(main_mod, "settings", test_settings), \
              patch.object(main_mod._scheduler, "start"), \
-             patch.object(main_mod._scheduler, "shutdown"):
-            with caplog.at_level(logging.WARNING, logger="backend.main"):
-                async with main_mod.lifespan(FastAPI()):
-                    pass
+             patch.object(main_mod._scheduler, "shutdown"), \
+             caplog.at_level(logging.WARNING, logger="backend.main"):
+            async with main_mod.lifespan(FastAPI()):
+                pass
 
         assert "cookie_secure_unset" not in caplog.text
 
@@ -385,10 +385,10 @@ class TestCookieSecureStartupWarning:
         test_settings = _make_settings(BASE_URL="http://localhost:8000", SECURE_COOKIES=None)
         with patch.object(main_mod, "settings", test_settings), \
              patch.object(main_mod._scheduler, "start"), \
-             patch.object(main_mod._scheduler, "shutdown"):
-            with caplog.at_level(logging.WARNING, logger="backend.main"):
-                async with main_mod.lifespan(FastAPI()):
-                    pass
+             patch.object(main_mod._scheduler, "shutdown"), \
+             caplog.at_level(logging.WARNING, logger="backend.main"):
+            async with main_mod.lifespan(FastAPI()):
+                pass
 
         assert "cookie_secure_unset" not in caplog.text
 
@@ -404,10 +404,10 @@ class TestCookieSecureStartupWarning:
         test_settings = _make_settings(BASE_URL="http://example.com", SECURE_COOKIES=None)
         with patch.object(main_mod, "settings", test_settings), \
              patch.object(main_mod._scheduler, "start"), \
-             patch.object(main_mod._scheduler, "shutdown"):
-            with caplog.at_level(logging.WARNING, logger="backend.main"):
-                async with main_mod.lifespan(FastAPI()):
-                    pass
+             patch.object(main_mod._scheduler, "shutdown"), \
+             caplog.at_level(logging.WARNING, logger="backend.main"):
+            async with main_mod.lifespan(FastAPI()):
+                pass
 
         assert any(
             "cookie_secure_unset" in r.message and "RENDER" in r.message
@@ -426,10 +426,10 @@ class TestCookieSecureStartupWarning:
         test_settings = _make_settings(BASE_URL="http://my-app.fly.dev", SECURE_COOKIES=None)
         with patch.object(main_mod, "settings", test_settings), \
              patch.object(main_mod._scheduler, "start"), \
-             patch.object(main_mod._scheduler, "shutdown"):
-            with caplog.at_level(logging.WARNING, logger="backend.main"):
-                async with main_mod.lifespan(FastAPI()):
-                    pass
+             patch.object(main_mod._scheduler, "shutdown"), \
+             caplog.at_level(logging.WARNING, logger="backend.main"):
+            async with main_mod.lifespan(FastAPI()):
+                pass
 
         assert any(
             "cookie_secure_unset" in r.message and "FLY_APP_NAME" in r.message
@@ -450,10 +450,10 @@ class TestCookieSecureStartupWarning:
         test_settings = _make_settings(BASE_URL="http://localhost:8000", SECURE_COOKIES=None)
         with patch.object(main_mod, "settings", test_settings), \
              patch.object(main_mod._scheduler, "start"), \
-             patch.object(main_mod._scheduler, "shutdown"):
-            with caplog.at_level(logging.WARNING, logger="backend.main"):
-                async with main_mod.lifespan(FastAPI()):
-                    pass
+             patch.object(main_mod._scheduler, "shutdown"), \
+             caplog.at_level(logging.WARNING, logger="backend.main"):
+            async with main_mod.lifespan(FastAPI()):
+                pass
 
         assert "cookie_secure_unset" not in caplog.text
 
@@ -470,10 +470,10 @@ class TestCookieSecureStartupWarning:
         test_settings = _make_settings(BASE_URL="http://localhost:8000", SECURE_COOKIES=None)
         with patch.object(main_mod, "settings", test_settings), \
              patch.object(main_mod._scheduler, "start"), \
-             patch.object(main_mod._scheduler, "shutdown"):
-            with caplog.at_level(logging.WARNING, logger="backend.main"):
-                async with main_mod.lifespan(FastAPI()):
-                    pass
+             patch.object(main_mod._scheduler, "shutdown"), \
+             caplog.at_level(logging.WARNING, logger="backend.main"):
+            async with main_mod.lifespan(FastAPI()):
+                pass
 
         assert any(
             "cookie_secure_unset" in r.message and "RAILWAY_ENVIRONMENT" in r.message
