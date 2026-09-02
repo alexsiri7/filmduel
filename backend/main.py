@@ -196,6 +196,11 @@ async def csrf_origin_check(request: Request, call_next):
     # No origin or referer header — non-browser / server-to-server clients cannot
     # perform CSRF (they have no victim session cookie), so allow through.
     if not origin:
+        logger.info(
+            "csrf_no_origin_allowed method=%s path=%s",
+            request.method,
+            request.url.path,
+        )
         return await call_next(request)
 
     # Normalise to scheme+host — strips path/query from Referer; Origin already
