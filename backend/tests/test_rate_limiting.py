@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from backend.main import app
 from backend.db import get_db
 from backend.rate_limit import limiter
-from backend.routers.auth import get_current_user
+from backend.routers.auth import get_admin_user, get_current_user
 from slowapi.errors import RateLimitExceeded
 
 
@@ -682,3 +682,171 @@ def test_purge_old_duels_is_registered_with_rate_limiter():
 def test_purge_old_swipe_results_is_registered_with_rate_limiter():
     """purge_old_swipe_results must be registered in the slowapi limiter."""
     assert "backend.routers.swipe.purge_old_swipe_results" in limiter._Limiter__marked_for_limiting
+
+
+# ---------------------------------------------------------------------------
+# Rate limit values — admin endpoints (issue #491 / SEC-014)
+# ---------------------------------------------------------------------------
+
+
+def test_list_feedback_rate_limit_is_10_per_minute():
+    """list_feedback rate limit must be exactly 10/minute."""
+    limits = limiter._route_limits.get("backend.routers.feedback.list_feedback", [])
+    limit_strings = [str(lim.limit) for lim in limits]
+    assert any("10 per 1 minute" in s for s in limit_strings), (
+        f"Expected '10/minute' limit on list_feedback, got: {limit_strings}"
+    )
+
+
+def test_scrub_screenshot_rate_limit_is_10_per_minute():
+    """scrub_screenshot rate limit must be exactly 10/minute."""
+    limits = limiter._route_limits.get("backend.routers.feedback.scrub_screenshot", [])
+    limit_strings = [str(lim.limit) for lim in limits]
+    assert any("10 per 1 minute" in s for s in limit_strings), (
+        f"Expected '10/minute' limit on scrub_screenshot, got: {limit_strings}"
+    )
+
+
+def test_purge_expired_screenshots_rate_limit_is_10_per_minute():
+    """purge_expired_screenshots rate limit must be exactly 10/minute."""
+    limits = limiter._route_limits.get(
+        "backend.routers.feedback.purge_expired_screenshots", []
+    )
+    limit_strings = [str(lim.limit) for lim in limits]
+    assert any("10 per 1 minute" in s for s in limit_strings), (
+        f"Expected '10/minute' limit on purge_expired_screenshots, got: {limit_strings}"
+    )
+
+
+def test_purge_old_duels_rate_limit_is_10_per_minute():
+    """purge_old_duels rate limit must be exactly 10/minute."""
+    limits = limiter._route_limits.get("backend.routers.duels.purge_old_duels", [])
+    limit_strings = [str(lim.limit) for lim in limits]
+    assert any("10 per 1 minute" in s for s in limit_strings), (
+        f"Expected '10/minute' limit on purge_old_duels, got: {limit_strings}"
+    )
+
+
+def test_purge_old_swipe_results_rate_limit_is_10_per_minute():
+    """purge_old_swipe_results rate limit must be exactly 10/minute."""
+    limits = limiter._route_limits.get(
+        "backend.routers.swipe.purge_old_swipe_results", []
+    )
+    limit_strings = [str(lim.limit) for lim in limits]
+    assert any("10 per 1 minute" in s for s in limit_strings), (
+        f"Expected '10/minute' limit on purge_old_swipe_results, got: {limit_strings}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Endpoint reachability — confirms request:Request param injection works
+# (admin endpoints — issue #491 / SEC-014)
+# ---------------------------------------------------------------------------
+
+
+def test_list_feedback_endpoint_reachable():
+    """list_feedback responds (not 500) after request:Request param was added."""
+    fake_user = _make_user()
+    fake_user.is_admin = True
+    mock_db = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = []
+    mock_db.execute.return_value = mock_result
+
+    app.dependency_overrides[get_current_user] = lambda: fake_user
+    app.dependency_overrides[get_admin_user] = lambda: fake_user
+    app.dependency_overrides[get_db] = lambda: mock_db
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        resp = client.get("/api/feedback/admin")
+
+    app.dependency_overrides.clear()
+    assert resp.status_code != 500
+
+
+def test_scrub_screenshot_endpoint_reachable():
+    """scrub_screenshot responds (not 500) after request:Request param was added."""
+    fake_user = _make_user()
+    fake_user.is_admin = True
+    mock_db = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    mock_db.execute.return_value = mock_result
+
+    app.dependency_overrides[get_current_user] = lambda: fake_user
+    app.dependency_overrides[get_admin_user] = lambda: fake_user
+    app.dependency_overrides[get_db] = lambda: mock_db
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        resp = client.delete(f"/api/feedback/admin/{uuid.uuid4()}/screenshot")
+
+    app.dependency_overrides.clear()
+    # 404 expected (report not found); confirms endpoint + Request param works
+    assert resp.status_code == 404
+    assert resp.status_code != 500
+
+
+def test_purge_expired_screenshots_endpoint_reachable():
+    """purge_expired_screenshots responds (not 500) after request:Request param was added."""
+    fake_user = _make_user()
+    fake_user.is_admin = True
+    mock_db = AsyncMock()
+
+    app.dependency_overrides[get_current_user] = lambda: fake_user
+    app.dependency_overrides[get_admin_user] = lambda: fake_user
+    app.dependency_overrides[get_db] = lambda: mock_db
+
+    with patch(
+        "backend.routers.feedback._purge_expired_screenshots", new_callable=AsyncMock
+    ) as mock_purge:
+        mock_purge.return_value = 0
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.delete("/api/feedback/admin/purge-expired-screenshots")
+
+    app.dependency_overrides.clear()
+    assert resp.status_code == 200
+    assert resp.status_code != 500
+
+
+def test_purge_old_duels_endpoint_reachable():
+    """purge_old_duels responds (not 500) after request:Request param was added."""
+    fake_user = _make_user()
+    fake_user.is_admin = True
+    mock_db = AsyncMock()
+
+    app.dependency_overrides[get_current_user] = lambda: fake_user
+    app.dependency_overrides[get_admin_user] = lambda: fake_user
+    app.dependency_overrides[get_db] = lambda: mock_db
+
+    with patch(
+        "backend.routers.duels._purge_old_duels", new_callable=AsyncMock
+    ) as mock_purge:
+        mock_purge.return_value = 0
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.delete("/api/duels/admin/purge-old-records")
+
+    app.dependency_overrides.clear()
+    assert resp.status_code == 200
+    assert resp.status_code != 500
+
+
+def test_purge_old_swipe_results_endpoint_reachable():
+    """purge_old_swipe_results responds (not 500) after request:Request param was added."""
+    fake_user = _make_user()
+    fake_user.is_admin = True
+    mock_db = AsyncMock()
+
+    app.dependency_overrides[get_current_user] = lambda: fake_user
+    app.dependency_overrides[get_admin_user] = lambda: fake_user
+    app.dependency_overrides[get_db] = lambda: mock_db
+
+    with patch(
+        "backend.routers.swipe._purge_old_swipe_results", new_callable=AsyncMock
+    ) as mock_purge:
+        mock_purge.return_value = 0
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.delete("/api/swipe/admin/purge-old-records")
+
+    app.dependency_overrides.clear()
+    assert resp.status_code == 200
+    assert resp.status_code != 500
