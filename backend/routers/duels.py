@@ -34,7 +34,7 @@ async def _sync_ratings_background(
     """Fire-and-forget Trakt rating sync after a duel with a winner."""
     try:
         async with async_session_factory() as session:
-            user_stmt = select(User).where(User.id == user_id)
+            user_stmt = select(User).where(User.id == user_id).with_for_update()
             result = await session.execute(user_stmt)
             user = result.scalar_one_or_none()
             if (

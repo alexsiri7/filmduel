@@ -264,7 +264,7 @@ async def add_to_watchlist(
     async def _sync_trakt_watchlist():
         try:
             async with async_session_factory() as session:
-                result = await session.execute(select(User).where(User.id == user_id))
+                result = await session.execute(select(User).where(User.id == user_id).with_for_update())
                 user = result.scalar_one_or_none()
                 if not user or not user.trakt_access_token:
                     return

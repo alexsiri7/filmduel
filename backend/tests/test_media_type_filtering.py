@@ -336,3 +336,58 @@ async def test_sync_ratings_background_syncs_when_opt_in():
         await _sync_ratings_background(uid, mid_a, 1100, mid_b, 900)
 
         mock_sync.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_sync_ratings_background_uses_select_for_update():
+    """_sync_ratings_background must lock the user row to prevent concurrent token refresh."""
+    from backend.routers.duels import _sync_ratings_background
+
+    uid = uuid.uuid4()
+    mid_a = uuid.uuid4()
+    mid_b = uuid.uuid4()
+
+    captured_stmts = []
+
+    mock_user = MagicMock()
+    mock_user.trakt_access_token = "token"
+    mock_user.sync_ratings_to_trakt = True
+
+    mock_rows = [
+        MagicMock(id=mid_a, trakt_id=111, media_type="movie"),
+        MagicMock(id=mid_b, trakt_id=222, media_type="movie"),
+    ]
+
+    with (
+        patch("backend.routers.duels.async_session_factory") as mock_factory,
+        patch(
+            "backend.routers.duels.ensure_fresh_token", new_callable=AsyncMock
+        ) as mock_refresh,
+        patch("backend.routers.duels.sync_post_duel", new_callable=AsyncMock),
+    ):
+        mock_session = AsyncMock()
+        mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_refresh.return_value = mock_user
+
+        mock_user_result = MagicMock()
+        mock_user_result.scalar_one_or_none.return_value = mock_user
+        mock_movies_result = MagicMock()
+        mock_movies_result.all.return_value = mock_rows
+
+        async def capture_execute(stmt, *args, **kwargs):
+            captured_stmts.append(stmt)
+            if len(captured_stmts) == 1:
+                return mock_user_result
+            return mock_movies_result
+
+        mock_session.execute.side_effect = capture_execute
+
+        await _sync_ratings_background(uid, mid_a, 1100, mid_b, 900)
+
+        # Verify the user query uses with_for_update
+        user_stmt = captured_stmts[0]
+        assert user_stmt._for_update_arg is not None, (
+            "User query must use .with_for_update() to prevent concurrent token refresh"
+        )
