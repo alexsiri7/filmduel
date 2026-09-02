@@ -249,3 +249,57 @@ class TestBandBoundaryIndexClamping:
         below_idx = min(len(BANDS) - 1, band_idx + 1)
         assert _community_rating_range(band_idx) != _community_rating_range(above_idx)
         assert _community_rating_range(band_idx) != _community_rating_range(below_idx)
+
+    def test_poor_clamped_ranges_are_identical(self):
+        # When below_idx is clamped at poor band (band_idx=4), ranges are identical
+        band_idx = 4
+        below_idx = min(len(BANDS) - 1, band_idx + 1)
+        assert _community_rating_range(band_idx) == _community_rating_range(below_idx)
+
+
+# ---------------------------------------------------------------------------
+# Deduplication logic (SEC-018 fix)
+# ---------------------------------------------------------------------------
+
+
+class TestDeduplicateRows:
+    """Unit-tests for the seen_ids_set deduplication logic (SEC-018 fix)."""
+
+    def _dedup(self, rows):
+        """Mirror of the dedup block in get_swipe_cards."""
+        seen_ids_set: set = set()
+        deduped: list = []
+        for row in rows:
+            if row.id not in seen_ids_set:
+                seen_ids_set.add(row.id)
+                deduped.append(row)
+        return deduped
+
+    def _row(self, id_val):
+        r = MagicMock()
+        r.id = id_val
+        return r
+
+    def test_removes_duplicate_ids(self):
+        rows = [self._row(1), self._row(2), self._row(1)]  # id=1 appears twice
+        result = self._dedup(rows)
+        assert [r.id for r in result] == [1, 2]
+
+    def test_preserves_order_of_first_occurrence(self):
+        rows = [self._row(3), self._row(1), self._row(3), self._row(2)]
+        result = self._dedup(rows)
+        assert [r.id for r in result] == [3, 1, 2]
+
+    def test_no_duplicates_returns_all(self):
+        rows = [self._row(i) for i in range(10)]
+        result = self._dedup(rows)
+        assert len(result) == 10
+
+    def test_empty_input_returns_empty(self):
+        assert self._dedup([]) == []
+
+    def test_all_same_id_returns_one(self):
+        rows = [self._row(42)] * 6
+        result = self._dedup(rows)
+        assert len(result) == 1
+        assert result[0].id == 42

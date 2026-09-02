@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from typing import Any
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
@@ -138,8 +139,8 @@ async def get_swipe_cards(
 
         # Deduplicate: boundary bands (elite/poor) clamp above/below index to target,
         # so two queries can return the same movies.
-        seen_ids_set: set = set()
-        deduped: list = []
+        seen_ids_set: set[uuid.UUID] = set()
+        deduped: list[Any] = []
         for row in rows:
             if row.id not in seen_ids_set:
                 seen_ids_set.add(row.id)
