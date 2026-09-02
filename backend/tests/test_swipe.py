@@ -267,13 +267,7 @@ class TestDeduplicateRows:
 
     def _dedup(self, rows):
         """Mirror of the dedup block in get_swipe_cards."""
-        seen_ids_set: set = set()
-        deduped: list = []
-        for row in rows:
-            if row.id not in seen_ids_set:
-                seen_ids_set.add(row.id)
-                deduped.append(row)
-        return deduped
+        return list({row.id: row for row in rows}.values())
 
     def _row(self, id_val):
         r = MagicMock()

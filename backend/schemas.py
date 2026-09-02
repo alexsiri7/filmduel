@@ -143,7 +143,7 @@ class SwipeCardSchema(BaseModel):
 
 
 class SwipeResultItem(BaseModel):
-    movie_id: str
+    movie_id: UUID
     seen: bool
 
 
