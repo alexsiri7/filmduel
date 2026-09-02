@@ -10,6 +10,7 @@ import pytest
 
 from sqlalchemy.dialects import postgresql
 
+from backend.db_models import Duel
 from backend.services.duel import (
     MIN_SEEN_UNRANKED,
     MIN_TOTAL_SEEN,
@@ -248,8 +249,6 @@ async def test_process_duel_creates_duel_record():
     # db.add is called for the Duel record
     assert db.add.called
     # Find the Duel object among add calls
-    from backend.db_models import Duel
-
     duel_adds = [
         call.args[0] for call in db.add.call_args_list if isinstance(call.args[0], Duel)
     ]
@@ -537,8 +536,6 @@ async def test_pair_type_ranked_vs_ranked():
 
     await process_duel(db, uid, mid_a, mid_b, "a_wins", "ranked")
 
-    from backend.db_models import Duel
-
     duel_adds = [
         call.args[0] for call in db.add.call_args_list if isinstance(call.args[0], Duel)
     ]
@@ -560,8 +557,6 @@ async def test_pair_type_ranked_vs_unranked():
     db.execute = _make_fake_execute(um_a, um_b)
 
     await process_duel(db, uid, mid_a, mid_b, "a_wins", "discovery")
-
-    from backend.db_models import Duel
 
     duel_adds = [
         call.args[0] for call in db.add.call_args_list if isinstance(call.args[0], Duel)
