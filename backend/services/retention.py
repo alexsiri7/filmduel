@@ -17,7 +17,10 @@ logger = logging.getLogger(__name__)
 async def _purge_by_age(
     db: AsyncSession, model: type, retention_days: int, log_name: str
 ) -> int:
-    """Delete rows from ``model`` with created_at older than ``retention_days``. Returns row count."""
+    """Delete rows from ``model`` with created_at older than ``retention_days``.
+
+    Returns row count.
+    """
     cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
     result = await db.execute(
         delete(model).where(model.created_at < cutoff).returning(model.id)
@@ -117,7 +120,9 @@ async def purge_old_suggestions(db: AsyncSession) -> int:
 
 
 async def purge_old_feedback_reports(db: AsyncSession) -> int:
-    """Delete feedback_reports older than FEEDBACK_RETENTION_DAYS. Does not commit; caller must commit.
+    """Delete feedback_reports older than FEEDBACK_RETENTION_DAYS.
+
+    Does not commit; caller must commit.
 
     Returns:
         Number of rows deleted.

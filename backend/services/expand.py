@@ -323,7 +323,10 @@ async def _upsert_film_from_trakt(
     now: datetime,
     media_type: str = "movie",
 ) -> bool:
-    """Upsert a Trakt movie/show dict into movies + user_movies. Returns True if new user_movie created."""
+    """Upsert a Trakt movie/show dict into movies + user_movies.
+
+    Returns True if a new user_movie row was created.
+    """
     ids = movie_data.get("ids", {})
     trakt_id = ids.get("trakt")
     if not trakt_id:
