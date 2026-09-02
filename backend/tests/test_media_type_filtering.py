@@ -387,7 +387,10 @@ async def test_sync_ratings_background_uses_select_for_update():
         await _sync_ratings_background(uid, mid_a, 1100, mid_b, 900)
 
         # Verify the user query uses with_for_update
+        from sqlalchemy.dialects import postgresql
+
         user_stmt = captured_stmts[0]
-        assert user_stmt._for_update_arg is not None, (
+        compiled = user_stmt.compile(dialect=postgresql.dialect())
+        assert "FOR UPDATE" in str(compiled).upper(), (
             "User query must use .with_for_update() to prevent concurrent token refresh"
         )

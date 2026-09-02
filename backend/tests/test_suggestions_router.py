@@ -163,3 +163,122 @@ class TestRegenerateSuggestions:
 
         assert resp.status_code == 503
         assert resp.json()["detail"] == "AI features are not available"
+
+
+# ---------------------------------------------------------------------------
+# _sync_trakt_watchlist — SELECT FOR UPDATE assertion
+# ---------------------------------------------------------------------------
+
+
+class TestSyncTraktWatchlistForUpdate:
+    """Verify _sync_trakt_watchlist locks the user row with SELECT ... FOR UPDATE."""
+
+    def setup_method(self):
+        app.dependency_overrides.clear()
+
+    def teardown_method(self):
+        app.dependency_overrides.clear()
+
+    def test_sync_trakt_watchlist_uses_select_for_update(self):
+        """_sync_trakt_watchlist must lock the user row to prevent concurrent token refresh.
+
+        TestClient runs background tasks synchronously, allowing us to capture
+        the SQLAlchemy statement passed to session.execute and verify that
+        SELECT ... FOR UPDATE is used.
+        """
+        from datetime import datetime, timezone
+
+        from sqlalchemy.dialects import postgresql
+
+        from backend.schemas import MovieSchema, SuggestionSchema
+
+        user_id = uuid.uuid4()
+        suggestion_id = uuid.uuid4()
+        movie_id = uuid.uuid4()
+
+        mock_user = MagicMock()
+        mock_user.id = user_id
+        mock_user.privacy_policy_accepted = True
+        mock_user.trakt_access_token = "valid-token"
+
+        # Mock the suggestion returned by the route's db query
+        mock_movie = MagicMock()
+        mock_movie.trakt_id = 42
+
+        mock_suggestion = MagicMock()
+        mock_suggestion.id = suggestion_id
+        mock_suggestion.movie = mock_movie
+        mock_suggestion.added_to_watchlist_at = None
+
+        # Build a valid SuggestionSchema for the mock response
+        fake_schema = SuggestionSchema(
+            id=str(suggestion_id),
+            movie=MovieSchema(
+                id=str(movie_id),
+                trakt_id=42,
+                title="Test Film",
+                media_type="movie",
+            ),
+            reason="test reason",
+            generated_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+
+        captured_bg_stmts = []
+
+        async def fake_bg_session_execute(stmt, *args, **kwargs):
+            captured_bg_stmts.append(stmt)
+            result = MagicMock()
+            result.scalar_one_or_none.return_value = mock_user
+            return result
+
+        mock_bg_session = AsyncMock()
+        mock_bg_session.execute.side_effect = fake_bg_session_execute
+        mock_bg_session.commit = AsyncMock()
+
+        mock_db = AsyncMock()
+
+        app.dependency_overrides[get_current_user] = lambda: mock_user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with (
+            patch(
+                "backend.routers.suggestions._get_user_suggestion",
+                new_callable=AsyncMock,
+                return_value=mock_suggestion,
+            ),
+            patch(
+                "backend.routers.suggestions._build_suggestion_schema",
+                return_value=fake_schema,
+            ),
+            patch(
+                "backend.routers.suggestions.async_session_factory"
+            ) as mock_factory,
+            patch(
+                "backend.routers.suggestions.ensure_fresh_token",
+                new_callable=AsyncMock,
+                return_value=mock_user,
+            ),
+            patch(
+                "backend.routers.suggestions.TraktClient"
+            ) as mock_trakt_cls,
+        ):
+            mock_factory.return_value.__aenter__ = AsyncMock(
+                return_value=mock_bg_session
+            )
+            mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+            mock_trakt_cls.return_value = AsyncMock()
+
+            with TestClient(app, raise_server_exceptions=True) as client:
+                resp = client.post(
+                    f"/api/suggestions/{suggestion_id}/watchlist"
+                )
+
+        assert resp.status_code == 200, f"Unexpected status: {resp.status_code}"
+        assert captured_bg_stmts, "session.execute was never called in background task"
+
+        user_stmt = captured_bg_stmts[0]
+        compiled = user_stmt.compile(dialect=postgresql.dialect())
+        assert "FOR UPDATE" in str(compiled).upper(), (
+            "User query in _sync_trakt_watchlist must use .with_for_update() "
+            "to prevent concurrent token refresh"
+        )
