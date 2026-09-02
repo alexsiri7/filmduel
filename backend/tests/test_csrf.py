@@ -1,5 +1,6 @@
 """Tests for CSRF Origin/Referer middleware."""
 
+import logging
 import os
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
@@ -69,15 +70,19 @@ def test_post_allowed_known_origin():
 
 def test_post_no_origin_allowed(caplog):
     """POST with no Origin header (CLI/API client) is allowed through and logged."""
-    import logging
-
     with caplog.at_level(logging.INFO, logger="backend.main"):
         response = client.post(
             "/api/duels",
             json={"winner_id": 1, "loser_id": 2},
         )
     assert response.status_code != 403
-    assert any("csrf_no_origin_allowed" in r.message for r in caplog.records)
+    assert any(
+        "csrf_no_origin_allowed" in r.message
+        and r.levelno == logging.INFO
+        and "method=" in r.message
+        and "path=" in r.message
+        for r in caplog.records
+    )
 
 
 def test_feedback_multipart_blocked_unknown_origin():
