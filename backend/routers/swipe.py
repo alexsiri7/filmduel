@@ -250,7 +250,9 @@ async def submit_swipe_results(
 
 
 @router.delete("/admin/purge-old-records", status_code=200)
+@limiter.limit("10/minute")
 async def purge_old_swipe_results(
+    request: Request,
     current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):

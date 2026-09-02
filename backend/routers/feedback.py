@@ -156,7 +156,9 @@ async def submit_feedback(
 
 
 @router.get("/admin", response_model=list[FeedbackAdminResponse])
+@limiter.limit("10/minute")
 async def list_feedback(
+    request: Request,
     current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -179,7 +181,9 @@ async def list_feedback(
 
 
 @router.delete("/admin/{report_id}/screenshot", status_code=204)
+@limiter.limit("10/minute")
 async def scrub_screenshot(
+    request: Request,
     report_id: uuid.UUID,
     current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
@@ -200,7 +204,9 @@ async def scrub_screenshot(
 
 
 @router.delete("/admin/purge-expired-screenshots", status_code=200)
+@limiter.limit("10/minute")
 async def purge_expired_screenshots(
+    request: Request,
     current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
