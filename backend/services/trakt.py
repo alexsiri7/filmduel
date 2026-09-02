@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from urllib.parse import quote
 
 import httpx
 
@@ -115,7 +116,7 @@ class TraktClient:
         """
         async with self._client() as client:
             resp = await client.get(
-                f"/users/{username}/watched/{media_type}s",
+                f"/users/{quote(username, safe='')}/watched/{media_type}s",
                 params={"extended": "full"},
             )
             resp.raise_for_status()
@@ -130,7 +131,7 @@ class TraktClient:
         """
         async with self._client() as client:
             resp = await client.get(
-                f"/users/{username}/ratings/{media_type}s",
+                f"/users/{quote(username, safe='')}/ratings/{media_type}s",
             )
             resp.raise_for_status()
             return [
