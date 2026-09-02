@@ -1,6 +1,9 @@
+import json
+import logging
+
 import pytest
 
-from backend.services.curator import elo_tier, sanitize_llm_input
+from backend.services.curator import CurationError, elo_tier, sanitize_llm_input
 
 
 class TestEloTier:
@@ -91,3 +94,61 @@ class TestSanitizeLlmInput:
         assert '"' not in result
         assert "Horror" in result
         assert "Sci-Fi themes" in result
+
+
+class TestCurateTournamentLogging:
+    """Regression tests: error logs must not emit user-linked LLM response data (SEC-009)."""
+
+    @pytest.mark.asyncio
+    async def test_invalid_json_logs_length_not_content(self, caplog):
+        """On JSON parse failure, log must contain len= but NOT the raw LLM text."""
+        from unittest.mock import AsyncMock, patch
+
+        sentinel = "SENSITIVE_LLM_OUTPUT_abc123"
+
+        with patch(
+            "backend.services.curator.chat_completion",
+            AsyncMock(return_value=sentinel),
+        ), caplog.at_level(logging.ERROR, logger="backend.services.curator"):
+            from backend.services.curator import curate_tournament
+
+            with pytest.raises(CurationError):
+                await curate_tournament(
+                    candidates=[],
+                    bracket_size=8,
+                    filter_context="Horror",
+                )
+
+        assert sentinel not in caplog.text  # raw content must NOT appear
+        assert "len=" in caplog.text  # length digest must appear
+
+    @pytest.mark.asyncio
+    async def test_missing_keys_logs_key_names_not_values(self, caplog):
+        """On missing-key validation failure, log must not echo the result dict values."""
+        from unittest.mock import AsyncMock, patch
+
+        # Valid JSON but missing film_ids; value is a canary string
+        canary = "CANARY_FILM_TITLE_xyz789"
+        partial_result = json.dumps(
+            {
+                "name": canary,
+                "tagline": "some tagline",
+                "theme_description": "desc",
+                # film_ids is intentionally absent
+            }
+        )
+
+        with patch(
+            "backend.services.curator.chat_completion",
+            AsyncMock(return_value=partial_result),
+        ), caplog.at_level(logging.ERROR, logger="backend.services.curator"):
+            from backend.services.curator import curate_tournament
+
+            with pytest.raises(CurationError):
+                await curate_tournament(
+                    candidates=[],
+                    bracket_size=8,
+                )
+
+        assert canary not in caplog.text  # result values must NOT appear
+        assert "film_ids" in caplog.text  # the missing key name is acceptable
