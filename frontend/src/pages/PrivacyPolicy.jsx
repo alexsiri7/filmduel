@@ -60,10 +60,21 @@ export default function PrivacyPolicy() {
             When you use AI-powered features (Watch Suggestions, AI-Curated Tournaments),
             the following data is sent to Requesty.ai for processing:
           </p>
+          <p className="text-[#d6c4ae] text-sm font-body leading-relaxed mb-3">
+            <strong className="text-[#F5F0E8]">Watch Suggestions</strong> sends:
+          </p>
           <ul className="space-y-2 text-[#d6c4ae] text-sm font-body mb-4">
             <li>• <strong className="text-[#F5F0E8]">Top 10 and bottom 5 ranked films</strong> — title, release year, genres, and a preference tier (e.g. "highly preferred", "neutral")</li>
             <li>• <strong className="text-[#F5F0E8]">Genre affinities</strong> — per-genre preference tier derived from your duel history</li>
             <li>• <strong className="text-[#F5F0E8]">Total number of ranked films</strong></li>
+            <li>• <strong className="text-[#F5F0E8]">Candidate film pool</strong> — up to 50 catalog films (title, year, genres, community rating) for the AI to select recommendations from</li>
+          </ul>
+          <p className="text-[#d6c4ae] text-sm font-body leading-relaxed mb-3">
+            <strong className="text-[#F5F0E8]">AI-Curated Tournaments</strong> sends:
+          </p>
+          <ul className="space-y-2 text-[#d6c4ae] text-sm font-body mb-4">
+            <li>• <strong className="text-[#F5F0E8]">Candidate films</strong> — title, year, genres, preference tier, and duel count per film</li>
+            <li>• <strong className="text-[#F5F0E8]">Filter context and theme hint</strong> — any genre filter or theme text you enter when creating a tournament</li>
           </ul>
           <p className="text-[#d6c4ae] text-sm font-body leading-relaxed mb-4">
             Raw ELO scores are never transmitted — only bucketed preference tiers.
@@ -132,7 +143,7 @@ export default function PrivacyPolicy() {
         <Divider />
 
         <p className="text-[#6B6760] text-xs font-body">
-          Last updated: June 2026
+          Last updated: September 2026
         </p>
       </div>
     </div>
