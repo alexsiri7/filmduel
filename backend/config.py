@@ -91,7 +91,7 @@ class Settings(BaseSettings):
                 "DATABASE_URL must be set to a valid connection string; "
                 "the hardcoded localhost default is not permitted"
             )
-        return v
+        return stripped
 
     @field_validator("SECRET_KEY", mode="before")
     @classmethod
