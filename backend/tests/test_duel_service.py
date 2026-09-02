@@ -10,6 +10,7 @@ import pytest
 
 from sqlalchemy.dialects import postgresql
 
+from backend.db_models import Duel
 from backend.services.duel import (
     MIN_SEEN_UNRANKED,
     MIN_TOTAL_SEEN,
@@ -248,8 +249,6 @@ async def test_process_duel_creates_duel_record():
     # db.add is called for the Duel record
     assert db.add.called
     # Find the Duel object among add calls
-    from backend.db_models import Duel
-
     duel_adds = [
         call.args[0] for call in db.add.call_args_list if isinstance(call.args[0], Duel)
     ]
@@ -341,7 +340,7 @@ async def test_process_duel_a_only_skips_elo():
     mid_b = uuid.uuid4()
 
     um_a = _make_user_movie(uid, mid_a, elo=1000, battles=5, seen=None)
-    um_b = _make_user_movie(uid, mid_b, elo=1000, battles=5, seen=None)
+    um_b = _make_user_movie(uid, mid_b, elo=1000, battles=0, seen=None)
 
     db = AsyncMock()
     db.execute = _make_fake_execute(um_a, um_b)
@@ -354,7 +353,7 @@ async def test_process_duel_a_only_skips_elo():
     assert um_b.seen is False
     # Battles should NOT be incremented for non-competitive outcomes
     assert um_a.battles == 5
-    assert um_b.battles == 5
+    assert um_b.battles == 0
 
 
 # ---------------------------------------------------------------------------
@@ -369,7 +368,7 @@ async def test_process_duel_b_only_skips_elo():
     mid_a = uuid.uuid4()
     mid_b = uuid.uuid4()
 
-    um_a = _make_user_movie(uid, mid_a, elo=1000, battles=5, seen=None)
+    um_a = _make_user_movie(uid, mid_a, elo=1000, battles=0, seen=None)
     um_b = _make_user_movie(uid, mid_b, elo=1000, battles=5, seen=None)
 
     db = AsyncMock()
@@ -381,7 +380,7 @@ async def test_process_duel_b_only_skips_elo():
     assert result.api_result.movie_b_elo_delta == 0
     assert um_a.seen is False
     assert um_b.seen is True
-    assert um_a.battles == 5
+    assert um_a.battles == 0
     assert um_b.battles == 5
 
 
@@ -397,8 +396,8 @@ async def test_process_duel_neither_skips_elo():
     mid_a = uuid.uuid4()
     mid_b = uuid.uuid4()
 
-    um_a = _make_user_movie(uid, mid_a, elo=1000, battles=5, seen=None)
-    um_b = _make_user_movie(uid, mid_b, elo=1000, battles=5, seen=None)
+    um_a = _make_user_movie(uid, mid_a, elo=1000, battles=0, seen=None)
+    um_b = _make_user_movie(uid, mid_b, elo=1000, battles=0, seen=None)
 
     db = AsyncMock()
     db.execute = _make_fake_execute(um_a, um_b)
@@ -410,8 +409,111 @@ async def test_process_duel_neither_skips_elo():
     assert um_a.seen is False
     assert um_b.seen is False
     # Battles should NOT be incremented for neither outcome
-    assert um_a.battles == 5
-    assert um_b.battles == 5
+    assert um_a.battles == 0
+    assert um_b.battles == 0
+
+
+# ---------------------------------------------------------------------------
+# process_duel — ranked film protection (seen not overridden)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_process_duel_a_only_preserves_seen_for_ranked_b():
+    """a_only should NOT flip seen=False on B when B has battles > 0."""
+    uid = uuid.uuid4()
+    mid_a = uuid.uuid4()
+    mid_b = uuid.uuid4()
+
+    um_a = _make_user_movie(uid, mid_a, elo=1000, battles=5, seen=None)
+    um_b = _make_user_movie(uid, mid_b, elo=900, battles=3, seen=True)
+
+    db = AsyncMock()
+    db.execute = _make_fake_execute(um_a, um_b)
+
+    await process_duel(db, uid, mid_a, mid_b, "a_only", "discovery")
+
+    # B is already ranked — seen must not be overridden
+    assert um_b.seen is True
+
+
+@pytest.mark.asyncio
+async def test_process_duel_b_only_preserves_seen_for_ranked_a():
+    """b_only should NOT flip seen=False on A when A has battles > 0."""
+    uid = uuid.uuid4()
+    mid_a = uuid.uuid4()
+    mid_b = uuid.uuid4()
+
+    um_a = _make_user_movie(uid, mid_a, elo=900, battles=3, seen=True)
+    um_b = _make_user_movie(uid, mid_b, elo=1000, battles=5, seen=None)
+
+    db = AsyncMock()
+    db.execute = _make_fake_execute(um_a, um_b)
+
+    await process_duel(db, uid, mid_a, mid_b, "b_only", "discovery")
+
+    assert um_a.seen is True
+
+
+@pytest.mark.asyncio
+async def test_process_duel_neither_preserves_seen_for_ranked_films():
+    """neither should NOT flip seen=False on films that already have battles > 0."""
+    uid = uuid.uuid4()
+    mid_a = uuid.uuid4()
+    mid_b = uuid.uuid4()
+
+    um_a = _make_user_movie(uid, mid_a, elo=1000, battles=3, seen=True)
+    um_b = _make_user_movie(uid, mid_b, elo=900, battles=2, seen=True)
+
+    db = AsyncMock()
+    db.execute = _make_fake_execute(um_a, um_b)
+
+    await process_duel(db, uid, mid_a, mid_b, "neither", "discovery")
+
+    assert um_a.seen is True
+    assert um_b.seen is True
+
+
+@pytest.mark.asyncio
+async def test_process_duel_neither_marks_unseen_for_unranked_films():
+    """neither SHOULD flip seen=False on films with battles == 0."""
+    uid = uuid.uuid4()
+    mid_a = uuid.uuid4()
+    mid_b = uuid.uuid4()
+
+    um_a = _make_user_movie(uid, mid_a, elo=None, battles=0, seen=None)
+    um_b = _make_user_movie(uid, mid_b, elo=None, battles=0, seen=None)
+
+    db = AsyncMock()
+    db.execute = _make_fake_execute(um_a, um_b)
+
+    await process_duel(db, uid, mid_a, mid_b, "neither", "discovery")
+
+    assert um_a.seen is False
+    assert um_b.seen is False
+
+
+@pytest.mark.asyncio
+async def test_process_duel_neither_preserves_ranked_but_marks_unranked():
+    """neither should preserve seen on the ranked film but mark unseen on the unranked one."""
+    uid = uuid.uuid4()
+    mid_a = uuid.uuid4()
+    mid_b = uuid.uuid4()
+
+    # A is ranked (has been in competitive duels before)
+    um_a = _make_user_movie(uid, mid_a, elo=1000, battles=3, seen=True)
+    # B is unranked (new addition, never duelled)
+    um_b = _make_user_movie(uid, mid_b, elo=None, battles=0, seen=None)
+
+    db = AsyncMock()
+    db.execute = _make_fake_execute(um_a, um_b)
+
+    await process_duel(db, uid, mid_a, mid_b, "neither", "discovery")
+
+    # Ranked film must NOT have seen reset
+    assert um_a.seen is True
+    # Unranked film SHOULD be marked unseen
+    assert um_b.seen is False
 
 
 # ---------------------------------------------------------------------------
@@ -434,8 +536,6 @@ async def test_pair_type_ranked_vs_ranked():
 
     await process_duel(db, uid, mid_a, mid_b, "a_wins", "ranked")
 
-    from backend.db_models import Duel
-
     duel_adds = [
         call.args[0] for call in db.add.call_args_list if isinstance(call.args[0], Duel)
     ]
@@ -457,8 +557,6 @@ async def test_pair_type_ranked_vs_unranked():
     db.execute = _make_fake_execute(um_a, um_b)
 
     await process_duel(db, uid, mid_a, mid_b, "a_wins", "discovery")
-
-    from backend.db_models import Duel
 
     duel_adds = [
         call.args[0] for call in db.add.call_args_list if isinstance(call.args[0], Duel)

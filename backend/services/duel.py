@@ -200,18 +200,22 @@ async def process_duel(
     elif outcome == "a_only":
         if um_a_seen_was_none:
             um_a.seen = True
-        um_b.seen = False
+        if um_b.battles == 0:
+            um_b.seen = False
         um_a.updated_at = now
         um_b.updated_at = now
     elif outcome == "b_only":
         if um_b_seen_was_none:
             um_b.seen = True
-        um_a.seen = False
+        if um_a.battles == 0:
+            um_a.seen = False
         um_a.updated_at = now
         um_b.updated_at = now
     elif outcome == "neither":
-        um_a.seen = False
-        um_b.seen = False
+        if um_a.battles == 0:
+            um_a.seen = False
+        if um_b.battles == 0:
+            um_b.seen = False
         um_a.updated_at = now
         um_b.updated_at = now
 
