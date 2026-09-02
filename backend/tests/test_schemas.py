@@ -173,13 +173,17 @@ class TestSwipeSubmit:
     def test_valid_submit(self):
         ss = SwipeSubmit(
             results=[
-                SwipeResultItem(movie_id="abc-123", seen=True),
-                SwipeResultItem(movie_id="def-456", seen=False),
+                SwipeResultItem(movie_id="550e8400-e29b-41d4-a716-446655440000", seen=True),
+                SwipeResultItem(movie_id="550e8400-e29b-41d4-a716-446655440001", seen=False),
             ]
         )
         assert len(ss.results) == 2
         assert ss.results[0].seen is True
         assert ss.results[1].seen is False
+
+    def test_invalid_uuid_rejected(self):
+        with pytest.raises(ValidationError):
+            SwipeResultItem(movie_id="not-a-uuid", seen=True)
 
     def test_empty_results_valid(self):
         ss = SwipeSubmit(results=[])

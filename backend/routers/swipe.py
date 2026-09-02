@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
@@ -189,11 +188,9 @@ async def submit_swipe_results(
     unseen_count = 0
 
     for item in body.results:
-        movie_id = uuid.UUID(item.movie_id)
-
         # Update user_movies.seen
         stmt = select(UserMovie).where(
-            UserMovie.user_id == uid, UserMovie.movie_id == movie_id
+            UserMovie.user_id == uid, UserMovie.movie_id == item.movie_id
         )
         result = await db.execute(stmt)
         um = result.scalar_one_or_none()
@@ -201,11 +198,11 @@ async def submit_swipe_results(
             um.seen = item.seen
             um.updated_at = now
         else:
-            logger.warning("UserMovie not found for user=%s movie=%s", uid, movie_id)
+            logger.warning("UserMovie not found for user=%s movie=%s", uid, item.movie_id)
             continue
 
         # Insert swipe_results record
-        sr = SwipeResult(user_id=uid, movie_id=movie_id, seen=item.seen)
+        sr = SwipeResult(user_id=uid, movie_id=item.movie_id, seen=item.seen)
         db.add(sr)
 
         if item.seen:
