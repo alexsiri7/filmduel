@@ -7,7 +7,7 @@ COPY frontend/ ./
 RUN npm run build && test -f dist/index.html
 
 # Stage 2: Python backend + built frontend
-FROM python:3.14-slim@sha256:ce40764625a4ff50df3548277632e7f96c4e77fe75fa848aae9885476e7df5a4
+FROM python:3.12-slim@sha256:2fe5997d249a808b8eeea52c58a1dbffbba28754dc11699ef5c029f2d818ce79
 WORKDIR /app
 
 COPY backend/requirements.txt ./
