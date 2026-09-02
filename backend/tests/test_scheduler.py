@@ -58,12 +58,18 @@ class TestRunRetentionPurge:
         with patch("backend.scheduler.async_session_factory", side_effect=make_ctx), \
              patch("backend.scheduler.purge_old_duels", return_value=3) as mock_duels, \
              patch("backend.scheduler.purge_old_swipe_results", return_value=1) as mock_swipes, \
-             patch("backend.scheduler.purge_expired_screenshots", return_value=0) as mock_ss:
+             patch("backend.scheduler.purge_expired_screenshots", return_value=0) as mock_ss, \
+             patch("backend.scheduler.purge_old_tournament_llm_responses", return_value=0) as mock_tourn, \
+             patch("backend.scheduler.purge_old_suggestions", return_value=0) as mock_sugg, \
+             patch("backend.scheduler.purge_old_feedback_reports", return_value=0) as mock_fb:
             await _run_retention_purge()
 
         assert mock_duels.await_count == 1
         assert mock_swipes.await_count == 1
         assert mock_ss.await_count == 1
+        assert mock_tourn.await_count == 1
+        assert mock_sugg.await_count == 1
+        assert mock_fb.await_count == 1
         for session in sessions:
             session.commit.assert_awaited_once()
             session.rollback.assert_not_awaited()
@@ -81,15 +87,17 @@ class TestRunRetentionPurge:
         with patch("backend.scheduler.async_session_factory", side_effect=make_ctx), \
              patch("backend.scheduler.purge_old_duels", side_effect=RuntimeError("db error")), \
              patch("backend.scheduler.purge_old_swipe_results", return_value=1), \
-             patch("backend.scheduler.purge_expired_screenshots", return_value=0):
+             patch("backend.scheduler.purge_expired_screenshots", return_value=0), \
+             patch("backend.scheduler.purge_old_tournament_llm_responses", return_value=0), \
+             patch("backend.scheduler.purge_old_suggestions", return_value=0), \
+             patch("backend.scheduler.purge_old_feedback_reports", return_value=0):
             # Should NOT raise — per-session errors are logged and swallowed
             await _run_retention_purge()
 
         # First session (duels) rolled back, not committed
         sessions[0].rollback.assert_awaited_once()
         sessions[0].commit.assert_not_awaited()
-        # Remaining sessions (swipes, screenshots) committed normally
-        sessions[1].commit.assert_awaited_once()
-        sessions[1].rollback.assert_not_awaited()
-        sessions[2].commit.assert_awaited_once()
-        sessions[2].rollback.assert_not_awaited()
+        # Remaining sessions (swipes, screenshots, tournament_llm, suggestions, feedback_reports) committed normally
+        for session in sessions[1:]:
+            session.commit.assert_awaited_once()
+            session.rollback.assert_not_awaited()

@@ -11,7 +11,10 @@ from backend.db import async_session_factory
 from backend.services.retention import (
     purge_expired_screenshots,
     purge_old_duels,
+    purge_old_feedback_reports,
+    purge_old_suggestions,
     purge_old_swipe_results,
+    purge_old_tournament_llm_responses,
 )
 
 logger = logging.getLogger(__name__)
@@ -28,6 +31,9 @@ async def _run_retention_purge() -> None:
         ("duels", purge_old_duels),
         ("swipes", purge_old_swipe_results),
         ("screenshots", purge_expired_screenshots),
+        ("tournament_llm", purge_old_tournament_llm_responses),
+        ("suggestions", purge_old_suggestions),
+        ("feedback_reports", purge_old_feedback_reports),
     ]:
         async with async_session_factory() as session:
             try:
@@ -37,10 +43,14 @@ async def _run_retention_purge() -> None:
                 await session.rollback()
                 logger.exception("scheduled_retention_purge failed name=%s", name)
     logger.info(
-        "scheduled_retention_purge duels=%d swipes=%d screenshots=%d",
+        "scheduled_retention_purge duels=%d swipes=%d screenshots=%d"
+        " tournament_llm=%d suggestions=%d feedback_reports=%d",
         results.get("duels", -1),
         results.get("swipes", -1),
         results.get("screenshots", -1),
+        results.get("tournament_llm", -1),
+        results.get("suggestions", -1),
+        results.get("feedback_reports", -1),
     )
 
 

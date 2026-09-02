@@ -10,7 +10,10 @@ import pytest
 from backend.services.retention import (
     purge_expired_screenshots,
     purge_old_duels,
+    purge_old_feedback_reports,
+    purge_old_suggestions,
     purge_old_swipe_results,
+    purge_old_tournament_llm_responses,
 )
 
 
@@ -65,4 +68,49 @@ class TestPurgeExpiredScreenshots:
     async def test_returns_zero_when_nothing_expired(self):
         db = _make_db([])
         count = await purge_expired_screenshots(db)
+        assert count == 0
+
+
+class TestPurgeOldTournamentLlmResponses:
+    @pytest.mark.asyncio
+    async def test_returns_count_of_updated_rows(self):
+        ids = [uuid.uuid4(), uuid.uuid4()]
+        db = _make_db(ids)
+        count = await purge_old_tournament_llm_responses(db)
+        assert count == 2
+
+    @pytest.mark.asyncio
+    async def test_returns_zero_when_nothing_to_update(self):
+        db = _make_db([])
+        count = await purge_old_tournament_llm_responses(db)
+        assert count == 0
+
+
+class TestPurgeOldSuggestions:
+    @pytest.mark.asyncio
+    async def test_returns_count_of_deleted_rows(self):
+        ids = [uuid.uuid4()]
+        db = _make_db(ids)
+        count = await purge_old_suggestions(db)
+        assert count == 1
+
+    @pytest.mark.asyncio
+    async def test_returns_zero_when_nothing_to_delete(self):
+        db = _make_db([])
+        count = await purge_old_suggestions(db)
+        assert count == 0
+
+
+class TestPurgeOldFeedbackReports:
+    @pytest.mark.asyncio
+    async def test_returns_count_of_deleted_rows(self):
+        ids = [uuid.uuid4(), uuid.uuid4(), uuid.uuid4()]
+        db = _make_db(ids)
+        count = await purge_old_feedback_reports(db)
+        assert count == 3
+
+    @pytest.mark.asyncio
+    async def test_returns_zero_when_nothing_to_delete(self):
+        db = _make_db([])
+        count = await purge_old_feedback_reports(db)
         assert count == 0
