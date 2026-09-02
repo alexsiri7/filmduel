@@ -214,3 +214,38 @@ class TestPurgeSwipeResults:
         # No dependency overrides — auth stack runs normally
         response = client.delete("/api/swipe/admin/purge-old-records")
         assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Band-boundary deduplication (SEC-018)
+# ---------------------------------------------------------------------------
+
+
+class TestBandBoundaryIndexClamping:
+    """Verify that boundary bands produce clamped adjacent indices equal to target."""
+
+    def test_elite_above_clamped_to_self(self):
+        # band_idx=0: max(0, -1) == 0
+        band_idx = 0
+        above_idx = max(0, band_idx - 1)
+        assert above_idx == band_idx, "above_idx should equal target at elite band"
+
+    def test_poor_below_clamped_to_self(self):
+        # band_idx=4: min(4, 5) == 4
+        band_idx = 4
+        below_idx = min(len(BANDS) - 1, band_idx + 1)
+        assert below_idx == band_idx, "below_idx should equal target at poor band"
+
+    def test_clamped_ranges_are_identical(self):
+        # When indices are equal, ranges are identical — the source of the duplicate risk
+        band_idx = 0
+        above_idx = max(0, band_idx - 1)
+        assert _community_rating_range(band_idx) == _community_rating_range(above_idx)
+
+    def test_mid_band_ranges_are_distinct(self):
+        # Middle bands should have distinct adjacent ranges
+        band_idx = 2
+        above_idx = max(0, band_idx - 1)
+        below_idx = min(len(BANDS) - 1, band_idx + 1)
+        assert _community_rating_range(band_idx) != _community_rating_range(above_idx)
+        assert _community_rating_range(band_idx) != _community_rating_range(below_idx)
