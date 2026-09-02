@@ -180,7 +180,7 @@ class Settings(BaseSettings):
             init_settings,
             _TolerantEnvSource(settings_cls),
             dotenv_settings,
-            *(([file_secret_settings]) if file_secret_settings else []),
+            *((file_secret_settings,) if file_secret_settings else ()),
         )
 
     @property

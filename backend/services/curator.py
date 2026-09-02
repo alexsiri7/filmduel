@@ -148,9 +148,8 @@ async def curate_tournament(
 
     if len(result["film_ids"]) > bracket_size:
         logger.warning(
-            "LLM returned %d films instead of %d, trimming to %d",
+            "LLM returned %d films instead of %d; trimming",
             len(result["film_ids"]),
-            bracket_size,
             bracket_size,
         )
         result["film_ids"] = result["film_ids"][:bracket_size]
