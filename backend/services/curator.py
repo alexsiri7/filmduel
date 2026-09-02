@@ -19,8 +19,8 @@ class CurationError(Exception):
 # These are common LLM prompt-injection phrases that should not appear in film titles.
 _INJECTION_PATTERN = re.compile(
     r"\b(ignore|disregard|forget|override|bypass)\b.{0,40}"
-    r"\b(instruction|prompt|rule|system|previous|above|context)\b"
-    r"|\b(respond as|act as|you are now|new instruction|respond only|from now on)\b",
+    r"\b(instructions?|prompts?|rules?|system|previous|above|context)\b"
+    r"|\b(respond as|act as|you are now|new instructions?|respond only|from now on)\b",
     re.IGNORECASE,
 )
 
@@ -31,9 +31,10 @@ def sanitize_llm_input(text: str, max_len: int = 200) -> str:
     text = re.sub(r"""[{}\[\]<>"']""", "", text)
     text = text.replace("\n", " ").replace("\r", " ")
     text = text.strip()
-    if _INJECTION_PATTERN.search(text):
+    sanitized = _INJECTION_PATTERN.sub("[REDACTED]", text)
+    if sanitized != text:
         logger.warning("Possible prompt injection detected in LLM input; redacting")
-        text = _INJECTION_PATTERN.sub("[REDACTED]", text)
+        text = sanitized
     return text
 
 
