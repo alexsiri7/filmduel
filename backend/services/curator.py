@@ -128,14 +128,14 @@ async def curate_tournament(
         except Exception:
             result = None
         if result is None:
-            logger.error("Failed to parse LLM JSON output: %s", text_content[:500])
+            logger.error("Failed to parse LLM JSON output: len=%d", len(text_content))
             raise CurationError("AI curation returned invalid JSON. Please try again.")
 
     # Validate required fields
     required_keys = {"name", "tagline", "theme_description", "film_ids"}
     missing = required_keys - result.keys()
     if missing:
-        logger.error("LLM response missing keys %s: %s", missing, result)
+        logger.error("LLM response missing keys: %s", missing)
         raise CurationError(f"AI curation response missing fields: {', '.join(missing)}")
 
     if not isinstance(result["film_ids"], list):
