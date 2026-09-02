@@ -26,7 +26,12 @@ _INJECTION_PATTERN = re.compile(
 
 
 def sanitize_llm_input(text: str, max_len: int = 200) -> str:
-    """Strip potential prompt injection from user-controlled or DB-sourced strings."""
+    """Sanitize user-controlled or DB-sourced strings before LLM prompt insertion.
+
+    Strips structural delimiters, flattens newlines, and redacts semantic
+    prompt-injection patterns (replaced with ``[REDACTED]``).  Logs a warning
+    when redaction occurs.
+    """
     text = text[:max_len]
     text = re.sub(r"""[{}\[\]<>"']""", "", text)
     text = text.replace("\n", " ").replace("\r", " ")
