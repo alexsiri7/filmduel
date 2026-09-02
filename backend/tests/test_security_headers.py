@@ -5,9 +5,22 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+import backend.main
+from backend.config import Settings
 from backend.main import app
 
 client = TestClient(app)
+
+_SETTINGS_DEFAULTS = {
+    "SECRET_KEY": "test-secret-key-for-unit-tests!!",
+    "TRAKT_CLIENT_ID": "",
+    "TRAKT_CLIENT_SECRET": "",
+    "DATABASE_URL": "postgresql+asyncpg://localhost/test",
+}
+
+
+def _make_settings(**overrides) -> Settings:
+    return Settings(**{**_SETTINGS_DEFAULTS, **overrides})
 
 
 @pytest.fixture(scope="module")
@@ -42,3 +55,33 @@ def test_permissions_policy_present(response):
 
 def test_permissions_policy_disables_geolocation(response):
     assert "geolocation=()" in response.headers["permissions-policy"]
+
+
+class TestHSTS:
+    def test_hsts_present_when_https_base_url(self, monkeypatch):
+        """HSTS header emitted when BASE_URL uses https://."""
+        monkeypatch.setattr(
+            backend.main, "settings", _make_settings(BASE_URL="https://filmduel.example.com")
+        )
+        r = client.get("/health")
+        assert "strict-transport-security" in r.headers
+
+    def test_hsts_present_when_secure_cookies_proxy_override(self, monkeypatch):
+        """HSTS header emitted when SECURE_COOKIES=True even with http:// BASE_URL."""
+        monkeypatch.setattr(
+            backend.main,
+            "settings",
+            _make_settings(BASE_URL="http://localhost:8000", SECURE_COOKIES=True),
+        )
+        r = client.get("/health")
+        assert "strict-transport-security" in r.headers
+
+    def test_hsts_absent_when_http_base_url_no_override(self, monkeypatch):
+        """HSTS header not emitted for plain http:// without SECURE_COOKIES override."""
+        monkeypatch.setattr(
+            backend.main,
+            "settings",
+            _make_settings(BASE_URL="http://localhost:8000"),
+        )
+        r = client.get("/health")
+        assert "strict-transport-security" not in r.headers
