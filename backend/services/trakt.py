@@ -212,9 +212,7 @@ class TraktClient:
             if resp.status_code != 200:
                 return None
             data = resp.json()
-            if data:
-                return data[0].get("movie", {}).get("ids", {}).get("trakt")
-            return None
+            return data[0].get("movie", {}).get("ids", {}).get("trakt") if data else None
 
     async def revoke_token(self, token: str, *, client_secret: str) -> None:
         """Revoke a Trakt OAuth token. Best-effort — does not raise on failure."""
