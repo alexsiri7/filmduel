@@ -46,7 +46,7 @@ echo "Python imports: OK"
 # On other deployments the operator should set FORWARDED_ALLOW_IPS explicitly.
 if [ -z "$FORWARDED_ALLOW_IPS" ]; then
     if [ -n "$RAILWAY_ENVIRONMENT" ]; then
-        echo "WARNING: FORWARDED_ALLOW_IPS not set — detected Railway environment, auto-setting to '*' so X-Forwarded-For is trusted and rate limiting keys on real client IPs"
+        echo "INFO: FORWARDED_ALLOW_IPS not set — detected Railway environment, auto-setting to '*' so X-Forwarded-For is trusted and rate limiting keys on real client IPs"
         FORWARDED_ALLOW_IPS="*"
     else
         echo "WARNING: FORWARDED_ALLOW_IPS not set — defaulting to 127.0.0.1 (loopback only). If running behind a reverse proxy, set FORWARDED_ALLOW_IPS to your proxy CIDR or rate limiting will key on proxy IP instead of client IP"
