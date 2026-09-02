@@ -34,7 +34,7 @@ router = APIRouter(tags=["users"])
 # 2. Update the hardcoded version in frontend/src/components/ConsentModal.jsx to match
 # 3. Update the privacy policy text in frontend/src/pages/PrivacyPolicy.jsx
 # Mismatch between this constant and the stored user value triggers re-consent for existing users.
-CURRENT_PRIVACY_POLICY_VERSION = "2.0"
+CURRENT_PRIVACY_POLICY_VERSION = "2.1"
 
 
 def _build_user_response(user: User) -> UserResponse:

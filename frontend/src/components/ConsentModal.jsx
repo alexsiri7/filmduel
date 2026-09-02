@@ -9,7 +9,7 @@ export default function ConsentModal({ onAccepted }) {
     setLoading(true);
     setError(null);
     try {
-      await acceptConsent("2.0");
+      await acceptConsent("2.1");
       onAccepted();
     } catch (err) {
       console.error("Failed to record consent:", err);
@@ -32,7 +32,9 @@ export default function ConsentModal({ onAccepted }) {
           <li>• OAuth tokens from Trakt (stored encrypted)</li>
           <li>• Your watched film history from Trakt</li>
           <li>• Duel choices and ELO rankings</li>
-          <li>• Film titles, years, genres &amp; preference tiers sent to Requesty.ai for AI recommendations</li>
+          <li>• <strong>AI Watch Suggestions</strong> — your top 10 and bottom 5 ranked films (title, year, genres, preference tier), per-genre affinities, total ranked count, and a candidate pool of up to 50 films from the catalog are sent to Requesty.ai</li>
+          <li>• <strong>AI-Curated Tournaments</strong> — candidate films (title, year, genres, preference tier, duel count) plus any theme or filter you enter are sent to Requesty.ai</li>
+          <li>• Raw ELO scores and account identifiers are never transmitted</li>
           <li>• Error reports sent to Sentry</li>
         </ul>
         <a
