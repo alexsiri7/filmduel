@@ -274,6 +274,22 @@ class TestTournamentCreate:
         with pytest.raises(ValidationError):
             TournamentCreate(bracket_size=4)
 
+    def test_filter_value_accepts_none(self):
+        tc = TournamentCreate(bracket_size=8, filter_value=None)
+        assert tc.filter_value is None
+
+    def test_filter_value_accepts_valid_string(self):
+        tc = TournamentCreate(bracket_size=8, filter_value="Horror")
+        assert tc.filter_value == "Horror"
+
+    def test_filter_value_accepts_exactly_200_chars(self):
+        tc = TournamentCreate(bracket_size=8, filter_value="x" * 200)
+        assert len(tc.filter_value) == 200
+
+    def test_filter_value_rejects_over_200_chars(self):
+        with pytest.raises(ValidationError):
+            TournamentCreate(bracket_size=8, filter_value="x" * 201)
+
     def test_name_max_length_enforced(self):
         with pytest.raises(ValidationError):
             TournamentCreate(bracket_size=16, name="x" * 101)
