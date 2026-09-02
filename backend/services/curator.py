@@ -133,7 +133,7 @@ async def curate_tournament(
 
     # Validate required fields
     required_keys = {"name", "tagline", "theme_description", "film_ids"}
-    missing = required_keys - set(result.keys())
+    missing = required_keys - result.keys()
     if missing:
         logger.error("LLM response missing keys %s: %s", missing, result)
         raise CurationError(f"AI curation response missing fields: {', '.join(missing)}")
@@ -141,17 +141,18 @@ async def curate_tournament(
     if not isinstance(result["film_ids"], list):
         raise CurationError("AI curation returned invalid film_ids (expected list)")
 
-    if len(result["film_ids"]) < bracket_size:
+    film_ids = result["film_ids"]
+    if len(film_ids) < bracket_size:
         raise CurationError(
-            f"AI selected {len(result['film_ids'])} films but bracket needs {bracket_size}. Please try again."
+            f"AI selected {len(film_ids)} films but bracket needs {bracket_size}. Please try again."
         )
 
-    if len(result["film_ids"]) > bracket_size:
+    if len(film_ids) > bracket_size:
         logger.warning(
             "LLM returned %d films instead of %d; trimming",
-            len(result["film_ids"]),
+            len(film_ids),
             bracket_size,
         )
-        result["film_ids"] = result["film_ids"][:bracket_size]
+        result["film_ids"] = film_ids[:bracket_size]
 
     return result

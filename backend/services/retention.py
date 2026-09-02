@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any
 
 from sqlalchemy import delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 async def _purge_by_age(
-    db: AsyncSession, model: Any, cutoff: datetime, log_name: str, retention_days: int
+    db: AsyncSession, model: type, cutoff: datetime, log_name: str, retention_days: int
 ) -> int:
     """Delete rows from ``model`` with created_at older than ``cutoff``. Returns row count."""
     result = await db.execute(
