@@ -11,10 +11,7 @@ def encode_pair_token(id_a: str, id_b: str) -> str:
 
 def decode_pair_token(token: str) -> set[str] | None:
     try:
-        raw = decrypt_token(token)
-        parts = raw.split(",")
-        if len(parts) == 2:
-            return set(parts)
+        parts = decrypt_token(token).split(",")
+        return set(parts) if len(parts) == 2 else None
     except Exception:
-        pass
-    return None
+        return None
