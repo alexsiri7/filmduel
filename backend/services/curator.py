@@ -15,12 +15,27 @@ class CurationError(Exception):
     """Raised when LLM-based curation fails (API error, bad JSON, etc.)."""
 
 
+# Semantic injection patterns — case-insensitive, anchored to word boundaries.
+# These are common LLM prompt-injection phrases that should not appear in film titles.
+_INJECTION_PATTERN = re.compile(
+    r"\b(ignore|disregard|forget|override|bypass)\b.{0,40}"
+    r"\b(instructions?|prompts?|rules?|system|previous|above|context)\b"
+    r"|\b(respond as|act as|you are now|new instructions?|respond only|from now on)\b",
+    re.IGNORECASE,
+)
+
+
 def sanitize_llm_input(text: str, max_len: int = 200) -> str:
     """Strip potential prompt injection from user-controlled or DB-sourced strings."""
     text = text[:max_len]
     text = re.sub(r"""[{}\[\]<>"']""", "", text)
     text = text.replace("\n", " ").replace("\r", " ")
-    return text.strip()
+    text = text.strip()
+    sanitized = _INJECTION_PATTERN.sub("[REDACTED]", text)
+    if sanitized != text:
+        logger.warning("Possible prompt injection detected in LLM input; redacting")
+        text = sanitized
+    return text
 
 
 def elo_tier(elo: int) -> str:
