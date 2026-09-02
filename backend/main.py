@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlparse
@@ -85,11 +86,35 @@ _is_dev = settings.BASE_URL.startswith("http://localhost")
 
 _scheduler = build_scheduler()
 
+# Known platform environment variable indicators for TLS-terminating proxy platforms
+_PROXY_PLATFORM_ENV_VARS = (
+    "RAILWAY_ENVIRONMENT",   # Railway
+    "RENDER",                # Render.com
+    "FLY_APP_NAME",          # Fly.io
+    "HEROKU_APP_NAME",       # Heroku
+    "K_SERVICE",             # Google Cloud Run
+)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _scheduler.start()
     logger.info("retention_scheduler started")
+    # Warn operators who deploy to TLS-terminating proxy platforms without
+    # explicitly setting SECURE_COOKIES=true.
+    if settings.SECURE_COOKIES is None and not settings.is_https:
+        detected = next(
+            (v for v in _PROXY_PLATFORM_ENV_VARS if os.environ.get(v)), None
+        )
+        if detected:
+            logger.warning(
+                "cookie_secure_unset: detected platform env var %r but SECURE_COOKIES is "
+                "not explicitly configured and BASE_URL=%r does not use https://. "
+                "Session cookies will be issued WITHOUT the Secure flag. "
+                "Set SECURE_COOKIES=true in your environment to fix this.",
+                detected,
+                settings.BASE_URL,
+            )
     yield
     _scheduler.shutdown(wait=False)
     logger.info("retention_scheduler stopped")

@@ -280,3 +280,55 @@ class TestDatabaseUrlValidation:
         monkeypatch.delenv("DATABASE_URL", raising=False)
         with pytest.raises(ValidationError, match="DATABASE_URL"):
             Settings(SECRET_KEY="test-secret-key-for-unit-tests!!")
+
+
+class TestCookieSecureStartupWarning:
+    """Verify that the startup warning fires under the right conditions."""
+
+    _PROXY_PLATFORM_ENV_VARS = (
+        "RAILWAY_ENVIRONMENT", "RENDER", "FLY_APP_NAME", "HEROKU_APP_NAME", "K_SERVICE",
+    )
+
+    def test_warning_emitted_when_railway_env_and_http_base_url(self, monkeypatch):
+        """Warning is logged when RAILWAY_ENVIRONMENT is set and BASE_URL is http://."""
+        import os
+        monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+        s = _make_settings(BASE_URL="http://localhost:8000", SECURE_COOKIES=None)
+        detected = next((v for v in self._PROXY_PLATFORM_ENV_VARS if os.environ.get(v)), None)
+        should_warn = s.SECURE_COOKIES is None and not s.is_https and detected is not None
+        assert should_warn, "Expected warning condition to be True for Railway + http:// BASE_URL"
+
+    def test_no_warning_when_secure_cookies_explicitly_set(self, monkeypatch):
+        """Warning is suppressed when SECURE_COOKIES is explicitly set (True or False)."""
+        monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+        s_true = _make_settings(BASE_URL="http://localhost:8000", SECURE_COOKIES=True)
+        assert s_true.SECURE_COOKIES is not None  # condition not triggered
+
+        s_false = _make_settings(BASE_URL="http://localhost:8000", SECURE_COOKIES=False)
+        assert s_false.SECURE_COOKIES is not None  # condition not triggered
+
+    def test_no_warning_when_base_url_is_https(self, monkeypatch):
+        """Warning is suppressed when BASE_URL already uses https://."""
+        monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+        s = _make_settings(BASE_URL="https://example.com")
+        assert s.is_https is True
+
+    def test_no_warning_when_no_platform_env(self, monkeypatch):
+        """Warning is suppressed when no platform env var is present (local dev)."""
+        import os
+        for var in self._PROXY_PLATFORM_ENV_VARS:
+            monkeypatch.delenv(var, raising=False)
+        s = _make_settings(BASE_URL="http://localhost:8000")
+        detected = next((v for v in self._PROXY_PLATFORM_ENV_VARS if os.environ.get(v)), None)
+        should_warn = s.SECURE_COOKIES is None and not s.is_https and detected is not None
+        assert not should_warn, "Expected no warning for local dev without platform env vars"
+
+    def test_warning_fires_for_render_env(self, monkeypatch):
+        """Warning fires for Render.com platform (RENDER env var)."""
+        import os
+        monkeypatch.setenv("RENDER", "true")
+        s = _make_settings(BASE_URL="http://example.com")
+        detected = next((v for v in self._PROXY_PLATFORM_ENV_VARS if os.environ.get(v)), None)
+        should_warn = s.SECURE_COOKIES is None and not s.is_https and detected is not None
+        assert should_warn
+        assert detected == "RENDER"
