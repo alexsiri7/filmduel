@@ -18,13 +18,13 @@ describe("ConsentModal", () => {
     expect(screen.getByRole("link", { name: /privacy policy/i })).toBeInTheDocument();
   });
 
-  it("calls acceptConsent('1.0') and onAccepted when button is clicked", async () => {
+  it("calls acceptConsent('2.1') and onAccepted when button is clicked", async () => {
     acceptConsent.mockResolvedValueOnce({});
     const onAccepted = vi.fn();
     render(<ConsentModal onAccepted={onAccepted} />);
     fireEvent.click(screen.getByRole("button", { name: /i accept/i }));
     await waitFor(() => {
-      expect(acceptConsent).toHaveBeenCalledWith("2.0");
+      expect(acceptConsent).toHaveBeenCalledWith("2.1");
       expect(onAccepted).toHaveBeenCalledOnce();
     });
   });
