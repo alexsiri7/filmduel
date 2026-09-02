@@ -136,6 +136,16 @@ async def get_swipe_cards(
             result = await db.execute(stmt)
             rows.extend(result.all())
 
+        # Deduplicate: boundary bands (elite/poor) clamp above/below index to target,
+        # so two queries can return the same movies.
+        seen_ids_set: set[uuid.UUID] = set()
+        deduped = []
+        for row in rows:
+            if row.id not in seen_ids_set:
+                seen_ids_set.add(row.id)
+                deduped.append(row)
+        rows = deduped
+
         # If we didn't get enough from banded selection, backfill randomly
         if len(rows) < 10:
             seen_ids = [r.id for r in rows]

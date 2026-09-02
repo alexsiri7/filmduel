@@ -214,3 +214,92 @@ class TestPurgeSwipeResults:
         # No dependency overrides — auth stack runs normally
         response = client.delete("/api/swipe/admin/purge-old-records")
         assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Band-boundary deduplication (SEC-018)
+# ---------------------------------------------------------------------------
+
+
+class TestBandBoundaryIndexClamping:
+    """Verify that boundary bands produce clamped adjacent indices equal to target."""
+
+    def test_elite_above_clamped_to_self(self):
+        # band_idx=0: max(0, -1) == 0
+        band_idx = 0
+        above_idx = max(0, band_idx - 1)
+        assert above_idx == band_idx, "above_idx should equal target at elite band"
+
+    def test_poor_below_clamped_to_self(self):
+        # band_idx=4: min(4, 5) == 4
+        band_idx = 4
+        below_idx = min(len(BANDS) - 1, band_idx + 1)
+        assert below_idx == band_idx, "below_idx should equal target at poor band"
+
+    def test_clamped_ranges_are_identical(self):
+        # When indices are equal, ranges are identical — the source of the duplicate risk
+        band_idx = 0
+        above_idx = max(0, band_idx - 1)
+        assert _community_rating_range(band_idx) == _community_rating_range(above_idx)
+
+    def test_mid_band_ranges_are_distinct(self):
+        # Middle bands should have distinct adjacent ranges
+        band_idx = 2
+        above_idx = max(0, band_idx - 1)
+        below_idx = min(len(BANDS) - 1, band_idx + 1)
+        assert _community_rating_range(band_idx) != _community_rating_range(above_idx)
+        assert _community_rating_range(band_idx) != _community_rating_range(below_idx)
+
+    def test_poor_clamped_ranges_are_identical(self):
+        # When below_idx is clamped at poor band (band_idx=4), ranges are identical
+        band_idx = 4
+        below_idx = min(len(BANDS) - 1, band_idx + 1)
+        assert _community_rating_range(band_idx) == _community_rating_range(below_idx)
+
+
+# ---------------------------------------------------------------------------
+# Deduplication logic (SEC-018 fix)
+# ---------------------------------------------------------------------------
+
+
+class TestDeduplicateRows:
+    """Unit-tests for the seen_ids_set deduplication logic (SEC-018 fix)."""
+
+    def _dedup(self, rows):
+        """Mirror of the dedup block in get_swipe_cards."""
+        seen_ids_set: set = set()
+        deduped: list = []
+        for row in rows:
+            if row.id not in seen_ids_set:
+                seen_ids_set.add(row.id)
+                deduped.append(row)
+        return deduped
+
+    def _row(self, id_val):
+        r = MagicMock()
+        r.id = id_val
+        return r
+
+    def test_removes_duplicate_ids(self):
+        rows = [self._row(1), self._row(2), self._row(1)]  # id=1 appears twice
+        result = self._dedup(rows)
+        assert [r.id for r in result] == [1, 2]
+
+    def test_preserves_order_of_first_occurrence(self):
+        rows = [self._row(3), self._row(1), self._row(3), self._row(2)]
+        result = self._dedup(rows)
+        assert [r.id for r in result] == [3, 1, 2]
+
+    def test_no_duplicates_returns_all(self):
+        rows = [self._row(i) for i in range(10)]
+        result = self._dedup(rows)
+        assert len(result) == 10
+
+    def test_empty_input_returns_empty(self):
+        assert self._dedup([]) == []
+
+    def test_all_same_id_returns_one(self):
+        rows = [self._row(42)] * 6
+        result = self._dedup(rows)
+        assert len(result) == 1
+        assert result[0].id == 42
