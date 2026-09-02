@@ -34,8 +34,7 @@ def sanitize_llm_input(text: str, max_len: int = 200) -> str:
     sanitized = _INJECTION_PATTERN.sub("[REDACTED]", text)
     if sanitized != text:
         logger.warning("Possible prompt injection detected in LLM input; redacting")
-        text = sanitized
-    return text
+    return sanitized
 
 
 def elo_tier(elo: int) -> str:
