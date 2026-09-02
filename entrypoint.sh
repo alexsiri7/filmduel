@@ -40,12 +40,26 @@ python -c "from backend.main import app" 2>&1 || {
 }
 echo "Python imports: OK"
 
+# Resolve trusted proxy IPs for --forwarded-allow-ips.
+# Railway containers are not directly internet-accessible (all external traffic
+# flows through Railway's proxy), so trusting '*' is safe on that platform.
+# On other deployments the operator should set FORWARDED_ALLOW_IPS explicitly.
+if [ -z "$FORWARDED_ALLOW_IPS" ]; then
+    if [ -n "$RAILWAY_ENVIRONMENT" ]; then
+        echo "INFO: FORWARDED_ALLOW_IPS not set — detected Railway environment, auto-setting to '*' so X-Forwarded-For is trusted and rate limiting keys on real client IPs"
+        FORWARDED_ALLOW_IPS="*"
+    else
+        echo "WARNING: FORWARDED_ALLOW_IPS not set — defaulting to 127.0.0.1 (loopback only). If running behind a reverse proxy, set FORWARDED_ALLOW_IPS to your proxy CIDR or rate limiting will key on proxy IP instead of client IP"
+        FORWARDED_ALLOW_IPS="127.0.0.1"
+    fi
+fi
+
 # Start uvicorn in background so Railway's health check passes during migrations.
 uvicorn backend.main:app \
   --host 0.0.0.0 \
   --port "${PORT:-8080}" \
   --proxy-headers \
-  --forwarded-allow-ips="${FORWARDED_ALLOW_IPS:-127.0.0.1}" &
+  --forwarded-allow-ips="$FORWARDED_ALLOW_IPS" &
 UVICORN_PID=$!
 
 trap 'kill "$UVICORN_PID" 2>/dev/null; wait "$UVICORN_PID" 2>/dev/null || true' TERM INT

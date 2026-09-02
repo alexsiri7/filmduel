@@ -94,6 +94,7 @@ async def _create_suggestions(
     if not picks:
         return []
 
+    now = datetime.now(timezone.utc)
     suggestions = []
     for pick in picks:
         try:
@@ -107,7 +108,7 @@ async def _create_suggestions(
             user_id=user_id,
             movie_id=movie_id,
             reason=pick["reason"],
-            generated_at=datetime.now(timezone.utc),
+            generated_at=now,
         )
         db.add(s)
         suggestions.append(s)
