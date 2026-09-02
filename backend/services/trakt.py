@@ -111,6 +111,9 @@ class TraktClient:
     ) -> list[dict]:
         """Fetch a user's watched movies or shows.
 
+        The username is URL-encoded (including ``/``) to prevent SSRF via API
+        path injection.
+
         Returns [{plays, last_watched_at, movie/show}, ...] — this extracts
         the inner dicts.
         """
@@ -126,6 +129,9 @@ class TraktClient:
         self, username: str, media_type: str = "movie"
     ) -> list[dict]:
         """Fetch a user's movie or show ratings.
+
+        The username is URL-encoded (including ``/``) to prevent SSRF via API
+        path injection.
 
         Returns [{rating, trakt_id}, ...].
         """
