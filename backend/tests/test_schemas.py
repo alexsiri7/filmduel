@@ -278,6 +278,10 @@ class TestTournamentCreate:
         tc = TournamentCreate(bracket_size=8, filter_value=None)
         assert tc.filter_value is None
 
+    def test_filter_value_accepts_empty_string(self):
+        tc = TournamentCreate(bracket_size=8, filter_value="")
+        assert tc.filter_value == ""
+
     def test_filter_value_accepts_valid_string(self):
         tc = TournamentCreate(bracket_size=8, filter_value="Horror")
         assert tc.filter_value == "Horror"
