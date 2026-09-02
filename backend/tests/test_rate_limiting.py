@@ -652,3 +652,33 @@ def test_create_tournament_daily_cap_allows_below_limit():
     app.dependency_overrides.clear()
     # 500 means cap was NOT hit (we passed through to the next step which we forced to fail)
     assert resp.status_code != 429
+
+
+# ---------------------------------------------------------------------------
+# Limiter registration — admin endpoints (issue #491 / SEC-014)
+# ---------------------------------------------------------------------------
+
+
+def test_list_feedback_is_registered_with_rate_limiter():
+    """list_feedback must be registered in the slowapi limiter."""
+    assert "backend.routers.feedback.list_feedback" in limiter._Limiter__marked_for_limiting
+
+
+def test_scrub_screenshot_is_registered_with_rate_limiter():
+    """scrub_screenshot must be registered in the slowapi limiter."""
+    assert "backend.routers.feedback.scrub_screenshot" in limiter._Limiter__marked_for_limiting
+
+
+def test_purge_expired_screenshots_is_registered_with_rate_limiter():
+    """purge_expired_screenshots must be registered in the slowapi limiter."""
+    assert "backend.routers.feedback.purge_expired_screenshots" in limiter._Limiter__marked_for_limiting
+
+
+def test_purge_old_duels_is_registered_with_rate_limiter():
+    """purge_old_duels must be registered in the slowapi limiter."""
+    assert "backend.routers.duels.purge_old_duels" in limiter._Limiter__marked_for_limiting
+
+
+def test_purge_old_swipe_results_is_registered_with_rate_limiter():
+    """purge_old_swipe_results must be registered in the slowapi limiter."""
+    assert "backend.routers.swipe.purge_old_swipe_results" in limiter._Limiter__marked_for_limiting
