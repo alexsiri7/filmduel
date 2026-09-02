@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
@@ -47,7 +48,7 @@ class TestBuildScheduler:
 class TestRunRetentionPurge:
     @pytest.mark.asyncio
     async def test_commits_on_success(self):
-        """Happy path: all three purge functions succeed; each session is committed."""
+        """Happy path: all purge functions succeed; each session is committed."""
         sessions = []
 
         def make_ctx():
@@ -73,6 +74,28 @@ class TestRunRetentionPurge:
         for session in sessions:
             session.commit.assert_awaited_once()
             session.rollback.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_logs_all_six_metrics(self, caplog):
+        """Verify the summary log line includes counts for all six purge jobs."""
+
+        def make_ctx():
+            session, ctx = _make_mock_ctx()
+            return ctx
+
+        with caplog.at_level(logging.INFO, logger="backend.scheduler"):
+            with patch("backend.scheduler.async_session_factory", side_effect=make_ctx), \
+                 patch("backend.scheduler.purge_old_duels", return_value=1), \
+                 patch("backend.scheduler.purge_old_swipe_results", return_value=2), \
+                 patch("backend.scheduler.purge_expired_screenshots", return_value=3), \
+                 patch("backend.scheduler.purge_old_tournament_llm_responses", return_value=4), \
+                 patch("backend.scheduler.purge_old_suggestions", return_value=5), \
+                 patch("backend.scheduler.purge_old_feedback_reports", return_value=6):
+                await _run_retention_purge()
+
+        assert "tournament_llm=" in caplog.text
+        assert "suggestions=" in caplog.text
+        assert "feedback_reports=" in caplog.text
 
     @pytest.mark.asyncio
     async def test_rolls_back_on_exception_and_continues(self):

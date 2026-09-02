@@ -99,6 +99,9 @@ async def purge_old_tournament_llm_responses(db: AsyncSession) -> int:
 async def purge_old_suggestions(db: AsyncSession) -> int:
     """Delete suggestions older than SUGGESTION_RETENTION_DAYS. Does not commit; caller must commit.
 
+    Inlines its own delete (rather than using ``_purge_by_age``) because
+    ``Suggestion`` uses ``generated_at`` as its age column, not ``created_at``.
+
     Returns:
         Number of rows deleted.
     """

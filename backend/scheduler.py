@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 async def _run_retention_purge() -> None:
-    """Run all three retention purge jobs, each in its own DB session.
+    """Run all retention purge jobs, each in its own DB session.
 
     Each purge operation commits independently so that a failure in one
     does not roll back successful deletions from another.

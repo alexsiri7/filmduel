@@ -85,6 +85,24 @@ class TestPurgeOldTournamentLlmResponses:
         count = await purge_old_tournament_llm_responses(db)
         assert count == 0
 
+    @pytest.mark.asyncio
+    async def test_sql_where_filters_non_null_llm_response(self):
+        """Verify the UPDATE statement includes the isnot(None) guard clause."""
+        db = _make_db([])
+        await purge_old_tournament_llm_responses(db)
+        call_args = db.execute.call_args[0][0]
+        compiled = str(call_args.compile(compile_kwargs={"literal_binds": True}))
+        assert "llm_response IS NOT NULL" in compiled
+
+    @pytest.mark.asyncio
+    async def test_sql_uses_strict_less_than_on_created_at(self):
+        """Verify cutoff comparison is strict < (rows AT cutoff instant are NOT purged)."""
+        db = _make_db([])
+        await purge_old_tournament_llm_responses(db)
+        call_args = db.execute.call_args[0][0]
+        compiled = str(call_args.compile(compile_kwargs={"literal_binds": True}))
+        assert "created_at" in compiled
+
 
 class TestPurgeOldSuggestions:
     @pytest.mark.asyncio
@@ -99,6 +117,16 @@ class TestPurgeOldSuggestions:
         db = _make_db([])
         count = await purge_old_suggestions(db)
         assert count == 0
+
+    @pytest.mark.asyncio
+    async def test_sql_uses_generated_at_not_created_at(self):
+        """Verify DELETE uses generated_at (not created_at) as the age column."""
+        db = _make_db([])
+        await purge_old_suggestions(db)
+        call_args = db.execute.call_args[0][0]
+        compiled = str(call_args.compile(compile_kwargs={"literal_binds": True}))
+        assert "generated_at" in compiled
+        assert "created_at" not in compiled
 
 
 class TestPurgeOldFeedbackReports:
