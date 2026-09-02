@@ -33,6 +33,7 @@ router = APIRouter(tags=["users"])
 # 1. Update this constant to the new version string
 # 2. Update the hardcoded version in frontend/src/components/ConsentModal.jsx to match
 # 3. Update the privacy policy text in frontend/src/pages/PrivacyPolicy.jsx
+# 4. Update the version check in frontend/src/App.jsx (re-consent guard)
 # Mismatch between this constant and the stored user value triggers re-consent for existing users.
 CURRENT_PRIVACY_POLICY_VERSION = "2.1"
 
