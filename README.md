@@ -59,9 +59,10 @@ docker run -p 8000:8000 --env-file .env filmduel
 
 Alembic migrations run automatically on container start.
 
-> **Reverse proxy deployments** (Railway, nginx, etc.): set `FORWARDED_ALLOW_IPS` in your `.env`
-> to your proxy's IP or CIDR — see `.env.example` for details. Without this, rate limiting will
-> not correctly identify client IPs.
+> **Reverse proxy deployments** (Railway, nginx, etc.): set `FORWARDED_ALLOW_IPS` and
+> `SECURE_COOKIES=true` in your `.env` — see `.env.example` for details. Without
+> `FORWARDED_ALLOW_IPS`, rate limiting will not correctly identify client IPs. Without
+> `SECURE_COOKIES=true`, session cookies will be issued without the Secure flag.
 
 ## How It Works
 
