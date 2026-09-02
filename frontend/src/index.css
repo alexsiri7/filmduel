@@ -50,20 +50,20 @@
 body {
   background-color: #0F0E0D;
   color: #F5F0E8;
-  font-family: 'Manrope', sans-serif;
+  font-family: 'Manrope Variable', 'Manrope', sans-serif;
   margin: 0;
 }
 
 .font-headline {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Space Grotesk Variable', 'Space Grotesk', sans-serif;
 }
 
 .font-body {
-  font-family: 'Manrope', sans-serif;
+  font-family: 'Manrope Variable', 'Manrope', sans-serif;
 }
 
 .font-label {
-  font-family: 'Manrope', sans-serif;
+  font-family: 'Manrope Variable', 'Manrope', sans-serif;
 }
 
 .noir-gradient {
