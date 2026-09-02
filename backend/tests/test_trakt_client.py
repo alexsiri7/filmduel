@@ -142,6 +142,78 @@ class TestTraktClientAuthHeader:
         assert "Authorization" not in client._headers
 
 
+class TestTraktClientUserEndpointsUrlEncoding:
+    @pytest.mark.asyncio
+    async def test_get_user_watched_encodes_username(self):
+        """get_user_watched URL-encodes the username to prevent SSRF via API path injection."""
+        mock_resp = _mock_response([{"movie": {"ids": {"trakt": 1}, "title": "Film"}}])
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_resp
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        client = TraktClient(client_id="test-id")
+        with patch.object(client, "_client", return_value=mock_client):
+            await client.get_user_watched("foo/bar", media_type="movie")
+
+        url = mock_client.get.call_args[0][0]
+        assert "foo/bar" not in url
+        assert "foo%2Fbar" in url
+
+    @pytest.mark.asyncio
+    async def test_get_user_ratings_encodes_username(self):
+        """get_user_ratings URL-encodes the username to prevent SSRF via API path injection."""
+        mock_resp = _mock_response([{"rating": 8, "movie": {"ids": {"trakt": 42}}}])
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_resp
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        client = TraktClient(client_id="test-id")
+        with patch.object(client, "_client", return_value=mock_client):
+            await client.get_user_ratings("foo/bar", media_type="movie")
+
+        url = mock_client.get.call_args[0][0]
+        assert "foo/bar" not in url
+        assert "foo%2Fbar" in url
+
+    @pytest.mark.asyncio
+    async def test_get_user_watched_plain_username_unchanged(self):
+        """Plain usernames are not mangled by URL encoding."""
+        mock_resp = _mock_response([{"movie": {"ids": {"trakt": 1}, "title": "Film"}}])
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_resp
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        client = TraktClient(client_id="test-id")
+        with patch.object(client, "_client", return_value=mock_client):
+            await client.get_user_watched("johnsmith", media_type="movie")
+
+        url = mock_client.get.call_args[0][0]
+        assert "/users/johnsmith/" in url
+
+    @pytest.mark.asyncio
+    async def test_get_user_ratings_plain_username_unchanged(self):
+        """Plain usernames are not mangled by URL encoding."""
+        mock_resp = _mock_response([{"rating": 8, "movie": {"ids": {"trakt": 42}}}])
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_resp
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        client = TraktClient(client_id="test-id")
+        with patch.object(client, "_client", return_value=mock_client):
+            await client.get_user_ratings("johnsmith", media_type="movie")
+
+        url = mock_client.get.call_args[0][0]
+        assert "/users/johnsmith/" in url
+
+
 class TestTraktClientErrorPropagation:
     @pytest.mark.asyncio
     async def test_http_error_raises(self):

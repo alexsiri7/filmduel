@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from urllib.parse import quote
 
 import httpx
 
@@ -110,12 +111,15 @@ class TraktClient:
     ) -> list[dict]:
         """Fetch a user's watched movies or shows.
 
+        The username is URL-encoded (including ``/``) to prevent SSRF via API
+        path injection.
+
         Returns [{plays, last_watched_at, movie/show}, ...] — this extracts
         the inner dicts.
         """
         async with self._client() as client:
             resp = await client.get(
-                f"/users/{username}/watched/{media_type}s",
+                f"/users/{quote(username, safe='')}/watched/{media_type}s",
                 params={"extended": "full"},
             )
             resp.raise_for_status()
@@ -126,11 +130,14 @@ class TraktClient:
     ) -> list[dict]:
         """Fetch a user's movie or show ratings.
 
+        The username is URL-encoded (including ``/``) to prevent SSRF via API
+        path injection.
+
         Returns [{rating, trakt_id}, ...].
         """
         async with self._client() as client:
             resp = await client.get(
-                f"/users/{username}/ratings/{media_type}s",
+                f"/users/{quote(username, safe='')}/ratings/{media_type}s",
             )
             resp.raise_for_status()
             return [

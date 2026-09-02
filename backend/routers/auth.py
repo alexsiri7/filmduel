@@ -206,7 +206,7 @@ def require_consent(user: User = Depends(get_current_user)) -> User:
 
 
 def require_ai_consent(user: User = Depends(get_current_user)) -> User:
-    """FastAPI dependency: reject if user hasn't accepted privacy policy or has disabled AI features."""
+    """FastAPI dependency: reject if user hasn't accepted privacy policy or disabled AI features."""
     require_consent(user)
     if not user.use_ai_features:
         raise HTTPException(
@@ -247,8 +247,8 @@ async def ensure_fresh_token(user: User, db: AsyncSession) -> User:
     if ttl is None:
         logger.warning("Trakt refresh response missing expires_in; using default TTL")
         ttl = _TRAKT_TOKEN_DEFAULT_TTL_SECONDS
-    user.trakt_token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl)
-    user.last_seen_at = datetime.now(timezone.utc)
+    user.trakt_token_expires_at = now + timedelta(seconds=ttl)
+    user.last_seen_at = now
     await db.flush()
 
     return user
