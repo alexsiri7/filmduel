@@ -131,7 +131,6 @@ def test_get_movie_pair_endpoint_reachable():
     app.dependency_overrides.clear()
     # 404 is expected (not enough films); confirms endpoint + Request param works
     assert resp.status_code == 404
-    assert resp.status_code != 500
     assert resp.json()["detail"] == "No eligible pair found"
 
 
@@ -151,7 +150,6 @@ def test_export_csv_endpoint_reachable():
 
     app.dependency_overrides.clear()
     assert resp.status_code == 200
-    assert resp.status_code != 500
 
 
 def test_list_tournaments_endpoint_reachable():
@@ -170,7 +168,6 @@ def test_list_tournaments_endpoint_reachable():
 
     app.dependency_overrides.clear()
     assert resp.status_code == 200
-    assert resp.status_code != 500
 
 
 # ---------------------------------------------------------------------------
@@ -783,7 +780,6 @@ def test_scrub_screenshot_endpoint_reachable():
     app.dependency_overrides.clear()
     # 404 expected (report not found); confirms endpoint + Request param works
     assert resp.status_code == 404
-    assert resp.status_code != 500
 
 
 def test_purge_expired_screenshots_endpoint_reachable():
@@ -805,7 +801,6 @@ def test_purge_expired_screenshots_endpoint_reachable():
 
     app.dependency_overrides.clear()
     assert resp.status_code == 200
-    assert resp.status_code != 500
 
 
 def test_purge_old_duels_endpoint_reachable():
@@ -827,7 +822,6 @@ def test_purge_old_duels_endpoint_reachable():
 
     app.dependency_overrides.clear()
     assert resp.status_code == 200
-    assert resp.status_code != 500
 
 
 def test_purge_old_swipe_results_endpoint_reachable():
@@ -849,4 +843,3 @@ def test_purge_old_swipe_results_endpoint_reachable():
 
     app.dependency_overrides.clear()
     assert resp.status_code == 200
-    assert resp.status_code != 500
