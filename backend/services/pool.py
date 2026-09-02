@@ -69,8 +69,8 @@ def build_movie_upsert(
 
 async def _upsert_user_movie(
     db: AsyncSession,
-    user_id,
-    movie_id,
+    user_id: uuid.UUID,
+    movie_id: uuid.UUID,
     seen: bool | None,
     rating: int | None,
     now: datetime,
