@@ -239,7 +239,6 @@ async def populate_movie_pool(user: User, db: AsyncSession) -> None:
                 db, user, pool, seen_ids, ratings_by_id, media_type, now
             )
 
-    # Update last_seen_at
     user.last_seen_at = now
     await db.flush()
 

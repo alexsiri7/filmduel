@@ -331,13 +331,11 @@ async def regenerate_tournament(
     await db.flush()
 
     # Update tournament metadata
-    t_stmt = select(Tournament).where(Tournament.id == tournament_id)
-    t = (await db.execute(t_stmt)).scalar_one()
     llm_result["_regen_count"] = regen_count + 1
-    t.name = llm_result["name"]
-    t.tagline = llm_result.get("tagline")
-    t.theme_description = llm_result.get("theme_description")
-    t.llm_response = llm_result
+    tournament.name = llm_result["name"]
+    tournament.tagline = llm_result.get("tagline")
+    tournament.theme_description = llm_result.get("theme_description")
+    tournament.llm_response = llm_result
 
     await create_tournament_bracket(
         db, tournament_id, tournament.bracket_size, selected_ums
