@@ -180,6 +180,9 @@ class TestSwipeSubmit:
         assert len(ss.results) == 2
         assert ss.results[0].seen is True
         assert ss.results[1].seen is False
+        # Verify type coercion — guards against accidental str revert
+        assert isinstance(ss.results[0].movie_id, UUID)
+        assert ss.results[0].movie_id == UUID("550e8400-e29b-41d4-a716-446655440000")
 
     def test_invalid_uuid_rejected(self):
         with pytest.raises(ValidationError):
