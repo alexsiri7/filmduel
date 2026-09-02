@@ -16,6 +16,10 @@ describe("ConsentModal", () => {
     expect(screen.getByText(/before you continue/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /i accept/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /privacy policy/i })).toBeInTheDocument();
+    // Verify disclosure bullets are present so regressions are caught
+    expect(screen.getByText(/AI Watch Suggestions/i)).toBeInTheDocument();
+    expect(screen.getByText(/AI-Curated Tournaments/i)).toBeInTheDocument();
+    expect(screen.getByText(/never transmitted/i)).toBeInTheDocument();
   });
 
   it("calls acceptConsent('2.1') and onAccepted when button is clicked", async () => {
