@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "lint:no-cdn-fonts": "! grep -r --exclude-dir=__tests__ 'fonts.googleapis.com\\|fonts.gstatic.com' src index.html"
   },
   "dependencies": {
     "@vitest/ui": "^4.1.11",
