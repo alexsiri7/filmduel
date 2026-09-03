@@ -20,5 +20,5 @@ python-multipart>=0.0.32   # CVE-2024-24762 (ReDoS) affects <=0.0.6
 sentry-sdk[fastapi]>=2.65.0
 slowapi>=0.1.9
 litellm>=1.98.0
-cryptography>=48.0.1
+cryptography>=50.0.1
 apscheduler>=3.10.4,<4
