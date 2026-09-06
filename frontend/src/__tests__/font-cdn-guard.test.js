@@ -2,9 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
-// process.cwd() in vitest resolves to the frontend root (where vite.config.js lives)
-const FRONTEND_ROOT = process.cwd();
-
 const CDN_PATTERNS = [
   'fonts.googleapis.com',
   'fonts.gstatic.com',
@@ -12,9 +9,9 @@ const CDN_PATTERNS = [
 
 // Files in the frontend that previously referenced Google Fonts CDN
 const FILES_TO_CHECK = [
-  ['index.html', resolve(FRONTEND_ROOT, 'index.html')],
-  ['src/index.css', resolve(FRONTEND_ROOT, 'src/index.css')],
-  ['src/main.jsx', resolve(FRONTEND_ROOT, 'src/main.jsx')],
+  ['index.html', resolve('index.html')],
+  ['src/index.css', resolve('src/index.css')],
+  ['src/main.jsx', resolve('src/main.jsx')],
 ];
 
 describe('Google Fonts CDN guard', () => {

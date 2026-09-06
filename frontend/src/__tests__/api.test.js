@@ -18,13 +18,17 @@ describe("api", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn());
     // Save and mock window.location
-    originalLocation = window.location;
-    delete window.location;
-    window.location = { href: "" };
+    if (typeof window !== "undefined") {
+      originalLocation = window.location;
+      delete window.location;
+      window.location = { href: "" };
+    }
   });
 
   afterEach(() => {
-    window.location = originalLocation;
+    if (typeof window !== "undefined") {
+      window.location = originalLocation;
+    }
     vi.restoreAllMocks();
   });
 

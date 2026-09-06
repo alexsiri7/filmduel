@@ -1,5 +1,7 @@
 """Tests for rankings service layer — pure logic (no DB)."""
 
+import csv
+import io
 import uuid
 from unittest.mock import AsyncMock, MagicMock
 
@@ -7,6 +9,7 @@ import pytest
 
 from backend.services.rankings import (
     elo_to_letterboxd_rating,
+    export_rankings_csv,
     get_user_stats,
     parse_decade,
 )
@@ -170,6 +173,59 @@ def test_elo_at_600():
 def test_elo_at_1400():
     """ELO at 1400 should map to rating 10."""
     assert elo_to_letterboxd_rating(1400) == 10
+
+
+# --- export_rankings_csv (integration with mock DB) ---
+
+
+def _make_export_user_movie(title: str, year: int, imdb_id: str, elo: int) -> MagicMock:
+    """Build a mock UserMovie with a loaded .movie relationship for CSV export."""
+    um = MagicMock()
+    um.elo = elo
+    um.movie.title = title
+    um.movie.year = year
+    um.movie.imdb_id = imdb_id
+    um.movie.media_type = "movie"
+    return um
+
+
+@pytest.mark.asyncio
+async def test_export_rankings_csv_valid_csv():
+    """CSV output has correct header and one row per UserMovie."""
+    fake_ums = [
+        _make_export_user_movie("Film A", 2020, "tt0000001", 1200),
+        _make_export_user_movie("Film B", 2019, "tt0000002", 1100),
+        _make_export_user_movie("Film C", 2021, "tt0000003", 1000),
+    ]
+
+    mock_result = MagicMock()
+    mock_result.unique.return_value.scalars.return_value.all.return_value = fake_ums
+    db = AsyncMock()
+    db.execute.return_value = mock_result
+
+    csv_content = await export_rankings_csv(db, uuid.uuid4(), media_type="movie")
+    reader = csv.reader(io.StringIO(csv_content))
+    rows = list(reader)
+
+    assert len(rows) == 4  # 1 header + 3 data
+    assert rows[0] == ["Position", "Title", "Year", "imdbID", "Rating10"]
+
+
+@pytest.mark.asyncio
+async def test_export_rankings_csv_sanitizes_formula_title():
+    """Titles starting with formula characters are prefixed with a single quote in CSV output."""
+    fake_ums = [_make_export_user_movie("=CMD()", 2020, "tt0000001", 1000)]
+
+    mock_result = MagicMock()
+    mock_result.unique.return_value.scalars.return_value.all.return_value = fake_ums
+    db = AsyncMock()
+    db.execute.return_value = mock_result
+
+    csv_content = await export_rankings_csv(db, uuid.uuid4(), media_type="movie")
+    reader = csv.reader(io.StringIO(csv_content))
+    rows = list(reader)
+
+    assert rows[1][1] == "'=CMD()"
 
 
 # --- CSV format ---
