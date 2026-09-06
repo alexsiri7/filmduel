@@ -565,6 +565,78 @@ async def test_pair_type_ranked_vs_unranked():
     assert duel_adds[0].pair_type == "ranked_vs_unranked"
 
 
+# ---------------------------------------------------------------------------
+# process_duel — invalid outcome value
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_process_duel_invalid_outcome_raises():
+    """An invalid outcome string should raise ValueError (via DuelOutcome enum)."""
+    uid = uuid.uuid4()
+    mid_a = uuid.uuid4()
+    mid_b = uuid.uuid4()
+
+    um_a = _make_user_movie(uid, mid_a, elo=1000, battles=5)
+    um_b = _make_user_movie(uid, mid_b, elo=1000, battles=5)
+
+    db = AsyncMock()
+    db.execute = _make_fake_execute(um_a, um_b)
+
+    with pytest.raises(ValueError):
+        await process_duel(db, uid, mid_a, mid_b, "invalid_value", "discovery")
+
+
+# ---------------------------------------------------------------------------
+# process_duel — timestamps updated after a_wins
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_process_duel_a_wins_updates_timestamps():
+    """After a_wins, both UserMovies should have last_dueled_at and updated_at set."""
+    uid = uuid.uuid4()
+    mid_a = uuid.uuid4()
+    mid_b = uuid.uuid4()
+
+    um_a = _make_user_movie(uid, mid_a, elo=1000, battles=5)
+    um_b = _make_user_movie(uid, mid_b, elo=1000, battles=5)
+    original_updated_at_a = um_a.updated_at
+
+    db = AsyncMock()
+    db.execute = _make_fake_execute(um_a, um_b)
+
+    await process_duel(db, uid, mid_a, mid_b, "a_wins", "discovery")
+
+    assert um_a.last_dueled_at is not None
+    assert um_b.last_dueled_at is not None
+    assert um_a.updated_at >= original_updated_at_a
+
+
+# ---------------------------------------------------------------------------
+# process_duel — a_only when um_a.seen was already True (ranked film)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_process_duel_a_only_already_seen_stays_true():
+    """a_only with um_a.seen=True should keep um_a.seen=True (the seen_was_none guard)."""
+    uid = uuid.uuid4()
+    mid_a = uuid.uuid4()
+    mid_b = uuid.uuid4()
+
+    um_a = _make_user_movie(uid, mid_a, elo=1000, battles=5, seen=True)
+    um_b = _make_user_movie(uid, mid_b, elo=None, battles=0, seen=None)
+
+    db = AsyncMock()
+    db.execute = _make_fake_execute(um_a, um_b)
+
+    await process_duel(db, uid, mid_a, mid_b, "a_only", "discovery")
+
+    assert um_a.seen is True
+    assert um_b.seen is False
+
+
 class TestShouldSuggestSwipe:
     """Boundary tests for the swipe-suggestion threshold function."""
 
