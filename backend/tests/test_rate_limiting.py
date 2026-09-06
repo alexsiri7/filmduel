@@ -25,7 +25,10 @@ from slowapi.errors import RateLimitExceeded
 @pytest.fixture(autouse=True)
 def _clear_dependency_overrides():
     """Ensure dependency overrides are cleaned up even if a test raises."""
+    limiter.enabled = False
     yield
+    app.dependency_overrides.clear()
+    limiter.enabled = True
 
 
 def _make_user():
