@@ -11,7 +11,7 @@ jobs:
   deploy-staging:
     name: Deploy to staging
     runs-on: ubuntu-latest
-    timeout-minutes: 45  # guard: Railway build ≤22 min + 16 min health-poll + 7 min buffer
+    timeout-minutes: 52  # guard: Railway build ≤22 min + 16 min health-poll + 7 min railway-up retries + 7 min buffer
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
@@ -42,15 +42,28 @@ jobs:
           # for this service, causing false negatives. --detach exits 0 immediately after upload;
           # the "Wait for staging health" step (60s + 30×30s = ~16 min) verifies actual success.
           # See issue #476 for full root cause analysis.
-          railway up \
-            --service web \
-            --environment staging \
-            --detach \
-          || { echo "ERROR: railway up failed — see Railway logs for details"; exit 1; }
-          # With --detach, railway up returns immediately after upload (before build starts).
-          # Health verification is handled by the "Wait for staging health" step below
-          # (60s pre-wait + 30×30s polling = ~16 min), which is the authoritative gate.
-          echo "railway up complete — deploy phase done"
+          # Retry added 2026-09-07 (issue #525): Railway's upload/API endpoints fail transiently —
+          # a 500 from the upload endpoint and a backboard.railway.com/graphql/v2 timeout after
+          # ~91s, both observed on deploy-production and both clearing on the next run untouched.
+          # Each attempt is capped just above that ~91s so a hung CLI fails one attempt cleanly
+          # rather than eating the job timeout.
+          ATTEMPTS=3
+          for attempt in $(seq 1 "$ATTEMPTS"); do
+            if timeout -k 10 120 railway up \
+                 --service web \
+                 --environment staging \
+                 --detach; then
+              echo "railway up succeeded on attempt $attempt/$ATTEMPTS"
+              exit 0
+            fi
+            if [ "$attempt" -lt "$ATTEMPTS" ]; then
+              delay=$((attempt * 15))
+              echo "railway up failed on attempt $attempt/$ATTEMPTS — retrying in ${delay}s"
+              sleep "$delay"
+            fi
+          done
+          echo "ERROR: railway up failed after $ATTEMPTS attempts — Railway upload/API appears unavailable"
+          exit 1
 
       - name: Wait for staging health
         env:
@@ -108,6 +121,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [deploy-staging, smoke-tests]
     environment: production
+    timeout-minutes: 20  # guard: ≤7 min railway-up retries + ~4 min health/smoke polling + checkout/CLI install + buffer
     permissions:
       deployments: write
     steps:
@@ -122,10 +136,28 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_PRODUCTION_TOKEN }}
         run: |
-          railway up \
-            --service web \
-            --environment production \
-            --detach
+          # Retry added 2026-09-07 (issue #525): Railway's upload/API endpoints fail transiently —
+          # a 500 from the upload endpoint (run 34138717300) and a
+          # backboard.railway.com/graphql/v2 timeout after ~91s (run 33723599288), both clearing on
+          # the next run untouched. Each attempt is capped just above that ~91s so a hung CLI fails
+          # one attempt cleanly rather than eating the job timeout.
+          ATTEMPTS=3
+          for attempt in $(seq 1 "$ATTEMPTS"); do
+            if timeout -k 10 120 railway up \
+                 --service web \
+                 --environment production \
+                 --detach; then
+              echo "railway up succeeded on attempt $attempt/$ATTEMPTS"
+              exit 0
+            fi
+            if [ "$attempt" -lt "$ATTEMPTS" ]; then
+              delay=$((attempt * 15))
+              echo "railway up failed on attempt $attempt/$ATTEMPTS — retrying in ${delay}s"
+              sleep "$delay"
+            fi
+          done
+          echo "ERROR: railway up failed after $ATTEMPTS attempts — Railway upload/API appears unavailable"
+          exit 1
 
       - name: Verify production health
         env:
