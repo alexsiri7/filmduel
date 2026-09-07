@@ -1,0 +1,653 @@
+# Canonical requirements spec. IDs are permanent — never renumber or reuse; append new ones.
+#
+# Reverse-engineered from the codebase (routers, services, tests, docs/PRD.md,
+# docs/TOURNAMENT_SPEC.md, docs/SUGGESTIONS_POOL_SPEC.md, requirements/*.md) on
+# 2026-09-07. Statements describe what the system does today; suspected bugs are
+# flagged in notes rather than canonized. Needs human review before becoming canon.
+meta:
+  project: filmduel
+  prefix: FD
+  ported: 2026-09-07
+
+requirements:
+  # ── Authentication & session ────────────────────────────────────────────
+
+  - id: FD-001
+    title: Trakt OAuth2 login
+    statement: "When a user requests GET /auth/login, the system shall redirect to Trakt's authorize URL using the Authorization Code flow with PKCE (S256) and a random state value, storing state and code verifier in short-lived (300s) httpOnly cookies."
+    category: functional
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "GET /auth/login returns a redirect to trakt.tv containing client_id, redirect_uri, state, code_challenge and code_challenge_method=S256"
+      - "filmduel_oauth_state and filmduel_oauth_pkce cookies are set httpOnly, samesite=lax, max_age=300"
+      - "GET /auth/callback with a state that does not match the state cookie is rejected"
+    notes: "PKCE verifier is 43 URL-safe chars per RFC 7636 §4.1."
+
+  - id: FD-002
+    title: SIMKL OAuth2 login (optional provider)
+    statement: "While SIMKL_CLIENT_ID is configured, the system shall offer a parallel SIMKL OAuth2 login (/auth/simkl/login, /auth/simkl/callback) so a user may authenticate with SIMKL instead of, or in addition to, Trakt."
+    category: functional
+    priority: should
+    status: active
+    source: back-ported
+    acceptance:
+      - "GET /auth/simkl/login redirects to SIMKL's authorize URL with state and PKCE cookies analogous to the Trakt flow"
+      - "A SIMKL-only user row has trakt_user_id NULL and simkl_user_id set"
+    notes: "SIMKL tokens are long-lived; refresh is not implemented (a warning is logged near expiry) — see ensure_fresh_simkl_token."
+
+  - id: FD-003
+    title: OAuth callback establishes session
+    statement: "When the OAuth callback succeeds, the system shall exchange the code for tokens, fetch the provider profile, upsert the user row, issue a signed session JWT as an httpOnly cookie named filmduel_session, and redirect to the SPA root."
+    category: functional
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "After a successful callback the response sets filmduel_session (httpOnly, samesite=lax, Secure per FD-041) and redirects to /"
+      - "The JWT is HS256-signed with SECRET_KEY and carries sub, jti, iss=filmduel, aud=filmduel, exp, iat, orig_iat"
+
+  - id: FD-004
+    title: Bounded sliding session lifetime
+    statement: "While a session cookie is presented, the system shall accept JWTs for at most 72 hours per token, re-issue the cookie at most once per 12 hours (carrying orig_iat forward), and reject any session older than 30 days from original login regardless of activity."
+    category: non-functional
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "A request with a token whose iat is more than 12h old receives a fresh Set-Cookie for filmduel_session"
+      - "A token whose orig_iat is more than 30 days in the past is rejected with 401 and the cookie is deleted"
+      - "Cookie max_age never exceeds the remaining 30-day session budget"
+
+  - id: FD-005
+    title: Server-side session revocation on logout
+    statement: "When a user calls POST /auth/logout, the system shall set the user's tokens_invalid_before to now, causing every previously issued JWT (any device) to be rejected, and shall delete the session cookie."
+    category: functional
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "POST /auth/logout returns 204 and deletes filmduel_session"
+      - "A JWT issued before logout is rejected with 401 'Session revoked' on any subsequent request"
+
+  - id: FD-006
+    title: OAuth token encryption at rest
+    statement: "When storing Trakt or SIMKL access/refresh tokens, the system shall encrypt them with Fernet using a key derived via HKDF-SHA256 from TOKEN_ENC_KEY (independent of SECRET_KEY)."
+    category: non-functional
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "users table columns store *_token_enc ciphertext, never plaintext tokens"
+      - "Decryption with a wrong TOKEN_ENC_KEY raises a RuntimeError rather than returning garbage"
+      - "Startup fails when an OAuth provider client id is configured but TOKEN_ENC_KEY is empty"
+
+  - id: FD-007
+    title: Proactive Trakt token refresh
+    statement: "When a Trakt API call is about to be made and the stored access token expires within 1 hour, the system shall refresh the token first and persist the new token and expiry on the user row."
+    category: functional
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "ensure_fresh_token refreshes when expires_at - now <= 1h and is a no-op otherwise"
+      - "A refresh response missing expires_in falls back to Trakt's documented 90-day TTL"
+    notes: "Concurrent background refresh is serialized via SELECT ... FOR UPDATE on the user row (PR #511)."
+
+  # ── Consent, privacy & data lifecycle ───────────────────────────────────
+
+  - id: FD-008
+    title: Versioned privacy-policy consent
+    statement: "When a user accepts the privacy policy via POST /api/me/consent, the system shall record acceptance only for the current policy version and shall reject unknown versions with 400; a version bump implies stored consent no longer matches and the frontend re-prompts."
+    category: functional
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "POST /api/me/consent with version != CURRENT_PRIVACY_POLICY_VERSION returns 400"
+      - "Successful consent sets privacy_policy_accepted=true, privacy_policy_version, and an acceptance timestamp"
+      - "GET /api/me exposes privacy_policy_accepted and privacy_policy_version so the SPA can gate access"
+    notes: "Current version constant is '2.1' in backend/routers/users.py and must match ConsentModal.jsx."
+
+  - id: FD-009
+    title: AI features are consent- and toggle-gated
+    statement: "When an AI-backed endpoint (suggestions, AI-curated tournament creation/regeneration) is called, the system shall return 403 unless the user has accepted the privacy policy AND has use_ai_features enabled."
+    category: functional
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "Without policy acceptance the endpoint returns 403 with detail 'Privacy policy consent required'"
+      - "With use_ai_features=false the endpoint returns 403 with detail 'AI features are disabled. Enable them in settings to use this feature.'"
+      - "use_ai_features defaults to true and is togglable via PATCH /api/me/settings"
+
+  - id: FD-010
+    title: Account deletion (GDPR Art. 17)
+    statement: "When a user calls DELETE /api/me, the system shall best-effort revoke Trakt/SIMKL tokens upstream, cascade-delete the user row and all dependent rows, delete the session cookie, and return 204."
+    category: functional
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "DELETE /api/me returns 204 and removes the users row plus user_movies, duels, swipe_results, suggestions, tournaments, feedback via ON DELETE CASCADE"
+      - "Endpoint is rate-limited to 3/hour per user"
+
+  - id: FD-011
+    title: Scheduled data-retention purge
+    statement: "While the app is running, the system shall run a daily scheduled purge (default 02:00 UTC, configurable via PURGE_SCHEDULE_HOUR) that deletes duels, swipe results and suggestions past their retention windows (default 180 days), nulls tournament llm_response payloads past 180 days, deletes feedback reports past 365 days, and nulls encrypted screenshots past their purge_after date."
+    category: non-functional
+    priority: must
+    status: active
+    source: "PR #502 (SEC-010)"
+    acceptance:
+      - "APScheduler job 'retention_purge' is registered with the configured cron hour and misfire_grace_time"
+      - "Each purge commits independently so one failure does not roll back the others"
+      - "Retention windows are configurable via *_RETENTION_DAYS env vars"
+
+  - id: FD-012
+    title: Sensitive-data scrubbing in error tracking
+    statement: "When an exception is reported to Sentry, the system shall send no default PII and shall replace stack-frame locals whose names match known token/secret/code patterns with '[Filtered]'."
+    category: non-functional
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "sentry_sdk is initialised with send_default_pii=False and a before_send scrubber"
+      - "Frame vars named in the denylist, or containing 'token', 'secret' or 'code' (case-insensitive), are filtered"
+      - "Pydantic validation-error 'input' values are stripped before logging"
+    notes: "Sentry is enabled only when SENTRY_DSN is set; traces_sample_rate=0.1."
+
+  # ── Pool ingestion & expansion ──────────────────────────────────────────
+
+  - id: FD-013
+    title: Movie pool ingestion from provider sources
+    statement: "When a user logs in (or their pool sync cooldown of 1 hour has elapsed), the system shall ingest popular, trending, recommended, watched-history and ratings lists from the connected provider (Trakt and/or SIMKL) for both movies and shows, upserting into the shared movies cache by trakt_id and creating per-user user_movies rows."
+    category: functional
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "Pool population is skipped when last_seen_at is within SYNC_COOLDOWN (1 hour)"
+      - "Upsert refreshes shared movie metadata without resetting existing per-user state (seen/elo/battles)"
+      - "A failure in one source list does not abort ingestion of the others (_safe_fetch)"
+
+  - id: FD-014
+    title: History and ratings import seed user state
+    statement: "When provider watch history and ratings are imported, the system shall mark history titles seen=true (Seen-unranked) and set seeded_elo from existing ratings via a linear 1→600 … 10→1400 mapping, leaving elo NULL and battles 0."
+    category: functional
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "trakt_rating_to_seeded_elo(1)==600, (10)==1400, (5)≈956"
+      - "Imported rated films still have elo=NULL and battles=0 until their first duel"
+
+  - id: FD-015
+    title: TMDB poster backfill
+    statement: "When movies are cached without a poster, the system shall backfill poster URLs from TMDB in a background task, and user-facing selection queries (swipe cards, suggestions) shall only surface titles that have a poster."
+    category: functional
+    priority: should
+    status: active
+    source: back-ported
+    acceptance:
+      - "Swipe card and suggestion queries filter poster_url IS NOT NULL"
+      - "Poster backfill runs via BackgroundTasks and never blocks the triggering request"
+
+  - id: FD-016
+    title: Manual provider re-sync
+    statement: "When a user calls POST /api/sync, the system shall refresh provider tokens, bypass the 1-hour sync cooldown, re-populate the pool, and return the number of newly added titles; the endpoint shall be limited to 3 calls per hour per user."
+    category: functional
+    priority: should
+    status: active
+    source: back-ported
+    acceptance:
+      - "POST /api/sync returns {new_movies, total_movies}"
+      - "A 4th call within an hour returns 429"
+
+  - id: FD-017
+    title: Background pool expansion
+    statement: "When a swipe submission leaves the user's unknown pool (seen IS NULL, per media_type) below 50 titles, the system shall enqueue a background expansion task that runs sources in priority order (provider recommendations, TMDB similar-to-top-ranked, provider anticipated, deeper popular pages 2–5) until roughly 100 new titles are added, skipping any source+key run within the last 7 days."
+    category: functional
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "Expansion is triggered from POST /api/swipe/results, not from duels, and never blocks the response"
+      - "pool_expansions rows record source, source_key, films_added and guard against re-running a source within 7 days"
+      - "Expansion stops early once TARGET_ADDED (100) new titles are reached"
+      - "Existing user_movies rows are never reset by expansion; new rows get seen=NULL, elo=NULL, battles=0"
+
+  # ── Swipe (seen/unseen classification) ──────────────────────────────────
+
+  - id: FD-018
+    title: Band-weighted swipe card selection
+    statement: "When a user requests GET /api/swipe/cards, the system shall return up to 10 unknown titles (seen IS NULL, with posters, scoped by media_type), selecting 6 from the community-rating band matching the user's median ELO, 2 from the band above, 2 from the band below, deduplicating and backfilling randomly when bands run short; with no ranked films yet it shall pick randomly from community-rated titles."
+    category: functional
+    priority: must
+    status: active
+    source: "PR #495 (SEC-018) for dedup"
+    acceptance:
+      - "Response contains at most 10 cards and no duplicate movie ids"
+      - "With no unknown titles available the endpoint returns 404 with a message to import more movies"
+      - "Bands follow the elite/strong/mid/weak/poor table shared with pair selection (BANDS)"
+
+  - id: FD-019
+    title: Bulk swipe result submission
+    statement: "When a user submits POST /api/swipe/results, the system shall update user_movies.seen for each submitted movie, record a swipe_results history row per item, skip (and log) movies not in the user's pool, and return seen/unseen counts plus next_action."
+    category: functional
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "Response is {seen_count, unseen_count, next_action} with next_action in {'duel','swipe'}"
+      - "movie_id values are validated as UUIDs at the schema layer (SEC-013)"
+      - "A movie_id with no user_movies row does not fail the whole submission"
+
+  - id: FD-020
+    title: Unseen titles never resurface
+    statement: "While a user_movies row has seen=false, the system shall never include that title in swipe cards or duel pairs for that user."
+    category: functional
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "Swipe card query filters seen IS NULL only"
+      - "Pair selection only draws from seen=true rows"
+
+  # ── ELO ─────────────────────────────────────────────────────────────────
+
+  - id: FD-021
+    title: ELO update formula with provisional K-factor
+    statement: "When a duel produces a winner, the system shall update both films' ratings using the standard ELO expected-score formula (divisor 400), applying K=64 independently to any film with fewer than 5 battles and K=32 otherwise, rounding to integers."
+    category: functional
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "k_factor(4)==64 and k_factor(5)==32"
+      - "Equal-rated films with established K exchange 16 points"
+      - "Winner and loser K-factors are determined independently from their own battle counts"
+
+  - id: FD-022
+    title: ELO is NULL until first ranked duel
+    statement: "While a film has battles=0, the system shall keep its elo NULL; when its first winner-producing duel occurs, the calculation shall bootstrap from seeded_elo if present, otherwise 1000."
+    category: functional
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "DB default for user_movies.elo is NULL, not 1000"
+      - "get_initial_elo(seeded) returns seeded when set, else 1000"
+
+  - id: FD-023
+    title: ELO to 1-10 rating mapping
+    statement: "When exporting or syncing ratings, the system shall map ELO to a 1-10 scale via round((elo-600)*9/800)+1, clamped to [1,10]."
+    category: functional
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "elo_to_trakt_rating(600)==1, (1400)==10, values outside the range clamp"
+      - "The same mapping is used for Trakt sync, Letterboxd CSV Rating10, and rankings display"
+
+  # ── Duels ───────────────────────────────────────────────────────────────
+
+  - id: FD-024
+    title: Weighted anchor/challenger pair selection
+    statement: "When a user requests GET /api/movies/pair, the system shall return two seen films where at least one (the anchor) has battles>=1, sampling with weight 1/(battles+1), constraining the challenger to the anchor's quality band (by ELO when ranked, by community rating when unranked, expanding to adjacent bands then all films when empty), preferring close ELO matches (<150) 70% of the time and wide matches (>300) otherwise for ranked-vs-ranked, and avoiding an immediate repeat of the previous pair."
+    category: functional
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "Returned pairs never include a seen=false or seen=NULL film"
+      - "With no ranked films yet, a bootstrap pair of two seen battles=0 films matched by community rating band is returned"
+      - "With fewer than 2 eligible films the endpoint returns 404 (client interprets as 'go swipe')"
+      - "When last_pair_token matches the newly selected pair, a different challenger is chosen if one exists"
+
+  - id: FD-025
+    title: Tamper-proof pair tokens
+    statement: "When a pair is served, the system shall include an encrypted pair token binding the two movie ids, and POST /api/duels shall reject with 400 any submission whose token is missing, undecryptable, or does not match the submitted movie ids."
+    category: non-functional
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "A duel submission with a forged or mismatched pair_token returns 400 'Invalid pair token'"
+      - "Tokens are encrypted with the same Fernet key material as token_crypto (not merely encoded)"
+    notes: "Prevents clients from submitting duels for arbitrary pairs the server never offered."
+
+  - id: FD-026
+    title: Duel outcome state machine
+    statement: "When POST /api/duels is submitted with one of the outcomes a_wins/b_wins/a_only/b_only/neither, the system shall: for wins, mark both films seen, update ELO for both and increment battles; for X_only, mark the seen film seen=true (if previously unknown) and mark the other seen=false only if it has battles=0; for neither, mark each film seen=false only if it has battles=0."
+    category: functional
+    priority: must
+    status: active
+    source: "PR #509 (SEC-004)"
+    acceptance:
+      - "a_wins/b_wins updates both elos, sets both seen=true, increments both battle counts, and records winner/loser elo before/after on the duels row"
+      - "a_only with a ranked (battles>=1) film B leaves B's seen status and elo untouched"
+      - "neither on two unranked films sets both to seen=false"
+      - "A duels history row is written for every outcome, carrying mode and pair_type"
+
+  - id: FD-027
+    title: Self-duel rejection
+    statement: "When a duel submission names the same movie for both sides, the system shall reject it with 400 'A movie cannot duel against itself'."
+    category: functional
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "POST /api/duels with movie_a_id == movie_b_id returns 400 with the friendly message (not a raw 422)"
+
+  - id: FD-028
+    title: Server-computed next_action
+    statement: "When a duel or swipe submission completes, the system shall compute and return next_action='swipe' if the user has fewer than 3 seen-unranked films or fewer than 10 total seen films (scoped by media_type), otherwise 'duel'; the frontend shows a swipe interstitial between duels and never interrupts mid-duel."
+    category: functional
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "compute_next_action returns 'swipe' when seen_unranked < 3 or total_seen < 10"
+      - "There is no separate swipe-status polling endpoint"
+    notes: "PRD only documents the seen_unranked<3 clause; the total_seen<10 clause exists in code (MIN_TOTAL_SEEN) and is treated as intended."
+
+  - id: FD-029
+    title: Concurrent duel safety
+    statement: "When processing a duel, the system shall lock both user_movies rows FOR UPDATE in deterministic (sorted UUID) order to prevent deadlocks and lost updates from concurrent submissions."
+    category: non-functional
+    priority: should
+    status: active
+    source: back-ported
+    acceptance:
+      - "process_duel acquires row locks in sorted movie-id order regardless of submission order"
+
+  # ── Rating sync back to providers ───────────────────────────────────────
+
+  - id: FD-030
+    title: Opt-in post-duel rating sync
+    statement: "When a duel produces a winner and the user has sync_ratings_to_trakt enabled, the system shall push both films' updated 1-10 ratings to Trakt as a fire-and-forget background task, refreshing the token first, retrying once on 5xx, and logging (never surfacing) failures."
+    category: functional
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "No sync occurs when sync_ratings_to_trakt=false (the default)"
+      - "A Trakt 5xx triggers exactly one retry; failures are logged/captured without failing the duel response"
+      - "The duel API response is not delayed by sync (BackgroundTasks)"
+    notes: "An analogous SIMKL path exists (sync_post_duel_simkl / sync_ratings_to_simkl toggle)."
+
+  # ── Rankings & export ───────────────────────────────────────────────────
+
+  - id: FD-031
+    title: Rankings list
+    statement: "When a user requests GET /api/rankings, the system shall return only films with seen=true and battles>=1, ordered by ELO descending, paginated (default 50, max 200), filterable by genre and decade, scoped by media_type, with each row carrying rank, elo, battles and the derived 1-10 rating."
+    category: functional
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "Films with battles=0 or seen != true never appear"
+      - "limit is capped at 200; an invalid decade string returns 400"
+      - "Rank numbers account for pagination offset"
+
+  - id: FD-032
+    title: Aggregate stats
+    statement: "When a user requests GET /api/rankings/stats, the system shall return total duels, total ranked count, unseen count, average ELO, and highest/lowest rated films for the selected media_type."
+    category: functional
+    priority: should
+    status: active
+    source: back-ported
+    acceptance:
+      - "With no ranked films, highest_rated/lowest_rated are omitted and counts are zero"
+
+  - id: FD-033
+    title: Letterboxd-compatible CSV export
+    statement: "When a user requests GET /api/rankings/export/csv, the system shall stream a CSV with header Position,Title,Year,imdbID,Rating10 of ranked films in ELO order, sanitizing cells that begin with formula characters (=+-@ tab newline) by prefixing a single quote, capped at 10000 rows and rate-limited to 10 exports/hour."
+    category: functional
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "Response has Content-Disposition attachment; filename=filmduel_rankings.csv"
+      - "A title beginning with '=' is emitted as \"'=...\" (CSV formula-injection guard)"
+      - "Rating10 equals elo_to_trakt_rating(elo)"
+
+  # ── TV show support ─────────────────────────────────────────────────────
+
+  - id: FD-034
+    title: Media-type scoping (movies vs shows)
+    statement: "When any pool, swipe, duel, rankings, suggestions or tournament operation runs, the system shall scope it by media_type ('movie' or 'show', default 'movie'), maintaining independent pools, ELO ladders, next_action counters and rankings per type, with a nav toggle in the frontend."
+    category: functional
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "media_type query values other than 'movie'/'show' are rejected with 422 (Literal type)"
+      - "A user's show rankings are unaffected by movie duels and vice versa"
+
+  # ── AI suggestions ──────────────────────────────────────────────────────
+
+  - id: FD-035
+    title: AI watchlist suggestions
+    statement: "When an eligible user (>=20 ranked films of the media_type, AI consent per FD-009) requests GET /api/suggestions, the system shall return current non-dismissed suggestions if generated within 24 hours, otherwise generate up to 6 new picks by sending an LLM a taste profile plus up to 50 unseen candidates and persisting each pick with its one-line reason."
+    category: functional
+    priority: should
+    status: active
+    source: back-ported
+    acceptance:
+      - "With < 20 ranked films the response is {suggestions: [], status: 'not_enough_films'}"
+      - "The LLM may only select from the provided candidate list; malformed ids are skipped, not surfaced"
+      - "With no candidates available the status is 'no_candidates'"
+      - "With LLM_API_KEY unconfigured the endpoint returns 503"
+    notes: "LLM is an OpenAI-compatible gateway (Requesty/OpenRouter via LLM_BASE_URL/LLM_MODEL), not a hardcoded provider — the older spec docs naming a specific Anthropic model are outdated."
+
+  - id: FD-036
+    title: Suggestion lifecycle actions
+    statement: "When a user acts on a suggestion, the system shall support dismiss (soft-delete via dismissed_at, excluded from future responses), add-to-watchlist (timestamped, optionally pushed to the provider watchlist), and mark-as-seen."
+    category: functional
+    priority: should
+    status: active
+    source: back-ported
+    acceptance:
+      - "POST /api/suggestions/{id}/dismiss on another user's suggestion returns 404"
+      - "Dismissed suggestions do not appear in subsequent GET /api/suggestions responses"
+
+  - id: FD-037
+    title: Suggestion regeneration cap
+    statement: "When a user calls POST /api/suggestions/regenerate, the system shall dismiss current suggestions and generate a fresh set, allowing at most 3 regenerations per rolling 24 hours (enforced both by the rate limiter and a DB count), returning 429 beyond the cap."
+    category: functional
+    priority: should
+    status: active
+    source: back-ported
+    acceptance:
+      - "A 4th regenerate within 24h returns 429"
+    notes: "Suspected quota bug not canonized: the DB guard counts distinct generated_at timestamps across ALL suggestion generations (including automatic staleness refreshes and both media types), so an auto-refresh can consume the user's manual regeneration quota. Also, an empty regeneration result reports status 'not_enough_films' where GET reports 'no_candidates'. Spec'd 429 body field next_allowed_at is not implemented."
+
+  - id: FD-038
+    title: LLM privacy - preference tiers, not raw scores
+    statement: "When building any LLM prompt, the system shall convert raw ELO values to coarse preference tiers (highly preferred / preferred / neutral / less preferred) and shall never transmit raw ELO, and shall redact known prompt-injection phrases from film titles and other DB-sourced strings before inclusion."
+    category: non-functional
+    priority: must
+    status: active
+    source: "PRs #504 (SEC-008), #508 (SEC-002), #503 (SEC-009)"
+    acceptance:
+      - "sanitize_llm_input replaces injection phrases with [REDACTED] and truncates to a max length"
+      - "No prompt-construction code path serializes the elo column value"
+      - "Raw LLM responses are not echoed into error logs on parse failure"
+
+  # ── Tournaments ─────────────────────────────────────────────────────────
+
+  - id: FD-039
+    title: Tournament creation and seeding
+    statement: "When a user creates a tournament, the system shall accept bracket sizes of 8/16/32/64 over a filtered pool (optional genre or decade filter, media_type scoped) of ranked films, require at least 4 matching films, reject brackets larger than 4x the pool, seed by ELO (1 vs last), pre-generate all rounds, and auto-resolve first-round byes for top seeds when the pool is smaller than the bracket."
+    category: functional
+    priority: should
+    status: active
+    source: back-ported
+    acceptance:
+      - "POST /api/tournaments with < 4 matching ranked films returns 400"
+      - "bracket_size outside {8,16,32,64} is rejected at the schema layer"
+      - "Bye matches are created with is_bye=true and winner pre-filled; GET /{id}/next never returns a bye"
+      - "Per-user creation is capped at 100 tournaments per 24h (429 beyond)"
+
+  - id: FD-040
+    title: Tournament matches are real duels
+    statement: "When a tournament match winner is submitted, the system shall process it through the standard duel pipeline (ELO update, duel history row with mode='tournament', optional provider sync), propagate the winner into the next round (auto-resolving any resulting bye), and mark the tournament completed with a champion when the final resolves."
+    category: functional
+    priority: should
+    status: active
+    source: back-ported
+    acceptance:
+      - "Submitting a match result changes both films' main-ladder ELO exactly as a regular duel would"
+      - "Each played tournament_matches row stores the linked duel_id"
+      - "Completing the final sets status='completed', champion_movie_id and completed_at"
+      - "DELETE /api/tournaments/{id} soft-deletes by setting status='abandoned'"
+
+  - id: FD-041
+    title: AI-curated tournaments
+    statement: "When a user creates a tournament with ai_curated=true (AI consent per FD-009), the system shall send the ELO-capped candidate list (top bracket_size*3, as preference tiers) to the LLM to select exactly bracket_size films and produce a name, tagline and theme description, seed the selected films by ELO (the LLM never controls matchups), store the raw LLM response on the tournament row, and support regeneration with the same candidate pool."
+    category: functional
+    priority: may
+    status: active
+    source: back-ported
+    acceptance:
+      - "An LLM failure returns 500 'AI curation failed' without creating a partial tournament"
+      - "filter_value carries a max_length constraint (SEC-012)"
+      - "llm_response is nulled by retention after 180 days (FD-011)"
+
+  # ── Feedback ────────────────────────────────────────────────────────────
+
+  - id: FD-042
+    title: In-app feedback reports
+    statement: "When a user submits POST /api/feedback, the system shall accept a title (<=200 chars), description (<=5000 chars) and optional screenshot (<=5 MB; must match JPEG/PNG/GIF/WebP magic bytes), encrypt the screenshot at rest with a 90-day purge_after, and enforce 5 submissions/hour plus a DB-backed cap of 20 per rolling 24 hours (both returning 429; oversize 413; wrong type 415)."
+    category: functional
+    priority: should
+    status: active
+    source: back-ported
+    acceptance:
+      - "A 5.1 MB upload returns 413; a PDF renamed .png returns 415"
+      - "screenshot_data_enc is Fernet ciphertext, decrypted only for admin listing"
+      - "Screenshot encryption failure returns 503 rather than storing plaintext"
+
+  - id: FD-043
+    title: Admin-only maintenance endpoints
+    statement: "When admin endpoints are called (feedback listing/screenshot scrub/purge, duel/swipe purge), the system shall require a user with is_admin=true (403 otherwise) and rate-limit each endpoint (10/minute)."
+    category: functional
+    priority: should
+    status: active
+    source: "PR #498 (SEC-014)"
+    acceptance:
+      - "A non-admin authenticated user receives 403 'Admin access required'"
+      - "Every /admin route carries a limiter decorator"
+
+  # ── Security (cross-cutting) ────────────────────────────────────────────
+
+  - id: FD-044
+    title: CSRF origin check on state-changing requests
+    statement: "When a non-GET/HEAD/OPTIONS request arrives without X-Requested-With: XMLHttpRequest, the system shall reject it with 403 unless its Origin (or Referer) scheme+host is in the CORS allowlist; requests with neither header are allowed through but logged."
+    category: non-functional
+    priority: must
+    status: active
+    source: "PR #507 (SEC-005)"
+    acceptance:
+      - "A POST with Origin https://evil.example returns 403 'CSRF check failed: unexpected origin'"
+      - "A POST with X-Requested-With: XMLHttpRequest passes regardless of Origin"
+      - "Header-less POSTs are logged as csrf_no_origin_allowed"
+    notes: "CORS allow_headers must keep X-Requested-With or the SPA bypass breaks."
+
+  - id: FD-045
+    title: Security response headers
+    statement: "When any response is served, the system shall attach X-Content-Type-Options: nosniff, X-Frame-Options: DENY, Referrer-Policy, Permissions-Policy, a restrictive CSP (self-only scripts/styles; images from self, image.tmdb.org and data:; connect to self and Sentry; frame-ancestors 'none'), and HSTS whenever secure cookies are in effect."
+    category: non-functional
+    priority: must
+    status: active
+    source: "PRs #497 (SEC-016), #501 (SEC-011)"
+    acceptance:
+      - "All listed headers are present on both API and SPA responses"
+      - "HSTS is keyed to settings.cookie_secure, not merely to an https BASE_URL"
+      - "Fonts are self-hosted; the CSP contains no Google Fonts origins"
+
+  - id: FD-046
+    title: Per-user rate limiting
+    statement: "When applying rate limits, the system shall key on the authenticated user id decoded from the session JWT, falling back to client IP for anonymous requests, so users cannot bypass limits by rotating IPs; behind Railway the entrypoint auto-trusts proxy X-Forwarded-For so IP keys are real client IPs."
+    category: non-functional
+    priority: must
+    status: active
+    source: "PR #505 (SEC-007)"
+    acceptance:
+      - "Two sessions of the same user share one rate-limit bucket"
+      - "429 responses use the standard slowapi handler"
+      - "With RAILWAY_ENVIRONMENT set and FORWARDED_ALLOW_IPS unset, uvicorn runs with --forwarded-allow-ips='*'; elsewhere it defaults to loopback with a warning"
+
+  - id: FD-047
+    title: Startup configuration validation
+    statement: "When the application starts, the system shall refuse to boot if DATABASE_URL is missing or the localhost placeholder, if SECRET_KEY is under 32 chars or a known placeholder, or if an OAuth client id is configured without a valid TOKEN_ENC_KEY; CORS_ORIGINS shall never contain '*'."
+    category: constraint
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "Settings() raises for each invalid combination above (see test_config.py)"
+      - "entrypoint.sh fail-fasts on the same conditions before Python starts, printing lengths but never values"
+
+  - id: FD-048
+    title: Cookie Secure flag control
+    statement: "While SECURE_COOKIES is set, the system shall honor it for the session-cookie Secure flag; otherwise it shall infer from BASE_URL https, and at startup it shall log a warning when a TLS-terminating proxy platform is detected with the flag effectively off."
+    category: non-functional
+    priority: must
+    status: active
+    source: "PRs #497, #506 (SEC-006)"
+    acceptance:
+      - "SECURE_COOKIES=true with http:// BASE_URL still issues Secure cookies"
+      - "Railway env detected + flag unset + http BASE_URL logs cookie_secure_unset at startup"
+
+  - id: FD-049
+    title: SSRF-safe provider URL construction
+    statement: "When building provider API paths from user-derived values (e.g. Trakt usernames), the system shall URL-encode path segments so crafted values cannot alter the request target."
+    category: non-functional
+    priority: must
+    status: active
+    source: "PR #510 (SEC-001)"
+    acceptance:
+      - "A username containing '/' or '..' cannot change the Trakt API path requested"
+
+  # ── Deployment & platform constraints ───────────────────────────────────
+
+  - id: FD-050
+    title: Single-service SPA hosting
+    statement: "While deployed, the system shall serve the built React SPA from the same FastAPI service: /assets from the Vite build, and a wildcard route returning index.html for any non-API path, rejecting path-traversal attempts and returning 503 when the build is absent; interactive API docs shall be disabled outside localhost."
+    category: constraint
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "GET /rankings (no such API route) returns index.html with 200"
+      - "A request resolving outside the static dir is logged and served index.html instead of the file"
+      - "/docs, /redoc and /openapi.json return 404 when BASE_URL is not localhost"
+
+  - id: FD-051
+    title: Railway deployment with zero-downtime migrations
+    statement: "When the production container starts, the system shall validate required env vars, verify the Python import, start uvicorn first so /health passes during startup, then run Alembic migrations with exponential-backoff retries (up to ~20 min), aborting the container if migrations ultimately fail."
+    category: constraint
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "GET /health returns {status:'ok'} (limit 1000/minute) and is Railway's healthcheckPath"
+      - "entrypoint.sh waits up to 60s for /health before running alembic upgrade head"
+      - "Deploys go through PRs to main; Railway auto-deploys on merge (branch protection)"
+    notes: "Docker image pinned to python:3.12-slim (PR #496 reverted a 3.14 pre-release bump)."
+
+  - id: FD-052
+    title: Database constraint - pooled Postgres via SQLAlchemy
+    statement: "While connecting to Supabase Postgres through PgBouncer transaction pooling, the system shall use SQLAlchemy 2.0 async with asyncpg and statement_cache_size=0, never the supabase-py SDK, with schema changes applied exclusively through Alembic migrations."
+    category: constraint
+    priority: must
+    status: active
+    source: back-ported
+    acceptance:
+      - "Engine construction sets statement_cache_size=0"
+      - "No supabase-py dependency exists in backend/requirements.in"
+      - "Every schema change ships as an Alembic revision (backend/migrations)"
