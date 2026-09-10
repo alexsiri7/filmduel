@@ -150,6 +150,14 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             status_code=400,
             content={"detail": "A movie cannot duel against itself"},
         )
+    if any(
+        e.get("type") == "missing" and e.get("loc", ())[-1:] == ("pair_token",)
+        for e in exc.errors()
+    ):
+        return JSONResponse(
+            status_code=400,
+            content={"detail": "Invalid pair token"},
+        )
     logger.warning(
         "validation_error path=%s errors=%s",
         request.url.path,

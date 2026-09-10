@@ -180,8 +180,8 @@ class TestSubmitDuel:
         assert response.status_code == 400
         assert "pair token" in response.json()["detail"].lower()
 
-    def test_missing_pair_token_returns_422(self):
-        """Missing pair_token should fail schema validation."""
+    def test_missing_pair_token_returns_400(self):
+        """A duel with no pair_token at all should return 400, not a raw 422."""
         client = TestClient(app)
         response = client.post(
             "/api/duels",
@@ -193,7 +193,8 @@ class TestSubmitDuel:
                 # no pair_token
             },
         )
-        assert response.status_code == 422
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Invalid pair token"
 
     def test_process_duel_value_error_returns_generic_400(self):
         """ValueError from process_duel must return 400 with generic detail — not str(e)."""
