@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { CURRENT_PRIVACY_POLICY_VERSION } from "./constants";
 import Nav from "./components/Nav";
 import ConsentModal from "./components/ConsentModal";
 import Login from "./pages/Login";
@@ -24,9 +25,10 @@ function ProtectedRoute({ children }) {
           return;
         }
         const data = await r.json();
-        // "2.0" must match CURRENT_PRIVACY_POLICY_VERSION in backend/routers/users.py
-        // and the version sent by frontend/src/components/ConsentModal.jsx
-        if (!data.privacy_policy_accepted || data.privacy_policy_version !== "2.0") {
+        if (
+          !data.privacy_policy_accepted ||
+          data.privacy_policy_version !== CURRENT_PRIVACY_POLICY_VERSION
+        ) {
           setShowConsent(true);
         }
         setStatus("authenticated");
