@@ -698,3 +698,19 @@ requirements:
       - "onSave receives only that flattened data URL — the editor hands back no copy of, or reference to, the pre-annotation image"
       - "A screenshot edited before submission is submitted as the flattened data URL: submitFeedback receives the editor's output, not the data URL read from the file"
     notes: "Suspected gap not canonized: the editor is opt-in. ReportIssueModal's handleSubmit computes the payload as editedScreenshotDataUrl || screenshotDataUrl and 'Edit Screenshot' is a button the user may never press, so a raw, un-annotated screenshot is a reachable submission; the guarantee above holds for the edited path only, and issue #535's stronger 'the unredacted original never leaves the browser' wording is not adopted, per this file's rule that statements describe today's behavior. Only redact is destructive (opaque black); highlight, arrow and text are additive marks over intact pixels. The original also stays in client memory after a save — handleEditorSave sets editedScreenshotDataUrl without clearing screenshotDataUrl — so re-opening the editor passes the original rather than the previous flattened export: a user who saves redaction A, re-opens to add redaction B and saves again ships an export in which A's pixels are visible again. The flatten mechanism is intact in that case; the earlier redaction is simply not carried forward. Neither path is tested, for the same reason as the opt-in path."
+
+  # ── Tournament browsing ─────────────────────────────────────────────────
+
+  - id: FD-056
+    title: Tournament list and bracket detail scoped to the requesting user
+    statement: "When a user requests GET /api/tournaments, the system shall return their own tournaments newest-first, capped at 100 rows and unpaginated, each carrying a progress string of \"Completed\", \"Abandoned\", or the current round's played/total match count; and when they request GET /api/tournaments/{id}, the system shall return the full bracket with matches ordered by (round, position), loading the tournament by id and owner together so another user's tournament id yields 404 rather than a foreign bracket."
+    category: functional
+    priority: must
+    status: active
+    source: "issue #534 (req-gap orphan)"
+    acceptance:
+      - "The list query filters on the requesting user's id, orders by created_at DESC and binds a LIMIT of 100 — scoping and ordering are in the SQL, not applied to an already-fetched set — and the response preserves that row order"
+      - "A completed tournament lists as \"Completed\", an abandoned one as \"Abandoned\", and an active one as \"Round N — P/T matches played\""
+      - "GET /api/tournaments/{id} returns matches sorted by round then position regardless of the order the rows arrive in"
+      - "GET /api/tournaments/{id} for a tournament owned by another user returns 404 \"Tournament not found\""
+    notes: "The 100-row cap has no pagination and no total count, so a user past 100 tournaments cannot reach the oldest ones through the API at all; issue #534 explicitly defers the pagination decision, so the cap is canonized as today's behavior rather than as an intended limit. The (round, position) ordering lives in _tournament_schema, not in SQL, so it holds for every endpoint returning the full tournament schema — create, regenerate and submit-result as well as this one — which is broader than the bracket-detail wording above. _active_progress falls through to a degenerate \"Round N — 0/0 matches played\" for an active tournament with no matches or with every match already played (tournaments.py:117-119); that is reachable only for a tournament whose status was not advanced to completed, and is pinned by existing tests rather than treated as a defect here."
