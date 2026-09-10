@@ -1,7 +1,10 @@
-"""Integration tests for filter_type query parameter validation on pool-count endpoint.
+"""Integration tests for filter validation on the pool-count endpoint.
 
 SEC-12 regression guard: ensures invalid filter_type values are rejected at the
 HTTP boundary with 422, and valid values pass through without a validation error.
+
+Also guards that an invalid decade *value* is rejected with 400, matching how
+POST /api/tournaments handles the same input.
 """
 
 from __future__ import annotations
@@ -79,3 +82,36 @@ class TestGetPoolCountFilterTypeValidation:
         ):
             resp = client.get("/api/tournaments/pool-count")
         assert resp.status_code != 422
+
+
+class TestGetPoolCountDecadeValueValidation:
+    def setup_method(self):
+        app.dependency_overrides[get_current_user] = lambda: _fake_user()
+        app.dependency_overrides[get_db] = _fake_db
+
+    def teardown_method(self):
+        app.dependency_overrides.clear()
+
+    def test_invalid_decade_value_returns_400(self):
+        with patch(
+            "backend.routers.tournaments.get_filtered_ranked_films",
+            new_callable=AsyncMock,
+            side_effect=ValueError("Invalid decade format"),
+        ):
+            resp = client.get(
+                "/api/tournaments/pool-count?filter_type=decade&filter_value=abc"
+            )
+        assert resp.status_code == 400
+        assert "decade" in resp.json()["detail"].lower()
+
+    def test_valid_decade_value_returns_count(self):
+        with patch(
+            "backend.routers.tournaments.get_filtered_ranked_films",
+            new_callable=AsyncMock,
+            return_value=[],
+        ):
+            resp = client.get(
+                "/api/tournaments/pool-count?filter_type=decade&filter_value=1990s"
+            )
+        assert resp.status_code == 200
+        assert resp.json() == {"count": 0}

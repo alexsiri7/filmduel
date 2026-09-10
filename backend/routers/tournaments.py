@@ -162,7 +162,7 @@ async def get_pool_count(
             media_type=media_type,
         )
     except ValueError:
-        return {"count": 0}
+        raise HTTPException(status_code=400, detail="Invalid decade format")
     return {"count": len(user_movies)}
 
 
