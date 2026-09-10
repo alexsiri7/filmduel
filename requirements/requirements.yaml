@@ -666,3 +666,19 @@ requirements:
       - "The user_movies row written for a matched title references the pre-existing movie id, so per-user seen/elo/battle state stays on one row"
       - "A SIMKL title with no imdb match is inserted with trakt_id == simkl_id == the SIMKL id"
     notes: "Suspected gap not canonized: the dedup is one-directional. _upsert_pool (the Trakt path) never reads imdb_id and there is no unique index on movies.imdb_id — only uq_movies_trakt_id_media_type — so a user who connects SIMKL first and Trakt second still gets a second catalog row for the same title. The guarantee above holds for the SIMKL-after-Trakt ordering only."
+
+  # ── Consent disclosure parity ───────────────────────────────────────────
+
+  - id: FD-054
+    title: Public privacy policy and itemized AI data disclosure
+    statement: "The system shall publish the current privacy policy at /privacy, reachable without a session and without having accepted the policy, and the consent prompt shall itemize the categories of data shared with third-party AI processors."
+    category: functional
+    priority: must
+    status: active
+    source: "issue #536 (req-gap orphan)"
+    acceptance:
+      - "/privacy renders the policy with no session cookie and for a user who has not accepted the current policy version — it is outside the auth and consent gates, not merely permitted by them"
+      - "The login footer and the settings sidebar both link to /privacy"
+      - "The consent prompt names, per AI feature, the film fields sent to the gateway (title, year, genres, preference tier, community rating, duel count), the candidate-pool cap, and the vendor, and states that raw ELO scores and account identifiers are never transmitted"
+      - "The suggestion and curation prompts substitute preference tiers for raw ELO and carry no account identifier"
+    notes: "The third and fourth criteria are enforced as a pair — backend/tests/test_llm_disclosure.py pins the service-side literals (CANDIDATE_LIMIT, the top-10/bottom-5 slices, elo_tier substitution, LLM_BASE_URL's vendor host) and ConsentModal.test.jsx pins the same values in the modal copy, so widening one side without the other fails. Two limits are not guaranteed: LLM_BASE_URL is env-overridable, so a deployment pointed at another gateway makes the named vendor inaccurate without failing a test; and curate_tournament never receives a user id, so the no-account-identifier clause holds structurally there rather than by assertion. Each prompt also carries a film reference the itemized list does not name — trakt_id for suggestions, the catalog row id for curation — so the model can identify its picks; these reference films, not users."

@@ -224,6 +224,47 @@ describe("App", () => {
     expect(screen.getByText("PRIVACY POLICY")).toBeInTheDocument();
   });
 
+  it("renders /privacy without a session instead of redirecting to login", async () => {
+    vi.stubGlobal("fetch", vi.fn(() =>
+      Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve(null) })
+    ));
+    render(
+      <MemoryRouter initialEntries={["/privacy"]}>
+        <App />
+      </MemoryRouter>
+    );
+    expect(screen.getByText("PRIVACY POLICY")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("Current Duel")).not.toBeInTheDocument();
+    });
+  });
+
+  it("renders /privacy for a user who has not accepted the policy", async () => {
+    vi.stubGlobal("fetch", vi.fn((url) => {
+      if (url === "/api/me") {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({
+            sync_ratings_to_trakt: false,
+            privacy_policy_accepted: false,
+            privacy_policy_version: null,
+          }),
+        });
+      }
+      return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve(null) });
+    }));
+    render(
+      <MemoryRouter initialEntries={["/privacy"]}>
+        <App />
+      </MemoryRouter>
+    );
+    expect(screen.getByText("PRIVACY POLICY")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText(/before you continue/i)).not.toBeInTheDocument();
+    });
+  });
+
   it("routes to /rankings correctly", async () => {
     vi.stubGlobal(
       "fetch",
