@@ -144,13 +144,19 @@ describe("App", () => {
     });
   });
 
-  it("does not show ConsentModal when user has accepted privacy policy", async () => {
+  // The version is hardcoded rather than imported from the shared constant: a test
+  // that sources the value it guards would pass for any value, including a stale one.
+  it("does not show ConsentModal when user has accepted the current privacy policy version", async () => {
     vi.stubGlobal("fetch", vi.fn((url) => {
       if (url === "/api/me") {
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: () => Promise.resolve({ sync_ratings_to_trakt: false, privacy_policy_accepted: true }),
+          json: () => Promise.resolve({
+            sync_ratings_to_trakt: false,
+            privacy_policy_accepted: true,
+            privacy_policy_version: "2.1",
+          }),
         });
       }
       return Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve(null) });
@@ -161,8 +167,10 @@ describe("App", () => {
       </MemoryRouter>
     );
     await waitFor(() => {
-      expect(screen.queryByText(/before you continue/i)).not.toBeInTheDocument();
+      expect(screen.queryByText("Loading...")).not.toBeInTheDocument();
     });
+    expect(screen.queryByText(/before you continue/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/sign in with trakt/i)).not.toBeInTheDocument();
   });
 
   it("shows ConsentModal when user has old privacy policy version", async () => {
@@ -270,7 +278,7 @@ describe("App", () => {
       "fetch",
       vi.fn((url) => {
         if (url === "/api/me") {
-          return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ sync_ratings_to_trakt: false, privacy_policy_accepted: true, privacy_policy_version: "2.0" }) });
+          return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ sync_ratings_to_trakt: false, privacy_policy_accepted: true, privacy_policy_version: "2.1" }) });
         }
         if (url.includes("/api/rankings") && !url.includes("stats")) {
           return Promise.resolve({

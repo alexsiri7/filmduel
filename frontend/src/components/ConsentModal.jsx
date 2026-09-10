@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { acceptConsent } from "../api";
+import { CURRENT_PRIVACY_POLICY_VERSION } from "../constants";
 
 export default function ConsentModal({ onAccepted }) {
   const [loading, setLoading] = useState(false);
@@ -9,7 +10,7 @@ export default function ConsentModal({ onAccepted }) {
     setLoading(true);
     setError(null);
     try {
-      await acceptConsent("2.1");
+      await acceptConsent(CURRENT_PRIVACY_POLICY_VERSION);
       onAccepted();
     } catch (err) {
       console.error("Failed to record consent:", err);

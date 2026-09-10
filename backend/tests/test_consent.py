@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
+import re
 import uuid
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 os.environ.setdefault("TOKEN_ENC_KEY", "test-secret-key-for-unit-tests-32b")
@@ -114,3 +116,24 @@ def test_accept_consent_idempotent():
 
     assert resp1.status_code == 200
     assert resp2.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Frontend parity (FD-008)
+# ---------------------------------------------------------------------------
+
+
+def test_frontend_pins_the_same_policy_version():
+    """The frontend copy of the version must match this one.
+
+    A bump that lands only here leaves the frontend prompting for a version the
+    endpoint rejects; a bump that lands only there re-prompts every user forever.
+    """
+    constants = Path(__file__).resolve().parents[2] / "frontend" / "src" / "constants.js"
+    match = re.search(
+        r'export const CURRENT_PRIVACY_POLICY_VERSION = "([^"]+)";',
+        constants.read_text(),
+    )
+
+    assert match, f"CURRENT_PRIVACY_POLICY_VERSION not found in {constants}"
+    assert match.group(1) == CURRENT_PRIVACY_POLICY_VERSION
