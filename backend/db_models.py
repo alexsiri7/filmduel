@@ -220,6 +220,9 @@ class Tournament(Base):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     filter_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     filter_value: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    media_type: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default="movie"
+    )
     bracket_size: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="active")
     champion_movie_id: Mapped[Optional[uuid.UUID]] = mapped_column(
