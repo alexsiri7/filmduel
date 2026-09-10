@@ -9,8 +9,25 @@ from backend.services.tournament import (
     _num_rounds,
     create_tournament_bracket,
     generate_seeded_bracket,
+    get_filtered_ranked_films,
     validate_match,
 )
+
+
+class TestGetFilteredRankedFilmsSignature:
+    """media_type must stay required and keyword-only.
+
+    A default here is what let regeneration silently draw show tournaments from
+    the movie pool; a reintroduced default has to fail loudly, not quietly.
+    """
+
+    def test_omitting_media_type_raises(self):
+        with pytest.raises(TypeError):
+            get_filtered_ranked_films(MagicMock(), uuid.uuid4(), None, None)
+
+    def test_passing_media_type_positionally_raises(self):
+        with pytest.raises(TypeError):
+            get_filtered_ranked_films(MagicMock(), uuid.uuid4(), None, None, "movie")
 
 
 class TestGenerateSeededBracket:
