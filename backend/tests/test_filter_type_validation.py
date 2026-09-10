@@ -114,4 +114,4 @@ class TestGetPoolCountDecadeValueValidation:
                 "/api/tournaments/pool-count?filter_type=decade&filter_value=1990s"
             )
         assert resp.status_code == 200
-        assert resp.json() == {"count": 0}
+        assert resp.json() == {"count": 0, "max_bracket_size": None}

@@ -24,7 +24,7 @@ Bracket sizes are powers of 2 (8, 16, 32, 64). The user's filtered ranked pool w
 
 **Minimum pool:** 4 ranked films matching the filter. Below 4, block creation and surface a message: "You need at least 4 ranked [genre] films to run a tournament. Keep dueling!"
 
-**Maximum bracket:** Capped at the next power of 2 above the pool size. If the user has 20 ranked sci-fi films, the max bracket is 32 (with 12 byes). Don't offer brackets larger than 4× the pool size — too many byes kills the drama.
+**Maximum bracket:** At most 2× the ranked pool. Standard seeding pairs seed `a` with seed `bracket_size + 1 - a`, and the lower seed of every pairing falls in `1..bracket_size / 2` — so below 2×, some round-1 pairing has no real film on either side and can never be played, leaving the tournament permanently stuck. With 20 ranked sci-fi films the max bracket is 32 (with 12 byes). `GET /api/tournaments/pool-count` returns this cap as `max_bracket_size` so the create form only offers sizes the API will accept.
 
 ---
 
@@ -62,7 +62,7 @@ For both manual and AI-curated tournaments, the candidate pool is derived as fol
 
 The cap keeps the LLM input bounded and focused. Sending "your top 48 horror films, find a psychological theme" is a better prompt than "all 200 ranked films."
 
-If the filtered pool (before cap) is smaller than `bracket_size`, allow it — byes fill the gap. If it's smaller than 4, block creation.
+If the filtered pool (before cap) is smaller than `bracket_size`, allow it — byes fill the gap — as long as it is at least half the bracket size. If it's smaller than 4, block creation. The same half-the-bracket floor applies to the films the LLM actually selects, not just the pool it chose from.
 
 ---
 
@@ -209,8 +209,10 @@ GET  /api/tournaments/:id/next
 
 POST /api/tournaments/:id/matches/:match_id
      Body: { winner_movie_id }
-     Submits result, updates bracket, resolves any downstream byes,
-     returns updated tournament state + next_match (or champion if final)
+     Submits result, updates bracket, schedules a background rating sync
+     to the linked provider, returns updated tournament state + next_match
+     (or champion if final). Byes exist only in round 1 and are already
+     resolved at creation, so there are never downstream byes to resolve.
 
 POST /api/tournaments/:id/regenerate
      AI-curated only. Re-runs LLM with same candidate pool. 
@@ -258,8 +260,8 @@ Champion screen: full-width poster, tournament name, "Champion crowned" with con
 
 - Generate all bracket slots on tournament creation — don't generate lazily round by round
 - Byes propagate immediately on creation: if seed 1 has a bye, `tournament_matches` row for their round-1 slot has `is_bye=true` and `winner_movie_id = movie_a_id` already set, `played_at = now()`
-- When a match result is submitted, check if the next match's opponent slot is now filled (both sides known) — if so, mark it ready. If the filled slot is a bye, auto-resolve it immediately server-side.
-- Tournament matches use the same `POST /api/duels` endpoint internally — the tournament match submission calls the duel service and stores the returned `duel_id`
+- When a match result is submitted, the winner is propagated into the next match's opponent slot. Byes only ever occur in round 1 (the 2× cap guarantees it), so no bye can appear downstream and need resolving.
+- Tournament matches do not round-trip through `POST /api/duels`. `record_match_winner` applies the shared `apply_elo_result` on the request session — same ELO maths, same `Duel` row, `pair_type='ranked_vs_ranked'`, `mode='tournament'` — and stores the resulting `duel_id` on the match row. The router then schedules the same background Trakt rating sync the duel router uses. Keeping it on one session avoids a cross-session round trip; the frontend does optimistic updates so the user never waits on it.
 - LLM call is synchronous on tournament creation for AI-curated — it's fast enough (< 3s) and the user is waiting for the preview anyway. Don't background it.
 - Store `llm_response` as raw JSONB — useful for debugging bad theme selections
 - The `/api/tournaments/:id/next` endpoint should never return a bye match

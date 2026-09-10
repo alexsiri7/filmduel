@@ -22,6 +22,7 @@ export default function Tournaments({ mediaType = "movie" }) {
   const [filterValue, setFilterValue] = useState("");
   const [availableGenres, setAvailableGenres] = useState([]);
   const [poolCount, setPoolCount] = useState(null);
+  const [maxBracketSize, setMaxBracketSize] = useState(null);
   const [aiCurated, setAiCurated] = useState(false);
 
   useEffect(() => {
@@ -45,8 +46,17 @@ export default function Tournaments({ mediaType = "movie" }) {
     const filterType = filterMode === "all" ? null : filterMode;
     const fv = filterMode === "all" ? null : filterValue;
     getTournamentPoolCount(filterType, fv, mediaType)
-      .then((data) => setPoolCount(data.count))
-      .catch(() => setPoolCount(null));
+      .then((data) => {
+        setPoolCount(data.count);
+        setMaxBracketSize(data.max_bracket_size ?? null);
+        setBracketSize((cur) =>
+          data.max_bracket_size && cur > data.max_bracket_size ? data.max_bracket_size : cur
+        );
+      })
+      .catch(() => {
+        setPoolCount(null);
+        setMaxBracketSize(null);
+      });
   }, [showCreate, filterMode, filterValue, mediaType]);
 
   async function handleOpenCreate() {
@@ -164,19 +174,25 @@ export default function Tournaments({ mediaType = "movie" }) {
               Bracket Size
             </label>
             <div className="flex gap-2">
-              {BRACKET_SIZES.map((size) => (
-                <button
-                  key={size}
-                  onClick={() => setBracketSize(size)}
-                  className={
-                    bracketSize === size
-                      ? "px-6 py-2 bg-primary-container text-[#0F0E0D] font-label font-bold uppercase text-xs tracking-widest border border-primary-container"
-                      : "px-6 py-2 bg-transparent text-[#F5F0E8]/60 font-label font-bold uppercase text-xs tracking-widest border border-[#F5F0E8]/10 hover:border-primary-container/40 transition-colors"
-                  }
-                >
-                  {size}
-                </button>
-              ))}
+              {BRACKET_SIZES.map((size) => {
+                const tooLarge = maxBracketSize !== null && size > maxBracketSize;
+                return (
+                  <button
+                    key={size}
+                    onClick={() => setBracketSize(size)}
+                    disabled={tooLarge}
+                    className={
+                      tooLarge
+                        ? "px-6 py-2 bg-transparent text-[#F5F0E8]/20 font-label font-bold uppercase text-xs tracking-widest border border-[#F5F0E8]/5 cursor-not-allowed"
+                        : bracketSize === size
+                        ? "px-6 py-2 bg-primary-container text-[#0F0E0D] font-label font-bold uppercase text-xs tracking-widest border border-primary-container"
+                        : "px-6 py-2 bg-transparent text-[#F5F0E8]/60 font-label font-bold uppercase text-xs tracking-widest border border-[#F5F0E8]/10 hover:border-primary-container/40 transition-colors"
+                    }
+                  >
+                    {size}
+                  </button>
+                );
+              })}
             </div>
             {poolCount !== null && (
               <p className="mt-2 text-sm font-body text-[#F5F0E8]/50">

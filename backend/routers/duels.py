@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/duels", tags=["duels"])
 
 
-async def _sync_ratings_background(
+async def sync_ratings_background(
     user_id: uuid.UUID,
     movie_a_id: uuid.UUID,
     new_elo_a: int,
@@ -111,7 +111,7 @@ async def submit_duel(
         and result.new_elo_b is not None
     ):
         background_tasks.add_task(
-            _sync_ratings_background,
+            sync_ratings_background,
             uid,
             movie_a_id,
             result.new_elo_a,

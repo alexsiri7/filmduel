@@ -446,3 +446,158 @@ class TestRegenerateCandidatePool:
 
         assert resp.status_code == 200
         assert mock_db.add.call_args[0][0].media_type == "show"
+
+
+# ---------------------------------------------------------------------------
+# FD-040: brackets the pool cannot half-fill, and provider sync after a match
+# ---------------------------------------------------------------------------
+
+
+class TestBracketSizeCap:
+    def setup_method(self):
+        app.dependency_overrides.clear()
+
+    def teardown_method(self):
+        app.dependency_overrides.clear()
+
+    def _override(self, user, film_count):
+        mock_db = AsyncMock()
+        mock_db.add = MagicMock()
+        mock_count_result = MagicMock()
+        mock_count_result.scalar_one.return_value = 0
+        mock_db.execute.return_value = mock_count_result
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+        return patch(
+            "backend.routers.tournaments.get_filtered_ranked_films",
+            new_callable=AsyncMock,
+            return_value=[MagicMock() for _ in range(film_count)],
+        )
+
+    def test_create_rejects_a_bracket_more_than_twice_the_pool(self):
+        """5 films cannot fill a 16 bracket — seeds 9-16 leave whole pairings empty."""
+        user = _make_user()
+
+        with self._override(user, 5):
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.post(
+                    "/api/tournaments",
+                    json={"name": "Test", "bracket_size": 16, "ai_curated": False},
+                )
+
+        assert resp.status_code == 400
+        assert "Bracket too large" in resp.json()["detail"]
+        assert "Max 8" in resp.json()["detail"]
+
+    def test_create_allows_a_bracket_at_exactly_twice_the_pool(self):
+        user = _make_user()
+
+        with self._override(user, 5), patch(
+            "backend.routers.tournaments.create_tournament_bracket",
+            new_callable=AsyncMock,
+        ), patch(
+            "backend.routers.tournaments._load_tournament",
+            new_callable=AsyncMock,
+            return_value=_make_tournament(user.id),
+        ):
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.post(
+                    "/api/tournaments",
+                    json={"name": "Test", "bracket_size": 8, "ai_curated": False},
+                )
+
+        assert resp.status_code == 200
+
+    def test_regenerate_rejects_a_pool_that_shrank_below_half_the_bracket(self):
+        """Regeneration must not rebuild an unplayable bracket after the pool shrinks."""
+        user = _make_user()
+        tournament_id = uuid.uuid4()
+        tournament = _make_tournament(
+            user.id, id=tournament_id, bracket_size=16, is_ai_curated=True, matches=[]
+        )
+        tournament.llm_response = {"_regen_count": 0, "_theme_hint": ""}
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+
+        with patch(
+            "backend.routers.tournaments._load_tournament",
+            new_callable=AsyncMock,
+            return_value=tournament,
+        ), patch(
+            "backend.routers.tournaments.get_filtered_ranked_films",
+            new_callable=AsyncMock,
+            return_value=[MagicMock() for _ in range(5)],
+        ), patch(
+            "backend.routers.tournaments.curate_and_select_films",
+            new_callable=AsyncMock,
+        ) as mock_curate:
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.post(f"/api/tournaments/{tournament_id}/regenerate")
+
+        assert resp.status_code == 400
+        assert "Bracket too large" in resp.json()["detail"]
+        mock_curate.assert_not_awaited()
+
+    def test_pool_count_reports_the_largest_offerable_bracket(self):
+        user = _make_user()
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+
+        with patch(
+            "backend.routers.tournaments.get_filtered_ranked_films",
+            new_callable=AsyncMock,
+            return_value=[MagicMock() for _ in range(9)],
+        ):
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.get("/api/tournaments/pool-count")
+
+        assert resp.status_code == 200
+        assert resp.json() == {"count": 9, "max_bracket_size": 16}
+
+
+class TestMatchResultSyncsRatings:
+    def setup_method(self):
+        app.dependency_overrides.clear()
+
+    def teardown_method(self):
+        app.dependency_overrides.clear()
+
+    def test_submitting_a_match_schedules_the_provider_rating_sync(self):
+        """FD-040: a tournament match pushes ratings to the provider like a duel."""
+        user = _make_user()
+        tournament_id = uuid.uuid4()
+        match = _mock_bracket_match(1, 0)
+        tournament = _make_tournament(
+            user.id, id=tournament_id, matches=[match]
+        )
+        winner_id = match.movie_a.id
+        loser_id = match.movie_b.id
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+
+        with patch(
+            "backend.routers.tournaments._load_tournament",
+            new_callable=AsyncMock,
+            return_value=tournament,
+        ), patch(
+            "backend.routers.tournaments.validate_match",
+            return_value=loser_id,
+        ), patch(
+            "backend.routers.tournaments.record_match_winner",
+            new_callable=AsyncMock,
+            return_value=(1210, 1090),
+        ), patch(
+            "backend.routers.tournaments.sync_ratings_background",
+            new_callable=AsyncMock,
+        ) as mock_sync:
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.post(
+                    f"/api/tournaments/{tournament_id}/matches/{match.id}",
+                    json={"winner_movie_id": str(winner_id)},
+                )
+
+        assert resp.status_code == 200
+        mock_sync.assert_awaited_once_with(user.id, winner_id, 1210, loser_id, 1090)
