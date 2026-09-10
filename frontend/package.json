@@ -12,7 +12,7 @@
     "lint:no-cdn-fonts": "! grep -r --exclude-dir=__tests__ 'fonts.googleapis.com\\|fonts.gstatic.com' src index.html"
   },
   "dependencies": {
-    "@vitest/ui": "^4.1.11",
+    "@vitest/ui": "^5.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.41.0",
