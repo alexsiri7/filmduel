@@ -682,3 +682,19 @@ requirements:
       - "The consent prompt names, per AI feature, the film fields sent to the gateway (title, year, genres, preference tier, community rating, duel count), the candidate-pool cap, and the vendor, and states that raw ELO scores and account identifiers are never transmitted"
       - "The suggestion and curation prompts substitute preference tiers for raw ELO and carry no account identifier"
     notes: "The third and fourth criteria are enforced as a pair — backend/tests/test_llm_disclosure.py pins the service-side literals (CANDIDATE_LIMIT, the top-10/bottom-5 slices, elo_tier substitution, LLM_BASE_URL's vendor host) and ConsentModal.test.jsx pins the same values in the modal copy, so widening one side without the other fails. Two limits are not guaranteed: LLM_BASE_URL is env-overridable, so a deployment pointed at another gateway makes the named vendor inaccurate without failing a test; and curate_tournament never receives a user id, so the no-account-identifier clause holds structurally there rather than by assertion. Each prompt also carries a film reference the itemized list does not name — trakt_id for suggestions, the catalog row id for curation — so the model can identify its picks; these reference films, not users."
+
+  # ── Feedback screenshot redaction ───────────────────────────────────────
+
+  - id: FD-055
+    title: Client-side screenshot annotation and redaction for feedback reports
+    statement: "When a user opens the screenshot editor on a feedback attachment, the system shall offer redact, highlight, arrow and text tools with undo, and on save shall flatten the original image, every committed annotation and any in-progress text onto a single canvas exported as one JPEG (quality 0.85) that replaces the attachment, so an edited screenshot reaches POST /api/feedback (FD-042) as the flattened image only and never as the pre-redaction original."
+    category: functional
+    priority: must
+    status: active
+    source: "issue #535 (req-gap orphan)"
+    acceptance:
+      - "The editor exposes redact, highlight, arrow and text tools and an undo that drops the most recent annotation from the export"
+      - "Saving draws the original image and then every committed annotation onto one canvas and exports it via canvas.toDataURL('image/jpeg', 0.85); a redaction is an opaque black fillRect painted over the original pixels, not a separate overlay layer"
+      - "onSave receives only that flattened data URL — the editor hands back no copy of, or reference to, the pre-annotation image"
+      - "A screenshot edited before submission is submitted as the flattened data URL: submitFeedback receives the editor's output, not the data URL read from the file"
+    notes: "Suspected gap not canonized: the editor is opt-in. ReportIssueModal's handleSubmit computes the payload as editedScreenshotDataUrl || screenshotDataUrl and 'Edit Screenshot' is a button the user may never press, so a raw, un-annotated screenshot is a reachable submission; the guarantee above holds for the edited path only, and issue #535's stronger 'the unredacted original never leaves the browser' wording is not adopted, per this file's rule that statements describe today's behavior. Only redact is destructive (opaque black); highlight, arrow and text are additive marks over intact pixels. The original also stays in client memory after a save — handleEditorSave sets editedScreenshotDataUrl without clearing screenshotDataUrl — so re-opening the editor passes the original rather than the previous flattened export: a user who saves redaction A, re-opens to add redaction B and saves again ships an export in which A's pixels are visible again. The flatten mechanism is intact in that case; the earlier redaction is simply not carried forward. Neither path is tested, for the same reason as the opt-in path."
