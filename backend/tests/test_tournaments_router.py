@@ -1,4 +1,4 @@
-"""Tests for tournaments router — daily cap, consent, ownership isolation."""
+"""Tests for tournaments router — daily cap, consent, listing, ownership isolation."""
 
 from __future__ import annotations
 
@@ -44,6 +44,37 @@ def _make_tournament(user_id, **overrides):
     t.completed_at = overrides.get("completed_at", None)
     t.matches = overrides.get("matches", [])
     return t
+
+
+def _mock_movie(title, trakt_id):
+    m = MagicMock()
+    m.id = uuid.uuid4()
+    m.title = title
+    m.year = 2020
+    m.trakt_id = trakt_id
+    m.imdb_id = f"tt{trakt_id:07d}"
+    m.tmdb_id = trakt_id * 100
+    m.poster_url = f"http://example.com/{trakt_id}.jpg"
+    m.genres = ["Drama"]
+    m.media_type = "movie"
+    m.overview = None
+    return m
+
+
+def _mock_bracket_match(round_num: int, position: int):
+    """Create a mock TournamentMatch carrying the fields the bracket schema reads."""
+    m = MagicMock()
+    m.id = uuid.uuid4()
+    m.round = round_num
+    m.position = position
+    m.movie_a = _mock_movie(f"Film r{round_num}p{position}a", round_num * 10 + position)
+    m.movie_b = _mock_movie(
+        f"Film r{round_num}p{position}b", round_num * 10 + position + 5
+    )
+    m.winner_movie_id = None
+    m.is_bye = False
+    m.played_at = None
+    return m
 
 
 # ---------------------------------------------------------------------------
@@ -135,29 +166,7 @@ class TestTournamentOwnership:
         user = _make_user()
         tournament_id = uuid.uuid4()
 
-        def _mock_movie(title, trakt_id):
-            m = MagicMock()
-            m.id = uuid.uuid4()
-            m.title = title
-            m.year = 2020
-            m.trakt_id = trakt_id
-            m.imdb_id = f"tt{trakt_id:07d}"
-            m.tmdb_id = trakt_id * 100
-            m.poster_url = f"http://example.com/{trakt_id}.jpg"
-            m.genres = ["Drama"]
-            m.media_type = "movie"
-            m.overview = None
-            return m
-
-        mock_match = MagicMock()
-        mock_match.id = uuid.uuid4()
-        mock_match.round = 1
-        mock_match.position = 0
-        mock_match.movie_a = _mock_movie("Film A", 1)
-        mock_match.movie_b = _mock_movie("Film B", 2)
-        mock_match.winner_movie_id = None
-        mock_match.is_bye = False
-        mock_match.played_at = None
+        mock_match = _mock_bracket_match(1, 0)
 
         mock_tournament = _make_tournament(
             user.id, id=tournament_id, matches=[mock_match]
@@ -179,6 +188,118 @@ class TestTournamentOwnership:
         assert "matches" in body
         assert len(body["matches"]) == 1
         assert body["matches"][0]["round"] == 1
+
+    def test_get_tournament_orders_matches_by_round_and_position(self):
+        """Bracket matches come back sorted by (round, position) (FD-056)."""
+        user = _make_user()
+        tournament_id = uuid.uuid4()
+
+        shuffled = [
+            _mock_bracket_match(2, 1),
+            _mock_bracket_match(1, 2),
+            _mock_bracket_match(2, 0),
+            _mock_bracket_match(1, 0),
+        ]
+        mock_tournament = _make_tournament(
+            user.id, id=tournament_id, matches=shuffled
+        )
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+
+        with patch(
+            "backend.routers.tournaments._load_tournament",
+            new_callable=AsyncMock,
+            return_value=mock_tournament,
+        ):
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.get(f"/api/tournaments/{tournament_id}")
+
+        assert resp.status_code == 200
+        ordering = [(m["round"], m["position"]) for m in resp.json()["matches"]]
+        assert ordering == [(1, 0), (1, 2), (2, 0), (2, 1)]
+
+
+# ---------------------------------------------------------------------------
+# list_tournaments — scoping, ordering, cap, progress (FD-056)
+# ---------------------------------------------------------------------------
+
+
+class TestListTournaments:
+    def setup_method(self):
+        app.dependency_overrides.clear()
+
+    def teardown_method(self):
+        app.dependency_overrides.clear()
+
+    @staticmethod
+    def _get_list(user, tournaments):
+        """Call GET /api/tournaments with a mocked DB; return (response, statement)."""
+        mock_result = MagicMock()
+        mock_result.unique.return_value.scalars.return_value.all.return_value = (
+            tournaments
+        )
+        mock_db = AsyncMock()
+        mock_db.execute.return_value = mock_result
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.get("/api/tournaments")
+
+        return resp, mock_db.execute.call_args[0][0]
+
+    def test_list_query_is_scoped_to_the_current_user(self):
+        """The WHERE clause binds the requesting user's id, so no foreign row is fetched."""
+        user = _make_user()
+        resp, stmt = self._get_list(user, [_make_tournament(user.id)])
+
+        assert resp.status_code == 200
+        assert "WHERE tournaments.user_id = " in str(stmt)
+        assert user.id in stmt.compile().params.values()
+
+    def test_list_query_orders_newest_first_and_caps_at_100(self):
+        """Ordering and the safety cap are in the SQL, not applied after fetching."""
+        user = _make_user()
+        resp, stmt = self._get_list(user, [])
+
+        assert resp.status_code == 200
+        assert "ORDER BY tournaments.created_at DESC" in str(stmt)
+        assert 100 in stmt.compile().params.values()
+
+    def test_list_preserves_query_row_order(self):
+        """Rows reach the client in the order the query returned them."""
+        user = _make_user()
+        rows = [
+            _make_tournament(user.id, name="Newest"),
+            _make_tournament(user.id, name="Middle"),
+            _make_tournament(user.id, name="Oldest"),
+        ]
+        resp, _ = self._get_list(user, rows)
+
+        assert resp.status_code == 200
+        assert [t["name"] for t in resp.json()] == ["Newest", "Middle", "Oldest"]
+
+    def test_list_progress_reflects_tournament_status(self):
+        """Terminal statuses get fixed labels; an active one gets a round tally."""
+        user = _make_user()
+        played = _mock_match(1, winner_id="w1")
+        unplayed = _mock_match(1)
+        rows = [
+            _make_tournament(user.id, name="Done", status="completed"),
+            _make_tournament(user.id, name="Gone", status="abandoned"),
+            _make_tournament(
+                user.id, name="Live", status="active", matches=[played, unplayed]
+            ),
+        ]
+        resp, _ = self._get_list(user, rows)
+
+        assert resp.status_code == 200
+        progress = {t["name"]: t["progress"] for t in resp.json()}
+        assert progress["Done"] == "Completed"
+        assert progress["Gone"] == "Abandoned"
+        assert progress["Live"] == "Round 1 \u2014 1/2 matches played"
 
 
 # ---------------------------------------------------------------------------
