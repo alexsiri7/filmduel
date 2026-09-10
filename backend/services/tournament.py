@@ -68,10 +68,30 @@ async def curate_and_select_films(
     selected_ums = [um for um in candidate_pool if str(um.movie_id) in film_id_set]
     selected_ums.sort(key=lambda um: um.elo or 0, reverse=True)
 
+    if len(selected_ums) * 2 < bracket_size:
+        raise ValueError(
+            f"AI selected only {len(selected_ums)} usable films "
+            f"for a {bracket_size} bracket"
+        )
+
     return selected_ums, llm_result
 
 
 # ── Pure helpers ──────────────────────────────────────────────────────
+
+
+BRACKET_SIZES = (8, 16, 32, 64)
+
+
+def max_bracket_size(pool_count: int) -> int | None:
+    """Largest offerable bracket for a pool of ``pool_count`` ranked films.
+
+    A bracket may not exceed 2x the pool: standard seeding pairs seed ``a``
+    with seed ``bracket_size + 1 - a``, and the lower seed of every pairing
+    falls in ``1..bracket_size / 2``. Below that ratio some pairing has no
+    real film on either side and can never be played.
+    """
+    return max((s for s in BRACKET_SIZES if s <= 2 * pool_count), default=None)
 
 
 def generate_seeded_bracket(n: int) -> list[tuple[int, int]]:
@@ -170,6 +190,11 @@ async def create_tournament_bracket(
     subsequent rounds, and propagates bye winners into round 2.
     """
     actual_films = len(seeded_films)
+    if actual_films * 2 < bracket_size:
+        raise ValueError(
+            f"Bracket size {bracket_size} needs at least {bracket_size // 2} films, "
+            f"got {actual_films}"
+        )
     num_byes = bracket_size - actual_films
     pairings = generate_seeded_bracket(bracket_size)
     num_rounds = _num_rounds(bracket_size)
@@ -291,6 +316,8 @@ def validate_match(
         raise ValueError("Match not found")
     if match.winner_movie_id is not None:
         raise ValueError("Match already played")
+    if match.movie_a_id is None or match.movie_b_id is None:
+        raise ValueError("Match is not ready to play")
     if winner_id not in (match.movie_a_id, match.movie_b_id):
         raise ValueError("Winner must be one of the two movies")
 
@@ -305,11 +332,14 @@ async def record_match_winner(
     winner_id: uuid.UUID,
     loser_id: uuid.UUID,
     user_id: uuid.UUID,
-) -> None:
+) -> tuple[int, int]:
     """Record match result: set winner, propagate, ELO update, duel record.
 
     All on the caller's session — no background tasks, no connection pool issues.
     Frontend does optimistic updates so the user doesn't wait.
+
+    Returns the winner's and loser's new ELO ratings as plain ints, which the
+    caller uses to schedule the provider rating sync on a fresh session.
     """
     now = datetime.now(timezone.utc)
 
@@ -380,7 +410,10 @@ async def record_match_winner(
     duel = await apply_elo_result(
         db, user_id, winner_id, loser_id, um_w, um_l, "tournament"
     )
+    duel.pair_type = "ranked_vs_ranked"
     await db.flush()
 
     match_obj.duel_id = duel.id
     await db.flush()
+
+    return um_w.elo, um_l.elo

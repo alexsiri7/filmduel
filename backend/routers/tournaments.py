@@ -6,7 +6,7 @@ import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +16,7 @@ from backend.db import get_db
 from backend.rate_limit import limiter
 from backend.db_models import Movie, Tournament, TournamentMatch, User
 from backend.routers.auth import get_current_user, require_ai_consent
+from backend.routers.duels import sync_ratings_background
 from backend.schemas import (
     FilterType,
     MediaType,
@@ -31,6 +32,7 @@ from backend.services.tournament import (
     create_tournament_bracket,
     curate_and_select_films,
     get_filtered_ranked_films,
+    max_bracket_size,
     record_match_winner,
     validate_match,
 )
@@ -78,6 +80,23 @@ def _tournament_schema(t: Tournament) -> TournamentSchema:
         completed_at=t.completed_at,
         matches=[_match_schema(m) for m in sorted_matches],
     )
+
+
+def _reject_unfillable_bracket(bracket_size: int, pool_size: int) -> None:
+    """Reject a bracket the pool cannot half-fill.
+
+    Below 2x the pool, standard seeding produces round-1 pairings with no real
+    film on either side — matches nothing can ever win, so the tournament can
+    never complete.
+    """
+    max_size = max_bracket_size(pool_size)
+    if max_size is None:
+        raise HTTPException(status_code=400, detail="Need at least 4 ranked films")
+    if bracket_size > max_size:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Bracket too large. Max {max_size} for {pool_size} films",
+        )
 
 
 async def _load_tournament(
@@ -163,7 +182,10 @@ async def get_pool_count(
         )
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid decade format")
-    return {"count": len(user_movies)}
+    return {
+        "count": len(user_movies),
+        "max_bracket_size": max_bracket_size(len(user_movies)),
+    }
 
 
 @router.post("", response_model=TournamentSchema)
@@ -207,11 +229,7 @@ async def create_tournament(
 
     if len(user_movies) < 4:
         raise HTTPException(status_code=400, detail="Need at least 4 ranked films")
-    if body.bracket_size > len(user_movies) * 4:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Bracket too large. Max {len(user_movies) * 4} for {len(user_movies)} films",
-        )
+    _reject_unfillable_bracket(body.bracket_size, len(user_movies))
 
     # AI curation or standard selection
     ai_name = None
@@ -310,6 +328,8 @@ async def regenerate_tournament(
         )
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid decade format")
+
+    _reject_unfillable_bracket(tournament.bracket_size, len(user_movies))
 
     original_hint = llm_response.get("_theme_hint", "")
     try:
@@ -440,6 +460,7 @@ async def submit_match_result_endpoint(
     tournament_id: uuid.UUID,
     match_id: uuid.UUID,
     body: MatchResult,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -456,7 +477,7 @@ async def submit_match_result_endpoint(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    await record_match_winner(
+    new_winner_elo, new_loser_elo = await record_match_winner(
         db,
         tournament_id,
         tournament.bracket_size,
@@ -464,6 +485,16 @@ async def submit_match_result_endpoint(
         winner_id,
         loser_id,
         uid,
+    )
+
+    # Same fire-and-forget Trakt sync a regular duel gets (FD-040)
+    background_tasks.add_task(
+        sync_ratings_background,
+        uid,
+        winner_id,
+        new_winner_elo,
+        loser_id,
+        new_loser_elo,
     )
 
     tournament = await _load_tournament(tournament_id, uid, db)

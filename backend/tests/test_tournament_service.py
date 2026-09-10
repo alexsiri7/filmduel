@@ -8,8 +8,10 @@ import pytest
 from backend.services.tournament import (
     _num_rounds,
     create_tournament_bracket,
+    curate_and_select_films,
     generate_seeded_bracket,
     get_filtered_ranked_films,
+    max_bracket_size,
     validate_match,
 )
 
@@ -235,6 +237,94 @@ class TestCreateTournamentBracketWithByes:
 
 
 # ---------------------------------------------------------------------------
+# max_bracket_size — the 2x-pool invariant that keeps every pairing playable
+# ---------------------------------------------------------------------------
+
+
+class TestMaxBracketSize:
+    @pytest.mark.parametrize(
+        "pool_count,expected",
+        [(3, None), (4, 8), (7, 8), (8, 16), (9, 16), (16, 32), (32, 64), (64, 64)],
+    )
+    def test_largest_offerable_bracket(self, pool_count, expected):
+        assert max_bracket_size(pool_count) == expected
+
+
+class TestCreateTournamentBracketRejectsUnplayableBrackets:
+    """A pool below half the bracket makes some pairing have no film at all."""
+
+    @pytest.mark.asyncio
+    async def test_rejects_pool_below_half_the_bracket(self):
+        db = AsyncMock()
+        db.add = MagicMock()
+
+        with pytest.raises(ValueError, match="needs at least 4 films"):
+            await create_tournament_bracket(
+                db, uuid.uuid4(), 8, [_make_seeded_film() for _ in range(3)]
+            )
+
+        db.add.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_accepts_pool_at_exactly_half_the_bracket(self):
+        """Every round-1 pairing still holds one real film at the boundary."""
+        tournament_id = uuid.uuid4()
+        films = [_make_seeded_film() for _ in range(4)]
+        added_objects = []
+
+        db = AsyncMock()
+        db.add = MagicMock(side_effect=lambda obj: added_objects.append(obj))
+
+        round2_mock = MagicMock()
+        round2_mock.movie_a_id = None
+        round2_mock.movie_b_id = None
+
+        async def fake_execute(stmt):
+            result = MagicMock()
+            if "is_bye" in str(stmt):
+                result.scalars.return_value.all.return_value = [
+                    obj for obj in added_objects if getattr(obj, "is_bye", False)
+                ]
+            else:
+                result.scalar_one.return_value = round2_mock
+            return result
+
+        db.execute = fake_execute
+
+        await create_tournament_bracket(db, tournament_id, 8, films)
+
+        from backend.db_models import TournamentMatch
+
+        round1_matches = [
+            obj
+            for obj in added_objects
+            if isinstance(obj, TournamentMatch) and obj.round == 1
+        ]
+        assert len(round1_matches) == 4
+        assert all(m.winner_movie_id is not None for m in round1_matches)
+
+
+class TestCurateAndSelectFilmsRejectsThinSelections:
+    @pytest.mark.asyncio
+    async def test_duplicate_film_ids_collapsing_below_half_raise(self):
+        """The LLM can name 8 ids that dedupe to 3 — the bracket would be unplayable."""
+        films = [_make_seeded_film() for _ in range(8)]
+        for um in films:
+            um.movie.title = "Film"
+            um.movie.year = 2000
+            um.movie.genres = []
+        chosen = [str(um.movie_id) for um in films[:3]]
+
+        with patch(
+            "backend.services.tournament.curate_tournament",
+            new_callable=AsyncMock,
+            return_value={"name": "T", "film_ids": chosen * 3},
+        ):
+            with pytest.raises(ValueError, match="only 3 usable films"):
+                await curate_and_select_films(films, 8, None, None, "")
+
+
+# ---------------------------------------------------------------------------
 # validate_match
 # ---------------------------------------------------------------------------
 
@@ -297,6 +387,24 @@ class TestValidateMatch:
 
         loser = validate_match(tournament, match_id, movie_a)
         assert loser == movie_b
+
+    def test_rejects_match_with_an_unfilled_slot(self):
+        """A future-round match whose second slot is empty is not playable yet."""
+        match_id = uuid.uuid4()
+        movie_a = uuid.uuid4()
+
+        match = MagicMock()
+        match.id = match_id
+        match.movie_a_id = movie_a
+        match.movie_b_id = None
+        match.winner_movie_id = None
+
+        tournament = MagicMock()
+        tournament.status = "active"
+        tournament.matches = [match]
+
+        with pytest.raises(ValueError, match="not ready to play"):
+            validate_match(tournament, match_id, movie_a)
 
     def test_rejects_inactive_tournament(self):
         """Should raise ValueError for a non-active tournament."""
@@ -475,3 +583,78 @@ class TestRecordMatchWinner:
 
         assert tournament_obj.champion_movie_id == winner_id
         assert tournament_obj.status == "completed"
+
+
+# ---------------------------------------------------------------------------
+# record_match_winner — FD-040 parity with the standard duel pipeline
+# ---------------------------------------------------------------------------
+
+
+class TestRecordMatchWinnerEloParity:
+    """The real ELO maths, unpatched: a tournament match must move ratings
+    exactly as a regular duel does, and leave the duel row linked to the match."""
+
+    @pytest.mark.asyncio
+    async def test_matches_the_shared_elo_calculation_and_stores_the_duel(self):
+        import types
+
+        from backend.db_models import Duel
+        from backend.services.elo import update_elo
+        from backend.services.tournament import record_match_winner
+
+        tournament_id = uuid.uuid4()
+        match_id = uuid.uuid4()
+        winner_id = uuid.uuid4()
+        loser_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+
+        match_obj = types.SimpleNamespace(
+            id=match_id,
+            round=1,
+            position=0,
+            winner_movie_id=None,
+            played_at=None,
+            duel_id=None,
+        )
+        um_w = types.SimpleNamespace(elo=1200, battles=10, seeded_elo=None)
+        um_l = types.SimpleNamespace(elo=1100, battles=8, seeded_elo=None)
+        added = []
+
+        # bracket_size=2 → round 1 is the final, so the second lookup is the
+        # tournament row rather than a next-round match.
+        lookups = [match_obj, MagicMock(), um_w, um_l]
+
+        async def fake_execute(stmt):
+            result = MagicMock()
+            result.scalar_one.return_value = lookups.pop(0)
+            return result
+
+        async def assign_ids_like_a_real_flush():
+            for obj in added:
+                if isinstance(obj, Duel) and obj.id is None:
+                    obj.id = uuid.uuid4()
+
+        db = AsyncMock()
+        db.execute = fake_execute
+        db.add = MagicMock(side_effect=added.append)
+        db.flush = AsyncMock(side_effect=assign_ids_like_a_real_flush)
+
+        returned = await record_match_winner(
+            db, tournament_id, 2, match_id, winner_id, loser_id, user_id
+        )
+
+        expected_w, expected_l = update_elo(1200, 1100, 10, 8)
+        assert (um_w.elo, um_l.elo) == (expected_w, expected_l)
+        assert returned == (expected_w, expected_l)
+        assert (um_w.battles, um_l.battles) == (11, 9)
+
+        duels = [obj for obj in added if isinstance(obj, Duel)]
+        assert len(duels) == 1
+        duel = duels[0]
+        assert duel.mode == "tournament"
+        assert duel.pair_type == "ranked_vs_ranked"
+        assert (duel.winner_elo_before, duel.winner_elo_after) == (1200, expected_w)
+        assert (duel.loser_elo_before, duel.loser_elo_after) == (1100, expected_l)
+
+        assert duel.id is not None
+        assert match_obj.duel_id == duel.id

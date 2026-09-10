@@ -87,14 +87,14 @@ async def test_has_enough_ranked_passes_media_type():
 
 
 # ---------------------------------------------------------------------------
-# _sync_ratings_background — error handling
+# sync_ratings_background — error handling
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_sync_ratings_background_handles_exceptions():
-    """_sync_ratings_background logs exceptions instead of crashing."""
-    from backend.routers.duels import _sync_ratings_background
+async def testsync_ratings_background_handles_exceptions():
+    """sync_ratings_background logs exceptions instead of crashing."""
+    from backend.routers.duels import sync_ratings_background
 
     uid = uuid.uuid4()
     mid_a = uuid.uuid4()
@@ -107,13 +107,13 @@ async def test_sync_ratings_background_handles_exceptions():
         mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
 
         # Should not raise — error is caught and logged
-        await _sync_ratings_background(uid, mid_a, 1100, mid_b, 900)
+        await sync_ratings_background(uid, mid_a, 1100, mid_b, 900)
 
 
 @pytest.mark.asyncio
-async def test_sync_ratings_background_refreshes_expired_token():
-    """_sync_ratings_background calls ensure_fresh_token before syncing."""
-    from backend.routers.duels import _sync_ratings_background
+async def testsync_ratings_background_refreshes_expired_token():
+    """sync_ratings_background calls ensure_fresh_token before syncing."""
+    from backend.routers.duels import sync_ratings_background
 
     uid = uuid.uuid4()
     mid_a = uuid.uuid4()
@@ -152,7 +152,7 @@ async def test_sync_ratings_background_refreshes_expired_token():
         mock_movies_result.all.return_value = mock_rows
         mock_session.execute.side_effect = [mock_user_result, mock_movies_result]
 
-        await _sync_ratings_background(uid, mid_a, 1100, mid_b, 900)
+        await sync_ratings_background(uid, mid_a, 1100, mid_b, 900)
 
         mock_refresh.assert_awaited_once_with(mock_user, mock_session)
         mock_session.commit.assert_awaited_once()
@@ -164,9 +164,9 @@ async def test_sync_ratings_background_refreshes_expired_token():
 
 
 @pytest.mark.asyncio
-async def test_sync_ratings_background_skips_if_user_not_found():
-    """_sync_ratings_background returns early when user record is missing."""
-    from backend.routers.duels import _sync_ratings_background
+async def testsync_ratings_background_skips_if_user_not_found():
+    """sync_ratings_background returns early when user record is missing."""
+    from backend.routers.duels import sync_ratings_background
 
     with (
         patch("backend.routers.duels.async_session_factory") as mock_factory,
@@ -181,7 +181,7 @@ async def test_sync_ratings_background_skips_if_user_not_found():
         mock_exec_result.scalar_one_or_none.return_value = None
         mock_session.execute.return_value = mock_exec_result
 
-        await _sync_ratings_background(
+        await sync_ratings_background(
             uuid.uuid4(), uuid.uuid4(), 1100, uuid.uuid4(), 900
         )
 
@@ -189,9 +189,9 @@ async def test_sync_ratings_background_skips_if_user_not_found():
 
 
 @pytest.mark.asyncio
-async def test_sync_ratings_background_skips_if_no_trakt_token():
-    """_sync_ratings_background returns early when user has no Trakt token linked."""
-    from backend.routers.duels import _sync_ratings_background
+async def testsync_ratings_background_skips_if_no_trakt_token():
+    """sync_ratings_background returns early when user has no Trakt token linked."""
+    from backend.routers.duels import sync_ratings_background
 
     mock_user = MagicMock()
     mock_user.trakt_access_token = None
@@ -209,7 +209,7 @@ async def test_sync_ratings_background_skips_if_no_trakt_token():
         mock_exec_result.scalar_one_or_none.return_value = mock_user
         mock_session.execute.return_value = mock_exec_result
 
-        await _sync_ratings_background(
+        await sync_ratings_background(
             uuid.uuid4(), uuid.uuid4(), 1100, uuid.uuid4(), 900
         )
 
@@ -217,10 +217,10 @@ async def test_sync_ratings_background_skips_if_no_trakt_token():
 
 
 @pytest.mark.asyncio
-async def test_sync_ratings_background_refresh_failure_is_swallowed():
-    """_sync_ratings_background swallows exceptions from ensure_fresh_token."""
+async def testsync_ratings_background_refresh_failure_is_swallowed():
+    """sync_ratings_background swallows exceptions from ensure_fresh_token."""
     import httpx
-    from backend.routers.duels import _sync_ratings_background
+    from backend.routers.duels import sync_ratings_background
 
     uid = uuid.uuid4()
     mid_a = uuid.uuid4()
@@ -249,15 +249,15 @@ async def test_sync_ratings_background_refresh_failure_is_swallowed():
         mock_exec_result.scalar_one_or_none.return_value = mock_user
         mock_session.execute.return_value = mock_exec_result
 
-        await _sync_ratings_background(uid, mid_a, 1100, mid_b, 900)
+        await sync_ratings_background(uid, mid_a, 1100, mid_b, 900)
 
         mock_sync.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_sync_ratings_background_skips_when_opt_out():
-    """_sync_ratings_background skips sync when sync_ratings_to_trakt is False."""
-    from backend.routers.duels import _sync_ratings_background
+async def testsync_ratings_background_skips_when_opt_out():
+    """sync_ratings_background skips sync when sync_ratings_to_trakt is False."""
+    from backend.routers.duels import sync_ratings_background
 
     mock_user = MagicMock()
     mock_user.trakt_access_token = "valid_token"
@@ -279,7 +279,7 @@ async def test_sync_ratings_background_skips_when_opt_out():
         mock_exec_result.scalar_one_or_none.return_value = mock_user
         mock_session.execute.return_value = mock_exec_result
 
-        await _sync_ratings_background(
+        await sync_ratings_background(
             uuid.uuid4(), uuid.uuid4(), 1100, uuid.uuid4(), 900
         )
 
@@ -288,9 +288,9 @@ async def test_sync_ratings_background_skips_when_opt_out():
 
 
 @pytest.mark.asyncio
-async def test_sync_ratings_background_syncs_when_opt_in():
-    """_sync_ratings_background syncs when sync_ratings_to_trakt is True."""
-    from backend.routers.duels import _sync_ratings_background
+async def testsync_ratings_background_syncs_when_opt_in():
+    """sync_ratings_background syncs when sync_ratings_to_trakt is True."""
+    from backend.routers.duels import sync_ratings_background
 
     uid = uuid.uuid4()
     mid_a = uuid.uuid4()
@@ -333,15 +333,15 @@ async def test_sync_ratings_background_syncs_when_opt_in():
         mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
 
-        await _sync_ratings_background(uid, mid_a, 1100, mid_b, 900)
+        await sync_ratings_background(uid, mid_a, 1100, mid_b, 900)
 
         mock_sync.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_sync_ratings_background_uses_select_for_update():
-    """_sync_ratings_background must lock the user row to prevent concurrent token refresh."""
-    from backend.routers.duels import _sync_ratings_background
+async def testsync_ratings_background_uses_select_for_update():
+    """sync_ratings_background must lock the user row to prevent concurrent token refresh."""
+    from backend.routers.duels import sync_ratings_background
 
     uid = uuid.uuid4()
     mid_a = uuid.uuid4()
@@ -384,7 +384,7 @@ async def test_sync_ratings_background_uses_select_for_update():
 
         mock_session.execute.side_effect = capture_execute
 
-        await _sync_ratings_background(uid, mid_a, 1100, mid_b, 900)
+        await sync_ratings_background(uid, mid_a, 1100, mid_b, 900)
 
         # Verify the user query uses with_for_update
         from sqlalchemy.dialects import postgresql
