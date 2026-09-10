@@ -651,3 +651,18 @@ requirements:
       - "Engine construction sets statement_cache_size=0"
       - "No supabase-py dependency exists in backend/requirements.in"
       - "Every schema change ships as an Alembic revision (backend/migrations)"
+
+  # ── Cross-provider catalog integrity ────────────────────────────────────
+
+  - id: FD-053
+    title: Cross-provider catalog dedup by IMDB id during SIMKL ingestion
+    statement: "When ingesting titles from SIMKL, the system shall match each incoming title against existing catalog rows by IMDB id within the same media_type and, on a match, reuse that row — backfilling its simkl_id rather than inserting a second row — so a user who connects SIMKL after Trakt keeps one catalog entry per title; unmatched SIMKL titles are inserted with the SIMKL id stored in both the trakt_id and simkl_id columns."
+    category: functional
+    priority: must
+    status: active
+    source: "issue #537 (req-gap orphan)"
+    acceptance:
+      - "Ingesting a SIMKL title whose imdb_id matches an existing movies row issues no INSERT into movies — only an UPDATE setting simkl_id on the matched row"
+      - "The user_movies row written for a matched title references the pre-existing movie id, so per-user seen/elo/battle state stays on one row"
+      - "A SIMKL title with no imdb match is inserted with trakt_id == simkl_id == the SIMKL id"
+    notes: "Suspected gap not canonized: the dedup is one-directional. _upsert_pool (the Trakt path) never reads imdb_id and there is no unique index on movies.imdb_id — only uq_movies_trakt_id_media_type — so a user who connects SIMKL first and Trakt second still gets a second catalog row for the same title. The guarantee above holds for the SIMKL-after-Trakt ordering only."
