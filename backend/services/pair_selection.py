@@ -109,7 +109,7 @@ async def select_pair(
     # Split into anchors (ranked, battles >= 1) and full pool
     anchor_pool = [f for f in seen_films if f.battles >= 1 and f.elo is not None]
 
-    # Bootstrap: no anchors yet — pick two seen films by settlement weight
+    # Bootstrap: no anchors yet — pick two band-matched seen films
     if len(anchor_pool) == 0:
         return _pick_bootstrap_pair(seen_films, last_pair_ids)
 
@@ -191,13 +191,22 @@ def _pick_bootstrap_pair(
     seen_films: list[UserMovie],
     last_pair_ids: set[str] | None,
 ) -> tuple[UserMovie, UserMovie]:
-    """Bootstrap: pick two seen films when no anchors exist."""
+    """Bootstrap: pick two seen films when no anchors exist.
+
+    Anchor is settlement-weighted; the challenger comes from the anchor's
+    quality band (same > adjacent > full pool), which for unranked films is
+    derived from community rating. Callers guarantee at least 2 seen films.
+    """
     for _ in range(5):
-        a, b = random.sample(seen_films, 2)
-        pair_ids = {str(a.movie_id), str(b.movie_id)}
+        anchor = _weighted_sample(seen_films)
+        candidates = [f for f in seen_films if f.movie_id != anchor.movie_id]
+        challenger = _weighted_sample(
+            _band_filtered_candidates(_film_band(anchor), candidates)
+        )
+        pair_ids = {str(anchor.movie_id), str(challenger.movie_id)}
         if last_pair_ids is None or pair_ids != last_pair_ids:
-            return a, b
-    return a, b  # type: ignore
+            return anchor, challenger
+    return anchor, challenger  # type: ignore
 
 
 def _weighted_sample(films: list[UserMovie]) -> UserMovie:
