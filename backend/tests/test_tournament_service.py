@@ -242,6 +242,16 @@ class TestCreateTournamentBracketWithByes:
 
 
 class TestMaxBracketSize:
+    def test_offerable_sizes_match_the_api_schema(self):
+        """The cap may only ever return a size TournamentCreate accepts."""
+        from typing import get_args
+
+        from backend.schemas import TournamentCreate
+        from backend.services.tournament import BRACKET_SIZES
+
+        annotation = TournamentCreate.model_fields["bracket_size"].annotation
+        assert get_args(annotation) == BRACKET_SIZES
+
     @pytest.mark.parametrize(
         "pool_count,expected",
         [(3, None), (4, 8), (7, 8), (8, 16), (9, 16), (16, 32), (32, 64), (64, 64)],
