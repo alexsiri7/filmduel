@@ -7,8 +7,14 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy.sql import Select
+from sqlalchemy.sql.dml import Insert, Update
 
-from backend.services.pool import populate_movie_pool, build_movie_upsert
+from backend.services.pool import (
+    populate_movie_pool,
+    build_movie_upsert,
+    _upsert_simkl_pool,
+)
 
 
 def _make_user(last_seen_at=None):
@@ -220,3 +226,87 @@ class TestSafeFetch:
 
         # last_seen_at should still be updated (sync completed)
         assert user.last_seen_at is not None
+
+
+# ---------------------------------------------------------------------------
+# _upsert_simkl_pool — cross-provider catalog dedup (FD-053)
+# ---------------------------------------------------------------------------
+
+
+class TestUpsertSimklPool:
+    """Tests for _upsert_simkl_pool's imdb cross-reference against existing rows."""
+
+    def _fake_db(self, existing_rows):
+        """AsyncMock session recording every statement; SELECTs return existing_rows."""
+        stmts = []
+
+        async def fake_execute(stmt):
+            stmts.append(stmt)
+            result = MagicMock()
+            result.all.return_value = existing_rows if isinstance(stmt, Select) else []
+            return result
+
+        db = AsyncMock()
+        db.execute = fake_execute
+        return db, stmts
+
+    def _inserts_into(self, stmts, table_name):
+        return [s for s in stmts if isinstance(s, Insert) and s.table.name == table_name]
+
+    def _updates_of(self, stmts, table_name):
+        return [s for s in stmts if isinstance(s, Update) and s.table.name == table_name]
+
+    @pytest.mark.asyncio
+    async def test_matches_existing_trakt_row_by_imdb_and_backfills_simkl_id(self):
+        """A SIMKL title matching an existing row by imdb_id reuses that row instead of inserting."""
+        existing_id = uuid.uuid4()
+        existing = MagicMock(id=existing_id, trakt_id=555, imdb_id="tt0111161")
+        db, stmts = self._fake_db([existing])
+
+        pool = {
+            900: {
+                "ids": {"simkl": 900, "imdb": "tt0111161", "tmdb": 278},
+                "title": "Shawshank",
+            }
+        }
+
+        await _upsert_simkl_pool(
+            db, _make_user(), pool, set(), {}, "movie", datetime.now(timezone.utc)
+        )
+
+        assert self._inserts_into(stmts, "movies") == []
+
+        updates = self._updates_of(stmts, "movies")
+        assert len(updates) == 1
+        params = updates[0].compile().params
+        assert params["simkl_id"] == 900
+        assert params["id_1"] == existing_id
+
+        user_movie_inserts = self._inserts_into(stmts, "user_movies")
+        assert len(user_movie_inserts) == 1
+        assert user_movie_inserts[0].compile().params["movie_id"] == existing_id
+
+    @pytest.mark.asyncio
+    async def test_unmatched_simkl_title_inserts_with_simkl_id_in_both_columns(self):
+        """A SIMKL title with no imdb match is inserted with the SIMKL id in trakt_id and simkl_id."""
+        db, stmts = self._fake_db([])
+
+        pool = {
+            901: {
+                "ids": {"simkl": 901, "imdb": "tt9999999", "tmdb": 1},
+                "title": "New",
+            }
+        }
+
+        await _upsert_simkl_pool(
+            db, _make_user(), pool, set(), {}, "movie", datetime.now(timezone.utc)
+        )
+
+        assert self._updates_of(stmts, "movies") == []
+
+        inserts = self._inserts_into(stmts, "movies")
+        assert len(inserts) == 1
+        params = inserts[0].compile().params
+        assert params["trakt_id"] == 901
+        assert params["simkl_id"] == 901
+        assert params["imdb_id"] == "tt9999999"
