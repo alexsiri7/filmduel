@@ -3,9 +3,10 @@
 import random
 import unittest.mock
 import uuid
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy.dialects import postgresql
 
 from backend.services.pair_selection import (
     BAND_ORDER,
@@ -17,6 +18,7 @@ from backend.services.pair_selection import (
     bands_adjacent,
     community_rating_to_band,
     elo_to_band,
+    select_pair,
 )
 
 
@@ -39,6 +41,14 @@ def _make_user_movie(
     movie.community_rating = community_rating
     um.movie = movie
     return um
+
+
+def _first_of_population():
+    """Pin every settlement-weighted draw to the head of its own population."""
+    return unittest.mock.patch(
+        "backend.services.pair_selection.random.choices",
+        side_effect=lambda population, weights, k: [population[0]],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -259,6 +269,21 @@ class TestPickChallenger:
                 result = _pick_challenger(anchor, [close, far])
                 assert result is close
 
+    def test_wide_match_preference(self):
+        """When roll >= 0.7, _pick_challenger should prefer distant ELO matches."""
+        anchor = _make_user_movie(elo=1000, battles=5)
+        close = _make_user_movie(elo=1050, battles=5)
+        far = _make_user_movie(elo=1500, battles=5)  # diff 500 > 300
+        with unittest.mock.patch(
+            "backend.services.pair_selection.random.random", return_value=0.9
+        ):
+            with unittest.mock.patch(
+                "backend.services.pair_selection.random.choices",
+                side_effect=lambda population, weights, k: [population[0]],
+            ):
+                result = _pick_challenger(anchor, [close, far])
+                assert result is far
+
     def test_falls_back_to_unranked_candidates(self):
         """When no ranked candidates, falls back to settlement-weighted sample."""
         anchor = _make_user_movie(elo=1000, battles=5)
@@ -289,17 +314,100 @@ class TestPickBootstrapPair:
             movie_id=uuid.UUID("00000000-0000-0000-0000-000000000003")
         )
         last_ids = {str(f1.movie_id), str(f2.movie_id)}
-        # Patch random.choices to deterministically return [f1, f3]
+        # First attempt draws {f1, f2} (the rejected pair), later attempts
+        # draw from the other end of each population so the retry can escape.
+        draws = []
+
+        def pick(population, weights, k):
+            draws.append(population)
+            return [population[0] if len(draws) <= 2 else population[-1]]
+
         with unittest.mock.patch(
             "backend.services.pair_selection.random.choices",
-            return_value=[f1, f3],
+            side_effect=pick,
         ):
             a, b = _pick_bootstrap_pair([f1, f2, f3], last_ids)
         pair_ids = {str(a.movie_id), str(b.movie_id)}
         assert pair_ids != last_ids
+        assert a is not b
+        assert len(draws) > 2, "anti-repeat loop should have retried"
 
     def test_only_2_films(self):
         f1 = _make_user_movie()
         f2 = _make_user_movie()
         a, b = _pick_bootstrap_pair([f1, f2], None)
         assert {a, b} == {f1, f2}
+
+    def test_challenger_comes_from_anchor_band(self):
+        """The bootstrap challenger shares the anchor's community rating band."""
+        anchor = _make_user_movie(community_rating=90)  # elite
+        distant = _make_user_movie(community_rating=10)  # poor
+        same_band = _make_user_movie(community_rating=85)  # elite
+        # distant sits ahead of same_band, so an unfiltered draw would pick it.
+        pool = [anchor, distant, same_band]
+        with _first_of_population():
+            for _ in range(20):
+                a, b = _pick_bootstrap_pair(pool, None)
+                assert a is anchor
+                assert b is same_band
+
+    def test_challenger_falls_back_to_adjacent_band(self):
+        anchor = _make_user_movie(community_rating=90)  # elite
+        distant = _make_user_movie(community_rating=10)  # poor
+        adjacent = _make_user_movie(community_rating=70)  # strong
+        pool = [anchor, distant, adjacent]
+        with _first_of_population():
+            for _ in range(20):
+                a, b = _pick_bootstrap_pair(pool, None)
+                assert a is anchor
+                assert b is adjacent
+
+    def test_challenger_falls_back_to_full_pool(self):
+        """A pair is still produced when nothing is in or next to the band."""
+        anchor = _make_user_movie(community_rating=90)  # elite
+        weak = _make_user_movie(community_rating=30)  # weak
+        poor = _make_user_movie(community_rating=10)  # poor
+        pool = [anchor, weak, poor]
+        with _first_of_population():
+            a, b = _pick_bootstrap_pair(pool, None)
+        assert a is anchor
+        assert b in (weak, poor)
+
+
+# ---------------------------------------------------------------------------
+# select_pair
+# ---------------------------------------------------------------------------
+
+
+def _mock_db(films):
+    """AsyncSession mock whose single query returns the given seen films."""
+    db = AsyncMock()
+    result = MagicMock()
+    result.unique.return_value.scalars.return_value.all.return_value = films
+    db.execute.return_value = result
+    return db
+
+
+class TestSelectPair:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("film_count", [0, 1])
+    async def test_raises_when_fewer_than_two_seen_films(self, film_count):
+        films = [_make_user_movie() for _ in range(film_count)]
+        with pytest.raises(ValueError, match="Need more seen movies to duel"):
+            await select_pair(_mock_db(films), uuid.uuid4(), None)
+
+    @pytest.mark.asyncio
+    async def test_query_filters_on_user_seen_and_media_type(self):
+        uid = uuid.uuid4()
+        db = _mock_db([_make_user_movie(), _make_user_movie()])
+        await select_pair(db, uid, None, media_type="tv")
+
+        stmt = db.execute.call_args[0][0]
+        compiled = stmt.compile(dialect=postgresql.dialect())
+        sql = str(compiled)
+        assert "user_movies.user_id = " in sql
+        assert "user_movies.seen IS " in sql
+        assert "movies.media_type = " in sql
+        params = compiled.params.values()
+        assert uid in params
+        assert "tv" in params
