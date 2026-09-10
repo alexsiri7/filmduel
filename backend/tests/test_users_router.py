@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 
 from backend.main import app
 from backend.db import get_db
+from backend.db_models import User
 from backend.routers.auth import get_current_user
 
 
@@ -147,3 +148,106 @@ class TestPrivacyPolicyVersion:
         assert resp.status_code == 200
         body = resp.json()
         assert body["privacy_policy_accepted"] is False
+
+
+# ---------------------------------------------------------------------------
+# FD-057: GET /api/me response contract
+# ---------------------------------------------------------------------------
+
+
+PROFILE_FIELDS = {
+    "id",
+    "trakt_username",
+    "simkl_username",
+    "created_at",
+    "sync_ratings_to_trakt",
+    "sync_ratings_to_simkl",
+    "use_ai_features",
+    "privacy_policy_accepted",
+    "privacy_policy_version",
+}
+
+TOKEN_SENTINELS = (
+    "trakt-access-sentinel",
+    "trakt-refresh-sentinel",
+    "simkl-access-sentinel",
+    "simkl-refresh-sentinel",
+)
+
+EXPIRY_SENTINEL_YEAR = "2033"
+
+
+def _user_row_with_tokens() -> User:
+    """A user row carrying every OAuth secret the schema can hold.
+
+    Assigns the encrypted columns rather than the EncryptedToken descriptors so
+    the sentinels reach the response untransformed if anything ever leaks them.
+    """
+    expires_at = datetime(int(EXPIRY_SENTINEL_YEAR), 6, 1, tzinfo=timezone.utc)
+    return User(
+        id=uuid.uuid4(),
+        trakt_user_id="trakt-user-42",
+        trakt_username="ripley",
+        trakt_access_token_enc="trakt-access-sentinel",
+        trakt_refresh_token_enc="trakt-refresh-sentinel",
+        trakt_token_expires_at=expires_at,
+        simkl_user_id="simkl-user-42",
+        simkl_username="ripley_simkl",
+        simkl_access_token_enc="simkl-access-sentinel",
+        simkl_refresh_token_enc="simkl-refresh-sentinel",
+        simkl_token_expires_at=expires_at,
+        created_at=datetime(2026, 3, 4, tzinfo=timezone.utc),
+        sync_ratings_to_trakt=True,
+        sync_ratings_to_simkl=True,
+        use_ai_features=False,
+        privacy_policy_accepted=True,
+        privacy_policy_version="2.1",
+    )
+
+
+class TestProfileResponseContract:
+    def setup_method(self):
+        app.dependency_overrides.clear()
+
+    def teardown_method(self):
+        app.dependency_overrides.clear()
+
+    def test_response_keys_are_pinned_to_the_full_allow_list(self):
+        """Equality, not a token deny-list: a new UserResponse field fails here."""
+        app.dependency_overrides[get_current_user] = _user_row_with_tokens
+
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.get("/api/me")
+
+        assert resp.status_code == 200
+        assert set(resp.json()) == PROFILE_FIELDS
+
+    def test_response_carries_the_profile_values(self):
+        """Guards the allow-list assertion against passing on an empty profile."""
+        user = _user_row_with_tokens()
+        app.dependency_overrides[get_current_user] = lambda: user
+
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.get("/api/me")
+
+        body = resp.json()
+        assert body["id"] == str(user.id)
+        assert body["trakt_username"] == "ripley"
+        assert body["simkl_username"] == "ripley_simkl"
+        assert body["sync_ratings_to_trakt"] is True
+        assert body["sync_ratings_to_simkl"] is True
+        assert body["use_ai_features"] is False
+        assert body["privacy_policy_accepted"] is True
+        assert body["privacy_policy_version"] == "2.1"
+
+    def test_no_token_or_expiry_value_reaches_the_body(self):
+        """Catches a leak re-keyed under a name the allow-list would not flag."""
+        app.dependency_overrides[get_current_user] = _user_row_with_tokens
+
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.get("/api/me")
+
+        assert resp.status_code == 200
+        for sentinel in TOKEN_SENTINELS:
+            assert sentinel not in resp.text
+        assert EXPIRY_SENTINEL_YEAR not in resp.text
