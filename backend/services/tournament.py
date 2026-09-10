@@ -118,7 +118,8 @@ async def get_filtered_ranked_films(
     user_id: uuid.UUID,
     filter_type: Optional[FilterType] = None,
     filter_value: Optional[str] = None,
-    media_type: str = "movie",
+    *,
+    media_type: str,
 ) -> list[UserMovie]:
     """Query ranked films with optional genre/decade filtering.
 

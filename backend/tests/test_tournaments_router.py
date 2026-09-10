@@ -34,6 +34,7 @@ def _make_tournament(user_id, **overrides):
     t.name = overrides.get("name", "Test Tournament")
     t.filter_type = overrides.get("filter_type", None)
     t.filter_value = overrides.get("filter_value", None)
+    t.media_type = overrides.get("media_type", "movie")
     t.bracket_size = overrides.get("bracket_size", 8)
     t.status = overrides.get("status", "active")
     t.champion_movie_id = overrides.get("champion_movie_id", None)
@@ -349,3 +350,99 @@ class TestActiveProgress:
         ]
         result = _active_progress(matches)
         assert "Round 2" in result
+
+
+# ---------------------------------------------------------------------------
+# FD-041: regeneration must reuse the tournament's original candidate pool
+# ---------------------------------------------------------------------------
+
+
+class TestRegenerateCandidatePool:
+    def setup_method(self):
+        app.dependency_overrides.clear()
+
+    def teardown_method(self):
+        app.dependency_overrides.clear()
+
+    def test_regenerate_reuses_the_tournaments_media_type(self):
+        """Regenerating a show tournament must not draw candidates from the movie pool."""
+        user = _make_user()
+        tournament_id = uuid.uuid4()
+        tournament = _make_tournament(
+            user.id,
+            id=tournament_id,
+            media_type="show",
+            is_ai_curated=True,
+            matches=[],
+        )
+        tournament.llm_response = {"_regen_count": 0, "_theme_hint": ""}
+
+        films = [MagicMock() for _ in range(8)]
+        llm_result = {
+            "name": "Regenerated",
+            "tagline": "new",
+            "theme_description": "new desc",
+        }
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+
+        with patch(
+            "backend.routers.tournaments._load_tournament",
+            new_callable=AsyncMock,
+            return_value=tournament,
+        ), patch(
+            "backend.routers.tournaments.get_filtered_ranked_films",
+            new_callable=AsyncMock,
+            return_value=films,
+        ) as mock_pool, patch(
+            "backend.routers.tournaments.curate_and_select_films",
+            new_callable=AsyncMock,
+            return_value=(films, llm_result),
+        ), patch(
+            "backend.routers.tournaments.create_tournament_bracket",
+            new_callable=AsyncMock,
+        ):
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.post(f"/api/tournaments/{tournament_id}/regenerate")
+
+        assert resp.status_code == 200
+        assert mock_pool.call_args.kwargs["media_type"] == "show"
+
+    def test_create_persists_media_type_on_the_tournament_row(self):
+        """The media_type a tournament was created over is stored for regeneration."""
+        user = _make_user()
+        mock_db = AsyncMock()
+        mock_db.add = MagicMock()
+        mock_count_result = MagicMock()
+        mock_count_result.scalar_one.return_value = 0
+        mock_db.execute.return_value = mock_count_result
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with patch(
+            "backend.routers.tournaments.get_filtered_ranked_films",
+            new_callable=AsyncMock,
+            return_value=[MagicMock() for _ in range(8)],
+        ), patch(
+            "backend.routers.tournaments.create_tournament_bracket",
+            new_callable=AsyncMock,
+        ), patch(
+            "backend.routers.tournaments._load_tournament",
+            new_callable=AsyncMock,
+            return_value=_make_tournament(user.id, media_type="show"),
+        ):
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.post(
+                    "/api/tournaments",
+                    json={
+                        "name": "Test",
+                        "bracket_size": 8,
+                        "ai_curated": False,
+                        "media_type": "show",
+                    },
+                )
+
+        assert resp.status_code == 200
+        assert mock_db.add.call_args[0][0].media_type == "show"

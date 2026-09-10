@@ -248,6 +248,7 @@ async def create_tournament(
         name=ai_name or body.name,
         filter_type=body.filter_type,
         filter_value=body.filter_value,
+        media_type=body.media_type,
         bracket_size=body.bracket_size,
         status="active",
         tagline=ai_tagline,
@@ -305,6 +306,7 @@ async def regenerate_tournament(
             uid,
             tournament.filter_type,
             tournament.filter_value,
+            media_type=tournament.media_type,
         )
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid decade format")
