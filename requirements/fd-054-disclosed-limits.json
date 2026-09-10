@@ -1,0 +1,5 @@
+{
+  "candidate_pool_cap": 50,
+  "taste_profile_top_n": 10,
+  "taste_profile_bottom_n": 5
+}

@@ -1,6 +1,18 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import ConsentModal from "../components/ConsentModal";
+
+const disclosed = JSON.parse(
+  readFileSync(
+    join(
+      import.meta.dirname,
+      "../../../requirements/fd-054-disclosed-limits.json"
+    ),
+    "utf8"
+  )
+);
 
 vi.mock("../api", () => ({
   acceptConsent: vi.fn(),
@@ -19,16 +31,24 @@ describe("ConsentModal", () => {
   });
 
   // Counterpart of backend/tests/test_llm_disclosure.py: both sides pin the same
-  // fields, so widening either one without the other fails a test.
+  // fields, and both read the disclosed sizes from the same fixture, so widening
+  // either one without the other fails a test.
   it("itemizes every category of data sent to the AI gateway", () => {
     render(<ConsentModal onAccepted={vi.fn()} />);
 
     const suggestions = screen.getByText(/AI Watch Suggestions/i).closest("li");
-    expect(suggestions).toHaveTextContent(/top 10 and bottom 5 ranked films/i);
+    expect(suggestions).toHaveTextContent(
+      new RegExp(
+        `top ${disclosed.taste_profile_top_n} and bottom ${disclosed.taste_profile_bottom_n} ranked films`,
+        "i"
+      )
+    );
     expect(suggestions).toHaveTextContent(/title, year, genres, preference tier/i);
     expect(suggestions).toHaveTextContent(/per-genre affinities/i);
     expect(suggestions).toHaveTextContent(/total ranked count/i);
-    expect(suggestions).toHaveTextContent(/up to 50 films/i);
+    expect(suggestions).toHaveTextContent(
+      new RegExp(`up to ${disclosed.candidate_pool_cap} films`, "i")
+    );
     expect(suggestions).toHaveTextContent(/title, year, genres, community rating/i);
     expect(suggestions).toHaveTextContent(/Requesty\.ai/i);
 

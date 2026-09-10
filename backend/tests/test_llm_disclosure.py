@@ -4,11 +4,17 @@ frontend/src/components/ConsentModal.jsx itemizes the data FilmDuel sends to the
 AI gateway. These tests pin the service-side counterpart of every itemized claim,
 so widening a payload — or changing a disclosed limit — fails here instead of
 silently making the disclosure untrue.
+
+The disclosed sizes live in requirements/fd-054-disclosed-limits.json, which
+ConsentModal.test.jsx reads as well: moving a limit on one side alone leaves one
+of the two suites red, whichever side moved.
 """
 
 from __future__ import annotations
 
+import json
 import uuid
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -20,7 +26,16 @@ from backend.services.suggest import (
     NUM_PICKS,
     _build_taste_profile,
     _call_llm,
+    _get_candidates,
     generate_suggestions,
+)
+
+DISCLOSED = json.loads(
+    (
+        Path(__file__).resolve().parents[2]
+        / "requirements"
+        / "fd-054-disclosed-limits.json"
+    ).read_text()
 )
 
 # Canary values chosen so they cannot collide with years, ratings, trakt ids or
@@ -132,8 +147,20 @@ class TestSuggestionPayloadMatchesDisclosure:
         assert str(CANARY_USER_ID) not in user_prompt
         assert str(CANARY_USER_ID) not in system_prompt
 
-    def test_candidate_pool_cap_matches_the_disclosed_fifty(self):
-        assert CANDIDATE_LIMIT == 50
+    def test_candidate_pool_cap_matches_the_disclosed_cap(self):
+        assert CANDIDATE_LIMIT == DISCLOSED["candidate_pool_cap"]
+
+    @pytest.mark.asyncio
+    async def test_candidate_query_is_limited_to_the_capped_pool(self):
+        db = AsyncMock()
+        result = MagicMock()
+        result.unique.return_value.scalars.return_value.all.return_value = []
+        db.execute.return_value = result
+
+        await _get_candidates(CANARY_USER_ID, db)
+
+        stmt = db.execute.await_args.args[0]
+        assert stmt._limit_clause.value == CANDIDATE_LIMIT
 
 
 class TestTasteProfileSizeMatchesDisclosure:
@@ -159,7 +186,7 @@ class TestTasteProfileSizeMatchesDisclosure:
         return result
 
     @pytest.mark.asyncio
-    async def test_top_slice_is_capped_at_ten(self):
+    async def test_top_slice_matches_the_disclosed_count(self):
         db = AsyncMock()
         db.execute.side_effect = [
             self._result(self._ranked(30)),
@@ -168,10 +195,10 @@ class TestTasteProfileSizeMatchesDisclosure:
 
         profile = await _build_taste_profile(CANARY_USER_ID, db)
 
-        assert len(profile["top_10"]) == 10
+        assert len(profile["top_10"]) == DISCLOSED["taste_profile_top_n"]
 
     @pytest.mark.asyncio
-    async def test_bottom_query_is_limited_to_five(self):
+    async def test_bottom_query_matches_the_disclosed_count(self):
         db = AsyncMock()
         db.execute.side_effect = [
             self._result(self._ranked(30)),
@@ -181,7 +208,7 @@ class TestTasteProfileSizeMatchesDisclosure:
         await _build_taste_profile(CANARY_USER_ID, db)
 
         bottom_stmt = db.execute.await_args_list[1].args[0]
-        assert bottom_stmt._limit_clause.value == 5
+        assert bottom_stmt._limit_clause.value == DISCLOSED["taste_profile_bottom_n"]
 
 
 class TestTournamentPayloadMatchesDisclosure:
