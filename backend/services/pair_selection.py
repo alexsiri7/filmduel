@@ -15,12 +15,14 @@ from backend.db_models import Movie, UserMovie
 # ---------------------------------------------------------------------------
 
 # (name, elo_low, elo_high, community_rating_low, community_rating_high)
+# Movie.community_rating is Numeric(4,1), so the upper bounds carry a .9 tenth to
+# reach the next band's lower bound without leaving a value unclassified.
 BANDS = [
     ("elite", 1300, 9999, 80, 100),
-    ("strong", 1100, 1299, 65, 79),
-    ("mid", 900, 1099, 45, 64),
-    ("weak", 700, 899, 25, 44),
-    ("poor", 0, 699, 0, 24),
+    ("strong", 1100, 1299, 65, 79.9),
+    ("mid", 900, 1099, 45, 64.9),
+    ("weak", 700, 899, 25, 44.9),
+    ("poor", 0, 699, 0, 24.9),
 ]
 
 BAND_ORDER = [b[0] for b in BANDS]

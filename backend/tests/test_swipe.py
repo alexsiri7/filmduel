@@ -68,22 +68,22 @@ class TestCommunityRatingRange:
     def test_strong_range(self):
         low, high = _community_rating_range(1)
         assert low == 65.0
-        assert high == 79.0
+        assert high == 79.9
 
     def test_mid_range(self):
         low, high = _community_rating_range(2)
         assert low == 45.0
-        assert high == 64.0
+        assert high == 64.9
 
     def test_weak_range(self):
         low, high = _community_rating_range(3)
         assert low == 25.0
-        assert high == 44.0
+        assert high == 44.9
 
     def test_low_range(self):
         low, high = _community_rating_range(4)
         assert low == 0.0
-        assert high == 24.0
+        assert high == 24.9
 
     def test_returns_floats(self):
         low, high = _community_rating_range(0)

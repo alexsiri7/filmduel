@@ -10,6 +10,7 @@ from sqlalchemy.dialects import postgresql
 
 from backend.services.pair_selection import (
     BAND_ORDER,
+    BANDS,
     _band_filtered_candidates,
     _film_band,
     _pick_bootstrap_pair,
@@ -111,6 +112,26 @@ class TestCommunityRatingToBand:
     def test_poor(self):
         assert community_rating_to_band(24) == "poor"
         assert community_rating_to_band(0) == "poor"
+
+    def test_fractional_ratings_between_integer_bounds(self):
+        assert community_rating_to_band(79.5) == "strong"
+        assert community_rating_to_band(79.9) == "strong"
+        assert community_rating_to_band(64.5) == "mid"
+        assert community_rating_to_band(64.9) == "mid"
+        assert community_rating_to_band(44.5) == "weak"
+        assert community_rating_to_band(44.9) == "weak"
+        assert community_rating_to_band(24.5) == "poor"
+        assert community_rating_to_band(24.9) == "poor"
+
+    def test_every_one_decimal_rating_lands_inside_its_own_band(self):
+        """No Numeric(4,1) rating may fall through to the unrated "mid" default."""
+        for tenths in range(1001):
+            rating = tenths / 10
+            band = community_rating_to_band(rating)
+            _, _, _, cr_low, cr_high = next(b for b in BANDS if b[0] == band)
+            assert cr_low <= rating <= cr_high, (
+                f"rating {rating} classified as {band} ({cr_low}-{cr_high})"
+            )
 
 
 # ---------------------------------------------------------------------------
