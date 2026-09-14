@@ -31,15 +31,17 @@ from backend.routers.auth import (
     OAUTH_STATE_COOKIE,
     REFRESH_INTERVAL,
     SESSION_MAX_LIFETIME,
-    _TRAKT_TOKEN_DEFAULT_TTL_SECONDS,
     _generate_pkce_pair,
     callback,
     create_jwt,
-    ensure_fresh_token,
     get_current_user_id,
     login,
     simkl_callback,
     simkl_login,
+)
+from backend.services.token_refresh import (
+    TRAKT_TOKEN_DEFAULT_TTL_SECONDS,
+    ensure_fresh_token,
 )
 from backend.routers.users import (
     CURRENT_PRIVACY_POLICY_VERSION,
@@ -538,7 +540,7 @@ class TestEnsureFreshToken:
     @pytest.mark.asyncio
     async def test_uses_default_ttl_when_expires_in_missing(self, monkeypatch):
         """When Trakt omits expires_in, token expiry uses the default TTL."""
-        monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
+        monkeypatch.setattr("backend.services.token_refresh.get_settings", lambda: SETTINGS)
         mock_client = AsyncMock()
         mock_client.refresh_token.return_value = {
             "access_token": "new-access",
@@ -546,7 +548,7 @@ class TestEnsureFreshToken:
             # No expires_in key
         }
         monkeypatch.setattr(
-            "backend.routers.auth.TraktClient", lambda **kw: mock_client
+            "backend.services.token_refresh.TraktClient", lambda **kw: mock_client
         )
         user = self._make_user(expires_soon=True)
         db = AsyncMock()
@@ -554,14 +556,14 @@ class TestEnsureFreshToken:
         now = datetime.now(timezone.utc)
         await ensure_fresh_token(user, db)
 
-        expected = now + timedelta(seconds=_TRAKT_TOKEN_DEFAULT_TTL_SECONDS)
+        expected = now + timedelta(seconds=TRAKT_TOKEN_DEFAULT_TTL_SECONDS)
         actual = user.trakt_token_expires_at
         assert abs((actual - expected).total_seconds()) < 5
 
     @pytest.mark.asyncio
     async def test_uses_provided_expires_in(self, monkeypatch):
         """When Trakt provides expires_in, that value is used."""
-        monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
+        monkeypatch.setattr("backend.services.token_refresh.get_settings", lambda: SETTINGS)
         mock_client = AsyncMock()
         mock_client.refresh_token.return_value = {
             "access_token": "new-access",
@@ -569,7 +571,7 @@ class TestEnsureFreshToken:
             "expires_in": 3600,
         }
         monkeypatch.setattr(
-            "backend.routers.auth.TraktClient", lambda **kw: mock_client
+            "backend.services.token_refresh.TraktClient", lambda **kw: mock_client
         )
         user = self._make_user(expires_soon=True)
         db = AsyncMock()

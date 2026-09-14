@@ -4,18 +4,16 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any
 
 import httpx
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
 
 from backend.config import get_settings
-from backend.db_models import UserMovie
+from backend.db import async_session_factory
+from backend.db_models import Movie, User
 from backend.services.elo import elo_to_trakt_rating
+from backend.services.token_refresh import ensure_fresh_token
 from backend.services.trakt import TraktClient
-from backend.services.simkl import SimklClient
 
 logger = logging.getLogger(__name__)
 
@@ -63,127 +61,45 @@ async def sync_post_duel(
         await _rate_with_retry(client, trakt_id, rating, media_type)
 
 
-async def sync_ratings_to_trakt(
+async def sync_ratings_background(
     user_id: uuid.UUID,
-    access_token: str,
-    db: AsyncSession,
-) -> dict[str, Any]:
-    """Sync all of a user's ELO rankings to Trakt as ratings.
-
-    Returns a summary of synced/failed counts.
-    """
-    settings = get_settings()
-    client = TraktClient(client_id=settings.TRAKT_CLIENT_ID, access_token=access_token)
-
-    stmt = (
-        select(UserMovie)
-        .options(joinedload(UserMovie.movie))
-        .where(
-            UserMovie.user_id == user_id,
-            UserMovie.seen.is_(True),
-            UserMovie.battles > 0,
-        )
-    )
-    result = await db.execute(stmt)
-    user_movies = result.unique().scalars().all()
-
-    if not user_movies:
-        return {"synced": 0, "failed": 0, "message": "No rankings to sync"}
-
-    synced = 0
-    failed = 0
-
-    for um in user_movies:
-        trakt_rating = elo_to_trakt_rating(um.elo)
-        try:
-            await client.rate(
-                um.movie.trakt_id, trakt_rating, media_type=um.movie.media_type
-            )
-            synced += 1
-        except Exception:
-            logger.exception("Failed to sync rating for trakt_id=%s", um.movie.trakt_id)
-            failed += 1
-
-    return {"synced": synced, "failed": failed}
-
-
-async def _rate_with_retry_simkl(
-    client: SimklClient, simkl_id: int, rating: int, media_type: str = "movie"
+    movie_a_id: uuid.UUID,
+    new_elo_a: int,
+    movie_b_id: uuid.UUID,
+    new_elo_b: int,
 ) -> None:
-    """Submit a single rating to SIMKL, retrying once on 5xx."""
-    for attempt in range(2):
-        try:
-            await client.rate(simkl_id, rating, media_type=media_type)
-            return
-        except httpx.HTTPStatusError as exc:
-            status = exc.response.status_code
-            if status >= 500 and attempt == 0:
-                logger.warning(
-                    "SIMKL 5xx (status=%d) for simkl_id=%s, retrying",
-                    status,
-                    simkl_id,
-                )
-                continue
-            logger.error(
-                "Failed to sync rating for simkl_id=%s: HTTP %d", simkl_id, status
+    """Fire-and-forget Trakt rating sync after a duel with a winner."""
+    try:
+        async with async_session_factory() as session:
+            user_stmt = select(User).where(User.id == user_id).with_for_update()
+            result = await session.execute(user_stmt)
+            user = result.scalar_one_or_none()
+            if (
+                not user
+                or not user.trakt_access_token
+                or not user.sync_ratings_to_trakt
+            ):
+                return
+            user = await ensure_fresh_token(user, session)
+            await session.commit()
+            access_token = user.trakt_access_token
+            movies_stmt = select(Movie.id, Movie.trakt_id, Movie.media_type).where(
+                Movie.id.in_([movie_a_id, movie_b_id])
             )
-            return
-        except Exception:
-            logger.exception("Unexpected error syncing simkl_id=%s", simkl_id)
-            return
-
-
-async def sync_post_duel_simkl(
-    access_token: str,
-    movie_ratings: list[tuple[int, int]],
-    media_type: str = "movie",
-) -> None:
-    """Sync a list of (simkl_id, elo) pairs to SIMKL as ratings after a duel."""
-    settings = get_settings()
-    client = SimklClient(
-        client_id=settings.SIMKL_CLIENT_ID, access_token=access_token
-    )
-    for simkl_id, elo in movie_ratings:
-        rating = elo_to_trakt_rating(elo)
-        await _rate_with_retry_simkl(client, simkl_id, rating, media_type)
-
-
-async def sync_ratings_to_simkl(
-    user_id: uuid.UUID,
-    access_token: str,
-    db: AsyncSession,
-) -> dict[str, Any]:
-    """Sync all of a user's ELO rankings to SIMKL as ratings."""
-    settings = get_settings()
-    client = SimklClient(
-        client_id=settings.SIMKL_CLIENT_ID, access_token=access_token
-    )
-
-    stmt = (
-        select(UserMovie)
-        .options(joinedload(UserMovie.movie))
-        .where(
-            UserMovie.user_id == user_id,
-            UserMovie.seen.is_(True),
-            UserMovie.battles > 0,
+            result = await session.execute(movies_stmt)
+            rows = result.all()
+            trakt_map = {row.id: row.trakt_id for row in rows}
+            # Both movies in a duel are the same media_type
+            media_type = rows[0].media_type if rows else "movie"
+        movie_ratings = []
+        if movie_a_id in trakt_map:
+            movie_ratings.append((trakt_map[movie_a_id], new_elo_a))
+        if movie_b_id in trakt_map:
+            movie_ratings.append((trakt_map[movie_b_id], new_elo_b))
+        if movie_ratings:
+            await sync_post_duel(access_token, movie_ratings, media_type)
+    except Exception:
+        logger.exception(
+            "Background rating sync failed for user %s (token refresh or sync error)",
+            user_id,
         )
-    )
-    result = await db.execute(stmt)
-    user_movies = result.unique().scalars().all()
-
-    if not user_movies:
-        return {"synced": 0, "failed": 0, "message": "No rankings to sync"}
-
-    synced = 0
-
-    for um in user_movies:
-        if um.movie.simkl_id is None:
-            continue  # Can't rate on SIMKL without a SIMKL ID
-        simkl_rating = elo_to_trakt_rating(um.elo)
-        await _rate_with_retry_simkl(
-            client, um.movie.simkl_id, simkl_rating,
-            media_type=um.movie.media_type,
-        )
-        synced += 1
-
-    return {"synced": synced, "failed": 0}

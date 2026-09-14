@@ -34,13 +34,13 @@ from backend.db_models import User
 from backend.services.pool import sync_pool_background
 from backend.services.tmdb import backfill_posters_background
 from backend.services.trakt import TraktClient
+from backend.services.token_refresh import (  # noqa: F401
+    TRAKT_TOKEN_DEFAULT_TTL_SECONDS,
+    ensure_fresh_token,  # re-exported for routers/users.py and routers/suggestions.py
+)
 from backend.services.simkl import SimklClient
 
 logger = logging.getLogger(__name__)
-
-# Trakt's documented token lifetime is 90 days (7776000 s).
-# Used as a fallback when expires_in is absent from the API response.
-_TRAKT_TOKEN_DEFAULT_TTL_SECONDS = 7776000
 
 # SIMKL tokens are long-lived (no documented expiry; default to 1 year).
 _SIMKL_TOKEN_DEFAULT_TTL_SECONDS = 31536000
@@ -216,44 +216,6 @@ def require_ai_consent(user: User = Depends(get_current_user)) -> User:
     return user
 
 
-async def ensure_fresh_token(user: User, db: AsyncSession) -> User:
-    """Refresh the Trakt access token if it expires within 1 hour.
-
-    Call this before any Trakt API request that needs a valid token.
-    Returns the user with up-to-date tokens (already flushed to the session).
-    """
-    if not user.trakt_token_expires_at or not user.trakt_access_token_enc:
-        return user  # no Trakt token to refresh
-
-    now = datetime.now(timezone.utc)
-    expires_at = user.trakt_token_expires_at
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-
-    if expires_at - now > timedelta(hours=1):
-        return user
-
-    settings = get_settings()
-    client = TraktClient(client_id=settings.TRAKT_CLIENT_ID)
-    tokens = await client.refresh_token(
-        user.trakt_refresh_token,
-        client_secret=settings.TRAKT_CLIENT_SECRET,
-        redirect_uri=settings.TRAKT_REDIRECT_URI,
-    )
-
-    user.trakt_access_token = tokens["access_token"]
-    user.trakt_refresh_token = tokens.get("refresh_token", user.trakt_refresh_token)
-    ttl = tokens.get("expires_in")
-    if ttl is None:
-        logger.warning("Trakt refresh response missing expires_in; using default TTL")
-        ttl = _TRAKT_TOKEN_DEFAULT_TTL_SECONDS
-    user.trakt_token_expires_at = now + timedelta(seconds=ttl)
-    user.last_seen_at = now
-    await db.flush()
-
-    return user
-
-
 async def ensure_fresh_simkl_token(user: User, db: AsyncSession) -> User:
     """Check SIMKL token expiry. SIMKL may not support refresh — log warning."""
     if not user.simkl_token_expires_at or not user.simkl_access_token_enc:
@@ -374,7 +336,7 @@ _TRAKT_PROVIDER = _OAuthProvider(
     name="Trakt",
     state_cookie=OAUTH_STATE_COOKIE,
     pkce_cookie=OAUTH_PKCE_COOKIE,
-    default_ttl=_TRAKT_TOKEN_DEFAULT_TTL_SECONDS,
+    default_ttl=TRAKT_TOKEN_DEFAULT_TTL_SECONDS,
     make_client=_make_trakt_client,
     exchange_kwargs=lambda s: {
         "client_secret": s.TRAKT_CLIENT_SECRET,
