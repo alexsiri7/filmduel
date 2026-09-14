@@ -94,13 +94,13 @@ async def test_has_enough_ranked_passes_media_type():
 @pytest.mark.asyncio
 async def testsync_ratings_background_handles_exceptions():
     """sync_ratings_background logs exceptions instead of crashing."""
-    from backend.routers.duels import sync_ratings_background
+    from backend.services.sync import sync_ratings_background
 
     uid = uuid.uuid4()
     mid_a = uuid.uuid4()
     mid_b = uuid.uuid4()
 
-    with patch("backend.routers.duels.async_session_factory") as mock_factory:
+    with patch("backend.services.sync.async_session_factory") as mock_factory:
         mock_factory.return_value.__aenter__ = AsyncMock(
             side_effect=RuntimeError("DB down")
         )
@@ -113,7 +113,7 @@ async def testsync_ratings_background_handles_exceptions():
 @pytest.mark.asyncio
 async def testsync_ratings_background_refreshes_expired_token():
     """sync_ratings_background calls ensure_fresh_token before syncing."""
-    from backend.routers.duels import sync_ratings_background
+    from backend.services.sync import sync_ratings_background
 
     uid = uuid.uuid4()
     mid_a = uuid.uuid4()
@@ -130,12 +130,12 @@ async def testsync_ratings_background_refreshes_expired_token():
     ]
 
     with (
-        patch("backend.routers.duels.async_session_factory") as mock_factory,
+        patch("backend.services.sync.async_session_factory") as mock_factory,
         patch(
-            "backend.routers.duels.ensure_fresh_token", new_callable=AsyncMock
+            "backend.services.sync.ensure_fresh_token", new_callable=AsyncMock
         ) as mock_refresh,
         patch(
-            "backend.routers.duels.sync_post_duel", new_callable=AsyncMock
+            "backend.services.sync.sync_post_duel", new_callable=AsyncMock
         ) as mock_sync,
     ):
         mock_session = AsyncMock()
@@ -166,12 +166,12 @@ async def testsync_ratings_background_refreshes_expired_token():
 @pytest.mark.asyncio
 async def testsync_ratings_background_skips_if_user_not_found():
     """sync_ratings_background returns early when user record is missing."""
-    from backend.routers.duels import sync_ratings_background
+    from backend.services.sync import sync_ratings_background
 
     with (
-        patch("backend.routers.duels.async_session_factory") as mock_factory,
+        patch("backend.services.sync.async_session_factory") as mock_factory,
         patch(
-            "backend.routers.duels.ensure_fresh_token", new_callable=AsyncMock
+            "backend.services.sync.ensure_fresh_token", new_callable=AsyncMock
         ) as mock_refresh,
     ):
         mock_session = AsyncMock()
@@ -191,15 +191,15 @@ async def testsync_ratings_background_skips_if_user_not_found():
 @pytest.mark.asyncio
 async def testsync_ratings_background_skips_if_no_trakt_token():
     """sync_ratings_background returns early when user has no Trakt token linked."""
-    from backend.routers.duels import sync_ratings_background
+    from backend.services.sync import sync_ratings_background
 
     mock_user = MagicMock()
     mock_user.trakt_access_token = None
 
     with (
-        patch("backend.routers.duels.async_session_factory") as mock_factory,
+        patch("backend.services.sync.async_session_factory") as mock_factory,
         patch(
-            "backend.routers.duels.ensure_fresh_token", new_callable=AsyncMock
+            "backend.services.sync.ensure_fresh_token", new_callable=AsyncMock
         ) as mock_refresh,
     ):
         mock_session = AsyncMock()
@@ -220,7 +220,7 @@ async def testsync_ratings_background_skips_if_no_trakt_token():
 async def testsync_ratings_background_refresh_failure_is_swallowed():
     """sync_ratings_background swallows exceptions from ensure_fresh_token."""
     import httpx
-    from backend.routers.duels import sync_ratings_background
+    from backend.services.sync import sync_ratings_background
 
     uid = uuid.uuid4()
     mid_a = uuid.uuid4()
@@ -230,16 +230,16 @@ async def testsync_ratings_background_refresh_failure_is_swallowed():
     mock_user.trakt_access_token = "expired-token"
 
     with (
-        patch("backend.routers.duels.async_session_factory") as mock_factory,
+        patch("backend.services.sync.async_session_factory") as mock_factory,
         patch(
-            "backend.routers.duels.ensure_fresh_token",
+            "backend.services.sync.ensure_fresh_token",
             new_callable=AsyncMock,
             side_effect=httpx.HTTPStatusError(
                 "401", request=MagicMock(), response=MagicMock(status_code=401)
             ),
         ),
         patch(
-            "backend.routers.duels.sync_post_duel", new_callable=AsyncMock
+            "backend.services.sync.sync_post_duel", new_callable=AsyncMock
         ) as mock_sync,
     ):
         mock_session = AsyncMock()
@@ -257,19 +257,19 @@ async def testsync_ratings_background_refresh_failure_is_swallowed():
 @pytest.mark.asyncio
 async def testsync_ratings_background_skips_when_opt_out():
     """sync_ratings_background skips sync when sync_ratings_to_trakt is False."""
-    from backend.routers.duels import sync_ratings_background
+    from backend.services.sync import sync_ratings_background
 
     mock_user = MagicMock()
     mock_user.trakt_access_token = "valid_token"
     mock_user.sync_ratings_to_trakt = False
 
     with (
-        patch("backend.routers.duels.async_session_factory") as mock_factory,
+        patch("backend.services.sync.async_session_factory") as mock_factory,
         patch(
-            "backend.routers.duels.ensure_fresh_token", new_callable=AsyncMock
+            "backend.services.sync.ensure_fresh_token", new_callable=AsyncMock
         ) as mock_refresh,
         patch(
-            "backend.routers.duels.sync_post_duel", new_callable=AsyncMock
+            "backend.services.sync.sync_post_duel", new_callable=AsyncMock
         ) as mock_sync,
     ):
         mock_session = AsyncMock()
@@ -290,7 +290,7 @@ async def testsync_ratings_background_skips_when_opt_out():
 @pytest.mark.asyncio
 async def testsync_ratings_background_syncs_when_opt_in():
     """sync_ratings_background syncs when sync_ratings_to_trakt is True."""
-    from backend.routers.duels import sync_ratings_background
+    from backend.services.sync import sync_ratings_background
 
     uid = uuid.uuid4()
     mid_a = uuid.uuid4()
@@ -320,14 +320,14 @@ async def testsync_ratings_background_syncs_when_opt_in():
     mock_session.execute.side_effect = [mock_user_result, mock_movies_result]
 
     with (
-        patch("backend.routers.duels.async_session_factory") as mock_factory,
+        patch("backend.services.sync.async_session_factory") as mock_factory,
         patch(
-            "backend.routers.duels.ensure_fresh_token",
+            "backend.services.sync.ensure_fresh_token",
             new_callable=AsyncMock,
             return_value=mock_user,
         ),
         patch(
-            "backend.routers.duels.sync_post_duel", new_callable=AsyncMock
+            "backend.services.sync.sync_post_duel", new_callable=AsyncMock
         ) as mock_sync,
     ):
         mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
@@ -341,7 +341,7 @@ async def testsync_ratings_background_syncs_when_opt_in():
 @pytest.mark.asyncio
 async def testsync_ratings_background_uses_select_for_update():
     """sync_ratings_background must lock the user row to prevent concurrent token refresh."""
-    from backend.routers.duels import sync_ratings_background
+    from backend.services.sync import sync_ratings_background
 
     uid = uuid.uuid4()
     mid_a = uuid.uuid4()
@@ -359,11 +359,11 @@ async def testsync_ratings_background_uses_select_for_update():
     ]
 
     with (
-        patch("backend.routers.duels.async_session_factory") as mock_factory,
+        patch("backend.services.sync.async_session_factory") as mock_factory,
         patch(
-            "backend.routers.duels.ensure_fresh_token", new_callable=AsyncMock
+            "backend.services.sync.ensure_fresh_token", new_callable=AsyncMock
         ) as mock_refresh,
-        patch("backend.routers.duels.sync_post_duel", new_callable=AsyncMock),
+        patch("backend.services.sync.sync_post_duel", new_callable=AsyncMock),
     ):
         mock_session = AsyncMock()
         mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)

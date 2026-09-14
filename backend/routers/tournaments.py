@@ -16,7 +16,7 @@ from backend.db import get_db
 from backend.rate_limit import limiter
 from backend.db_models import Movie, Tournament, TournamentMatch, User
 from backend.routers.auth import get_current_user, require_ai_consent
-from backend.routers.duels import sync_ratings_background
+from backend.services.sync import sync_ratings_background
 from backend.schemas import (
     FilterType,
     MediaType,
