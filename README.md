@@ -61,11 +61,13 @@ Alembic migrations run automatically on container start.
 
 > **Reverse proxy deployments** (Railway, nginx, etc.): set `FORWARDED_ALLOW_IPS` and
 > `SECURE_COOKIES=true` in your `.env` — see `.env.example` for details. Without
-> `FORWARDED_ALLOW_IPS`, rate limiting will not correctly identify client IPs. Without
-> `SECURE_COOKIES=true`, session cookies will be issued without the Secure flag (and without
-> the `__Host-` prefix). Without `RATE_LIMIT_STORAGE_URI`, rate limits are per-process and
-> reset on every deploy — point it at a Redis instance to make them durable and shared
-> across replicas.
+> `FORWARDED_ALLOW_IPS`, rate limiting will not correctly identify client IPs. On Railway,
+> Render, Fly.io, Heroku and Cloud Run the app refuses to start when `SECURE_COOKIES` is
+> unset and `BASE_URL` is not `https://`; on other proxies (nginx etc.) it cannot detect the
+> proxy and will silently issue session cookies without the Secure flag (and without the
+> `__Host-` prefix), so set `SECURE_COOKIES=true` there too. Without
+> `RATE_LIMIT_STORAGE_URI`, rate limits are per-process and reset on every deploy — point it
+> at a Redis instance to make them durable and shared across replicas.
 
 ## How It Works
 
