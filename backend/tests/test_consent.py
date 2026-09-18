@@ -6,7 +6,7 @@ import os
 import re
 import uuid
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 os.environ.setdefault("TOKEN_ENC_KEY", "test-secret-key-for-unit-tests-32b")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
@@ -58,11 +58,12 @@ def test_accept_consent_correct_version():
     app.dependency_overrides[get_current_user] = lambda: fake_user
     app.dependency_overrides[get_db] = lambda: mock_db
 
-    with TestClient(app, raise_server_exceptions=False) as client:
-        resp = client.post(
-            "/api/me/consent",
-            json={"version": CURRENT_PRIVACY_POLICY_VERSION},
-        )
+    with patch("backend.routers.users._force_pool_sync", new_callable=AsyncMock):
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.post(
+                "/api/me/consent",
+                json={"version": CURRENT_PRIVACY_POLICY_VERSION},
+            )
 
     assert resp.status_code == 200
     assert resp.json()["privacy_policy_accepted"] is True
@@ -97,25 +98,29 @@ def test_accept_consent_wrong_version_400():
 
 
 def test_accept_consent_idempotent():
-    """Accepting consent twice with the correct version both return 200."""
+    """Accepting consent twice returns 200 both times; only the first run imports the library."""
     fake_user = _make_user()
     mock_db = AsyncMock()
 
     app.dependency_overrides[get_current_user] = lambda: fake_user
     app.dependency_overrides[get_db] = lambda: mock_db
 
-    with TestClient(app, raise_server_exceptions=False) as client:
-        resp1 = client.post(
-            "/api/me/consent",
-            json={"version": CURRENT_PRIVACY_POLICY_VERSION},
-        )
-        resp2 = client.post(
-            "/api/me/consent",
-            json={"version": CURRENT_PRIVACY_POLICY_VERSION},
-        )
+    with patch(
+        "backend.routers.users._force_pool_sync", new_callable=AsyncMock
+    ) as mock_sync:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp1 = client.post(
+                "/api/me/consent",
+                json={"version": CURRENT_PRIVACY_POLICY_VERSION},
+            )
+            resp2 = client.post(
+                "/api/me/consent",
+                json={"version": CURRENT_PRIVACY_POLICY_VERSION},
+            )
 
     assert resp1.status_code == 200
     assert resp2.status_code == 200
+    mock_sync.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------

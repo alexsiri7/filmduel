@@ -448,7 +448,10 @@ async def _handle_oauth_callback(
 
     await db.flush()
 
-    background_tasks.add_task(sync_pool_background, user.id, force=True)
+    # Initial import is deferred to consent acceptance (#571); only re-sync users
+    # who have already accepted the privacy policy.
+    if user.privacy_policy_accepted:
+        background_tasks.add_task(sync_pool_background, user.id, force=True)
     background_tasks.add_task(backfill_posters_background)
 
     response = RedirectResponse(url=settings.BASE_URL)

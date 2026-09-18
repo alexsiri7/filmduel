@@ -13,7 +13,7 @@ from backend.db import get_db
 from backend.db_models import Movie, SwipeResult, User, UserMovie
 from backend.rate_limit import limiter
 from backend.config import get_settings
-from backend.routers.auth import get_admin_user, get_current_user
+from backend.routers.auth import get_admin_user, require_consent
 from backend.schemas import MediaType, SwipeCardSchema, SwipeResponse, SwipeSubmit
 from backend.services.duel import compute_next_action
 from backend.services.expand import expand_pool
@@ -43,7 +43,7 @@ def _community_rating_range(band_index: int) -> tuple[float, float]:
 @limiter.limit("20/minute")
 async def get_swipe_cards(
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_consent),
     db: AsyncSession = Depends(get_db),
     media_type: MediaType = Query(default="movie"),
 ):
@@ -177,7 +177,7 @@ async def submit_swipe_results(
     request: Request,
     body: SwipeSubmit,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_consent),
     db: AsyncSession = Depends(get_db),
     media_type: MediaType = Query(default="movie"),
 ):

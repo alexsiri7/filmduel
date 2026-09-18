@@ -15,7 +15,7 @@ from sqlalchemy.orm import joinedload
 from backend.db import acquire_quota_lock, get_db
 from backend.rate_limit import limiter
 from backend.db_models import Movie, Tournament, TournamentMatch, User
-from backend.routers.auth import get_current_user, require_ai_consent
+from backend.routers.auth import get_current_user, require_ai_consent, require_consent
 from backend.services.sync import sync_ratings_background
 from backend.schemas import (
     FilterType,
@@ -470,7 +470,7 @@ async def submit_match_result_endpoint(
     match_id: uuid.UUID,
     body: MatchResult,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_consent),
     db: AsyncSession = Depends(get_db),
 ):
     """Submit a tournament match result."""
