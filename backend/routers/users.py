@@ -14,7 +14,7 @@ from backend.db import get_db
 from backend.rate_limit import limiter
 from backend.db_models import User, UserMovie
 from backend.routers.auth import (
-    COOKIE_NAME,
+    delete_session_cookie,
     ensure_fresh_token,
     ensure_fresh_simkl_token,
     get_current_user,
@@ -166,7 +166,7 @@ async def delete_account(
     await db.commit()
 
     response = Response(status_code=204)
-    response.delete_cookie(COOKIE_NAME)
+    delete_session_cookie(response, settings)
     return response
 
 

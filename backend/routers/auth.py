@@ -39,6 +39,14 @@ from backend.services.token_refresh import (  # noqa: F401
     ensure_fresh_token,  # re-exported for routers/users.py and routers/suggestions.py
 )
 from backend.services.simkl import SimklClient
+from backend.utils.cookies import (
+    COOKIE_NAME,
+    OAUTH_PKCE_COOKIE,
+    OAUTH_SIMKL_PKCE_COOKIE,
+    OAUTH_SIMKL_STATE_COOKIE,
+    OAUTH_STATE_COOKIE,
+    cookie_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +55,6 @@ _SIMKL_TOKEN_DEFAULT_TTL_SECONDS = 31536000
 
 router = APIRouter(tags=["auth"])
 
-COOKIE_NAME = "filmduel_session"
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_HOURS = 72  # 3-day absolute lifetime per issued token
 REFRESH_INTERVAL = timedelta(hours=12)  # re-issue cookie at most once per 12h
@@ -89,6 +96,8 @@ def set_session_cookie(
     orig_iat: original login time forwarded on refresh; None for a new login.
     Cookie max_age is bounded by the shorter of the per-token JWT expiry
     (72 h) and the remaining session lifetime (30-day cap - elapsed).
+    The name is ``__Host-``-prefixed whenever the cookie is Secure (see
+    ``cookie_name``).
     """
     now = datetime.now(timezone.utc)
     session_start = orig_iat or now
@@ -96,14 +105,29 @@ def set_session_cookie(
     if remaining <= timedelta(0):
         return  # session cap already reached; do not issue new credentials
     max_age = min(JWT_EXPIRY_HOURS * 3600, int(remaining.total_seconds()))
+    secure = settings.cookie_secure
     response.set_cookie(
-        COOKIE_NAME,
+        cookie_name(COOKIE_NAME, secure),
         create_jwt(user_id, settings, orig_iat=session_start),
         httponly=True,
-        secure=settings.cookie_secure,
+        secure=secure,
         samesite="lax",
         max_age=max_age,
     )
+
+
+def _delete_cookie(response: Response, base: str, secure: bool) -> None:
+    """Expire the cookie issued as ``cookie_name(base, secure)``.
+
+    Browsers drop any Set-Cookie for a ``__Host-`` name that lacks Secure,
+    including the expiry one, so the flag must travel with the name.
+    """
+    response.delete_cookie(cookie_name(base, secure), secure=secure)
+
+
+def delete_session_cookie(response: Response, settings: Settings) -> None:
+    """Expire the session cookie; the counterpart of set_session_cookie."""
+    _delete_cookie(response, COOKIE_NAME, settings.cookie_secure)
 
 
 async def get_current_user_id(
@@ -118,7 +142,7 @@ async def get_current_user_id(
     (bounded sliding session).
     """
     settings = get_settings()
-    token = request.cookies.get(COOKIE_NAME)
+    token = request.cookies.get(cookie_name(COOKIE_NAME, settings.cookie_secure))
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
@@ -127,7 +151,7 @@ async def get_current_user_id(
         # HTTPException is raised, so the cookie deletion must travel on the
         # exception itself to reach the client.
         cleared = Response()
-        cleared.delete_cookie(COOKIE_NAME)
+        delete_session_cookie(cleared, settings)
         raise HTTPException(
             status_code=401,
             detail=detail,
@@ -238,12 +262,6 @@ async def ensure_fresh_simkl_token(user: User, db: AsyncSession) -> User:
     return user
 
 
-OAUTH_STATE_COOKIE = "filmduel_oauth_state"
-OAUTH_SIMKL_STATE_COOKIE = "filmduel_oauth_simkl_state"
-OAUTH_PKCE_COOKIE = "filmduel_oauth_pkce"
-OAUTH_SIMKL_PKCE_COOKIE = "filmduel_oauth_simkl_pkce"
-
-
 def _generate_pkce_pair() -> tuple[str, str]:
     """Return (code_verifier, code_challenge) per RFC 7636 S256 method.
 
@@ -266,8 +284,8 @@ def _set_oauth_cookies(
 ) -> None:
     """Set the OAuth state and PKCE verifier cookies on a redirect response."""
     cookie_kwargs = {"httponly": True, "secure": secure, "samesite": "lax", "max_age": 300}
-    response.set_cookie(state_cookie, state, **cookie_kwargs)
-    response.set_cookie(pkce_cookie, code_verifier, **cookie_kwargs)
+    response.set_cookie(cookie_name(state_cookie, secure), state, **cookie_kwargs)
+    response.set_cookie(cookie_name(pkce_cookie, secure), code_verifier, **cookie_kwargs)
 
 
 @router.get("/auth/login")
@@ -393,12 +411,14 @@ async def _handle_oauth_callback(
     db: AsyncSession,
 ) -> Response:
     """Shared OAuth callback logic for Trakt and SIMKL."""
+    secure = settings.cookie_secure
+
     # Validate state
-    expected_state = request.cookies.get(provider.state_cookie)
+    expected_state = request.cookies.get(cookie_name(provider.state_cookie, secure))
     if not expected_state or not state or not hmac.compare_digest(state, expected_state):
         raise HTTPException(status_code=400, detail="Invalid OAuth state")
 
-    code_verifier = request.cookies.get(provider.pkce_cookie)
+    code_verifier = request.cookies.get(cookie_name(provider.pkce_cookie, secure))
     if not code_verifier:
         raise HTTPException(status_code=400, detail="Missing PKCE verifier")
 
@@ -464,8 +484,8 @@ async def _handle_oauth_callback(
 
     response = RedirectResponse(url=settings.BASE_URL)
     set_session_cookie(response, str(user.id), settings)
-    response.delete_cookie(provider.state_cookie)
-    response.delete_cookie(provider.pkce_cookie)
+    _delete_cookie(response, provider.state_cookie, secure)
+    _delete_cookie(response, provider.pkce_cookie, secure)
     return response
 
 
@@ -535,6 +555,7 @@ async def logout(
     request: Request,
     db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
+    settings: Settings = Depends(get_settings),
 ):
     """Clear the session cookie and revoke all previously issued JWTs."""
     await db.execute(
@@ -544,6 +565,6 @@ async def logout(
     )
     await db.commit()
     response = Response(status_code=204)
-    response.delete_cookie(COOKIE_NAME)
+    delete_session_cookie(response, settings)
     return response
 

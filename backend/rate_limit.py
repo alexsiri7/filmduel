@@ -8,6 +8,7 @@ from slowapi.util import get_remote_address
 from starlette.requests import Request
 
 from backend.config import Settings, get_settings
+from backend.utils.cookies import COOKIE_NAME, cookie_name
 
 
 def _rate_limit_key(request: Request) -> str:
@@ -18,11 +19,12 @@ def _rate_limit_key(request: Request) -> str:
     downstream dependency). If decode fails we fall back to IP — the
     underlying request will be rejected with 401 by the route handler anyway.
     Keying on user ID prevents a single user from cycling IPs to bypass limits.
+    The cookie is looked up under the same ``__Host-`` rule the issuer applies.
     """
-    token = request.cookies.get("filmduel_session")
+    settings = get_settings()
+    token = request.cookies.get(cookie_name(COOKIE_NAME, settings.cookie_secure))
     if token:
         try:
-            settings = get_settings()
             payload = jwt.decode(
                 token,
                 settings.SECRET_KEY,
