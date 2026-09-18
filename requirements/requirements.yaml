@@ -742,7 +742,7 @@ requirements:
     category: non-functional
     priority: should
     status: active
-    source: "issue #580 (SEC-12)"
+    source: "issue #580 (SEC-019)"
     acceptance:
       - "With a JWT-shaped (eyJ…, two dots) TMDB_API_KEY, requests to api.themoviedb.org carry Authorization: Bearer and an empty query string (test_tmdb_client.py)"
       - "With a 32-hex TMDB_API_KEY, requests carry ?api_key= and lifespan() logs a WARNING containing tmdb_v3_api_key but not the key value (test_config.py)"

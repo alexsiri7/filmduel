@@ -28,7 +28,7 @@ def _client() -> httpx.AsyncClient:
     """AsyncClient with TMDB auth attached at client level.
 
     A v4 Read Access Token goes in the Authorization header so it never appears
-    in request URLs (SEC-12, #580). A v3 API Key can only be sent as the
+    in request URLs (SEC-019, #580). A v3 API Key can only be sent as the
     ``api_key`` query parameter; lifespan() warns operators still using one.
     """
     token = get_settings().TMDB_API_KEY

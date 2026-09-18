@@ -110,7 +110,7 @@ async def lifespan(app: FastAPI):
             "sent to TMDB as an api_key URL query parameter and can leak via proxy logs "
             "and error reports. Replace it with the API Read Access Token from "
             "https://www.themoviedb.org/settings/api to authenticate via the "
-            "Authorization header (SEC-12, #580)."
+            "Authorization header (SEC-019, #580)."
         )
     yield
     _scheduler.shutdown(wait=False)

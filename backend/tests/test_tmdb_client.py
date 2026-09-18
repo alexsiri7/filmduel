@@ -1,4 +1,4 @@
-"""Tests for the TMDB client's credential transport (SEC-12, #580).
+"""Tests for the TMDB client's credential transport (SEC-019, #580).
 
 A v4 API Read Access Token must travel only in the Authorization header so it
 never lands in request URLs; a v3 API Key can only go in the api_key query
