@@ -12,6 +12,7 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
 
 from backend.routers.tournaments import _active_progress
 
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.main import app
@@ -111,6 +112,100 @@ class TestCreateTournamentDailyCap:
 
         assert resp.status_code == 429
         assert "Daily tournament creation limit" in resp.json()["detail"]
+
+    def test_daily_cap_check_is_serialized_per_user(self):
+        """The cap count must run under a per-user advisory lock (SEC-02, #570)."""
+        from sqlalchemy.dialects import postgresql
+
+        user = _make_user(privacy_policy_accepted=False)
+        mock_db = AsyncMock()
+        statements: list = []
+
+        mock_count_result = MagicMock()
+        mock_count_result.scalar_one.return_value = 100
+
+        async def record_execute(stmt, *args, **kwargs):
+            statements.append(stmt)
+            return mock_count_result
+
+        mock_db.execute = AsyncMock(side_effect=record_execute)
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.post(
+                "/api/tournaments",
+                json={"bracket_size": 8, "ai_curated": False},
+            )
+
+        assert resp.status_code == 429
+        mock_db.commit.assert_not_called()
+
+        compiled = [stmt.compile(dialect=postgresql.dialect()) for stmt in statements]
+        lock_idx = next(
+            i for i, c in enumerate(compiled) if "pg_advisory_xact_lock" in str(c)
+        )
+        count_idx = next(i for i, c in enumerate(compiled) if "count(" in str(c).lower())
+        assert lock_idx < count_idx, "advisory lock must be taken before the daily count"
+
+        lock_params = set(compiled[lock_idx].params.values())
+        assert "tournament_daily_cap" in lock_params
+        assert str(user.id) in lock_params
+
+    def test_daily_cap_lock_is_held_through_ai_curation(self):
+        """Under the cap, nothing between the count and the LLM call may commit (SEC-02, #570)."""
+        from sqlalchemy.dialects import postgresql
+
+        user = _make_user()
+        mock_db = AsyncMock()
+        mock_db.add = MagicMock()
+        statements: list = []
+
+        mock_count_result = MagicMock()
+        mock_count_result.scalar_one.return_value = 0
+
+        async def record_execute(stmt, *args, **kwargs):
+            statements.append(stmt)
+            return mock_count_result
+
+        mock_db.execute = AsyncMock(side_effect=record_execute)
+
+        films = [MagicMock() for _ in range(8)]
+        llm_result = {"name": "Curated", "tagline": None, "theme_description": None}
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with patch(
+            "backend.routers.tournaments.get_filtered_ranked_films",
+            new_callable=AsyncMock,
+            return_value=films,
+        ), patch(
+            "backend.routers.tournaments.curate_and_select_films",
+            new_callable=AsyncMock,
+            return_value=(films, llm_result),
+        ) as mock_curate, patch(
+            "backend.routers.tournaments.create_tournament_bracket",
+            new_callable=AsyncMock,
+        ), patch(
+            "backend.routers.tournaments._load_tournament",
+            new_callable=AsyncMock,
+            return_value=_make_tournament(user.id, is_ai_curated=True),
+        ):
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.post(
+                    "/api/tournaments",
+                    json={"bracket_size": 8, "ai_curated": True},
+                )
+
+        assert resp.status_code == 200
+        mock_curate.assert_awaited_once()
+        mock_db.commit.assert_not_called()
+        assert any(
+            "pg_advisory_xact_lock" in str(stmt.compile(dialect=postgresql.dialect()))
+            for stmt in statements
+        )
 
     def test_create_tournament_ai_curated_requires_consent(self):
         """POST /api/tournaments with ai_curated=True returns 403 without consent."""
@@ -408,6 +503,71 @@ class TestRegenerateCandidatePool:
 
         assert resp.status_code == 200
         assert mock_pool.call_args.kwargs["media_type"] == "show"
+
+    def test_tournament_is_locked_before_regen_count_is_read(self):
+        """The tournament advisory lock must precede the load that reads _regen_count (SEC-02, #570)."""
+        from sqlalchemy.dialects import postgresql
+
+        user = _make_user()
+        tournament_id = uuid.uuid4()
+        tournament = _make_tournament(
+            user.id, id=tournament_id, is_ai_curated=True, matches=[]
+        )
+        tournament.llm_response = {"_regen_count": 0, "_theme_hint": ""}
+
+        films = [MagicMock() for _ in range(8)]
+        llm_result = {"name": "Regenerated", "tagline": None, "theme_description": None}
+
+        events: list = []
+        mock_db = AsyncMock()
+
+        async def record_execute(stmt, *args, **kwargs):
+            events.append(stmt)
+            return MagicMock()
+
+        async def load_tournament(*args, **kwargs):
+            events.append("load_tournament")
+            return tournament
+
+        mock_db.execute = AsyncMock(side_effect=record_execute)
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with patch(
+            "backend.routers.tournaments._load_tournament",
+            new_callable=AsyncMock,
+            side_effect=load_tournament,
+        ), patch(
+            "backend.routers.tournaments.get_filtered_ranked_films",
+            new_callable=AsyncMock,
+            return_value=films,
+        ), patch(
+            "backend.routers.tournaments.curate_and_select_films",
+            new_callable=AsyncMock,
+            return_value=(films, llm_result),
+        ), patch(
+            "backend.routers.tournaments.create_tournament_bracket",
+            new_callable=AsyncMock,
+        ):
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.post(f"/api/tournaments/{tournament_id}/regenerate")
+
+        assert resp.status_code == 200
+        mock_db.commit.assert_not_called()
+
+        first_load = events.index("load_tournament")
+        lock_idx = next(
+            i
+            for i, e in enumerate(events)
+            if e != "load_tournament"
+            and "pg_advisory_xact_lock" in str(e.compile(dialect=postgresql.dialect()))
+        )
+        assert lock_idx < first_load, "tournament must be locked before it is loaded"
+
+        lock_params = set(events[lock_idx].compile(dialect=postgresql.dialect()).params.values())
+        assert "tournament_regen" in lock_params
+        assert str(tournament_id) in lock_params
 
     def test_create_persists_media_type_on_the_tournament_row(self):
         """The media_type a tournament was created over is stored for regeneration."""

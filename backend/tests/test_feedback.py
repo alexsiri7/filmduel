@@ -437,3 +437,66 @@ class TestPurgeExpiredScreenshots:
         response = self._delete(client, purged_ids=[])
         assert response.status_code == 200
         assert response.json() == {"purged": 0}
+
+
+class TestSubmitFeedbackCapIsSerialized:
+    """The daily-cap count must run under a per-user advisory lock (SEC-02, #570)."""
+
+    def test_lock_is_acquired_before_the_daily_count(self, client):
+        from sqlalchemy.dialects import postgresql
+
+        from backend.db_models import FeedbackReport as RealFeedbackReport
+
+        fake_user = _make_user()
+        mock_db = _make_db()
+        report = _make_feedback_report()
+        statements: list = []
+
+        async def record_execute(stmt, *args, **kwargs):
+            statements.append(("execute", stmt))
+            return MagicMock()
+
+        async def record_scalar(stmt, *args, **kwargs):
+            statements.append(("scalar", stmt))
+            return 0
+
+        mock_db.execute = AsyncMock(side_effect=record_execute)
+        mock_db.scalar = AsyncMock(side_effect=record_scalar)
+
+        class _MockFR:
+            user_id = RealFeedbackReport.user_id
+            created_at = RealFeedbackReport.created_at
+
+            def __new__(cls, **kwargs):
+                return report
+
+        app.dependency_overrides[get_current_user] = lambda: fake_user
+        app.dependency_overrides[get_db] = lambda: mock_db
+        try:
+            with patch("backend.routers.feedback.FeedbackReport", _MockFR):
+                resp = client.post(
+                    "/api/feedback",
+                    data={"title": "Test", "description": "Details"},
+                )
+        finally:
+            app.dependency_overrides.clear()
+
+        assert resp.status_code == 201
+        mock_db.commit.assert_not_called()
+
+        compiled = [
+            (method, stmt.compile(dialect=postgresql.dialect()))
+            for method, stmt in statements
+        ]
+        lock_idx = next(
+            i for i, (_, c) in enumerate(compiled) if "pg_advisory_xact_lock" in str(c)
+        )
+        count_idx = next(
+            i for i, (_, c) in enumerate(compiled) if "count(" in str(c).lower()
+        )
+        assert lock_idx < count_idx, "advisory lock must be taken before the daily count"
+        assert compiled[count_idx][0] == "scalar"
+
+        lock_params = set(compiled[lock_idx][1].params.values())
+        assert "feedback_daily_cap" in lock_params
+        assert str(fake_user.id) in lock_params

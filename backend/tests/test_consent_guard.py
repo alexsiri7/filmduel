@@ -10,7 +10,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 os.environ.setdefault("TOKEN_ENC_KEY", "test-secret-key-for-unit-tests-32b")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
 
+import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.dialects import postgresql
 
 from backend.main import app
 from backend.db import get_db
@@ -405,8 +407,14 @@ class TestTournamentConsentGuard:
         assert "candidate pool" not in resp.text
         assert resp.json()["detail"] == "AI curation failed. Please try again."
         # Guard against regressions where execution continues past the ValueError
-        # and db writes (delete matches, flush, update metadata) are silently triggered
-        mock_db.execute.assert_not_called()
+        # and db writes (delete matches, flush, update metadata) are silently triggered.
+        # The only statement allowed to reach the session is the regen advisory lock.
+        executed = [
+            str(c.args[0].compile(dialect=postgresql.dialect()))
+            for c in mock_db.execute.await_args_list
+        ]
+        assert executed, "expected the regeneration advisory lock to be acquired"
+        assert all("pg_advisory_xact_lock" in sql for sql in executed), executed
         mock_db.flush.assert_not_called()
 
     def test_create_ai_tournament_curation_error_does_not_leak_details(self):
