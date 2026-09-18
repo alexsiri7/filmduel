@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -76,3 +77,13 @@ class TestTokenCrypto:
         # Clear cache and re-derive — must still decrypt successfully
         _fernet.cache_clear()
         assert decrypt_token(ciphertext) == "determinism-check"
+
+    @patch("backend.services.token_crypto.get_settings")
+    def test_ttl_rejects_expired(self, mock_get_settings):
+        """A ttl rejects tokens older than it; the default (no ttl) never expires."""
+        mock_get_settings.return_value = _mock_settings()
+        ciphertext = _fernet().encrypt_at_time(b"secret", int(time.time()) - 120).decode()
+
+        with pytest.raises(RuntimeError, match="Token decryption failed"):
+            decrypt_token(ciphertext, ttl=60)
+        assert decrypt_token(ciphertext) == "secret"

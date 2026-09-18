@@ -40,10 +40,15 @@ def encrypt_token(plain: str) -> str:
     return _fernet().encrypt(plain.encode()).decode()
 
 
-def decrypt_token(ciphertext: str) -> str:
+def decrypt_token(ciphertext: str, *, ttl: int | None = None) -> str:
+    """Decrypt a token, rejecting it once it is older than ``ttl`` seconds.
+
+    ``None`` (the default) never expires — required for OAuth tokens and
+    screenshots stored at rest.
+    """
     if not ciphertext:
         return ""
     try:
-        return _fernet().decrypt(ciphertext.encode()).decode()
+        return _fernet().decrypt(ciphertext.encode(), ttl=ttl).decode()
     except InvalidToken as exc:
         raise RuntimeError("Token decryption failed — wrong TOKEN_ENC_KEY?") from exc

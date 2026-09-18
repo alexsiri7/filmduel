@@ -2,17 +2,32 @@
 
 from __future__ import annotations
 
+import os
+import time
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
 
-from backend.main import app
-from backend.db import get_db
-from backend.routers.auth import get_current_user
-from backend.schemas import DuelOutcome, DuelResult
-from backend.services.duel import ProcessDuelResult
-from backend.utils.tokens import encode_pair_token
+# Pair tokens need a TOKEN_ENC_KEY; set it and clear the cached settings/Fernet
+# before importing backend modules so this file also passes when run alone.
+os.environ.setdefault("TOKEN_ENC_KEY", "test-secret-key-for-unit-tests-32b")
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
+
+from backend.config import get_settings  # noqa: E402
+
+get_settings.cache_clear()
+
+from backend.services.token_crypto import _fernet  # noqa: E402
+
+_fernet.cache_clear()
+
+from backend.main import app  # noqa: E402
+from backend.db import get_db  # noqa: E402
+from backend.routers.auth import get_current_user  # noqa: E402
+from backend.schemas import DuelOutcome, DuelResult  # noqa: E402
+from backend.services.duel import ProcessDuelResult  # noqa: E402
+from backend.utils.tokens import PAIR_TOKEN_TTL_SECONDS, encode_pair_token  # noqa: E402
 
 
 def _make_user():
@@ -54,7 +69,7 @@ class TestSubmitDuel:
         """Valid duel submission returns 200 with ELO deltas."""
         mid_a = str(uuid.uuid4())
         mid_b = str(uuid.uuid4())
-        token = encode_pair_token(mid_a, mid_b)
+        token = encode_pair_token(mid_a, mid_b, user_id=str(FAKE_USER.id))
 
         fake_result = ProcessDuelResult(
             api_result=DuelResult(
@@ -164,7 +179,7 @@ class TestSubmitDuel:
         # Token is for a completely different pair
         other_a = str(uuid.uuid4())
         other_b = str(uuid.uuid4())
-        token = encode_pair_token(other_a, other_b)
+        token = encode_pair_token(other_a, other_b, user_id=str(FAKE_USER.id))
 
         client = TestClient(app)
         response = client.post(
@@ -212,11 +227,61 @@ class TestSubmitDuel:
         assert response.status_code == 400
         assert response.json()["detail"] == "Invalid pair token"
 
+    def test_pair_token_for_other_user_returns_400(self):
+        """A token minted for a different user must be rejected before process_duel."""
+        mid_a = str(uuid.uuid4())
+        mid_b = str(uuid.uuid4())
+        token = encode_pair_token(mid_a, mid_b, user_id=str(uuid.uuid4()))
+
+        with patch(
+            "backend.routers.duels.process_duel", new_callable=AsyncMock
+        ) as mock_pd:
+            client = TestClient(app)
+            response = client.post(
+                "/api/duels",
+                json={
+                    "movie_a_id": mid_a,
+                    "movie_b_id": mid_b,
+                    "outcome": "a_wins",
+                    "mode": "discovery",
+                    "pair_token": token,
+                },
+            )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Invalid pair token"
+        mock_pd.assert_not_called()
+
+    def test_expired_pair_token_returns_400(self):
+        """A token older than PAIR_TOKEN_TTL_SECONDS must be rejected before process_duel."""
+        mid_a = str(uuid.uuid4())
+        mid_b = str(uuid.uuid4())
+        plaintext = f"{FAKE_USER.id},{mid_a},{mid_b}".encode()
+        minted_at = int(time.time()) - PAIR_TOKEN_TTL_SECONDS - 60
+        token = _fernet().encrypt_at_time(plaintext, minted_at).decode()
+
+        with patch(
+            "backend.routers.duels.process_duel", new_callable=AsyncMock
+        ) as mock_pd:
+            client = TestClient(app)
+            response = client.post(
+                "/api/duels",
+                json={
+                    "movie_a_id": mid_a,
+                    "movie_b_id": mid_b,
+                    "outcome": "a_wins",
+                    "mode": "discovery",
+                    "pair_token": token,
+                },
+            )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Invalid pair token"
+        mock_pd.assert_not_called()
+
     def test_process_duel_value_error_returns_generic_400(self):
         """ValueError from process_duel must return 400 with generic detail — not str(e)."""
         mid_a = str(uuid.uuid4())
         mid_b = str(uuid.uuid4())
-        token = encode_pair_token(mid_a, mid_b)
+        token = encode_pair_token(mid_a, mid_b, user_id=str(FAKE_USER.id))
         with patch(
             "backend.routers.duels.process_duel", new_callable=AsyncMock
         ) as mock_pd:

@@ -68,7 +68,7 @@ async def get_movie_pair(
 
     last_pair_ids: set[str] | None = None
     if last_pair_token:
-        last_pair_ids = decode_pair_token(last_pair_token)
+        last_pair_ids = decode_pair_token(last_pair_token, user_id=str(uid))
 
     try:
         pair = await select_pair(db, uid, last_pair_ids, media_type)
@@ -79,7 +79,9 @@ async def get_movie_pair(
     movie_a, movie_b = pair
     schema_a = _user_movie_to_schema(movie_a)
     schema_b = _user_movie_to_schema(movie_b)
-    token = encode_pair_token(str(movie_a.movie_id), str(movie_b.movie_id))
+    token = encode_pair_token(
+        str(movie_a.movie_id), str(movie_b.movie_id), user_id=str(uid)
+    )
 
     return MoviePairResponse(
         movie_a=schema_a,
