@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import jwt as pyjwt
 import pytest
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
 from backend.config import Settings
 from backend.rate_limit import limiter
@@ -87,6 +88,12 @@ def _make_request(cookies: dict | None = None) -> MagicMock:
 def _make_response() -> MagicMock:
     """Create a mock FastAPI Response; set_cookie is a no-op MagicMock."""
     return MagicMock()
+
+
+def _assert_session_cookie_cleared(set_cookie: str) -> None:
+    """A rejection's Set-Cookie header must expire the session cookie."""
+    assert set_cookie.startswith(f'{COOKIE_NAME}=""')
+    assert "Max-Age=0" in set_cookie
 
 
 def _make_jwt_payload(**overrides) -> dict:
@@ -289,7 +296,7 @@ class TestGetCurrentUserId:
             await get_current_user_id(request, response, _make_db())
         assert exc_info.value.status_code == 401
         assert "expired" in exc_info.value.detail.lower()
-        response.delete_cookie.assert_called_once_with(COOKIE_NAME)
+        _assert_session_cookie_cleared(exc_info.value.headers["set-cookie"])
 
     @pytest.mark.asyncio
     async def test_invalid_token_raises_401(self, monkeypatch):
@@ -301,7 +308,7 @@ class TestGetCurrentUserId:
             await get_current_user_id(request, response, _make_db())
         assert exc_info.value.status_code == 401
         assert "Invalid session" in exc_info.value.detail
-        response.delete_cookie.assert_called_once_with(COOKIE_NAME)
+        _assert_session_cookie_cleared(exc_info.value.headers["set-cookie"])
 
     @pytest.mark.asyncio
     async def test_wrong_secret_raises_401(self, monkeypatch):
@@ -314,7 +321,7 @@ class TestGetCurrentUserId:
         with pytest.raises(HTTPException) as exc_info:
             await get_current_user_id(request, response, _make_db())
         assert exc_info.value.status_code == 401
-        response.delete_cookie.assert_called_once_with(COOKIE_NAME)
+        _assert_session_cookie_cleared(exc_info.value.headers["set-cookie"])
 
     @pytest.mark.asyncio
     async def test_token_missing_sub_raises_401(self, monkeypatch):
@@ -334,7 +341,7 @@ class TestGetCurrentUserId:
             await get_current_user_id(request, response, _make_db())
         assert exc_info.value.status_code == 401
         assert "missing subject" in exc_info.value.detail.lower()
-        response.delete_cookie.assert_called_once_with(COOKIE_NAME)
+        _assert_session_cookie_cleared(exc_info.value.headers["set-cookie"])
 
     @pytest.mark.asyncio
     async def test_revoked_token_raises_401(self, monkeypatch):
@@ -349,7 +356,7 @@ class TestGetCurrentUserId:
             await get_current_user_id(request, response, _make_db(future_revocation))
         assert exc_info.value.status_code == 401
         assert "revoked" in exc_info.value.detail.lower()
-        response.delete_cookie.assert_called_once_with(COOKIE_NAME)
+        _assert_session_cookie_cleared(exc_info.value.headers["set-cookie"])
 
     @pytest.mark.asyncio
     async def test_hard_cap_rejects_session_older_than_30_days(self, monkeypatch):
@@ -364,7 +371,7 @@ class TestGetCurrentUserId:
             await get_current_user_id(request, response, _make_db())
         assert exc_info.value.status_code == 401
         assert "expired" in exc_info.value.detail.lower()
-        response.delete_cookie.assert_called_once_with(COOKIE_NAME)
+        _assert_session_cookie_cleared(exc_info.value.headers["set-cookie"])
 
     @pytest.mark.asyncio
     async def test_refresh_preserves_orig_iat(self, monkeypatch):
@@ -501,7 +508,7 @@ class TestGetCurrentUserId:
             await get_current_user_id(request, response, _make_db())
         assert exc_info.value.status_code == 401
         assert "Invalid session" in exc_info.value.detail
-        response.delete_cookie.assert_called_once_with(COOKIE_NAME)
+        _assert_session_cookie_cleared(exc_info.value.headers["set-cookie"])
 
     @pytest.mark.asyncio
     async def test_user_not_found_clears_cookie(self, monkeypatch):
@@ -517,7 +524,21 @@ class TestGetCurrentUserId:
             await get_current_user_id(request, response, db)
         assert exc_info.value.status_code == 401
         assert "not found" in exc_info.value.detail.lower()
-        response.delete_cookie.assert_called_once_with(COOKIE_NAME)
+        _assert_session_cookie_cleared(exc_info.value.headers["set-cookie"])
+
+    def test_rejection_set_cookie_reaches_client(self, monkeypatch):
+        """Headers staged on the injected Response are dropped when an
+        HTTPException propagates, so the deletion must arrive on the real
+        401 response, not just on the mock."""
+        from backend.main import app
+
+        monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
+        with TestClient(app, raise_server_exceptions=False) as client:
+            client.cookies.set(COOKIE_NAME, "not-a-valid-jwt")
+            resp = client.get("/api/me")
+
+        assert resp.status_code == 401
+        _assert_session_cookie_cleared(resp.headers["set-cookie"])
 
 
 # ---------------------------------------------------------------------------
