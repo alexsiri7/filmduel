@@ -140,6 +140,7 @@ class TestCreateTournamentDailyCap:
             )
 
         assert resp.status_code == 429
+        mock_db.commit.assert_not_called()
 
         compiled = [stmt.compile(dialect=postgresql.dialect()) for stmt in statements]
         lock_idx = next(
@@ -499,6 +500,7 @@ class TestRegenerateCandidatePool:
                 resp = client.post(f"/api/tournaments/{tournament_id}/regenerate")
 
         assert resp.status_code == 200
+        mock_db.commit.assert_not_called()
 
         first_load = events.index("load_tournament")
         lock_idx = next(

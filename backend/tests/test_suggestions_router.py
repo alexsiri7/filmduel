@@ -159,6 +159,7 @@ class TestRegenerateSuggestions:
                 resp = client.post("/api/suggestions/regenerate")
 
         assert resp.status_code == 429
+        mock_db.commit.assert_not_called()
 
         compiled = [stmt.compile(dialect=postgresql.dialect()) for stmt in statements]
         lock_idx = next(

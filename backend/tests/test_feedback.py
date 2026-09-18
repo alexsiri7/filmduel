@@ -482,6 +482,7 @@ class TestSubmitFeedbackCapIsSerialized:
             app.dependency_overrides.clear()
 
         assert resp.status_code == 201
+        mock_db.commit.assert_not_called()
 
         compiled = [
             (method, stmt.compile(dialect=postgresql.dialect()))
