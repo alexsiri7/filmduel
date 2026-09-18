@@ -37,7 +37,8 @@ async def submit_duel(
     outcome = body.outcome.value
     mode = body.mode.value
 
-    logger.info(
+    # DEBUG, not INFO: user_id + preference data is behavioral personal data (SEC-15, #583).
+    logger.debug(
         "duel_submitted user_id=%s movie_a=%s movie_b=%s outcome=%s mode=%s",
         uid,
         movie_a_id,
