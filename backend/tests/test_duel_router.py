@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import time
 import uuid
@@ -104,6 +105,52 @@ class TestSubmitDuel:
         assert body["movie_a_elo_delta"] == 15
         assert body["movie_b_elo_delta"] == -15
         assert body["next_action"] == "duel"
+
+    def test_submission_is_not_logged_at_info(self, caplog):
+        """Behavioral data (user + movie IDs) is logged at DEBUG only (SEC-15, #583)."""
+        mid_a = str(uuid.uuid4())
+        mid_b = str(uuid.uuid4())
+        token = encode_pair_token(mid_a, mid_b, user_id=str(FAKE_USER.id))
+
+        fake_result = ProcessDuelResult(
+            api_result=DuelResult(
+                outcome=DuelOutcome.a_wins,
+                movie_a_elo_delta=15,
+                movie_b_elo_delta=-15,
+                next_action="duel",
+            ),
+            new_elo_a=1015,
+            new_elo_b=985,
+        )
+
+        with patch(
+            "backend.routers.duels.process_duel", new_callable=AsyncMock
+        ) as mock_pd:
+            mock_pd.return_value = fake_result
+            client = TestClient(app, headers=SPA_HEADERS)
+            with caplog.at_level(logging.DEBUG, logger="backend.routers.duels"):
+                response = client.post(
+                    "/api/duels",
+                    json={
+                        "movie_a_id": mid_a,
+                        "movie_b_id": mid_b,
+                        "outcome": "a_wins",
+                        "mode": "discovery",
+                        "pair_token": token,
+                    },
+                )
+
+        assert response.status_code == 200
+        sensitive = (mid_a, mid_b, str(FAKE_USER.id))
+        records = [r for r in caplog.records if r.name == "backend.routers.duels"]
+        for record in records:
+            if record.levelno >= logging.INFO:
+                message = record.getMessage()
+                assert not any(s in message for s in sensitive), message
+        assert any(
+            r.levelno == logging.DEBUG and r.getMessage().startswith("duel_submitted")
+            for r in records
+        ), "duel_submitted should still be logged, at DEBUG"
 
     def test_self_duel_returns_400(self):
         """Dueling a movie against itself should return 400."""

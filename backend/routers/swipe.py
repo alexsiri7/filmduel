@@ -85,7 +85,8 @@ async def get_swipe_cards(
     )
 
     if median_elo is None:
-        logger.info("swipe_band_selection user_id=%s band=none (no ranked films)", uid)
+        # DEBUG, not INFO: user_id + preference data is behavioral personal data (SEC-15, #583).
+        logger.debug("swipe_band_selection user_id=%s band=none (no ranked films)", uid)
         # No ranked films yet — pick randomly from rated films
         stmt = (
             base.where(Movie.community_rating.isnot(None))
@@ -105,7 +106,7 @@ async def get_swipe_cards(
     else:
         # Band-weighted selection: 60% target, 20% above, 20% below
         band_idx = _elo_to_band_index(int(median_elo))
-        logger.info(
+        logger.debug(
             "swipe_band_selection user_id=%s median_elo=%s band=%s",
             uid,
             median_elo,
@@ -212,7 +213,7 @@ async def submit_swipe_results(
 
     next_action = await compute_next_action(db, uid, media_type)
 
-    logger.info(
+    logger.debug(
         "swipe_submit user_id=%s seen_count=%d unseen_count=%d next_action=%s",
         uid,
         seen_count,

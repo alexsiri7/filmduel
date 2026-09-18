@@ -223,7 +223,8 @@ async def process_duel(
         duel = Duel(user_id=user_id, mode=mode, pair_type=pair_type)
         db.add(duel)
 
-    logger.info(
+    # DEBUG, not INFO: user_id + preference data is behavioral personal data (SEC-15, #583).
+    logger.debug(
         "duel_processed user_id=%s outcome=%s pair_type=%s elo_delta_a=%+d elo_delta_b=%+d",
         user_id,
         outcome,
@@ -234,7 +235,7 @@ async def process_duel(
 
     # ── next_action ─────────────────────────────────────────────────
     next_action = await compute_next_action(db, user_id, media_type)
-    logger.info("duel_next_action user_id=%s next_action=%s", user_id, next_action)
+    logger.debug("duel_next_action user_id=%s next_action=%s", user_id, next_action)
 
     return ProcessDuelResult(
         api_result=DuelResult(

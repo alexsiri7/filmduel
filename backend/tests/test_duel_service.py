@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
@@ -170,6 +171,33 @@ async def test_process_duel_a_wins_elo():
     assert um_b.battles == 6
     assert um_a.seen is True
     assert um_b.seen is True
+
+
+@pytest.mark.asyncio
+async def test_process_duel_is_not_logged_at_info(caplog):
+    """Duel outcome for a user is logged at DEBUG only (SEC-15, #583)."""
+    uid = uuid.uuid4()
+    mid_a = uuid.uuid4()
+    mid_b = uuid.uuid4()
+
+    um_a = _make_user_movie(uid, mid_a, elo=1000, battles=5)
+    um_b = _make_user_movie(uid, mid_b, elo=1000, battles=5)
+
+    db = AsyncMock()
+    db.execute = _make_fake_execute(um_a, um_b)
+
+    with caplog.at_level(logging.DEBUG, logger="backend.services.duel"):
+        await process_duel(db, uid, mid_a, mid_b, "a_wins", "discovery")
+
+    for record in caplog.records:
+        if record.levelno >= logging.INFO:
+            assert str(uid) not in record.getMessage(), record.getMessage()
+    debug_events = {
+        r.getMessage().split(" ", 1)[0]
+        for r in caplog.records
+        if r.levelno == logging.DEBUG
+    }
+    assert {"duel_processed", "duel_next_action"} <= debug_events
 
 
 @pytest.mark.asyncio

@@ -201,7 +201,8 @@ async def generate_suggestions(
         return []
 
     top_genre = next(iter(taste_profile["genre_affinities"]), None)
-    logger.info(
+    # DEBUG, not INFO: user_id + preference data is behavioral personal data (SEC-15, #583).
+    logger.debug(
         "suggest_taste_profile user_id=%s num_ranked=%d top_genre=%s",
         user_id,
         taste_profile["total_ranked"],
