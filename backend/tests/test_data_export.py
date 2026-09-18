@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from sqlalchemy.dialects import sqlite
 
-from backend.db_models import Base
+from backend.db_models import Base, User
 from backend.services import data_export
 from backend.services.data_export import build_export_payload, export_user_data
 
@@ -133,6 +133,25 @@ def test_no_credential_material_in_payload():
 def test_profile_is_exact_allow_list():
     payload = _build()
     assert set(payload["profile"].keys()) == PROFILE_KEYS
+
+
+# Credential and token-lifecycle columns: the only User columns the export may skip.
+DELIBERATELY_OMITTED_USER_COLUMNS = {
+    "trakt_access_token",
+    "trakt_refresh_token",
+    "trakt_token_expires_at",
+    "simkl_access_token",
+    "simkl_refresh_token",
+    "simkl_token_expires_at",
+    "tokens_invalid_before",
+}
+
+
+def test_every_user_column_is_exported_or_deliberately_omitted():
+    """A new personal column on User cannot silently go unexported."""
+    columns = set(User.__table__.columns.keys())
+    assert columns - PROFILE_KEYS == DELIBERATELY_OMITTED_USER_COLUMNS
+    assert PROFILE_KEYS <= columns
 
 
 # ---------------------------------------------------------------------------
