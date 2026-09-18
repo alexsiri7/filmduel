@@ -90,8 +90,8 @@ _scheduler = build_scheduler()
 async def lifespan(app: FastAPI):
     _scheduler.start()
     logger.info("retention_scheduler started")
-    # Warn operators who deploy to hosted platforms without the settings those
-    # deployments need.
+    # Warn operators who deploy to hosted platforms without shared rate-limit
+    # storage. (Missing SECURE_COOKIES on those platforms is rejected by Settings.)
     detected = detected_proxy_platform()
     if settings.RATE_LIMIT_STORAGE_URI:
         logger.info("rate_limit_storage: redis (shared, survives restarts)")
