@@ -252,3 +252,58 @@ class TestProfileResponseContract:
         for sentinel in TOKEN_SENTINELS:
             assert sentinel not in resp.text
         assert EXPIRY_SENTINEL_YEAR not in resp.text
+
+
+# ---------------------------------------------------------------------------
+# GET /api/me/export — GDPR Art. 15 / 20
+# ---------------------------------------------------------------------------
+
+
+class TestExportMyData:
+    def setup_method(self):
+        app.dependency_overrides.clear()
+
+    def teardown_method(self):
+        app.dependency_overrides.clear()
+
+    def test_export_requires_auth(self):
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.get("/api/me/export")
+        assert resp.status_code == 401
+
+    def test_export_returns_json_attachment(self):
+        user = _make_user()
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+        payload = {"format_version": 1, "profile": {"id": "x"}}
+
+        with patch(
+            "backend.routers.users.export_user_data", new=AsyncMock(return_value=payload)
+        ) as mock_export:
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.get("/api/me/export")
+
+        assert resp.status_code == 200
+        assert "application/json" in resp.headers["content-type"]
+        disposition = resp.headers["content-disposition"]
+        assert "attachment" in disposition
+        assert "filmduel_data_export.json" in disposition
+        assert resp.json() == payload
+        mock_export.assert_awaited_once()
+        assert mock_export.await_args.args[1] is user
+
+    def test_export_does_not_require_consent(self):
+        """Right of access is independent of consent — the route must not use require_consent."""
+        user = _make_user(privacy_policy_accepted=False, privacy_policy_version=None)
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+
+        with patch(
+            "backend.routers.users.export_user_data",
+            new=AsyncMock(return_value={"format_version": 1}),
+        ) as mock_export:
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.get("/api/me/export")
+
+        assert resp.status_code == 200
+        mock_export.assert_awaited_once()

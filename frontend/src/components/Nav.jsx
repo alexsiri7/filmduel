@@ -172,6 +172,13 @@ export default function Nav({ mediaType, setMediaType }) {
         >
           Privacy Policy
         </Link>
+        <a
+          href="/api/me/export"
+          download
+          className="block w-full text-center text-[#F5F0E8]/30 hover:text-primary-container/70 font-headline font-bold uppercase text-xs tracking-widest py-2 transition-colors"
+        >
+          Download My Data
+        </a>
         {hasTrakt && (
           <ToggleRow label="Sync to Trakt" checked={syncRatings} onToggle={handleSyncToggle} />
         )}
