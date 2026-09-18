@@ -13,6 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.main import app
+from backend.tests import SPA_HEADERS
 from backend.db import get_db
 from backend.routers.auth import get_current_user
 
@@ -42,7 +43,7 @@ class TestGetSuggestions:
         app.dependency_overrides[get_current_user] = lambda: user
         app.dependency_overrides[get_db] = lambda: AsyncMock()
 
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.get("/api/suggestions")
 
         assert resp.status_code == 403
@@ -59,7 +60,7 @@ class TestGetSuggestions:
             new_callable=AsyncMock,
             return_value=False,
         ):
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.get("/api/suggestions")
 
         assert resp.status_code == 200
@@ -86,7 +87,7 @@ class TestGetSuggestions:
             new_callable=AsyncMock,
             side_effect=ValueError("LLM_API_KEY not configured"),
         ):
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.get("/api/suggestions")
 
         assert resp.status_code == 503
@@ -124,7 +125,7 @@ class TestRegenerateSuggestions:
             new_callable=AsyncMock,
             return_value=True,
         ):
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post("/api/suggestions/regenerate")
 
         assert resp.status_code == 429
@@ -155,7 +156,7 @@ class TestRegenerateSuggestions:
             new_callable=AsyncMock,
             return_value=True,
         ):
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post("/api/suggestions/regenerate")
 
         assert resp.status_code == 429
@@ -221,7 +222,7 @@ class TestRegenerateSuggestions:
             "backend.routers.suggestions._build_suggestion_schema",
             return_value=fake_schema,
         ):
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post("/api/suggestions/regenerate")
 
         assert resp.status_code == 200
@@ -262,7 +263,7 @@ class TestRegenerateSuggestions:
             new_callable=AsyncMock,
             side_effect=ValueError("LLM_API_KEY not configured"),
         ):
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post("/api/suggestions/regenerate")
 
         assert resp.status_code == 503
@@ -372,7 +373,7 @@ class TestSyncTraktWatchlistForUpdate:
             mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
             mock_trakt_cls.return_value = AsyncMock()
 
-            with TestClient(app, raise_server_exceptions=True) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=True) as client:
                 resp = client.post(
                     f"/api/suggestions/{suggestion_id}/watchlist"
                 )

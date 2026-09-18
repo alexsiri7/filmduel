@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from backend.db import get_db
 from backend.main import app
+from backend.tests import SPA_HEADERS
 from backend.routers.auth import get_current_user
 from backend.routers.swipe import (
     BANDS,
@@ -184,13 +185,13 @@ class TestPurgeSwipeResults:
 
     def test_returns_purged_count(self):
         purged = [uuid.uuid4(), uuid.uuid4()]
-        client = TestClient(app)
+        client = TestClient(app, headers=SPA_HEADERS)
         response = self._delete(client, purged_ids=purged)
         assert response.status_code == 200
         assert response.json() == {"purged": 2}
 
     def test_returns_zero_when_nothing_to_purge(self):
-        client = TestClient(app)
+        client = TestClient(app, headers=SPA_HEADERS)
         response = self._delete(client, purged_ids=[])
         assert response.status_code == 200
         assert response.json() == {"purged": 0}
@@ -199,7 +200,7 @@ class TestPurgeSwipeResults:
         user = _make_user()
         user.is_admin = False
         db = _make_db()
-        client = TestClient(app)
+        client = TestClient(app, headers=SPA_HEADERS)
         app.dependency_overrides[get_current_user] = lambda: user
         app.dependency_overrides[get_db] = lambda: db
         try:
@@ -210,7 +211,7 @@ class TestPurgeSwipeResults:
         assert "admin" in response.json()["detail"].lower()
 
     def test_unauthenticated_returns_401(self):
-        client = TestClient(app)
+        client = TestClient(app, headers=SPA_HEADERS)
         # No dependency overrides — auth stack runs normally
         response = client.delete("/api/swipe/admin/purge-old-records")
         assert response.status_code == 401

@@ -15,6 +15,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.main import app
+from backend.tests import SPA_HEADERS
 from backend.db import get_db
 from backend.rate_limit import limiter
 from backend.routers.auth import get_current_user
@@ -59,7 +60,7 @@ def test_accept_consent_correct_version():
     app.dependency_overrides[get_db] = lambda: mock_db
 
     with patch("backend.routers.users._force_pool_sync", new_callable=AsyncMock):
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.post(
                 "/api/me/consent",
                 json={"version": CURRENT_PRIVACY_POLICY_VERSION},
@@ -82,7 +83,7 @@ def test_accept_consent_wrong_version_400():
     app.dependency_overrides[get_current_user] = lambda: fake_user
     app.dependency_overrides[get_db] = lambda: mock_db
 
-    with TestClient(app, raise_server_exceptions=False) as client:
+    with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
         resp = client.post(
             "/api/me/consent",
             json={"version": "0.0"},
@@ -108,7 +109,7 @@ def test_accept_consent_idempotent():
     with patch(
         "backend.routers.users._force_pool_sync", new_callable=AsyncMock
     ) as mock_sync:
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp1 = client.post(
                 "/api/me/consent",
                 json={"version": CURRENT_PRIVACY_POLICY_VERSION},

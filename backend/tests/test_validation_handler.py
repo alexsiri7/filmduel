@@ -12,9 +12,10 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
 from fastapi.testclient import TestClient
 
 from backend.main import _scrub_validation_errors, app
+from backend.tests import SPA_HEADERS
 from backend.routers.auth import get_current_user
 
-client = TestClient(app)
+client = TestClient(app, headers=SPA_HEADERS)
 
 
 def _make_fake_user() -> MagicMock:

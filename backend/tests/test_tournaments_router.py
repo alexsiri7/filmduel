@@ -16,6 +16,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.main import app
+from backend.tests import SPA_HEADERS
 from backend.db import get_db
 from backend.routers.auth import get_current_user
 
@@ -104,7 +105,7 @@ class TestCreateTournamentDailyCap:
         app.dependency_overrides[get_current_user] = lambda: user
         app.dependency_overrides[get_db] = lambda: mock_db
 
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.post(
                 "/api/tournaments",
                 json={"bracket_size": 8, "ai_curated": False},
@@ -133,7 +134,7 @@ class TestCreateTournamentDailyCap:
         app.dependency_overrides[get_current_user] = lambda: user
         app.dependency_overrides[get_db] = lambda: mock_db
 
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.post(
                 "/api/tournaments",
                 json={"bracket_size": 8, "ai_curated": False},
@@ -193,7 +194,7 @@ class TestCreateTournamentDailyCap:
             new_callable=AsyncMock,
             return_value=_make_tournament(user.id, is_ai_curated=True),
         ):
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post(
                     "/api/tournaments",
                     json={"bracket_size": 8, "ai_curated": True},
@@ -213,7 +214,7 @@ class TestCreateTournamentDailyCap:
         app.dependency_overrides[get_current_user] = lambda: user
         app.dependency_overrides[get_db] = lambda: AsyncMock()
 
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.post(
                 "/api/tournaments",
                 json={"bracket_size": 8, "ai_curated": True},
@@ -251,7 +252,7 @@ class TestTournamentOwnership:
         app.dependency_overrides[get_current_user] = lambda: user_b
         app.dependency_overrides[get_db] = lambda: mock_db
 
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.get(f"/api/tournaments/{tournament_id}")
 
         assert resp.status_code == 404
@@ -276,7 +277,7 @@ class TestTournamentOwnership:
             new_callable=AsyncMock,
             return_value=mock_tournament,
         ):
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.get(f"/api/tournaments/{tournament_id}")
 
         assert resp.status_code == 200
@@ -308,7 +309,7 @@ class TestTournamentOwnership:
             new_callable=AsyncMock,
             return_value=mock_tournament,
         ):
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.get(f"/api/tournaments/{tournament_id}")
 
         assert resp.status_code == 200
@@ -341,7 +342,7 @@ class TestListTournaments:
         app.dependency_overrides[get_current_user] = lambda: user
         app.dependency_overrides[get_db] = lambda: mock_db
 
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.get("/api/tournaments")
 
         return resp, mock_db.execute.call_args[0][0]
@@ -498,7 +499,7 @@ class TestRegenerateCandidatePool:
             "backend.routers.tournaments.create_tournament_bracket",
             new_callable=AsyncMock,
         ):
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post(f"/api/tournaments/{tournament_id}/regenerate")
 
         assert resp.status_code == 200
@@ -550,7 +551,7 @@ class TestRegenerateCandidatePool:
             "backend.routers.tournaments.create_tournament_bracket",
             new_callable=AsyncMock,
         ):
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post(f"/api/tournaments/{tournament_id}/regenerate")
 
         assert resp.status_code == 200
@@ -593,7 +594,7 @@ class TestRegenerateCandidatePool:
             new_callable=AsyncMock,
             return_value=_make_tournament(user.id, media_type="show"),
         ):
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post(
                     "/api/tournaments",
                     json={
@@ -640,7 +641,7 @@ class TestBracketSizeCap:
         user = _make_user()
 
         with self._override(user, 5):
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post(
                     "/api/tournaments",
                     json={"name": "Test", "bracket_size": 16, "ai_curated": False},
@@ -661,7 +662,7 @@ class TestBracketSizeCap:
             new_callable=AsyncMock,
             return_value=_make_tournament(user.id),
         ):
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post(
                     "/api/tournaments",
                     json={"name": "Test", "bracket_size": 8, "ai_curated": False},
@@ -693,7 +694,7 @@ class TestBracketSizeCap:
             "backend.routers.tournaments.curate_and_select_films",
             new_callable=AsyncMock,
         ) as mock_curate:
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post(f"/api/tournaments/{tournament_id}/regenerate")
 
         assert resp.status_code == 400
@@ -710,7 +711,7 @@ class TestBracketSizeCap:
             new_callable=AsyncMock,
             return_value=[MagicMock() for _ in range(9)],
         ):
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.get("/api/tournaments/pool-count")
 
         assert resp.status_code == 200
@@ -753,7 +754,7 @@ class TestMatchResultSyncsRatings:
             "backend.routers.tournaments.sync_ratings_background",
             new_callable=AsyncMock,
         ) as mock_sync:
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post(
                     f"/api/tournaments/{tournament_id}/matches/{match.id}",
                     json={"winner_movie_id": str(winner_id)},

@@ -23,6 +23,7 @@ from backend.services.token_crypto import _fernet  # noqa: E402
 _fernet.cache_clear()
 
 from backend.main import app  # noqa: E402
+from backend.tests import SPA_HEADERS  # noqa: E402
 from backend.db import get_db  # noqa: E402
 from backend.routers.auth import get_current_user  # noqa: E402
 from backend.utils.tokens import encode_pair_token  # noqa: E402
@@ -54,7 +55,7 @@ class TestSuggestionsConsentGuard:
         app.dependency_overrides[get_current_user] = lambda: user
         app.dependency_overrides[get_db] = lambda: AsyncMock()
 
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.get("/api/suggestions")
 
         assert resp.status_code == 403
@@ -66,7 +67,7 @@ class TestSuggestionsConsentGuard:
         app.dependency_overrides[get_current_user] = lambda: user
         app.dependency_overrides[get_db] = lambda: AsyncMock()
 
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.post("/api/suggestions/regenerate")
 
         assert resp.status_code == 403
@@ -84,7 +85,7 @@ class TestSuggestionsConsentGuard:
             new_callable=AsyncMock,
             return_value=False,
         ):
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.get("/api/suggestions")
 
         # Should pass consent check and hit "not_enough_films" path
@@ -103,7 +104,7 @@ class TestSuggestionsConsentGuard:
             new_callable=AsyncMock,
             return_value=False,
         ):
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post("/api/suggestions/regenerate")
 
         # Should pass consent check and hit "not_enough_films" path
@@ -131,7 +132,7 @@ class TestTournamentConsentGuard:
         app.dependency_overrides[get_current_user] = lambda: user
         app.dependency_overrides[get_db] = lambda: mock_db
 
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.post(
                 "/api/tournaments",
                 json={
@@ -156,7 +157,7 @@ class TestTournamentConsentGuard:
             new_callable=AsyncMock,
             return_value=[MagicMock() for _ in range(16)],
         ) as mock_db_query:
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post(
                     "/api/tournaments",
                     json={"ai_curated": True, "bracket_size": 8},
@@ -209,7 +210,7 @@ class TestTournamentConsentGuard:
             new_callable=AsyncMock,
             return_value=mock_tournament,
         ):
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post(
                     "/api/tournaments",
                     json={
@@ -272,7 +273,7 @@ class TestTournamentConsentGuard:
             new_callable=AsyncMock,
             return_value=mock_tournament,
         ):
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post(
                     "/api/tournaments",
                     json={"ai_curated": True, "bracket_size": 8},
@@ -307,7 +308,7 @@ class TestTournamentConsentGuard:
             new_callable=AsyncMock,
             return_value=mock_tournament,
         ):
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post(f"/api/tournaments/{tournament_id}/regenerate")
 
         assert resp.status_code == 403
@@ -368,7 +369,7 @@ class TestTournamentConsentGuard:
             "backend.routers.tournaments.create_tournament_bracket",
             new_callable=AsyncMock,
         ):
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post(f"/api/tournaments/{tournament_id}/regenerate")
 
         # Consenting user must not be blocked by the consent guard
@@ -408,7 +409,7 @@ class TestTournamentConsentGuard:
             new_callable=AsyncMock,
             side_effect=ValueError(f"AI selected films not in candidate pool: {{{internal_uuid}}}"),
         ):
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post(f"/api/tournaments/{tournament_id}/regenerate")
 
         assert resp.status_code == 500
@@ -448,7 +449,7 @@ class TestTournamentConsentGuard:
             new_callable=AsyncMock,
             side_effect=ValueError(f"AI selected films not in candidate pool: {{{internal_uuid}}}"),
         ):
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post(
                     "/api/tournaments",
                     json={"name": "Test", "bracket_size": 8, "ai_curated": True},
@@ -484,7 +485,7 @@ class TestAiConsentGuard:
         app.dependency_overrides[get_current_user] = lambda: user
         app.dependency_overrides[get_db] = lambda: AsyncMock()
 
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.get("/api/suggestions")
 
         assert resp.status_code == 403
@@ -496,7 +497,7 @@ class TestAiConsentGuard:
         app.dependency_overrides[get_current_user] = lambda: user
         app.dependency_overrides[get_db] = lambda: AsyncMock()
 
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.get("/api/suggestions")
 
         assert resp.status_code == 403
@@ -514,7 +515,7 @@ class TestAiConsentGuard:
             new_callable=AsyncMock,
             return_value=False,
         ):
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.get("/api/suggestions")
 
         assert resp.status_code == 200
@@ -526,7 +527,7 @@ class TestAiConsentGuard:
         app.dependency_overrides[get_current_user] = lambda: user
         app.dependency_overrides[get_db] = lambda: AsyncMock()
 
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.post("/api/suggestions/regenerate")
 
         assert resp.status_code == 403
@@ -540,7 +541,7 @@ class TestAiConsentGuard:
         app.dependency_overrides[get_current_user] = lambda: user
         app.dependency_overrides[get_db] = lambda: mock_db
 
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.post(
                 "/api/tournaments",
                 json={"ai_curated": True, "bracket_size": 8},
@@ -574,7 +575,7 @@ class TestAiConsentGuard:
             new_callable=AsyncMock,
             return_value=mock_tournament,
         ):
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post(f"/api/tournaments/{tournament_id}/regenerate")
 
         assert resp.status_code == 403
@@ -619,7 +620,7 @@ class TestDataCollectionConsentGuard:
         with patch(
             "backend.routers.users._force_pool_sync", new_callable=AsyncMock
         ) as mock_sync:
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post("/api/sync")
 
         assert resp.status_code == 403
@@ -633,7 +634,7 @@ class TestDataCollectionConsentGuard:
         with patch(
             "backend.routers.duels.process_duel", new_callable=AsyncMock
         ) as mock_pd:
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post("/api/duels", json=_duel_payload(user))
 
         assert resp.status_code == 403
@@ -644,7 +645,7 @@ class TestDataCollectionConsentGuard:
         user = _make_user(privacy_policy_accepted=False)
         self._install(user)
 
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.get("/api/swipe/cards")
 
         assert resp.status_code == 403
@@ -657,7 +658,7 @@ class TestDataCollectionConsentGuard:
         with patch(
             "backend.routers.swipe.compute_next_action", new_callable=AsyncMock
         ) as mock_next:
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post("/api/swipe/results", json={"results": []})
 
         assert resp.status_code == 403
@@ -671,7 +672,7 @@ class TestDataCollectionConsentGuard:
         with patch(
             "backend.routers.tournaments._load_tournament", new_callable=AsyncMock
         ) as mock_load:
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post(
                     f"/api/tournaments/{uuid.uuid4()}/matches/{uuid.uuid4()}",
                     json={"winner_movie_id": str(uuid.uuid4())},
@@ -694,7 +695,7 @@ class TestDataCollectionConsentGuard:
             new_callable=AsyncMock,
             return_value=user,
         ) as mock_sync:
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post("/api/sync")
 
         assert resp.status_code == 200
@@ -722,7 +723,7 @@ class TestDataCollectionConsentGuard:
             new_callable=AsyncMock,
             return_value=fake_result,
         ) as mock_pd:
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post("/api/duels", json=_duel_payload(user))
 
         assert resp.status_code == 200
@@ -732,7 +733,7 @@ class TestDataCollectionConsentGuard:
         user = _make_user(privacy_policy_accepted=True)
         self._install(user)
 
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.get("/api/swipe/cards")
 
         assert resp.status_code != 403
@@ -750,7 +751,7 @@ class TestDataCollectionConsentGuard:
             new_callable=AsyncMock,
             return_value="duel",
         ) as mock_next:
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post("/api/swipe/results", json={"results": []})
 
         assert resp.status_code == 200
@@ -793,7 +794,7 @@ class TestDataCollectionConsentGuard:
             "backend.routers.tournaments.sync_ratings_background",
             new_callable=AsyncMock,
         ):
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post(
                     f"/api/tournaments/{tournament_id}/matches/{uuid.uuid4()}",
                     json={"winner_movie_id": str(winner_id)},

@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from datetime import datetime, timezone
 
 from backend.main import app
+from backend.tests import SPA_HEADERS
 from backend.db import get_db
 from backend.rate_limit import limiter
 from backend.routers.auth import get_admin_user, get_current_user
@@ -132,7 +133,7 @@ def test_get_movie_pair_endpoint_reachable():
         "backend.routers.movies.select_pair", new_callable=AsyncMock
     ) as mock_pair:
         mock_pair.side_effect = ValueError("not enough films")
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.get("/api/movies/pair")
 
     # 404 is expected (not enough films); confirms endpoint + Request param works
@@ -151,7 +152,7 @@ def test_export_csv_endpoint_reachable():
     app.dependency_overrides[get_current_user] = lambda: fake_user
     app.dependency_overrides[get_db] = lambda: mock_db
 
-    with TestClient(app, raise_server_exceptions=False) as client:
+    with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
         resp = client.get("/api/rankings/export/csv")
 
     assert resp.status_code == 200
@@ -168,7 +169,7 @@ def test_list_tournaments_endpoint_reachable():
     app.dependency_overrides[get_current_user] = lambda: fake_user
     app.dependency_overrides[get_db] = lambda: mock_db
 
-    with TestClient(app, raise_server_exceptions=False) as client:
+    with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
         resp = client.get("/api/tournaments")
 
     assert resp.status_code == 200
@@ -206,7 +207,7 @@ def test_list_tournaments_returns_at_most_100_results():
     app.dependency_overrides[get_current_user] = lambda: fake_user
     app.dependency_overrides[get_db] = lambda: mock_db
 
-    with TestClient(app, raise_server_exceptions=False) as client:
+    with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
         resp = client.get("/api/tournaments")
 
     assert resp.status_code == 200
@@ -474,7 +475,7 @@ def test_get_rankings_endpoint_reachable():
     app.dependency_overrides[get_current_user] = lambda: fake_user
     app.dependency_overrides[get_db] = lambda: mock_db
 
-    with TestClient(app, raise_server_exceptions=False) as client:
+    with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
         resp = client.get("/api/rankings")
 
     assert resp.status_code == 200
@@ -499,7 +500,7 @@ def test_get_stats_endpoint_reachable():
         "backend.routers.rankings.get_user_stats", new_callable=AsyncMock
     ) as mock_stats:
         mock_stats.return_value = empty_stats
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.get("/api/rankings/stats")
 
     assert resp.status_code == 200
@@ -516,7 +517,7 @@ def test_dismiss_suggestion_endpoint_reachable():
     app.dependency_overrides[get_current_user] = lambda: fake_user
     app.dependency_overrides[get_db] = lambda: mock_db
 
-    with TestClient(app, raise_server_exceptions=False) as client:
+    with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
         resp = client.post(f"/api/suggestions/{uuid.uuid4()}/dismiss")
 
     # 404 expected (suggestion not found); confirms endpoint + Request param works
@@ -534,7 +535,7 @@ def test_get_available_genres_endpoint_reachable():
     app.dependency_overrides[get_current_user] = lambda: fake_user
     app.dependency_overrides[get_db] = lambda: mock_db
 
-    with TestClient(app, raise_server_exceptions=False) as client:
+    with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
         resp = client.get("/api/tournaments/genres")
 
     assert resp.status_code == 200
@@ -551,7 +552,7 @@ def test_abandon_tournament_endpoint_reachable():
     app.dependency_overrides[get_current_user] = lambda: fake_user
     app.dependency_overrides[get_db] = lambda: mock_db
 
-    with TestClient(app, raise_server_exceptions=False) as client:
+    with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
         resp = client.delete(f"/api/tournaments/{uuid.uuid4()}")
 
     # 404 expected (tournament not found); confirms endpoint + Request param works
@@ -595,7 +596,7 @@ def test_create_tournament_daily_cap_enforced():
     app.dependency_overrides[get_current_user] = lambda: fake_user
     app.dependency_overrides[get_db] = lambda: mock_db
 
-    with TestClient(app, raise_server_exceptions=False) as client:
+    with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
         resp = client.post(
             "/api/tournaments",
             json={
@@ -630,7 +631,7 @@ def test_create_tournament_daily_cap_allows_below_limit():
         new_callable=AsyncMock,
     ) as mock_films:
         mock_films.side_effect = Exception("stop early — cap passed")
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.post(
                 "/api/tournaments",
                 json={
@@ -750,7 +751,7 @@ def test_list_feedback_endpoint_reachable():
     app.dependency_overrides[get_admin_user] = lambda: fake_user
     app.dependency_overrides[get_db] = lambda: mock_db
 
-    with TestClient(app, raise_server_exceptions=False) as client:
+    with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
         resp = client.get("/api/feedback/admin")
 
     assert resp.status_code == 200
@@ -769,7 +770,7 @@ def test_scrub_screenshot_endpoint_reachable():
     app.dependency_overrides[get_admin_user] = lambda: fake_user
     app.dependency_overrides[get_db] = lambda: mock_db
 
-    with TestClient(app, raise_server_exceptions=False) as client:
+    with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
         resp = client.delete(f"/api/feedback/admin/{uuid.uuid4()}/screenshot")
 
     # 404 expected (report not found); confirms endpoint + Request param works
@@ -790,7 +791,7 @@ def test_purge_expired_screenshots_endpoint_reachable():
         "backend.routers.feedback._purge_expired_screenshots", new_callable=AsyncMock
     ) as mock_purge:
         mock_purge.return_value = 0
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.delete("/api/feedback/admin/purge-expired-screenshots")
 
     assert resp.status_code == 200
@@ -810,7 +811,7 @@ def test_purge_old_duels_endpoint_reachable():
         "backend.routers.duels._purge_old_duels", new_callable=AsyncMock
     ) as mock_purge:
         mock_purge.return_value = 0
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.delete("/api/duels/admin/purge-old-records")
 
     assert resp.status_code == 200
@@ -830,7 +831,7 @@ def test_purge_old_swipe_results_endpoint_reachable():
         "backend.routers.swipe._purge_old_swipe_results", new_callable=AsyncMock
     ) as mock_purge:
         mock_purge.return_value = 0
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.delete("/api/swipe/admin/purge-old-records")
 
     assert resp.status_code == 200

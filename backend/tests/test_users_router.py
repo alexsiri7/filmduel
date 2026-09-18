@@ -13,6 +13,7 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
 from fastapi.testclient import TestClient
 
 from backend.main import app
+from backend.tests import SPA_HEADERS
 from backend.db import get_db
 from backend.db_models import User
 from backend.routers.auth import get_current_user
@@ -81,7 +82,7 @@ class TestDeleteAccount:
                 SIMKL_CLIENT_ID="fake",
                 SIMKL_CLIENT_SECRET="fake-secret",
             )
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.delete("/api/me")
 
         assert resp.status_code == 204
@@ -116,7 +117,7 @@ class TestDeleteAccount:
                 SIMKL_CLIENT_ID="fake",
                 SIMKL_CLIENT_SECRET="fake-secret",
             )
-            with TestClient(app, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.delete("/api/me")
 
         assert resp.status_code == 500
@@ -142,7 +143,7 @@ class TestPrivacyPolicyVersion:
         )
         app.dependency_overrides[get_current_user] = lambda: user
 
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.get("/api/me")
 
         assert resp.status_code == 200
@@ -216,7 +217,7 @@ class TestProfileResponseContract:
         """Equality, not a token deny-list: a new UserResponse field fails here."""
         app.dependency_overrides[get_current_user] = _user_row_with_tokens
 
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.get("/api/me")
 
         assert resp.status_code == 200
@@ -227,7 +228,7 @@ class TestProfileResponseContract:
         user = _user_row_with_tokens()
         app.dependency_overrides[get_current_user] = lambda: user
 
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.get("/api/me")
 
         body = resp.json()
@@ -244,7 +245,7 @@ class TestProfileResponseContract:
         """Catches a leak re-keyed under a name the allow-list would not flag."""
         app.dependency_overrides[get_current_user] = _user_row_with_tokens
 
-        with TestClient(app, raise_server_exceptions=False) as client:
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.get("/api/me")
 
         assert resp.status_code == 200
