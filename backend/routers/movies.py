@@ -68,7 +68,9 @@ async def get_movie_pair(
 
     last_pair_ids: set[str] | None = None
     if last_pair_token:
-        last_pair_ids = decode_pair_token(last_pair_token, user_id=str(uid))
+        last_pair_ids = decode_pair_token(
+            last_pair_token, user_id=str(uid), ttl=None
+        )
 
     try:
         pair = await select_pair(db, uid, last_pair_ids, media_type)
