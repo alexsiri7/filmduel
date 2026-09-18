@@ -123,8 +123,16 @@ async def get_current_user_id(
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     def _reject(detail: str) -> NoReturn:
-        response.delete_cookie(COOKIE_NAME)
-        raise HTTPException(status_code=401, detail=detail)
+        # Headers staged on the injected `response` are discarded when an
+        # HTTPException is raised, so the cookie deletion must travel on the
+        # exception itself to reach the client.
+        cleared = Response()
+        cleared.delete_cookie(COOKIE_NAME)
+        raise HTTPException(
+            status_code=401,
+            detail=detail,
+            headers={"set-cookie": cleared.headers["set-cookie"]},
+        )
 
     try:
         payload = jwt.decode(
