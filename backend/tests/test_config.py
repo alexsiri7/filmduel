@@ -391,20 +391,21 @@ class TestCookieSecureFailClosed:
             _make_settings(BASE_URL="http://localhost:8000", SECURE_COOKIES=None)
 
 
+async def _run_lifespan(test_settings, caplog):
+    from backend import main as main_mod
+
+    with patch.object(main_mod, "settings", test_settings), \
+         patch.object(main_mod._scheduler, "start"), \
+         patch.object(main_mod._scheduler, "shutdown"), \
+         caplog.at_level(logging.INFO, logger="backend.main"):
+        async with main_mod.lifespan(FastAPI()):
+            pass
+
+
 class TestRateLimitStorageStartupWarning:
     """lifespan() reports whether rate-limit counters are durable/shared."""
 
     _PROXY_PLATFORM_ENV_VARS = _PROXY_PLATFORM_ENV_VARS_PROD
-
-    async def _run_lifespan(self, test_settings, caplog):
-        from backend import main as main_mod
-
-        with patch.object(main_mod, "settings", test_settings), \
-             patch.object(main_mod._scheduler, "start"), \
-             patch.object(main_mod._scheduler, "shutdown"), \
-             caplog.at_level(logging.INFO, logger="backend.main"):
-            async with main_mod.lifespan(FastAPI()):
-                pass
 
     @pytest.mark.asyncio
     async def test_warning_when_platform_env_and_uri_unset(self, monkeypatch, caplog):
@@ -414,7 +415,7 @@ class TestRateLimitStorageStartupWarning:
                 monkeypatch.delenv(var, raising=False)
 
         # explicit so the SEC-11 fail-closed check doesn't trip on the platform var
-        await self._run_lifespan(
+        await _run_lifespan(
             _make_settings(RATE_LIMIT_STORAGE_URI="", SECURE_COOKIES=True), caplog
         )
 
@@ -430,7 +431,7 @@ class TestRateLimitStorageStartupWarning:
         monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
 
         # explicit so the SEC-11 fail-closed check doesn't trip on the platform var
-        await self._run_lifespan(
+        await _run_lifespan(
             _make_settings(RATE_LIMIT_STORAGE_URI="redis://127.0.0.1:1/0", SECURE_COOKIES=True),
             caplog,
         )
@@ -447,7 +448,7 @@ class TestRateLimitStorageStartupWarning:
         for var in self._PROXY_PLATFORM_ENV_VARS:
             monkeypatch.delenv(var, raising=False)
 
-        await self._run_lifespan(_make_settings(RATE_LIMIT_STORAGE_URI=""), caplog)
+        await _run_lifespan(_make_settings(RATE_LIMIT_STORAGE_URI=""), caplog)
 
         assert "rate_limit_storage" not in caplog.text
 
@@ -456,7 +457,7 @@ class TestRateLimitStorageStartupWarning:
         for var in self._PROXY_PLATFORM_ENV_VARS:
             monkeypatch.delenv(var, raising=False)
 
-        await self._run_lifespan(
+        await _run_lifespan(
             _make_settings(RATE_LIMIT_STORAGE_URI="redis://127.0.0.1:1/0"), caplog
         )
 
@@ -466,3 +467,32 @@ class TestRateLimitStorageStartupWarning:
             for r in caplog.records
         ), "Redis confirmation must not depend on hosted-platform detection"
         assert "127.0.0.1:1" not in caplog.text, "URI must never be logged"
+
+
+class TestTmdbAuthStartupWarning:
+    """lifespan() warns when TMDB_API_KEY is a v3 key that must travel in the URL."""
+
+    _V3_KEY = "0123456789abcdef0123456789abcdef"
+    _V4_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJ0ZXN0In0.sig"
+
+    @pytest.mark.asyncio
+    async def test_warning_for_v3_key_never_logs_value(self, caplog):
+        await _run_lifespan(_make_settings(TMDB_API_KEY=self._V3_KEY), caplog)
+
+        assert any(
+            r.levelno == logging.WARNING and "tmdb_v3_api_key" in r.message
+            for r in caplog.records
+        ), "Expected tmdb_v3_api_key warning"
+        assert self._V3_KEY not in caplog.text, "Key must never be logged"
+
+    @pytest.mark.asyncio
+    async def test_no_warning_for_read_access_token(self, caplog):
+        await _run_lifespan(_make_settings(TMDB_API_KEY=self._V4_TOKEN), caplog)
+
+        assert "tmdb_v3_api_key" not in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_no_warning_when_unset(self, caplog):
+        await _run_lifespan(_make_settings(), caplog)
+
+        assert "tmdb_v3_api_key" not in caplog.text

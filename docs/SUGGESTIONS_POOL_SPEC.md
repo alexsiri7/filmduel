@@ -183,7 +183,8 @@ The threshold is 50 — high enough to never visibly exhaust the pool between ex
 **Source A — TMDB similar films (highest quality)**
 For each of the user's top 10 ranked films (by ELO):
 ```
-GET https://api.themoviedb.org/3/movie/{tmdb_id}/recommendations?api_key=...
+GET https://api.themoviedb.org/3/movie/{tmdb_id}/recommendations
+Authorization: Bearer <read access token>
 ```
 Returns up to 20 films per call. 10 films × 20 results = up to 200 new candidates. These are the most taste-matched candidates because they're seeded from films the user demonstrably loves.
 

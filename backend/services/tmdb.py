@@ -15,16 +15,35 @@ from backend.db_models import Movie
 logger = logging.getLogger(__name__)
 
 
+def is_read_access_token(value: str) -> bool:
+    """True when ``value`` looks like a TMDB v4 API Read Access Token (a JWT).
+
+    The v3 API Key is a 32-char hex string and is only accepted as an ``api_key``
+    query parameter; the v4 token is what ``Authorization: Bearer`` expects.
+    """
+    return value.startswith("eyJ") and value.count(".") == 2
+
+
+def _client() -> httpx.AsyncClient:
+    """AsyncClient with TMDB auth attached at client level.
+
+    A v4 Read Access Token goes in the Authorization header so it never appears
+    in request URLs (SEC-019, #580). A v3 API Key can only be sent as the
+    ``api_key`` query parameter; lifespan() warns operators still using one.
+    """
+    token = get_settings().TMDB_API_KEY
+    if is_read_access_token(token):
+        return httpx.AsyncClient(headers={"Authorization": f"Bearer {token}"})
+    return httpx.AsyncClient(params={"api_key": token})
+
+
 async def fetch_poster_url(tmdb_id: int) -> str | None:
     """Fetch poster URL from TMDB API. Returns full URL or None."""
     settings = get_settings()
     if not settings.TMDB_API_KEY or not tmdb_id:
         return None
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            f"https://api.themoviedb.org/3/movie/{tmdb_id}",
-            params={"api_key": settings.TMDB_API_KEY},
-        )
+    async with _client() as client:
+        resp = await client.get(f"https://api.themoviedb.org/3/movie/{tmdb_id}")
         if resp.status_code != 200:
             logger.warning(
                 "TMDB API returned %d for tmdb_id=%d", resp.status_code, tmdb_id
@@ -66,11 +85,8 @@ async def fetch_tv_poster_url(tmdb_id: int) -> str | None:
     settings = get_settings()
     if not settings.TMDB_API_KEY or not tmdb_id:
         return None
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            f"https://api.themoviedb.org/3/tv/{tmdb_id}",
-            params={"api_key": settings.TMDB_API_KEY},
-        )
+    async with _client() as client:
+        resp = await client.get(f"https://api.themoviedb.org/3/tv/{tmdb_id}")
         if resp.status_code != 200:
             logger.warning(
                 "TMDB TV API returned %d for tmdb_id=%d", resp.status_code, tmdb_id
@@ -83,18 +99,18 @@ async def fetch_tv_poster_url(tmdb_id: int) -> str | None:
         return None
 
 
-async def fetch_similar_films(tmdb_id: int, api_key: str) -> list[dict]:
+async def fetch_similar_films(tmdb_id: int) -> list[dict]:
     """Fetch recommended films from TMDB for a given movie.
 
     Returns list of dicts with keys: tmdb_id, title, year, overview, genres.
     """
-    if not api_key or not tmdb_id:
+    settings = get_settings()
+    if not settings.TMDB_API_KEY or not tmdb_id:
         return []
     try:
-        async with httpx.AsyncClient() as client:
+        async with _client() as client:
             resp = await client.get(
                 f"https://api.themoviedb.org/3/movie/{tmdb_id}/recommendations",
-                params={"api_key": api_key},
                 timeout=10.0,
             )
             if resp.status_code != 200:

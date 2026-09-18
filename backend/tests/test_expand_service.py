@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import functools
 import uuid
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
-from backend.services.expand import _expand_pool_inner
+from backend.services.expand import _expand_from_similar, _expand_pool_inner
+
+TMDB_READ_ACCESS_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJ0ZXN0In0.sig"
 
 
 def _mock_session_factory(db):
@@ -153,3 +158,71 @@ class TestExpandPoolInner:
             result = await _expand_pool_inner(uuid.uuid4(), "movie")
 
         assert result == 0
+
+
+class TestExpandFromSimilar:
+    @pytest.mark.asyncio
+    async def test_calls_real_fetch_similar_films_with_tmdb_id_only(self):
+        """Source B must reach TMDB through the real fetch_similar_films.
+
+        Only the HTTP transport is mocked, so this exercises the call site's
+        arity against the real one-argument signature; a reintroduced second
+        parameter raises TypeError here instead of being swallowed by
+        expand_pool's catch-all.
+        """
+        user_id = uuid.uuid4()
+        settings = MagicMock(TMDB_API_KEY=TMDB_READ_ACCESS_TOKEN)
+        now = datetime.now(timezone.utc)
+
+        top_row = MagicMock()
+        top_row.movie_id = uuid.uuid4()
+        top_row.tmdb_id = 42
+        top_result = MagicMock()
+        top_result.all.return_value = [top_row]
+        db = AsyncMock()
+        db.execute = AsyncMock(return_value=top_result)
+        db.add = MagicMock()
+
+        requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {
+                            "id": 5,
+                            "title": "Rec",
+                            "release_date": "2020-01-01",
+                            "overview": "o",
+                            "genre_ids": [28],
+                        }
+                    ]
+                },
+            )
+
+        transport = httpx.MockTransport(handler)
+        upsert = AsyncMock(return_value=True)
+
+        with (
+            patch("backend.services.tmdb.get_settings", return_value=settings),
+            patch(
+                "httpx.AsyncClient",
+                functools.partial(httpx.AsyncClient, transport=transport),
+            ),
+            patch("backend.services.expand._upsert_film_from_tmdb", upsert),
+            patch("backend.services.expand.asyncio.sleep", new_callable=AsyncMock),
+        ):
+            added = await _expand_from_similar(db, user_id, settings, set(), now)
+
+        assert added == 1
+        assert len(requests) == 1
+        assert (
+            str(requests[0].url)
+            == "https://api.themoviedb.org/3/movie/42/recommendations"
+        )
+        upsert.assert_awaited_once()
+        film = upsert.await_args.args[2]
+        assert film["tmdb_id"] == 5
+        assert film["genres"] == ["action"]

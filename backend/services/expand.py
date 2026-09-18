@@ -193,7 +193,7 @@ async def _expand_from_similar(
         if ("tmdb_similar", source_key) in recent_keys:
             continue
 
-        recs = await fetch_similar_films(row.tmdb_id, settings.TMDB_API_KEY)
+        recs = await fetch_similar_films(row.tmdb_id)
         added = 0
         for film in recs:
             ok = await _upsert_film_from_tmdb(db, user_id, film, settings)

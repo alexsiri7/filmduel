@@ -18,7 +18,7 @@ Rank your movies and TV shows through head-to-head duels. Powered by ELO ratings
 - A PostgreSQL database (e.g. [Supabase](https://supabase.com))
 - A [Trakt](https://trakt.tv/oauth/applications) OAuth application
 - _(Optional)_ A [SIMKL](https://simkl.com/settings/developer) OAuth application
-- A [TMDB](https://www.themoviedb.org/settings/api) API key
+- A [TMDB](https://www.themoviedb.org/settings/api) API Read Access Token
 
 ### 1. Environment
 

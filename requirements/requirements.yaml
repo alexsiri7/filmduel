@@ -733,3 +733,17 @@ requirements:
       - "GET /api/me for a user row carrying Trakt and SIMKL access tokens, refresh tokens and token expiries returns a body whose key set is exactly id, trakt_username, simkl_username, created_at, sync_ratings_to_trakt, sync_ratings_to_simkl, use_ai_features, privacy_policy_accepted, privacy_policy_version"
       - "No access-token, refresh-token or expiry value held on the user row appears anywhere in the response body, under any key"
     notes: "Pinned by backend/tests/test_users_router.py::TestProfileResponseContract, which asserts the body's key set as an allow-list — set equality against the whole nine-field set, so a field added to UserResponse fails — rather than as a deny-list naming only today's token fields; a companion test asserts no sentinel token or expiry value appears in the body under any key, since set equality alone would accept a secret re-keyed into an allow-listed field. The guarantee is structural: _build_user_response (users.py:40-52) names each field it copies and UserResponse (schemas.py:13-22) declares no token field, so neither the ORM row nor any dict of it is passed through. It is also broader than the GET /api/me wording above — _build_user_response is the single builder for PATCH /api/me/settings and POST /api/me/consent as well, so all three responses share the nine-field shape; only GET /api/me is pinned by test. Issue #532's stronger claim that tokens never appear in *any* user-facing response is not canonized, per this file's rule that statements describe verified behavior: it holds across backend/schemas.py today (the only fields matching /token/ there are the duel pair tokens next_pair_token and pair_token, which are opaque pagination cursors, not OAuth credentials), but no test constrains response schemas outside this one."
+
+  # ── TMDB credential transport ───────────────────────────────────────────
+
+  - id: FD-058
+    title: TMDB credential never sent in the request URL
+    statement: "When calling the TMDB API with a v4 API Read Access Token configured in TMDB_API_KEY, the system shall send it only as an Authorization: Bearer header; when a v3 API Key is configured it shall be sent as the api_key query parameter (TMDB's only form for that credential) and the system shall log a tmdb_v3_api_key warning at startup, never including the value."
+    category: non-functional
+    priority: should
+    status: active
+    source: "issue #580 (SEC-019)"
+    acceptance:
+      - "With a JWT-shaped (eyJ…, two dots) TMDB_API_KEY, requests to api.themoviedb.org carry Authorization: Bearer and an empty query string (test_tmdb_client.py)"
+      - "With a 32-hex TMDB_API_KEY, requests carry ?api_key= and lifespan() logs a WARNING containing tmdb_v3_api_key but not the key value (test_config.py)"
+    notes: "The credential's shape selects the transport (backend/services/tmdb.py::is_read_access_token) so the single TMDB_API_KEY setting needs no rename; closing the leak in a deployment is an operator action — replacing the value with the Read Access Token — not a code change. Dropping the v3 query-parameter path is deferred until production has migrated."
