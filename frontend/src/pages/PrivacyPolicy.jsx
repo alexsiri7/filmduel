@@ -113,7 +113,7 @@ export default function PrivacyPolicy() {
             Under the General Data Protection Regulation, you have the right to:
           </p>
           <ul className="space-y-2 text-[#d6c4ae] text-sm font-body">
-            <li>• <strong className="text-[#F5F0E8]">Access</strong> — Download a copy of all the data we hold about you at any time using "Download My Data" in the sidebar</li>
+            <li>• <strong className="text-[#F5F0E8]">Access</strong> — Download a copy of all the data we hold about you using "Download My Data" in the desktop navigation, or by visiting /api/me/export while signed in</li>
             <li>• <strong className="text-[#F5F0E8]">Rectification</strong> — Request correction of inaccurate data</li>
             <li>• <strong className="text-[#F5F0E8]">Erasure</strong> — Delete your account and all associated data</li>
             <li>• <strong className="text-[#F5F0E8]">Portability</strong> — The same download is a machine-readable JSON file you can take to another service</li>
