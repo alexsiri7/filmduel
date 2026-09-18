@@ -166,6 +166,15 @@ class TestGetMoviePair:
         assert resp.status_code == 200, resp.text
         return resp.json(), mock_select_pair
 
+    def test_minted_token_is_bound_to_requesting_user(self):
+        body, _ = self._get_pair()
+        token = body["next_pair_token"]
+        served = {body["movie_a"]["id"], body["movie_b"]["id"]}
+
+        assert served == {self.id_a, self.id_b}
+        assert decode_pair_token(token, user_id=str(self.user.id)) == served
+        assert decode_pair_token(token, user_id=str(uuid.uuid4())) is None
+
     def test_last_pair_token_excludes_previous_pair(self):
         body, _ = self._get_pair()
         _, mock_select_pair = self._get_pair(last_pair_token=body["next_pair_token"])
