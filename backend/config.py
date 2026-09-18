@@ -1,5 +1,6 @@
 """Application configuration via environment variables."""
 
+import os
 from functools import lru_cache
 from typing import Annotated
 
@@ -34,6 +35,15 @@ _LOCALHOST_DB_DEFAULT = "postgresql+asyncpg://postgres:postgres@localhost:5432/p
 # The only schemes the installed redis client (limits' RedisStorage) accepts.
 _RATE_LIMIT_STORAGE_SCHEMES = ("redis://", "rediss://", "redis+unix://")
 
+# Known platform environment variable indicators for TLS-terminating proxy platforms
+_PROXY_PLATFORM_ENV_VARS = (
+    "RAILWAY_ENVIRONMENT",   # Railway
+    "RENDER",                # Render.com
+    "FLY_APP_NAME",          # Fly.io
+    "HEROKU_APP_NAME",       # Heroku
+    "K_SERVICE",             # Google Cloud Run
+)
+
 _WEAK_KEY_PLACEHOLDERS = frozenset(
     {
         "secret",
@@ -63,6 +73,11 @@ def _validate_key_strength(name: str, v: str) -> str:
     if len(v) < 32:
         raise ValueError(f"{name} must be at least 32 characters; got {len(v)}")
     return v
+
+
+def detected_proxy_platform() -> str | None:
+    """Name of the first known TLS-terminating-proxy platform env var that is set, else None."""
+    return next((v for v in _PROXY_PLATFORM_ENV_VARS if os.environ.get(v)), None)
 
 
 class Settings(BaseSettings):
@@ -179,8 +194,29 @@ class Settings(BaseSettings):
 
     # Explicit override for cookie Secure flag.
     # Set SECURE_COOKIES=true when behind a TLS-terminating proxy with BASE_URL=http://.
-    # Defaults to None (auto-detect from BASE_URL).
+    # Defaults to None (auto-detect from BASE_URL). On a detected hosted platform
+    # with an http:// BASE_URL, leaving it unset refuses to start.
     SECURE_COOKIES: bool | None = None
+
+    @model_validator(mode="after")
+    def require_explicit_secure_cookies_on_proxy_platform(self) -> "Settings":
+        """Refuse to start on a known TLS-terminating proxy platform unless the Secure flag is explicit.
+
+        Behind such a proxy BASE_URL is usually http://, so the is_https fallback would
+        silently issue session cookies without Secure (and without HSTS). Fail closed
+        instead of warning (SEC-11, #579).
+        """
+        detected = detected_proxy_platform()
+        if self.SECURE_COOKIES is None and not self.is_https and detected:
+            raise ValueError(
+                f"cookie_secure_unset: detected platform env var {detected!r} but "
+                "SECURE_COOKIES is not explicitly configured and "
+                f"BASE_URL={self.BASE_URL!r} does not use https://. Refusing to start: "
+                "session cookies would be issued WITHOUT the Secure flag. Set "
+                "SECURE_COOKIES=true (behind a TLS-terminating proxy) or "
+                "SECURE_COOKIES=false (plain-http deployment, insecure) to proceed."
+            )
+        return self
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

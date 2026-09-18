@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from pydantic import ValidationError
 
 from backend.config import Settings
-from backend.main import _PROXY_PLATFORM_ENV_VARS as _PROXY_PLATFORM_ENV_VARS_PROD
+from backend.config import _PROXY_PLATFORM_ENV_VARS as _PROXY_PLATFORM_ENV_VARS_PROD
 
 
 def _make_settings(**overrides) -> Settings:
@@ -319,197 +319,76 @@ class TestRateLimitStorageUriValidation:
             _make_settings(RATE_LIMIT_STORAGE_URI=uri)
 
 
-class TestCookieSecureStartupWarning:
-    """Verify that the startup warning fires under the right conditions."""
+class TestCookieSecureFailClosed:
+    """Settings() refuses to build when a TLS-proxy platform is detected and the
+    Secure flag is neither explicit nor inferable from an https BASE_URL (SEC-11, #579)."""
 
     # Import from production module — single source of truth.
-    # If a new platform is added to main.py, this reference auto-tracks it.
+    # If a new platform is added to config.py, this reference auto-tracks it.
     _PROXY_PLATFORM_ENV_VARS = _PROXY_PLATFORM_ENV_VARS_PROD
 
-    # ------------------------------------------------------------------
-    # Integration tests: call lifespan() and assert on actual log output
-    # ------------------------------------------------------------------
+    def _only_platform(self, monkeypatch, var: str | None, value: str = "set"):
+        for other in self._PROXY_PLATFORM_ENV_VARS:
+            monkeypatch.delenv(other, raising=False)
+        if var is not None:
+            monkeypatch.setenv(var, value)
 
-    @pytest.mark.asyncio
-    async def test_warning_emitted_when_railway_env_and_http_base_url(
-        self, monkeypatch, caplog
-    ):
-        """lifespan() emits logger.warning when RAILWAY_ENVIRONMENT set and http:// BASE_URL."""
-        monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
-        for var in self._PROXY_PLATFORM_ENV_VARS:
-            if var != "RAILWAY_ENVIRONMENT":
-                monkeypatch.delenv(var, raising=False)
-        from backend import main as main_mod
+    @pytest.mark.parametrize("var", _PROXY_PLATFORM_ENV_VARS_PROD)
+    def test_raises_for_each_known_platform(self, monkeypatch, var):
+        self._only_platform(monkeypatch, var)
 
-        test_settings = _make_settings(BASE_URL="http://localhost:8000", SECURE_COOKIES=None)
-        with patch.object(main_mod, "settings", test_settings), \
-             patch.object(main_mod._scheduler, "start"), \
-             patch.object(main_mod._scheduler, "shutdown"), \
-             caplog.at_level(logging.WARNING, logger="backend.main"):
-            async with main_mod.lifespan(FastAPI()):
-                pass
+        with pytest.raises(ValidationError, match="cookie_secure_unset") as exc:
+            _make_settings(BASE_URL="http://localhost:8000", SECURE_COOKIES=None)
 
-        assert any(
-            "cookie_secure_unset" in r.message and "RAILWAY_ENVIRONMENT" in r.message
-            for r in caplog.records
-        ), "Expected cookie_secure_unset warning mentioning RAILWAY_ENVIRONMENT"
+        assert var in str(exc.value)
+        assert "SECURE_COOKIES=true" in str(exc.value)
 
-    @pytest.mark.asyncio
-    async def test_no_warning_when_secure_cookies_explicitly_set(
-        self, monkeypatch, caplog
-    ):
-        """No warning when SECURE_COOKIES is explicitly set to True."""
-        monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
-        from backend import main as main_mod
+    def test_boots_when_secure_cookies_explicitly_true(self, monkeypatch):
+        self._only_platform(monkeypatch, "RAILWAY_ENVIRONMENT", "production")
 
-        test_settings = _make_settings(BASE_URL="http://localhost:8000", SECURE_COOKIES=True)
-        with patch.object(main_mod, "settings", test_settings), \
-             patch.object(main_mod._scheduler, "start"), \
-             patch.object(main_mod._scheduler, "shutdown"), \
-             caplog.at_level(logging.WARNING, logger="backend.main"):
-            async with main_mod.lifespan(FastAPI()):
-                pass
+        s = _make_settings(BASE_URL="http://localhost:8000", SECURE_COOKIES=True)
 
-        assert "cookie_secure_unset" not in caplog.text
+        assert s.cookie_secure is True
 
-    @pytest.mark.asyncio
-    async def test_no_warning_when_secure_cookies_explicitly_false(
-        self, monkeypatch, caplog
-    ):
-        """No warning when SECURE_COOKIES is explicitly set to False."""
-        monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
-        from backend import main as main_mod
+    def test_boots_when_secure_cookies_explicitly_false(self, monkeypatch):
+        """An explicit false is an operator decision, not a missing one."""
+        self._only_platform(monkeypatch, "RAILWAY_ENVIRONMENT", "production")
 
-        test_settings = _make_settings(BASE_URL="http://localhost:8000", SECURE_COOKIES=False)
-        with patch.object(main_mod, "settings", test_settings), \
-             patch.object(main_mod._scheduler, "start"), \
-             patch.object(main_mod._scheduler, "shutdown"), \
-             caplog.at_level(logging.WARNING, logger="backend.main"):
-            async with main_mod.lifespan(FastAPI()):
-                pass
+        s = _make_settings(BASE_URL="http://localhost:8000", SECURE_COOKIES=False)
 
-        assert "cookie_secure_unset" not in caplog.text
+        assert s.cookie_secure is False
 
-    @pytest.mark.asyncio
-    async def test_no_warning_when_base_url_is_https(self, monkeypatch, caplog):
-        """No warning when BASE_URL already uses https://."""
-        monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
-        from backend import main as main_mod
+    def test_boots_when_base_url_is_https(self, monkeypatch):
+        self._only_platform(monkeypatch, "RAILWAY_ENVIRONMENT", "production")
 
-        test_settings = _make_settings(BASE_URL="https://example.com", SECURE_COOKIES=None)
-        with patch.object(main_mod, "settings", test_settings), \
-             patch.object(main_mod._scheduler, "start"), \
-             patch.object(main_mod._scheduler, "shutdown"), \
-             caplog.at_level(logging.WARNING, logger="backend.main"):
-            async with main_mod.lifespan(FastAPI()):
-                pass
+        s = _make_settings(BASE_URL="https://example.com", SECURE_COOKIES=None)
 
-        assert "cookie_secure_unset" not in caplog.text
+        assert s.cookie_secure is True
 
-    @pytest.mark.asyncio
-    async def test_no_warning_when_no_platform_env(self, monkeypatch, caplog):
-        """No warning when no platform env var is present (local dev)."""
-        for var in self._PROXY_PLATFORM_ENV_VARS:
-            monkeypatch.delenv(var, raising=False)
-        from backend import main as main_mod
+    def test_boots_when_no_platform_env(self, monkeypatch):
+        """Local dev (no platform var, http BASE_URL) is unaffected."""
+        self._only_platform(monkeypatch, None)
 
-        test_settings = _make_settings(BASE_URL="http://localhost:8000", SECURE_COOKIES=None)
-        with patch.object(main_mod, "settings", test_settings), \
-             patch.object(main_mod._scheduler, "start"), \
-             patch.object(main_mod._scheduler, "shutdown"), \
-             caplog.at_level(logging.WARNING, logger="backend.main"):
-            async with main_mod.lifespan(FastAPI()):
-                pass
+        s = _make_settings(BASE_URL="http://localhost:8000", SECURE_COOKIES=None)
 
-        assert "cookie_secure_unset" not in caplog.text
+        assert s.cookie_secure is False
 
-    @pytest.mark.asyncio
-    async def test_warning_fires_for_render_env(self, monkeypatch, caplog):
-        """lifespan() emits warning for Render.com platform (RENDER env var)."""
-        monkeypatch.setenv("RENDER", "true")
-        for var in self._PROXY_PLATFORM_ENV_VARS:
-            if var != "RENDER":
-                monkeypatch.delenv(var, raising=False)
-        from backend import main as main_mod
+    def test_boots_when_platform_env_set_to_empty_string(self, monkeypatch):
+        """Empty-string platform env var is not a detection (os.environ.get is falsy)."""
+        self._only_platform(monkeypatch, "RAILWAY_ENVIRONMENT", "")
 
-        test_settings = _make_settings(BASE_URL="http://example.com", SECURE_COOKIES=None)
-        with patch.object(main_mod, "settings", test_settings), \
-             patch.object(main_mod._scheduler, "start"), \
-             patch.object(main_mod._scheduler, "shutdown"), \
-             caplog.at_level(logging.WARNING, logger="backend.main"):
-            async with main_mod.lifespan(FastAPI()):
-                pass
+        s = _make_settings(BASE_URL="http://localhost:8000", SECURE_COOKIES=None)
 
-        assert any(
-            "cookie_secure_unset" in r.message and "RENDER" in r.message
-            for r in caplog.records
-        ), "Expected cookie_secure_unset warning mentioning RENDER"
+        assert s.cookie_secure is False
 
-    @pytest.mark.asyncio
-    async def test_warning_fires_for_fly_io_env(self, monkeypatch, caplog):
-        """lifespan() emits warning for Fly.io platform (FLY_APP_NAME env var)."""
-        monkeypatch.setenv("FLY_APP_NAME", "my-app")
-        for var in self._PROXY_PLATFORM_ENV_VARS:
-            if var != "FLY_APP_NAME":
-                monkeypatch.delenv(var, raising=False)
-        from backend import main as main_mod
-
-        test_settings = _make_settings(BASE_URL="http://my-app.fly.dev", SECURE_COOKIES=None)
-        with patch.object(main_mod, "settings", test_settings), \
-             patch.object(main_mod._scheduler, "start"), \
-             patch.object(main_mod._scheduler, "shutdown"), \
-             caplog.at_level(logging.WARNING, logger="backend.main"):
-            async with main_mod.lifespan(FastAPI()):
-                pass
-
-        assert any(
-            "cookie_secure_unset" in r.message and "FLY_APP_NAME" in r.message
-            for r in caplog.records
-        ), "Expected cookie_secure_unset warning mentioning FLY_APP_NAME"
-
-    @pytest.mark.asyncio
-    async def test_no_warning_when_platform_env_set_to_empty_string(
-        self, monkeypatch, caplog
-    ):
-        """Empty-string platform env var does not trigger the warning (os.environ.get is falsy)."""
-        monkeypatch.setenv("RAILWAY_ENVIRONMENT", "")
-        for var in self._PROXY_PLATFORM_ENV_VARS:
-            if var != "RAILWAY_ENVIRONMENT":
-                monkeypatch.delenv(var, raising=False)
-        from backend import main as main_mod
-
-        test_settings = _make_settings(BASE_URL="http://localhost:8000", SECURE_COOKIES=None)
-        with patch.object(main_mod, "settings", test_settings), \
-             patch.object(main_mod._scheduler, "start"), \
-             patch.object(main_mod._scheduler, "shutdown"), \
-             caplog.at_level(logging.WARNING, logger="backend.main"):
-            async with main_mod.lifespan(FastAPI()):
-                pass
-
-        assert "cookie_secure_unset" not in caplog.text
-
-    @pytest.mark.asyncio
-    async def test_first_matching_platform_env_var_is_reported(
-        self, monkeypatch, caplog
-    ):
+    def test_first_matching_platform_env_var_is_reported(self, monkeypatch):
         """When multiple platform vars are set, the first one in tuple order is reported."""
         # RAILWAY_ENVIRONMENT precedes RENDER in _PROXY_PLATFORM_ENV_VARS
-        monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+        self._only_platform(monkeypatch, "RAILWAY_ENVIRONMENT", "production")
         monkeypatch.setenv("RENDER", "true")
-        from backend import main as main_mod
 
-        test_settings = _make_settings(BASE_URL="http://localhost:8000", SECURE_COOKIES=None)
-        with patch.object(main_mod, "settings", test_settings), \
-             patch.object(main_mod._scheduler, "start"), \
-             patch.object(main_mod._scheduler, "shutdown"), \
-             caplog.at_level(logging.WARNING, logger="backend.main"):
-            async with main_mod.lifespan(FastAPI()):
-                pass
-
-        assert any(
-            "cookie_secure_unset" in r.message and "RAILWAY_ENVIRONMENT" in r.message
-            for r in caplog.records
-        ), "Expected first-match to be RAILWAY_ENVIRONMENT, not RENDER"
+        with pytest.raises(ValidationError, match="RAILWAY_ENVIRONMENT"):
+            _make_settings(BASE_URL="http://localhost:8000", SECURE_COOKIES=None)
 
 
 class TestRateLimitStorageStartupWarning:
@@ -534,7 +413,10 @@ class TestRateLimitStorageStartupWarning:
             if var != "RAILWAY_ENVIRONMENT":
                 monkeypatch.delenv(var, raising=False)
 
-        await self._run_lifespan(_make_settings(RATE_LIMIT_STORAGE_URI=""), caplog)
+        # explicit so the SEC-11 fail-closed check doesn't trip on the platform var
+        await self._run_lifespan(
+            _make_settings(RATE_LIMIT_STORAGE_URI="", SECURE_COOKIES=True), caplog
+        )
 
         assert any(
             r.levelno == logging.WARNING
@@ -547,8 +429,10 @@ class TestRateLimitStorageStartupWarning:
     async def test_info_and_no_warning_when_uri_set(self, monkeypatch, caplog):
         monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
 
+        # explicit so the SEC-11 fail-closed check doesn't trip on the platform var
         await self._run_lifespan(
-            _make_settings(RATE_LIMIT_STORAGE_URI="redis://127.0.0.1:1/0"), caplog
+            _make_settings(RATE_LIMIT_STORAGE_URI="redis://127.0.0.1:1/0", SECURE_COOKIES=True),
+            caplog,
         )
 
         assert "rate_limit_storage_unset" not in caplog.text

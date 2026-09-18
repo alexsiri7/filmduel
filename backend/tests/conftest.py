@@ -16,6 +16,14 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
 # that is not running, so the suite must always pin in-memory storage.
 os.environ["RATE_LIMIT_STORAGE_URI"] = ""
 
+# Popped, not left alone: with a platform var exported in the shell, the SEC-11
+# fail-closed validator would abort Settings() at collection time (the default
+# test BASE_URL is http://) — a confusing collection error instead of a test failure.
+from backend.config import _PROXY_PLATFORM_ENV_VARS
+
+for _var in _PROXY_PLATFORM_ENV_VARS:
+    os.environ.pop(_var, None)
+
 import pytest
 
 from backend.rate_limit import limiter
