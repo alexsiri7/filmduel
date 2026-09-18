@@ -231,15 +231,17 @@ def test_movie_identity_is_inlined_as_compact_ref():
 def test_feedback_reports_expose_screenshot_presence_not_bytes():
     with_shot = SimpleNamespace(
         id=uuid.uuid4(), title="Bug", description="It broke", created_at=NOW,
-        screenshot_data_enc="enc-bytes",
+        screenshot_data_enc="enc-bytes", purge_after=NOW,
     )
     without = SimpleNamespace(
         id=uuid.uuid4(), title="Idea", description="Add dark mode", created_at=NOW,
-        screenshot_data_enc=None,
+        screenshot_data_enc=None, purge_after=None,
     )
     payload = _build(feedback_reports=[with_shot, without])
     assert payload["feedback_reports"][0]["has_screenshot"] is True
+    assert payload["feedback_reports"][0]["purge_after"] == NOW.isoformat()
     assert payload["feedback_reports"][1]["has_screenshot"] is False
+    assert payload["feedback_reports"][1]["purge_after"] is None
     for entry in payload["feedback_reports"]:
         assert not any("screenshot_data" in k for k in entry)
     assert "enc-bytes" not in json.dumps(payload)

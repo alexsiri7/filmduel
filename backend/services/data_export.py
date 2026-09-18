@@ -176,6 +176,7 @@ def build_export_payload(
                 "description": fr.description,
                 "created_at": _iso(fr.created_at),
                 "has_screenshot": fr.screenshot_data_enc is not None,
+                "purge_after": _iso(fr.purge_after),
             }
             for fr in feedback_reports
         ],
