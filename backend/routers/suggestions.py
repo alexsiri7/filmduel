@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from backend.config import get_settings
-from backend.db import async_session_factory, get_db
+from backend.db import acquire_quota_lock, async_session_factory, get_db
 from backend.rate_limit import limiter
 from backend.db_models import Movie, Suggestion, User, UserMovie
 from backend.routers.auth import ensure_fresh_token, get_current_user, require_ai_consent
@@ -185,6 +185,9 @@ async def regenerate_suggestions(
 
     if not await has_enough_ranked(uid, db, media_type=media_type):
         return SuggestionsResponse(suggestions=[], status="not_enough_films")
+
+    # Serialize the cap check per user (SEC-02, #570).
+    await acquire_quota_lock(db, "suggestions_regen", uid)
 
     # Count regenerations in last 24h (by counting distinct generated_at timestamps)
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)

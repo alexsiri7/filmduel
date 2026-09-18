@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.db import get_db
+from backend.db import acquire_quota_lock, get_db
 from backend.db_models import FeedbackReport, User
 from backend.rate_limit import limiter
 from backend.routers.auth import get_admin_user, get_current_user
@@ -83,7 +83,12 @@ async def submit_feedback(
 
     Both limits return HTTP 429. The DB guard uses `or 0` to handle None
     returned by db.scalar() on drivers that return NULL for an empty count.
+    The DB guard is serialized per user with a transaction-scoped advisory lock.
     """
+    # Serialize the count-then-insert per user so parallel requests cannot all
+    # read the same count and bypass the cap (SEC-02, #570).
+    await acquire_quota_lock(db, "feedback_daily_cap", current_user.id)
+
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     daily_count: int = (
         await db.scalar(

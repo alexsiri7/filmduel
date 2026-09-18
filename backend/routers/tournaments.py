@@ -12,7 +12,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from backend.db import get_db
+from backend.db import acquire_quota_lock, get_db
 from backend.rate_limit import limiter
 from backend.db_models import Movie, Tournament, TournamentMatch, User
 from backend.routers.auth import get_current_user, require_ai_consent
@@ -202,6 +202,10 @@ async def create_tournament(
     if body.ai_curated:
         require_ai_consent(current_user)
 
+    # Serialize the cap check per user (SEC-02, #570); held until get_db commits,
+    # so a concurrent request waits, re-counts, and 429s instead of also curating.
+    await acquire_quota_lock(db, "tournament_daily_cap", uid)
+
     # Per-user daily cap: prevent database bloat DoS (SEC-03)
     window_start = datetime.now(timezone.utc) - timedelta(hours=24)
     count_stmt = select(func.count()).where(
@@ -293,6 +297,11 @@ async def regenerate_tournament(
 ):
     """Re-run LLM curation with same candidates. Max 3 regenerations."""
     uid = current_user.id
+
+    # Lock this tournament before reading _regen_count so a parallel regenerate
+    # cannot read the same count and both re-curate (SEC-02, #570).
+    await acquire_quota_lock(db, "tournament_regen", tournament_id)
+
     tournament = await _load_tournament(tournament_id, uid, db)
 
     # Enforce consent before revealing any business-logic details
