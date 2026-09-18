@@ -23,6 +23,7 @@ from backend.services.token_crypto import _fernet  # noqa: E402
 _fernet.cache_clear()
 
 from backend.main import app  # noqa: E402
+from backend.tests import SPA_HEADERS  # noqa: E402
 from backend.db import get_db  # noqa: E402
 from backend.routers.auth import get_current_user  # noqa: E402
 from backend.schemas import DuelOutcome, DuelResult  # noqa: E402
@@ -86,7 +87,7 @@ class TestSubmitDuel:
             "backend.routers.duels.process_duel", new_callable=AsyncMock
         ) as mock_pd:
             mock_pd.return_value = fake_result
-            client = TestClient(app)
+            client = TestClient(app, headers=SPA_HEADERS)
             response = client.post(
                 "/api/duels",
                 json={
@@ -107,7 +108,7 @@ class TestSubmitDuel:
     def test_self_duel_returns_400(self):
         """Dueling a movie against itself should return 400."""
         same_id = str(uuid.uuid4())
-        client = TestClient(app)
+        client = TestClient(app, headers=SPA_HEADERS)
         response = client.post(
             "/api/duels",
             json={
@@ -123,7 +124,7 @@ class TestSubmitDuel:
 
     def test_invalid_payload_returns_422(self):
         """A request with a missing required field should still return 422."""
-        client = TestClient(app)
+        client = TestClient(app, headers=SPA_HEADERS)
         response = client.post(
             "/api/duels",
             json={
@@ -141,7 +142,7 @@ class TestSubmitDuel:
     def test_missing_auth_returns_401(self):
         """Request without authentication should return 401."""
         app.dependency_overrides.clear()
-        client = TestClient(app)
+        client = TestClient(app, headers=SPA_HEADERS)
         response = client.post(
             "/api/duels",
             json={
@@ -158,7 +159,7 @@ class TestSubmitDuel:
         """A duel with an invalid/garbage pair token should return 400."""
         mid_a = str(uuid.uuid4())
         mid_b = str(uuid.uuid4())
-        client = TestClient(app)
+        client = TestClient(app, headers=SPA_HEADERS)
         response = client.post(
             "/api/duels",
             json={
@@ -181,7 +182,7 @@ class TestSubmitDuel:
         other_b = str(uuid.uuid4())
         token = encode_pair_token(other_a, other_b, user_id=str(FAKE_USER.id))
 
-        client = TestClient(app)
+        client = TestClient(app, headers=SPA_HEADERS)
         response = client.post(
             "/api/duels",
             json={
@@ -197,7 +198,7 @@ class TestSubmitDuel:
 
     def test_missing_pair_token_returns_400(self):
         """A duel with no pair_token at all should return 400, not a raw 422."""
-        client = TestClient(app)
+        client = TestClient(app, headers=SPA_HEADERS)
         response = client.post(
             "/api/duels",
             json={
@@ -213,7 +214,7 @@ class TestSubmitDuel:
 
     def test_null_pair_token_returns_400(self):
         """A client sending pair_token: null is just as tokenless as one omitting it."""
-        client = TestClient(app)
+        client = TestClient(app, headers=SPA_HEADERS)
         response = client.post(
             "/api/duels",
             json={
@@ -236,7 +237,7 @@ class TestSubmitDuel:
         with patch(
             "backend.routers.duels.process_duel", new_callable=AsyncMock
         ) as mock_pd:
-            client = TestClient(app)
+            client = TestClient(app, headers=SPA_HEADERS)
             response = client.post(
                 "/api/duels",
                 json={
@@ -262,7 +263,7 @@ class TestSubmitDuel:
         with patch(
             "backend.routers.duels.process_duel", new_callable=AsyncMock
         ) as mock_pd:
-            client = TestClient(app)
+            client = TestClient(app, headers=SPA_HEADERS)
             response = client.post(
                 "/api/duels",
                 json={
@@ -286,7 +287,7 @@ class TestSubmitDuel:
             "backend.routers.duels.process_duel", new_callable=AsyncMock
         ) as mock_pd:
             mock_pd.side_effect = ValueError("Movie not in your pool: some internal detail")
-            client = TestClient(app)
+            client = TestClient(app, headers=SPA_HEADERS)
             response = client.post(
                 "/api/duels",
                 json={
@@ -327,13 +328,13 @@ class TestPurgeDuels:
 
     def test_returns_purged_count(self):
         purged = [uuid.uuid4(), uuid.uuid4()]
-        client = TestClient(app)
+        client = TestClient(app, headers=SPA_HEADERS)
         response = self._delete(client, purged_ids=purged)
         assert response.status_code == 200
         assert response.json() == {"purged": 2}
 
     def test_returns_zero_when_nothing_to_purge(self):
-        client = TestClient(app)
+        client = TestClient(app, headers=SPA_HEADERS)
         response = self._delete(client, purged_ids=[])
         assert response.status_code == 200
         assert response.json() == {"purged": 0}
@@ -342,7 +343,7 @@ class TestPurgeDuels:
         user = _make_user()
         user.is_admin = False
         db = _make_db()
-        client = TestClient(app)
+        client = TestClient(app, headers=SPA_HEADERS)
         app.dependency_overrides[get_current_user] = lambda: user
         app.dependency_overrides[get_db] = lambda: db
         try:
@@ -353,7 +354,7 @@ class TestPurgeDuels:
         assert "admin" in response.json()["detail"].lower()
 
     def test_unauthenticated_returns_401(self):
-        client = TestClient(app)
+        client = TestClient(app, headers=SPA_HEADERS)
         # No dependency overrides — auth stack runs normally
         response = client.delete("/api/duels/admin/purge-old-records")
         assert response.status_code == 401

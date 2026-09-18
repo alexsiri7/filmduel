@@ -13,6 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.main import app
+from backend.tests import SPA_HEADERS
 from backend.db import get_db
 from backend.rate_limit import limiter
 from backend.routers.auth import COOKIE_NAME, get_current_user
@@ -48,7 +49,7 @@ def test_delete_account_clears_cookie():
     app.dependency_overrides[get_current_user] = lambda: fake_user
     app.dependency_overrides[get_db] = lambda: mock_db
 
-    with TestClient(app, raise_server_exceptions=False) as client:
+    with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
         resp = client.delete("/api/me")
 
     assert resp.status_code == 204
@@ -72,7 +73,7 @@ def test_delete_account_no_providers_succeeds(mock_simkl_cls, mock_trakt_cls):
     app.dependency_overrides[get_current_user] = lambda: fake_user
     app.dependency_overrides[get_db] = lambda: mock_db
 
-    with TestClient(app, raise_server_exceptions=False) as client:
+    with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
         resp = client.delete("/api/me")
 
     assert resp.status_code == 204

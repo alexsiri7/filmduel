@@ -68,17 +68,18 @@ def test_post_allowed_known_origin():
     assert response.status_code != 403
 
 
-def test_post_no_origin_allowed(caplog):
-    """POST with no Origin header (CLI/API client) is allowed through and logged."""
-    with caplog.at_level(logging.INFO, logger="backend.main"):
+def test_post_no_origin_rejected(caplog):
+    """POST with neither Origin/Referer nor X-Requested-With is rejected and logged."""
+    with caplog.at_level(logging.WARNING, logger="backend.main"):
         response = client.post(
             "/api/duels",
             json={"winner_id": 1, "loser_id": 2},
         )
-    assert response.status_code != 403
+    assert response.status_code == 403
+    assert response.json()["detail"] == "CSRF check failed: missing Origin/Referer"
     assert any(
-        "csrf_no_origin_allowed" in r.message
-        and r.levelno == logging.INFO
+        "csrf_no_origin_rejected" in r.message
+        and r.levelno == logging.WARNING
         and "method=" in r.message
         and "path=" in r.message
         for r in caplog.records

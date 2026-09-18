@@ -29,6 +29,7 @@ _fernet.cache_clear()
 
 from backend.db import get_db  # noqa: E402
 from backend.main import app  # noqa: E402
+from backend.tests import SPA_HEADERS  # noqa: E402
 from backend.rate_limit import limiter  # noqa: E402
 from backend.routers.auth import get_current_user  # noqa: E402
 
@@ -69,7 +70,7 @@ def _reset_limiter():
 
 @pytest.fixture
 def client():
-    return TestClient(app)
+    return TestClient(app, headers=SPA_HEADERS)
 
 
 class TestSubmitFeedback:
