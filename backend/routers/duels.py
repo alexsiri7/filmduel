@@ -11,7 +11,7 @@ from backend.db import get_db
 from backend.rate_limit import limiter
 from backend.db_models import User
 from backend.schemas import DuelSubmit, DuelResult
-from backend.routers.auth import get_admin_user, get_current_user
+from backend.routers.auth import get_admin_user, require_consent
 from backend.services.duel import process_duel
 from backend.utils.tokens import decode_pair_token
 from backend.services.retention import purge_old_duels as _purge_old_duels
@@ -28,7 +28,7 @@ async def submit_duel(
     request: Request,
     body: DuelSubmit,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_consent),
     db: AsyncSession = Depends(get_db),
 ):
     uid = current_user.id

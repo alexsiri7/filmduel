@@ -1,4 +1,4 @@
-"""Tests for privacy policy consent enforcement on LLM-calling endpoints."""
+"""Tests for privacy policy consent enforcement on LLM-calling and data-collecting endpoints."""
 
 from __future__ import annotations
 
@@ -14,9 +14,18 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.dialects import postgresql
 
-from backend.main import app
-from backend.db import get_db
-from backend.routers.auth import get_current_user
+from backend.config import get_settings
+
+get_settings.cache_clear()
+
+from backend.services.token_crypto import _fernet  # noqa: E402
+
+_fernet.cache_clear()
+
+from backend.main import app  # noqa: E402
+from backend.db import get_db  # noqa: E402
+from backend.routers.auth import get_current_user  # noqa: E402
+from backend.utils.tokens import encode_pair_token  # noqa: E402
 
 
 def _make_user(*, privacy_policy_accepted: bool = False, use_ai_features: bool = True):
@@ -570,3 +579,225 @@ class TestAiConsentGuard:
 
         assert resp.status_code == 403
         assert "AI features are disabled" in resp.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# Data-collecting endpoints — consent guard (#571)
+# ---------------------------------------------------------------------------
+
+
+def _duel_payload(user) -> dict:
+    mid_a, mid_b = str(uuid.uuid4()), str(uuid.uuid4())
+    return {
+        "movie_a_id": mid_a,
+        "movie_b_id": mid_b,
+        "outcome": "a_wins",
+        "mode": "discovery",
+        "pair_token": encode_pair_token(mid_a, mid_b, user_id=str(user.id)),
+    }
+
+
+class TestDataCollectionConsentGuard:
+    """Sync, duels, swipes and tournament matches must not run before consent."""
+
+    def setup_method(self):
+        app.dependency_overrides.clear()
+
+    def teardown_method(self):
+        app.dependency_overrides.clear()
+
+    def _install(self, user, db=None):
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: db if db is not None else AsyncMock()
+
+    # -- 403 without consent --------------------------------------------------
+
+    def test_sync_requires_consent(self):
+        user = _make_user(privacy_policy_accepted=False)
+        self._install(user)
+
+        with patch(
+            "backend.routers.users._force_pool_sync", new_callable=AsyncMock
+        ) as mock_sync:
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.post("/api/sync")
+
+        assert resp.status_code == 403
+        assert "consent" in resp.json()["detail"].lower()
+        mock_sync.assert_not_awaited()
+
+    def test_submit_duel_requires_consent(self):
+        user = _make_user(privacy_policy_accepted=False)
+        self._install(user)
+
+        with patch(
+            "backend.routers.duels.process_duel", new_callable=AsyncMock
+        ) as mock_pd:
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.post("/api/duels", json=_duel_payload(user))
+
+        assert resp.status_code == 403
+        assert "consent" in resp.json()["detail"].lower()
+        mock_pd.assert_not_awaited()
+
+    def test_swipe_cards_requires_consent(self):
+        user = _make_user(privacy_policy_accepted=False)
+        self._install(user)
+
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.get("/api/swipe/cards")
+
+        assert resp.status_code == 403
+        assert "consent" in resp.json()["detail"].lower()
+
+    def test_submit_swipe_results_requires_consent(self):
+        user = _make_user(privacy_policy_accepted=False)
+        self._install(user)
+
+        with patch(
+            "backend.routers.swipe.compute_next_action", new_callable=AsyncMock
+        ) as mock_next:
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.post("/api/swipe/results", json={"results": []})
+
+        assert resp.status_code == 403
+        assert "consent" in resp.json()["detail"].lower()
+        mock_next.assert_not_awaited()
+
+    def test_submit_match_result_requires_consent(self):
+        user = _make_user(privacy_policy_accepted=False)
+        self._install(user)
+
+        with patch(
+            "backend.routers.tournaments._load_tournament", new_callable=AsyncMock
+        ) as mock_load:
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.post(
+                    f"/api/tournaments/{uuid.uuid4()}/matches/{uuid.uuid4()}",
+                    json={"winner_movie_id": str(uuid.uuid4())},
+                )
+
+        assert resp.status_code == 403
+        assert "consent" in resp.json()["detail"].lower()
+        mock_load.assert_not_awaited()
+
+    # -- pass-through with consent --------------------------------------------
+
+    def test_sync_allowed_with_consent(self):
+        user = _make_user(privacy_policy_accepted=True)
+        mock_db = AsyncMock()
+        mock_db.scalar.return_value = 0
+        self._install(user, mock_db)
+
+        with patch(
+            "backend.routers.users._force_pool_sync",
+            new_callable=AsyncMock,
+            return_value=user,
+        ) as mock_sync:
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.post("/api/sync")
+
+        assert resp.status_code == 200
+        mock_sync.assert_awaited_once()
+
+    def test_submit_duel_allowed_with_consent(self):
+        from backend.schemas import DuelOutcome, DuelResult
+        from backend.services.duel import ProcessDuelResult
+
+        user = _make_user(privacy_policy_accepted=True)
+        self._install(user)
+        fake_result = ProcessDuelResult(
+            api_result=DuelResult(
+                outcome=DuelOutcome.a_wins,
+                movie_a_elo_delta=15,
+                movie_b_elo_delta=-15,
+                next_action="duel",
+            ),
+            new_elo_a=1015,
+            new_elo_b=985,
+        )
+
+        with patch(
+            "backend.routers.duels.process_duel",
+            new_callable=AsyncMock,
+            return_value=fake_result,
+        ) as mock_pd:
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.post("/api/duels", json=_duel_payload(user))
+
+        assert resp.status_code == 200
+        mock_pd.assert_awaited_once()
+
+    def test_swipe_cards_allowed_with_consent(self):
+        user = _make_user(privacy_policy_accepted=True)
+        self._install(user)
+
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.get("/api/swipe/cards")
+
+        assert resp.status_code != 403
+
+    def test_submit_swipe_results_allowed_with_consent(self):
+        user = _make_user(privacy_policy_accepted=True)
+        mock_db = AsyncMock()
+        count_result = MagicMock()
+        count_result.scalar.return_value = 100
+        mock_db.execute.return_value = count_result
+        self._install(user, mock_db)
+
+        with patch(
+            "backend.routers.swipe.compute_next_action",
+            new_callable=AsyncMock,
+            return_value="duel",
+        ) as mock_next:
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.post("/api/swipe/results", json={"results": []})
+
+        assert resp.status_code == 200
+        mock_next.assert_awaited_once()
+
+    def test_submit_match_result_allowed_with_consent(self):
+        user = _make_user(privacy_policy_accepted=True)
+        self._install(user)
+        tournament_id = uuid.uuid4()
+        winner_id, loser_id = uuid.uuid4(), uuid.uuid4()
+
+        tournament = MagicMock()
+        tournament.id = tournament_id
+        tournament.user_id = user.id
+        tournament.bracket_size = 8
+        tournament.matches = []
+        tournament.is_ai_curated = False
+        tournament.name = "Test"
+        tournament.filter_type = None
+        tournament.filter_value = None
+        tournament.status = "active"
+        tournament.champion_movie_id = None
+        tournament.tagline = None
+        tournament.theme_description = None
+        tournament.created_at = datetime.now(timezone.utc)
+        tournament.completed_at = None
+
+        with patch(
+            "backend.routers.tournaments._load_tournament",
+            new_callable=AsyncMock,
+            return_value=tournament,
+        ), patch(
+            "backend.routers.tournaments.validate_match",
+            return_value=loser_id,
+        ), patch(
+            "backend.routers.tournaments.record_match_winner",
+            new_callable=AsyncMock,
+            return_value=(1210, 1090),
+        ) as mock_record, patch(
+            "backend.routers.tournaments.sync_ratings_background",
+            new_callable=AsyncMock,
+        ):
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.post(
+                    f"/api/tournaments/{tournament_id}/matches/{uuid.uuid4()}",
+                    json={"winner_movie_id": str(winner_id)},
+                )
+
+        assert resp.status_code == 200
+        mock_record.assert_awaited_once()

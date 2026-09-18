@@ -18,6 +18,7 @@ from backend.routers.auth import (
     ensure_fresh_token,
     ensure_fresh_simkl_token,
     get_current_user,
+    require_consent,
 )
 from backend.schemas import ConsentAccept, UserResponse, UserSettingsUpdate
 from backend.services.pool import populate_movie_pool
@@ -74,6 +75,21 @@ async def update_settings(
         current_user.use_ai_features = body.use_ai_features
     await db.commit()
     return _build_user_response(current_user)
+
+
+async def _force_pool_sync(user: User, db: AsyncSession) -> User:
+    """Refresh provider tokens, then run a pool sync that bypasses the 1-hour cooldown."""
+    if user.trakt_access_token_enc:
+        user = await ensure_fresh_token(user, db)
+    if user.simkl_access_token_enc:
+        user = await ensure_fresh_simkl_token(user, db)
+
+    # Force sync (bypass cooldown by resetting last_seen_at)
+    user.last_seen_at = datetime.now(timezone.utc) - timedelta(hours=2)
+    await db.flush()
+
+    await populate_movie_pool(user, db)
+    return user
 
 
 @router.post("/api/me/consent", response_model=UserResponse)
@@ -136,7 +152,7 @@ async def delete_account(
 async def sync_providers(
     request: Request,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_consent),
     db: AsyncSession = Depends(get_db),
 ):
     """Trigger a manual re-sync, bypassing the 1-hour cooldown.
@@ -151,17 +167,7 @@ async def sync_providers(
         .where(UserMovie.user_id == current_user.id)
     ) or 0
 
-    # Ensure fresh tokens for connected providers
-    if current_user.trakt_access_token_enc:
-        current_user = await ensure_fresh_token(current_user, db)
-    if current_user.simkl_access_token_enc:
-        current_user = await ensure_fresh_simkl_token(current_user, db)
-
-    # Force sync (bypass cooldown by resetting last_seen_at)
-    current_user.last_seen_at = datetime.now(timezone.utc) - timedelta(hours=2)
-    await db.flush()
-
-    await populate_movie_pool(current_user, db)
+    current_user = await _force_pool_sync(current_user, db)
     await db.commit()
 
     # Count movies after sync
