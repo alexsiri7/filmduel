@@ -20,6 +20,7 @@ from slowapi.errors import RateLimitExceeded
 from backend.config import detected_proxy_platform, get_settings
 from backend.rate_limit import limiter
 from backend.scheduler import build_scheduler
+from backend.services.tmdb import is_read_access_token
 from backend.routers import (
     auth,
     movies,
@@ -102,6 +103,14 @@ async def lifespan(app: FastAPI):
             "they reset on every deploy and are not shared across replicas. "
             "Set RATE_LIMIT_STORAGE_URI to a redis:// URI to fix this.",
             detected,
+        )
+    if settings.TMDB_API_KEY and not is_read_access_token(settings.TMDB_API_KEY):
+        logger.warning(
+            "tmdb_v3_api_key: TMDB_API_KEY is not a v4 API Read Access Token, so it is "
+            "sent to TMDB as an api_key URL query parameter and can leak via proxy logs "
+            "and error reports. Replace it with the API Read Access Token from "
+            "https://www.themoviedb.org/settings/api to authenticate via the "
+            "Authorization header (SEC-12, #580)."
         )
     yield
     _scheduler.shutdown(wait=False)

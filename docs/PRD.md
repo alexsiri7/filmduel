@@ -120,7 +120,7 @@ SIMKL_CLIENT_ID=
 SIMKL_CLIENT_SECRET=
 SIMKL_REDIRECT_URI=https://filmduel.interstellarai.net/auth/simkl/callback
 
-# TMDB — https://www.themoviedb.org/settings/api
+# TMDB (API Read Access Token) — https://www.themoviedb.org/settings/api
 TMDB_API_KEY=
 
 # Sentry
@@ -532,7 +532,7 @@ On `a_wins` or `b_wins`: sync both films to Trakt asynchronously.
 
 - Always `?extended=full` for overview, runtime, genres, ids.tmdb, community rating
 - `community_rating`: Trakt's `rating` field is 0–10, store as `rating * 10` (0–100 scale)
-- TMDB poster: `GET https://api.themoviedb.org/3/movie/{tmdb_id}?api_key=...` → store `https://image.tmdb.org/t/p/w500{poster_path}`
+- TMDB poster: `GET https://api.themoviedb.org/3/movie/{tmdb_id}` with `Authorization: Bearer <read access token>` → store `https://image.tmdb.org/t/p/w500{poster_path}`
 
 ---
 
