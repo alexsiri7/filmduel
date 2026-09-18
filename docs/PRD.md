@@ -28,7 +28,7 @@ The experience should feel like a game — fast, opinionated, oddly compelling.
 
 | Layer | Technology |
 |---|---|
-| Backend | Python 3.12, FastAPI |
+| Backend | Python 3.14, FastAPI |
 | ORM | SQLAlchemy 2.0 (async, declarative `mapped_column` style) |
 | Migrations | Alembic (async, runs automatically on deploy) |
 | Database | Supabase PostgreSQL (direct connection via asyncpg, NOT supabase-py SDK) |

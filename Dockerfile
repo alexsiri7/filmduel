@@ -1,4 +1,5 @@
 # Stage 1: Build frontend
+# Node major must match node-version in .github/workflows/ci.yml (guarded by backend/tests/test_runtime_versions.py).
 FROM node:26-alpine@sha256:ef24c5053d50fdc3e4e56eb4e7ddb7861874ab0fdc797046ba897581deb8e868 AS frontend-build
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json* ./
@@ -7,6 +8,7 @@ COPY frontend/ ./
 RUN npm run build && test -f dist/index.html
 
 # Stage 2: Python backend + built frontend
+# Python major.minor must match python-version in .github/workflows/ci.yml and --python-version in backend/requirements*.txt (guarded by backend/tests/test_runtime_versions.py).
 FROM python:3.14-slim@sha256:cad9a2c871761c413caa6fdd6441c783451e740a48aaeba60ae62a8b53525ef6
 WORKDIR /app
 
