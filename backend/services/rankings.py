@@ -163,7 +163,7 @@ async def get_user_stats(
     }
 
 
-_FORMULA_PREFIXES = frozenset("=+-@\t\n")
+_FORMULA_PREFIXES = frozenset("=+-@\t\r\n")
 
 
 def _sanitize_csv_cell(value: str) -> str:

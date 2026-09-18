@@ -263,7 +263,7 @@ def test_sanitize_csv_cell_formula_prefixes():
     """Cells starting with injection-trigger characters must be prefixed with a quote."""
     from backend.services.rankings import _sanitize_csv_cell
 
-    dangerous = ["=CMD", "+1-1", "-1+1", "@SUM(A1)", "\t hidden", "\nhidden"]
+    dangerous = ["=CMD", "+1-1", "-1+1", "@SUM(A1)", "\t hidden", "\rhidden", "\nhidden"]
     for val in dangerous:
         result = _sanitize_csv_cell(val)
         assert result.startswith("'"), f"Expected quote prefix for: {val!r}"

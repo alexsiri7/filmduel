@@ -33,6 +33,9 @@ class TestSanitizeCsvCell:
     def test_newline_prefix(self):
         assert _sanitize_csv_cell("\nCMD") == "'\nCMD"
 
+    def test_carriage_return_prefix(self):
+        assert _sanitize_csv_cell("\rCMD") == "'\rCMD"
+
     def test_safe_string_passthrough(self):
         assert _sanitize_csv_cell("Normal Title") == "Normal Title"
 
