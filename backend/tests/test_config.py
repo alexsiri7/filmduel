@@ -566,3 +566,19 @@ class TestRateLimitStorageStartupWarning:
         await self._run_lifespan(_make_settings(RATE_LIMIT_STORAGE_URI=""), caplog)
 
         assert "rate_limit_storage" not in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_info_logged_without_platform_env_when_uri_set(self, monkeypatch, caplog):
+        for var in self._PROXY_PLATFORM_ENV_VARS:
+            monkeypatch.delenv(var, raising=False)
+
+        await self._run_lifespan(
+            _make_settings(RATE_LIMIT_STORAGE_URI="redis://127.0.0.1:1/0"), caplog
+        )
+
+        assert "rate_limit_storage_unset" not in caplog.text
+        assert any(
+            r.levelno == logging.INFO and "rate_limit_storage: redis" in r.message
+            for r in caplog.records
+        ), "Redis confirmation must not depend on hosted-platform detection"
+        assert "127.0.0.1:1" not in caplog.text, "URI must never be logged"
