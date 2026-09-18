@@ -312,9 +312,10 @@ def _db_returning(rows_per_call):
 
 
 @pytest.mark.asyncio
-async def test_loader_statements_are_capped_and_user_scoped():
+async def test_loader_statements_are_capped_and_filtered_to_the_given_user():
+    user = _user()
     db = _db_returning([[]] * 7)
-    await export_user_data(db, _user())
+    await export_user_data(db, user)
 
     assert db.execute.call_count == 7
     for call in db.execute.call_args_list:
@@ -324,7 +325,10 @@ async def test_loader_statements_are_capped_and_user_scoped():
             )
         )
         assert re.search(r"\bLIMIT\s+10001\b", compiled, re.IGNORECASE), compiled
-        assert "user_id" in compiled, compiled
+        where = re.search(r"\bWHERE\b(.*)", compiled, re.IGNORECASE | re.DOTALL)
+        assert where, compiled
+        assert re.search(r"\.user_id = '(\w+)'", where.group(1)), compiled
+        assert user.id.hex in where.group(1), compiled
 
 
 @pytest.mark.asyncio
