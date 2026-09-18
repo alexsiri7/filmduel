@@ -548,7 +548,7 @@ requirements:
 
   - id: FD-044
     title: CSRF origin check on state-changing requests
-    statement: "When a non-GET/HEAD/OPTIONS request arrives without X-Requested-With: XMLHttpRequest, the system shall reject it with 403 unless its Origin (or Referer) scheme+host is in the CORS allowlist; requests with neither header are allowed through but logged."
+    statement: "When a non-GET/HEAD/OPTIONS request arrives, the system shall accept it only if it carries X-Requested-With: XMLHttpRequest or an Origin (or Referer) whose scheme+host is in the CORS allowlist; requests with an unknown origin, or with none of these headers, are rejected with 403."
     category: non-functional
     priority: must
     status: active
@@ -556,7 +556,7 @@ requirements:
     acceptance:
       - "A POST with Origin https://evil.example returns 403 'CSRF check failed: unexpected origin'"
       - "A POST with X-Requested-With: XMLHttpRequest passes regardless of Origin"
-      - "Header-less POSTs are logged as csrf_no_origin_allowed"
+      - "A POST with neither Origin/Referer nor X-Requested-With returns 403 'CSRF check failed: missing Origin/Referer' and is logged as csrf_no_origin_rejected"
     notes: "CORS allow_headers must keep X-Requested-With or the SPA bypass breaks."
 
   - id: FD-045

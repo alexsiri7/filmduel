@@ -164,6 +164,7 @@ class TestTournamentConsentGuard:
                 )
 
         assert resp.status_code == 403
+        assert "consent" in resp.json()["detail"].lower()
         mock_db_query.assert_not_called()
 
     def test_create_non_ai_tournament_no_consent_required(self):

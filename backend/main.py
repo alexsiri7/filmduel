@@ -191,8 +191,9 @@ app.add_middleware(
 async def csrf_origin_check(request: Request, call_next):
     """Block state-changing requests from unexpected origins.
 
-    Checks Origin (or Referer fallback) against the CORS allowlist.
-    Also accepts requests with X-Requested-With header (set by our SPA).
+    Requests with X-Requested-With: XMLHttpRequest (set by our SPA) are
+    accepted; anything else must carry an Origin (or Referer fallback) in the
+    CORS allowlist. Requests with none of these headers are rejected.
     Exempt: GET, HEAD, OPTIONS (safe methods / preflight).
     """
     if request.method in ("GET", "HEAD", "OPTIONS"):
@@ -205,15 +206,19 @@ async def csrf_origin_check(request: Request, call_next):
 
     origin = request.headers.get("origin") or request.headers.get("referer", "")
 
-    # No origin or referer header — non-browser / server-to-server clients cannot
-    # perform CSRF (they have no victim session cookie), so allow through.
+    # The SPA always sends X-Requested-With and browsers always send Origin on
+    # cross-site POSTs, so a request with none of the three headers has no
+    # provenance we can verify — reject rather than trust it.
     if not origin:
-        logger.info(
-            "csrf_no_origin_allowed method=%s path=%s",
+        logger.warning(
+            "csrf_no_origin_rejected method=%s path=%s",
             request.method,
             request.url.path,
         )
-        return await call_next(request)
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "CSRF check failed: missing Origin/Referer"},
+        )
 
     # Normalise to scheme+host — strips path/query from Referer; Origin already
     # carries only scheme+host, so this is a no-op for them.
