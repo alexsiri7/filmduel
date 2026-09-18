@@ -172,6 +172,67 @@ class TestRegenerateSuggestions:
         assert "suggestions_regen" in lock_params
         assert str(user.id) in lock_params
 
+    def test_regen_cap_lock_is_held_through_generation(self):
+        """Under the cap, nothing between the count and the LLM call may commit (SEC-02, #570)."""
+        from datetime import datetime, timezone
+
+        from sqlalchemy.dialects import postgresql
+
+        from backend.schemas import MovieSchema, SuggestionSchema
+
+        user = _make_user(privacy_policy_accepted=True)
+        mock_db = AsyncMock()
+        statements: list = []
+
+        mock_count_result = MagicMock()
+        mock_count_result.scalar.return_value = 0
+
+        async def record_execute(stmt, *args, **kwargs):
+            statements.append(stmt)
+            return mock_count_result
+
+        mock_db.execute = AsyncMock(side_effect=record_execute)
+
+        fake_schema = SuggestionSchema(
+            id=str(uuid.uuid4()),
+            movie=MovieSchema(
+                id=str(uuid.uuid4()), trakt_id=42, title="Test Film", media_type="movie"
+            ),
+            reason="test reason",
+            generated_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with patch(
+            "backend.routers.suggestions.has_enough_ranked",
+            new_callable=AsyncMock,
+            return_value=True,
+        ), patch(
+            "backend.routers.suggestions._get_active_suggestions",
+            new_callable=AsyncMock,
+            return_value=[],
+        ), patch(
+            "backend.routers.suggestions._create_suggestions",
+            new_callable=AsyncMock,
+            return_value=[MagicMock()],
+        ) as mock_create, patch(
+            "backend.routers.suggestions._build_suggestion_schema",
+            return_value=fake_schema,
+        ):
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.post("/api/suggestions/regenerate")
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "ready"
+        mock_create.assert_awaited_once()
+        mock_db.commit.assert_not_called()
+        assert any(
+            "pg_advisory_xact_lock" in str(stmt.compile(dialect=postgresql.dialect()))
+            for stmt in statements
+        )
+
     def test_regenerate_503_without_llm_key(self):
         """POST /api/suggestions/regenerate returns 503 when LLM key not configured."""
         user = _make_user(privacy_policy_accepted=True)

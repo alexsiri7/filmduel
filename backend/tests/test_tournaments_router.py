@@ -153,6 +153,60 @@ class TestCreateTournamentDailyCap:
         assert "tournament_daily_cap" in lock_params
         assert str(user.id) in lock_params
 
+    def test_daily_cap_lock_is_held_through_ai_curation(self):
+        """Under the cap, nothing between the count and the LLM call may commit (SEC-02, #570)."""
+        from sqlalchemy.dialects import postgresql
+
+        user = _make_user()
+        mock_db = AsyncMock()
+        mock_db.add = MagicMock()
+        statements: list = []
+
+        mock_count_result = MagicMock()
+        mock_count_result.scalar_one.return_value = 0
+
+        async def record_execute(stmt, *args, **kwargs):
+            statements.append(stmt)
+            return mock_count_result
+
+        mock_db.execute = AsyncMock(side_effect=record_execute)
+
+        films = [MagicMock() for _ in range(8)]
+        llm_result = {"name": "Curated", "tagline": None, "theme_description": None}
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with patch(
+            "backend.routers.tournaments.get_filtered_ranked_films",
+            new_callable=AsyncMock,
+            return_value=films,
+        ), patch(
+            "backend.routers.tournaments.curate_and_select_films",
+            new_callable=AsyncMock,
+            return_value=(films, llm_result),
+        ) as mock_curate, patch(
+            "backend.routers.tournaments.create_tournament_bracket",
+            new_callable=AsyncMock,
+        ), patch(
+            "backend.routers.tournaments._load_tournament",
+            new_callable=AsyncMock,
+            return_value=_make_tournament(user.id, is_ai_curated=True),
+        ):
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.post(
+                    "/api/tournaments",
+                    json={"bracket_size": 8, "ai_curated": True},
+                )
+
+        assert resp.status_code == 200
+        mock_curate.assert_awaited_once()
+        mock_db.commit.assert_not_called()
+        assert any(
+            "pg_advisory_xact_lock" in str(stmt.compile(dialect=postgresql.dialect()))
+            for stmt in statements
+        )
+
     def test_create_tournament_ai_curated_requires_consent(self):
         """POST /api/tournaments with ai_curated=True returns 403 without consent."""
         user = _make_user(privacy_policy_accepted=False)
