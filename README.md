@@ -13,8 +13,8 @@ Rank your movies and TV shows through head-to-head duels. Powered by ELO ratings
 
 ### Prerequisites
 
-- Python 3.12+
-- Node.js 20+
+- Python 3.14 (the hash-locked `backend/requirements*.txt` are compiled for 3.14)
+- Node.js 26 (matches the Docker build and CI)
 - A PostgreSQL database (e.g. [Supabase](https://supabase.com))
 - A [Trakt](https://trakt.tv/oauth/applications) OAuth application
 - _(Optional)_ A [SIMKL](https://simkl.com/settings/developer) OAuth application

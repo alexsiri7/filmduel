@@ -640,7 +640,7 @@ requirements:
       - "GET /health returns {status:'ok'} (limit 1000/minute) and is Railway's healthcheckPath"
       - "entrypoint.sh waits up to 60s for /health before running alembic upgrade head"
       - "Deploys go through PRs to main; Railway auto-deploys on merge (branch protection)"
-    notes: "Docker image pinned to python:3.12-slim (PR #496 reverted a 3.14 pre-release bump)."
+    notes: "Docker image is python:3.14-slim, matching ci.yml python-version and the --python-version of the hash-locked requirements; Dependabot ignores major/minor base-image bumps so the three move together (#574)."
 
   - id: FD-052
     title: Database constraint - pooled Postgres via SQLAlchemy

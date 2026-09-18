@@ -17,6 +17,16 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    ignore:
+      # Base-image majors must move together with the CI toolchain (ci.yml
+      # python-version / node-version) and the lock headers (backend/requirements*.txt
+      # --python-version); a Dockerfile-only bump re-opens #574 and round-tripped twice
+      # before (#456->#457, #496->#514). Upgrade all of them in one PR by hand.
+      # Digest and patch bumps still flow.
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
