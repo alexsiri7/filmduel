@@ -308,13 +308,15 @@ requirements:
 
   - id: FD-025
     title: Tamper-proof pair tokens
-    statement: "When a pair is served, the system shall include an encrypted pair token binding the two movie ids, and POST /api/duels shall reject with 400 any submission whose token is missing, undecryptable, or does not match the submitted movie ids."
+    statement: "When a pair is served, the system shall include an encrypted pair token binding the requesting user and the two movie ids, and POST /api/duels shall reject with 400 any submission whose token is missing, undecryptable, expired, issued to a different user, or does not match the submitted movie ids."
     category: non-functional
     priority: must
     status: active
     source: back-ported
     acceptance:
       - "A duel submission with a forged or mismatched pair_token returns 400 'Invalid pair token'"
+      - "A pair_token minted for one user is rejected with 400 'Invalid pair token' when submitted by another user"
+      - "A pair_token older than 15 minutes is rejected with 400 'Invalid pair token'"
       - "Tokens are encrypted with the same Fernet key material as token_crypto (not merely encoded)"
     notes: "Prevents clients from submitting duels for arbitrary pairs the server never offered."
 

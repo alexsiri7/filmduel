@@ -47,7 +47,7 @@ async def submit_duel(
     )
 
     # Validate pair token before anything else
-    token_ids = decode_pair_token(body.pair_token)
+    token_ids = decode_pair_token(body.pair_token, user_id=str(uid))
     submitted_ids = {str(movie_a_id), str(movie_b_id)}
     if token_ids is None or token_ids != submitted_ids:
         raise HTTPException(status_code=400, detail="Invalid pair token")
