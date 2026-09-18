@@ -97,20 +97,43 @@ async def _force_pool_sync(user: User, db: AsyncSession) -> User:
 async def accept_consent(
     body: ConsentAccept,
     request: Request,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Record that the user has accepted the privacy policy (GDPR consent)."""
+    """Record that the user has accepted the privacy policy (GDPR consent).
+
+    The first acceptance also runs the initial provider import inline, so the
+    user lands on a populated pool once the request returns.
+    """
     if body.version != CURRENT_PRIVACY_POLICY_VERSION:
         raise HTTPException(
             status_code=400,
             detail=f"Unrecognized policy version. Expected '{CURRENT_PRIVACY_POLICY_VERSION}'.",
         )
+    first_consent = not current_user.privacy_policy_accepted
     current_user.privacy_policy_accepted = True
     current_user.privacy_policy_accepted_at = datetime.now(timezone.utc)
     current_user.privacy_policy_version = CURRENT_PRIVACY_POLICY_VERSION
     await db.commit()
-    return _build_user_response(current_user)
+
+    # Built before the sync: a rollback below expires the user instance.
+    response = _build_user_response(current_user)
+
+    if first_consent:
+        # Initial library import is deferred from the OAuth callback to here so no
+        # provider data is ingested before consent is recorded (#571).
+        try:
+            await _force_pool_sync(current_user, db)
+            await db.commit()
+        except Exception:
+            logger.exception(
+                "Initial pool sync after consent failed for user %s", current_user.id
+            )
+            await db.rollback()
+        background_tasks.add_task(backfill_posters_background)
+
+    return response
 
 
 @router.delete("/api/me", status_code=204)

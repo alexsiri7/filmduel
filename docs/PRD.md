@@ -528,7 +528,7 @@ On `a_wins` or `b_wins`: sync both films to Trakt asynchronously.
 | 2 | `GET /movies/trending?limit=100&extended=full` | Weekly | Recent/buzzy |
 | 3 | `GET /users/{u}/watched/movies?extended=full` | Hourly | User history → `seen=true` |
 | 4 | `GET /movies/recommended?extended=full` | Daily | Personalised, authenticated |
-| 5 | `GET /users/{u}/ratings/movies` | On login | Sets `seeded_elo` |
+| 5 | `GET /users/{u}/ratings/movies` | On first consent, then on login | Sets `seeded_elo` |
 
 - Always `?extended=full` for overview, runtime, genres, ids.tmdb, community rating
 - `community_rating`: Trakt's `rating` field is 0–10, store as `rating * 10` (0–100 scale)

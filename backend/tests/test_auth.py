@@ -10,7 +10,7 @@ from urllib.parse import parse_qs, urlparse
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
 
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import jwt as pyjwt
 import pytest
@@ -48,6 +48,9 @@ from backend.routers.users import (
     accept_consent,
     update_settings,
 )
+from backend.services.pool import sync_pool_background
+from backend.services.tmdb import backfill_posters_background
+from starlette.background import BackgroundTasks as BG
 
 
 def _make_settings(**overrides) -> Settings:
@@ -724,7 +727,12 @@ class TestUpdateSettings:
 
 
 class TestAcceptConsent:
-    def _make_user(self) -> MagicMock:
+    def _make_user(
+        self,
+        *,
+        privacy_policy_accepted: bool = False,
+        privacy_policy_version: str | None = None,
+    ) -> MagicMock:
         user = MagicMock()
         user.id = "00000000-0000-0000-0000-000000000001"
         user.trakt_username = "testuser"
@@ -732,8 +740,8 @@ class TestAcceptConsent:
         user.created_at = datetime(2024, 1, 1, tzinfo=timezone.utc)
         user.sync_ratings_to_trakt = False
         user.sync_ratings_to_simkl = False
-        user.privacy_policy_accepted = False
-        user.privacy_policy_version = None
+        user.privacy_policy_accepted = privacy_policy_accepted
+        user.privacy_policy_version = privacy_policy_version
         return user
 
     @pytest.mark.asyncio
@@ -743,17 +751,19 @@ class TestAcceptConsent:
         user = self._make_user()
         db = AsyncMock()
 
-        result = await accept_consent(
-            body=ConsentAccept(version=CURRENT_PRIVACY_POLICY_VERSION),
-            request=_make_starlette_request(),
-            current_user=user,
-            db=db,
-        )
+        with patch("backend.routers.users._force_pool_sync", new_callable=AsyncMock):
+            result = await accept_consent(
+                body=ConsentAccept(version=CURRENT_PRIVACY_POLICY_VERSION),
+                request=_make_starlette_request(),
+                background_tasks=BG(),
+                current_user=user,
+                db=db,
+            )
 
         assert user.privacy_policy_accepted is True
         assert user.privacy_policy_version == CURRENT_PRIVACY_POLICY_VERSION
         assert user.privacy_policy_accepted_at is not None
-        db.commit.assert_awaited_once()
+        assert db.commit.await_count >= 1
         assert result.privacy_policy_accepted is True
         assert result.privacy_policy_version == CURRENT_PRIVACY_POLICY_VERSION
 
@@ -764,12 +774,14 @@ class TestAcceptConsent:
         user = self._make_user()
         db = AsyncMock()
 
-        result = await accept_consent(
-            body=ConsentAccept(version=CURRENT_PRIVACY_POLICY_VERSION),
-            request=_make_starlette_request(),
-            current_user=user,
-            db=db,
-        )
+        with patch("backend.routers.users._force_pool_sync", new_callable=AsyncMock):
+            result = await accept_consent(
+                body=ConsentAccept(version=CURRENT_PRIVACY_POLICY_VERSION),
+                request=_make_starlette_request(),
+                background_tasks=BG(),
+                current_user=user,
+                db=db,
+            )
 
         assert result.privacy_policy_accepted is True
         assert result.trakt_username == "testuser"
@@ -786,6 +798,7 @@ class TestAcceptConsent:
             await accept_consent(
                 body=ConsentAccept(version="99.0"),
                 request=_make_starlette_request(),
+                background_tasks=BG(),
                 current_user=user,
                 db=db,
             )
@@ -794,6 +807,85 @@ class TestAcceptConsent:
         assert "Unrecognized policy version" in exc_info.value.detail
         assert CURRENT_PRIVACY_POLICY_VERSION in exc_info.value.detail  # expected version still present
         db.commit.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_first_consent_runs_forced_sync_and_schedules_backfill(self, monkeypatch):
+        """The False->True consent transition runs the initial provider import inline (#571)."""
+        monkeypatch.setattr(limiter, "enabled", False)
+        user = self._make_user(privacy_policy_accepted=False)
+        db = AsyncMock()
+        bg = BG()
+        commits_before_sync = []
+
+        async def record_commits(*_):
+            commits_before_sync.append(db.commit.await_count)
+
+        with patch(
+            "backend.routers.users._force_pool_sync",
+            new_callable=AsyncMock,
+            side_effect=record_commits,
+        ) as mock_sync:
+            result = await accept_consent(
+                body=ConsentAccept(version=CURRENT_PRIVACY_POLICY_VERSION),
+                request=_make_starlette_request(),
+                background_tasks=bg,
+                current_user=user,
+                db=db,
+            )
+
+        mock_sync.assert_awaited_once_with(user, db)
+        assert commits_before_sync == [1], "consent must be committed before the provider import starts"
+        assert db.commit.await_count == 2
+        assert result.privacy_policy_accepted is True
+        assert [t.func for t in bg.tasks] == [backfill_posters_background]
+
+    @pytest.mark.asyncio
+    async def test_reconsent_does_not_resync(self, monkeypatch):
+        """Re-accepting after a policy version bump must not re-import the library."""
+        monkeypatch.setattr(limiter, "enabled", False)
+        user = self._make_user(privacy_policy_accepted=True, privacy_policy_version="2.0")
+        db = AsyncMock()
+        bg = BG()
+
+        with patch(
+            "backend.routers.users._force_pool_sync", new_callable=AsyncMock
+        ) as mock_sync:
+            result = await accept_consent(
+                body=ConsentAccept(version=CURRENT_PRIVACY_POLICY_VERSION),
+                request=_make_starlette_request(),
+                background_tasks=bg,
+                current_user=user,
+                db=db,
+            )
+
+        mock_sync.assert_not_awaited()
+        db.commit.assert_awaited_once()
+        assert result.privacy_policy_version == CURRENT_PRIVACY_POLICY_VERSION
+        assert bg.tasks == []
+
+    @pytest.mark.asyncio
+    async def test_sync_failure_does_not_unrecord_consent(self, monkeypatch):
+        """A failing initial import is logged and rolled back; consent stays committed."""
+        monkeypatch.setattr(limiter, "enabled", False)
+        user = self._make_user(privacy_policy_accepted=False)
+        db = AsyncMock()
+
+        with patch(
+            "backend.routers.users._force_pool_sync",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("trakt down"),
+        ):
+            result = await accept_consent(
+                body=ConsentAccept(version=CURRENT_PRIVACY_POLICY_VERSION),
+                request=_make_starlette_request(),
+                background_tasks=BG(),
+                current_user=user,
+                db=db,
+            )
+
+        assert result.privacy_policy_accepted is True
+        db.commit.assert_awaited_once()
+        db.rollback.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------
@@ -1196,6 +1288,80 @@ class TestPKCE:
             for h in cookie_headers
         )
         assert pkce_deleted, "PKCE verifier cookie was not cleared after successful Trakt callback"
+
+    async def _run_trakt_callback(self, monkeypatch, existing_user) -> BG:
+        """Drive a successful Trakt callback for `existing_user` (None = new signup); return the task list."""
+        monkeypatch.setattr(limiter, "enabled", False)
+
+        mock_client = AsyncMock()
+        mock_client.exchange_code = AsyncMock(return_value={
+            "access_token": "tok",
+            "refresh_token": "ref",
+            "expires_in": 7776000,
+        })
+        mock_client.get_profile = AsyncMock(return_value={
+            "username": "alice",
+            "ids": {"slug": "alice"},
+        })
+        monkeypatch.setattr("backend.routers.auth.TraktClient", lambda **kw: mock_client)
+
+        state = "test-state"
+        request = _make_starlette_request(cookies={
+            OAUTH_STATE_COOKIE: state,
+            OAUTH_PKCE_COOKIE: "verifier123",
+        })
+        db = AsyncMock()
+        db_result = MagicMock()
+        db_result.scalar_one_or_none.return_value = existing_user
+        db.execute.return_value = db_result
+
+        bg = BG()
+        await callback(
+            code="auth-code",
+            request=request,
+            background_tasks=bg,
+            state=state,
+            settings=_make_settings(),
+            db=db,
+        )
+        return bg
+
+    @pytest.mark.asyncio
+    async def test_callback_skips_pool_sync_when_not_consented(self, monkeypatch):
+        """Login must not import provider data for a user who has not accepted the policy (#571)."""
+        existing_user = MagicMock()
+        existing_user.id = "00000000-0000-0000-0000-000000000001"
+        existing_user.privacy_policy_accepted = False
+
+        bg = await self._run_trakt_callback(monkeypatch, existing_user)
+
+        funcs = [t.func for t in bg.tasks]
+        assert sync_pool_background not in funcs
+        assert backfill_posters_background in funcs
+
+    @pytest.mark.asyncio
+    async def test_callback_enqueues_pool_sync_when_consented(self, monkeypatch):
+        """Returning consented users keep the login-time forced re-sync."""
+        existing_user = MagicMock()
+        existing_user.id = "00000000-0000-0000-0000-000000000001"
+        existing_user.privacy_policy_accepted = True
+
+        bg = await self._run_trakt_callback(monkeypatch, existing_user)
+
+        sync_tasks = [t for t in bg.tasks if t.func is sync_pool_background]
+        assert len(sync_tasks) == 1
+        assert sync_tasks[0].args == (existing_user.id,)
+        assert sync_tasks[0].kwargs == {"force": True}
+
+    @pytest.mark.asyncio
+    async def test_callback_skips_pool_sync_for_new_user(self, monkeypatch):
+        """A brand-new signup (privacy_policy_accepted defaults False) gets no sync at login."""
+        # The real User row encrypts tokens on construction; keep this test independent of TOKEN_ENC_KEY.
+        monkeypatch.setattr("backend.services.token_crypto.encrypt_token", lambda v: v)
+
+        bg = await self._run_trakt_callback(monkeypatch, existing_user=None)
+
+        assert sync_pool_background not in [t.func for t in bg.tasks]
 
     @pytest.mark.asyncio
     async def test_simkl_callback_deletes_pkce_cookie_on_success(self, monkeypatch):
