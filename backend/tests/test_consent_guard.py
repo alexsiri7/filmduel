@@ -10,12 +10,22 @@ from unittest.mock import AsyncMock, MagicMock, patch
 os.environ.setdefault("TOKEN_ENC_KEY", "test-secret-key-for-unit-tests-32b")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.dialects import postgresql
 
 from backend.main import app
 from backend.db import get_db
 from backend.routers.auth import get_current_user
+from backend.rate_limit import limiter
+
+
+@pytest.fixture(autouse=True)
+def _reset_limiter():
+    """Reset slowapi in-memory counters between tests so per-route caps don't leak."""
+    limiter.reset()
+    yield
+    limiter.reset()
 
 
 def _make_user(*, privacy_policy_accepted: bool = False, use_ai_features: bool = True):

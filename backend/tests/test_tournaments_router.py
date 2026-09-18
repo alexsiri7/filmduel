@@ -12,11 +12,21 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
 
 from backend.routers.tournaments import _active_progress
 
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.main import app
 from backend.db import get_db
 from backend.routers.auth import get_current_user
+from backend.rate_limit import limiter
+
+
+@pytest.fixture(autouse=True)
+def _reset_limiter():
+    """Reset slowapi in-memory counters between tests so per-route caps don't leak."""
+    limiter.reset()
+    yield
+    limiter.reset()
 
 
 def _make_user(*, privacy_policy_accepted: bool = True):
