@@ -17,10 +17,20 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.db import get_db
-from backend.main import app
-from backend.rate_limit import limiter
-from backend.routers.auth import get_current_user
+from backend.config import get_settings
+
+# conftest already built the cached Settings (via backend.rate_limit) before the
+# TOKEN_ENC_KEY default above was set; rebuild so it is picked up.
+get_settings.cache_clear()
+
+from backend.services.token_crypto import _fernet  # noqa: E402
+
+_fernet.cache_clear()
+
+from backend.db import get_db  # noqa: E402
+from backend.main import app  # noqa: E402
+from backend.rate_limit import limiter  # noqa: E402
+from backend.routers.auth import get_current_user  # noqa: E402
 
 
 def _make_user():

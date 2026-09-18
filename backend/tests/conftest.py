@@ -11,6 +11,10 @@ import os
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://localhost/ci_test")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
+# Assigned, not setdefault: the autouse limiter.reset() below raises when a
+# RATE_LIMIT_STORAGE_URI exported in the shell (or in .env) points at a Redis
+# that is not running, so the suite must always pin in-memory storage.
+os.environ["RATE_LIMIT_STORAGE_URI"] = ""
 
 import pytest
 

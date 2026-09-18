@@ -31,6 +31,9 @@ class _TolerantEnvSource(EnvSettingsSource):
 
 _LOCALHOST_DB_DEFAULT = "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
 
+# The only schemes the installed redis client (limits' RedisStorage) accepts.
+_RATE_LIMIT_STORAGE_SCHEMES = ("redis://", "rediss://", "redis+unix://")
+
 _WEAK_KEY_PLACEHOLDERS = frozenset(
     {
         "secret",
@@ -157,6 +160,22 @@ class Settings(BaseSettings):
 
     # Sentry
     SENTRY_DSN: str = ""
+
+    # Rate-limit counter storage (slowapi). Empty = per-process in-memory (counters
+    # reset on restart and are not shared across replicas). Set to a redis:// URI
+    # so limits survive restarts and are shared by all instances (SEC-04, #572).
+    RATE_LIMIT_STORAGE_URI: str = ""
+
+    @field_validator("RATE_LIMIT_STORAGE_URI", mode="before")
+    @classmethod
+    def validate_rate_limit_storage_uri(cls, v: str) -> str:
+        stripped = v.strip()
+        if stripped and not stripped.startswith(_RATE_LIMIT_STORAGE_SCHEMES):
+            raise ValueError(
+                "RATE_LIMIT_STORAGE_URI must be empty or a redis://, rediss:// "
+                "or redis+unix:// URI"
+            )
+        return stripped
 
     # Explicit override for cookie Secure flag.
     # Set SECURE_COOKIES=true when behind a TLS-terminating proxy with BASE_URL=http://.

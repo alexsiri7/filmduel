@@ -288,6 +288,37 @@ class TestDatabaseUrlValidation:
             Settings(SECRET_KEY="test-secret-key-for-unit-tests!!")
 
 
+class TestRateLimitStorageUriValidation:
+    def test_defaults_to_empty(self):
+        s = _make_settings()
+        assert s.RATE_LIMIT_STORAGE_URI == ""
+
+    def test_empty_string_accepted(self):
+        s = _make_settings(RATE_LIMIT_STORAGE_URI="")
+        assert s.RATE_LIMIT_STORAGE_URI == ""
+
+    def test_whitespace_is_stripped(self):
+        s = _make_settings(RATE_LIMIT_STORAGE_URI="  redis://h:6379/0 ")
+        assert s.RATE_LIMIT_STORAGE_URI == "redis://h:6379/0"
+
+    @pytest.mark.parametrize(
+        "uri",
+        [
+            "redis://default:pw@host:6379/0",
+            "rediss://host:6380/0",
+            "redis+unix:///tmp/redis.sock",
+        ],
+    )
+    def test_redis_schemes_accepted_verbatim(self, uri):
+        s = _make_settings(RATE_LIMIT_STORAGE_URI=uri)
+        assert s.RATE_LIMIT_STORAGE_URI == uri
+
+    @pytest.mark.parametrize("uri", ["memcached://h:11211", "memory://", "h:6379"])
+    def test_non_redis_uri_rejected(self, uri):
+        with pytest.raises(ValidationError, match="RATE_LIMIT_STORAGE_URI"):
+            _make_settings(RATE_LIMIT_STORAGE_URI=uri)
+
+
 class TestCookieSecureStartupWarning:
     """Verify that the startup warning fires under the right conditions."""
 
@@ -479,3 +510,59 @@ class TestCookieSecureStartupWarning:
             "cookie_secure_unset" in r.message and "RAILWAY_ENVIRONMENT" in r.message
             for r in caplog.records
         ), "Expected first-match to be RAILWAY_ENVIRONMENT, not RENDER"
+
+
+class TestRateLimitStorageStartupWarning:
+    """lifespan() reports whether rate-limit counters are durable/shared."""
+
+    _PROXY_PLATFORM_ENV_VARS = _PROXY_PLATFORM_ENV_VARS_PROD
+
+    async def _run_lifespan(self, test_settings, caplog):
+        from backend import main as main_mod
+
+        with patch.object(main_mod, "settings", test_settings), \
+             patch.object(main_mod._scheduler, "start"), \
+             patch.object(main_mod._scheduler, "shutdown"), \
+             caplog.at_level(logging.INFO, logger="backend.main"):
+            async with main_mod.lifespan(FastAPI()):
+                pass
+
+    @pytest.mark.asyncio
+    async def test_warning_when_platform_env_and_uri_unset(self, monkeypatch, caplog):
+        monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+        for var in self._PROXY_PLATFORM_ENV_VARS:
+            if var != "RAILWAY_ENVIRONMENT":
+                monkeypatch.delenv(var, raising=False)
+
+        await self._run_lifespan(_make_settings(RATE_LIMIT_STORAGE_URI=""), caplog)
+
+        assert any(
+            r.levelno == logging.WARNING
+            and "rate_limit_storage_unset" in r.message
+            and "RAILWAY_ENVIRONMENT" in r.message
+            for r in caplog.records
+        ), "Expected rate_limit_storage_unset warning mentioning RAILWAY_ENVIRONMENT"
+
+    @pytest.mark.asyncio
+    async def test_info_and_no_warning_when_uri_set(self, monkeypatch, caplog):
+        monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+
+        await self._run_lifespan(
+            _make_settings(RATE_LIMIT_STORAGE_URI="redis://127.0.0.1:1/0"), caplog
+        )
+
+        assert "rate_limit_storage_unset" not in caplog.text
+        assert any(
+            r.levelno == logging.INFO and "rate_limit_storage: redis" in r.message
+            for r in caplog.records
+        )
+        assert "127.0.0.1:1" not in caplog.text, "URI must never be logged"
+
+    @pytest.mark.asyncio
+    async def test_no_warning_without_platform_env(self, monkeypatch, caplog):
+        for var in self._PROXY_PLATFORM_ENV_VARS:
+            monkeypatch.delenv(var, raising=False)
+
+        await self._run_lifespan(_make_settings(RATE_LIMIT_STORAGE_URI=""), caplog)
+
+        assert "rate_limit_storage" not in caplog.text

@@ -19,6 +19,7 @@ PyJWT>=2.14.0
 python-multipart>=0.0.32   # CVE-2024-24762 (ReDoS) affects <=0.0.6
 sentry-sdk[fastapi]>=2.69.1
 slowapi>=0.1.9
+redis>=5.0,<8  # slowapi/limits RedisStorage client for RATE_LIMIT_STORAGE_URI (#572); limits 5.x requires redis<8
 litellm>=1.100.1
 cryptography>=50.0.1
 apscheduler>=3.10.4,<4
