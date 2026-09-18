@@ -19,11 +19,14 @@ from slowapi.errors import RateLimitExceeded
 from starlette.requests import Request
 
 from backend.rate_limit import _build_limiter, _rate_limit_key
+from backend.utils.cookies import COOKIE_NAME, cookie_name
 
 
-def _make_request(cookie_value=None, client_ip="1.2.3.4"):
+def _make_request(cookie_value=None, client_ip="1.2.3.4", secure=False):
     request = MagicMock()
-    request.cookies = {"filmduel_session": cookie_value} if cookie_value else {}
+    request.cookies = (
+        {cookie_name(COOKIE_NAME, secure): cookie_value} if cookie_value else {}
+    )
     request.client.host = client_ip
     return request
 
@@ -40,6 +43,7 @@ def test_rate_limit_key_authenticated_user_returns_user_key():
     request = _make_request(cookie_value=token)
     with patch("backend.rate_limit.get_settings") as mock_settings:
         mock_settings.return_value.SECRET_KEY = "test-secret"
+        mock_settings.return_value.cookie_secure = False
         key = _rate_limit_key(request)
     assert key == "user:user-123"
 
@@ -49,8 +53,31 @@ def test_rate_limit_key_invalid_jwt_falls_back_to_ip():
     request = _make_request(cookie_value="not-a-jwt", client_ip="10.0.0.1")
     with patch("backend.rate_limit.get_settings") as mock_settings:
         mock_settings.return_value.SECRET_KEY = "test-secret"
+        mock_settings.return_value.cookie_secure = False
         key = _rate_limit_key(request)
     assert key == "ip:10.0.0.1"
+
+
+def test_rate_limit_key_secure_reads_host_prefixed_cookie():
+    """With Secure cookies on, the JWT lives under __Host-filmduel_session."""
+    token = _make_valid_token("user-123")
+    request = _make_request(cookie_value=token, secure=True)
+    with patch("backend.rate_limit.get_settings") as mock_settings:
+        mock_settings.return_value.SECRET_KEY = "test-secret"
+        mock_settings.return_value.cookie_secure = True
+        key = _rate_limit_key(request)
+    assert key == "user:user-123"
+
+
+def test_rate_limit_key_secure_ignores_unprefixed_cookie():
+    """With Secure cookies on, a bare-named session cookie does not key by user."""
+    token = _make_valid_token("user-123")
+    request = _make_request(cookie_value=token, client_ip="9.9.9.9", secure=False)
+    with patch("backend.rate_limit.get_settings") as mock_settings:
+        mock_settings.return_value.SECRET_KEY = "test-secret"
+        mock_settings.return_value.cookie_secure = True
+        key = _rate_limit_key(request)
+    assert key == "ip:9.9.9.9"
 
 
 def test_rate_limit_key_no_cookie_falls_back_to_ip():
@@ -66,6 +93,7 @@ def test_rate_limit_key_jwt_missing_sub_falls_back_to_ip():
     request = _make_request(cookie_value=token, client_ip="5.5.5.5")
     with patch("backend.rate_limit.get_settings") as mock_settings:
         mock_settings.return_value.SECRET_KEY = "test-secret"
+        mock_settings.return_value.cookie_secure = False
         key = _rate_limit_key(request)
     assert key == "ip:5.5.5.5"
 
@@ -80,6 +108,7 @@ def test_rate_limit_key_expired_jwt_falls_back_to_ip():
     request = _make_request(cookie_value=token, client_ip="7.7.7.7")
     with patch("backend.rate_limit.get_settings") as mock_settings:
         mock_settings.return_value.SECRET_KEY = "test-secret"
+        mock_settings.return_value.cookie_secure = False
         key = _rate_limit_key(request)
     assert key == "ip:7.7.7.7"
 

@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import jwt as pyjwt
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, Response
 from fastapi.testclient import TestClient
 
 from backend.config import Settings
@@ -37,9 +37,11 @@ from backend.routers.auth import (
     create_jwt,
     get_current_user_id,
     login,
+    logout,
     simkl_callback,
     simkl_login,
 )
+from backend.utils.cookies import cookie_name
 from backend.services.token_refresh import (
     TRAKT_TOKEN_DEFAULT_TTL_SECONDS,
     ensure_fresh_token,
@@ -90,10 +92,15 @@ def _make_response() -> MagicMock:
     return MagicMock()
 
 
-def _assert_session_cookie_cleared(set_cookie: str) -> None:
-    """A rejection's Set-Cookie header must expire the session cookie."""
-    assert set_cookie.startswith(f'{COOKIE_NAME}=""')
+def _assert_session_cookie_cleared(set_cookie: str, secure: bool = False) -> None:
+    """A rejection's Set-Cookie header must expire the session cookie.
+
+    In Secure mode the name is __Host-prefixed and the expiry must itself
+    carry Secure, or the browser discards it and the cookie survives.
+    """
+    assert set_cookie.startswith(f'{cookie_name(COOKIE_NAME, secure)}=""')
     assert "Max-Age=0" in set_cookie
+    assert ("Secure" in set_cookie) is secure
 
 
 def _make_jwt_payload(**overrides) -> dict:
@@ -261,11 +268,41 @@ class TestGetCurrentUserId:
         token = pyjwt.encode(
             payload, https_settings.SECRET_KEY, algorithm=JWT_ALGORITHM
         )
-        request = _make_request({COOKIE_NAME: token})
+        request = _make_request({cookie_name(COOKIE_NAME, True): token})
         response = _make_response()
         await get_current_user_id(request, response, _make_db())
+        assert response.set_cookie.call_args.args[0] == "__Host-filmduel_session"
         kwargs = response.set_cookie.call_args.kwargs
         assert kwargs.get("secure") is True
+
+    @pytest.mark.asyncio
+    async def test_https_ignores_unprefixed_session_cookie(self, monkeypatch):
+        """In Secure mode a valid token under the bare name is not a session.
+
+        A sibling subdomain can set a bare-named cookie; only the __Host- one
+        counts (#578).
+        """
+        https_settings = _make_settings(BASE_URL="https://filmduel.example.com")
+        monkeypatch.setattr("backend.routers.auth.get_settings", lambda: https_settings)
+        token = create_jwt("550e8400-e29b-41d4-a716-446655440000", https_settings)
+        request = _make_request({COOKIE_NAME: token})
+        response = _make_response()
+        with pytest.raises(HTTPException) as exc_info:
+            await get_current_user_id(request, response, _make_db())
+        assert exc_info.value.status_code == 401
+        assert "Not authenticated" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_https_rejection_clears_prefixed_cookie_with_secure(self, monkeypatch):
+        """In Secure mode the rejection expires __Host-filmduel_session with Secure."""
+        https_settings = _make_settings(BASE_URL="https://filmduel.example.com")
+        monkeypatch.setattr("backend.routers.auth.get_settings", lambda: https_settings)
+        request = _make_request({cookie_name(COOKIE_NAME, True): "not-a-valid-jwt"})
+        response = _make_response()
+        with pytest.raises(HTTPException) as exc_info:
+            await get_current_user_id(request, response, _make_db())
+        assert exc_info.value.status_code == 401
+        _assert_session_cookie_cleared(exc_info.value.headers["set-cookie"], secure=True)
 
     @pytest.mark.asyncio
     async def test_no_cookie_raises_401(self, monkeypatch):
@@ -1085,11 +1122,11 @@ class TestUpdateSettingsSimkl:
 class TestStateCookieSecureFlag:
     """Verify OAuth state cookies honour cookie_secure, not just is_https."""
 
-    async def _get_state_cookie(self, monkeypatch, func, cookie_name, **settings_kwargs):
+    async def _get_state_cookie(self, monkeypatch, func, base_name, **settings_kwargs):
         monkeypatch.setattr(limiter, "enabled", False)
         response = await func(_make_starlette_request(), settings=_make_settings(**settings_kwargs))
         headers = response.headers.getlist("set-cookie")
-        return next((h for h in headers if cookie_name in h), "")
+        return next((h for h in headers if base_name in h), "")
 
     @pytest.mark.asyncio
     async def test_login_state_cookie_secure_when_proxy_override(self, monkeypatch):
@@ -1162,6 +1199,72 @@ class TestStateCookieSecureFlag:
             BASE_URL="http://localhost:8000",
         )
         assert "Secure" not in cookie
+
+    @pytest.mark.asyncio
+    async def test_login_cookies_host_prefixed_when_secure(self, monkeypatch):
+        """Secure Trakt state/PKCE cookies are issued under __Host- names (#578)."""
+        state = await self._get_state_cookie(
+            monkeypatch, login, OAUTH_STATE_COOKIE, SECURE_COOKIES=True,
+        )
+        pkce = await self._get_state_cookie(
+            monkeypatch, login, OAUTH_PKCE_COOKIE, SECURE_COOKIES=True,
+        )
+        assert state.startswith("__Host-filmduel_oauth_state=")
+        assert pkce.startswith("__Host-filmduel_oauth_pkce=")
+
+    @pytest.mark.asyncio
+    async def test_simkl_login_cookies_host_prefixed_when_secure(self, monkeypatch):
+        """Secure SIMKL state/PKCE cookies are issued under __Host- names (#578)."""
+        state = await self._get_state_cookie(
+            monkeypatch, simkl_login, OAUTH_SIMKL_STATE_COOKIE, SECURE_COOKIES=True,
+        )
+        pkce = await self._get_state_cookie(
+            monkeypatch, simkl_login, OAUTH_SIMKL_PKCE_COOKIE, SECURE_COOKIES=True,
+        )
+        assert state.startswith("__Host-filmduel_oauth_simkl_state=")
+        assert pkce.startswith("__Host-filmduel_oauth_simkl_pkce=")
+
+    @pytest.mark.asyncio
+    async def test_login_cookies_unprefixed_when_not_secure(self, monkeypatch):
+        """Without Secure the names stay bare — __Host- would be rejected by browsers."""
+        monkeypatch.setattr(limiter, "enabled", False)
+        for func in (login, simkl_login):
+            response = await func(
+                _make_starlette_request(), settings=_make_settings(BASE_URL="http://localhost:8000")
+            )
+            headers = response.headers.getlist("set-cookie")
+            assert len(headers) == 2
+            assert not any(h.startswith("__Host-") for h in headers)
+
+
+# ---------------------------------------------------------------------------
+# TestLogout
+# ---------------------------------------------------------------------------
+
+
+class TestLogout:
+    async def _logout(self, monkeypatch, settings: Settings):
+        monkeypatch.setattr(limiter, "enabled", False)
+        response = await logout(
+            request=_make_starlette_request(),
+            db=AsyncMock(),
+            user_id="550e8400-e29b-41d4-a716-446655440000",
+            settings=settings,
+        )
+        assert response.status_code == 204
+        return response.headers["set-cookie"]
+
+    @pytest.mark.asyncio
+    async def test_logout_clears_prefixed_cookie_with_secure(self, monkeypatch):
+        set_cookie = await self._logout(
+            monkeypatch, _make_settings(BASE_URL="https://filmduel.example.com")
+        )
+        _assert_session_cookie_cleared(set_cookie, secure=True)
+
+    @pytest.mark.asyncio
+    async def test_logout_clears_bare_cookie_without_secure(self, monkeypatch):
+        set_cookie = await self._logout(monkeypatch, _make_settings())
+        _assert_session_cookie_cleared(set_cookie, secure=False)
 
 
 # ---------------------------------------------------------------------------
@@ -1310,8 +1413,48 @@ class TestPKCE:
         )
         assert pkce_deleted, "PKCE verifier cookie was not cleared after successful Trakt callback"
 
-    async def _run_trakt_callback(self, monkeypatch, existing_user) -> BG:
-        """Drive a successful Trakt callback for `existing_user` (None = new signup); return the task list."""
+    @pytest.mark.asyncio
+    async def test_secure_callback_expires_prefixed_cookies_with_secure(self, monkeypatch):
+        """In Secure mode the callback reads the __Host- state/PKCE cookies and
+        expires them with Secure, so the browser honours the deletion (#578)."""
+        https_settings = _make_settings(BASE_URL="https://filmduel.example.com")
+        existing_user = MagicMock()
+        existing_user.id = "00000000-0000-0000-0000-000000000001"
+        response, _ = await self._run_trakt_callback(
+            monkeypatch, existing_user, settings=https_settings, secure_cookies=True
+        )
+        headers = response.headers.getlist("set-cookie")
+        assert any(h.startswith("__Host-filmduel_session=") and "Secure" in h for h in headers)
+        for base in (OAUTH_STATE_COOKIE, OAUTH_PKCE_COOKIE):
+            expiry = next(h for h in headers if h.startswith(f'__Host-{base}=""'))
+            assert "Max-Age=0" in expiry
+            assert "Secure" in expiry
+
+    @pytest.mark.asyncio
+    async def test_secure_callback_ignores_unprefixed_state_cookie(self, monkeypatch):
+        """In Secure mode bare-named state/PKCE cookies (tossable by a sibling
+        subdomain) do not satisfy the state check (#578)."""
+        https_settings = _make_settings(BASE_URL="https://filmduel.example.com")
+        with pytest.raises(HTTPException) as exc_info:
+            await self._run_trakt_callback(
+                monkeypatch, MagicMock(), settings=https_settings, secure_cookies=False
+            )
+        assert exc_info.value.status_code == 400
+        assert "Invalid OAuth state" in exc_info.value.detail
+
+    async def _run_trakt_callback(
+        self,
+        monkeypatch,
+        existing_user,
+        settings: Settings | None = None,
+        secure_cookies: bool = False,
+    ) -> tuple[Response, BG]:
+        """Drive a Trakt callback for `existing_user` (None = new signup);
+        return the response and its background task list.
+
+        secure_cookies: present the state/PKCE cookies under their Secure
+        (__Host-) names rather than the bare ones.
+        """
         monkeypatch.setattr(limiter, "enabled", False)
 
         mock_client = AsyncMock()
@@ -1328,8 +1471,8 @@ class TestPKCE:
 
         state = "test-state"
         request = _make_starlette_request(cookies={
-            OAUTH_STATE_COOKIE: state,
-            OAUTH_PKCE_COOKIE: "verifier123",
+            cookie_name(OAUTH_STATE_COOKIE, secure_cookies): state,
+            cookie_name(OAUTH_PKCE_COOKIE, secure_cookies): "verifier123",
         })
         db = AsyncMock()
         db_result = MagicMock()
@@ -1337,15 +1480,15 @@ class TestPKCE:
         db.execute.return_value = db_result
 
         bg = BG()
-        await callback(
+        response = await callback(
             code="auth-code",
             request=request,
             background_tasks=bg,
             state=state,
-            settings=_make_settings(),
+            settings=settings or _make_settings(),
             db=db,
         )
-        return bg
+        return response, bg
 
     @pytest.mark.asyncio
     async def test_callback_skips_pool_sync_when_not_consented(self, monkeypatch):
@@ -1354,7 +1497,7 @@ class TestPKCE:
         existing_user.id = "00000000-0000-0000-0000-000000000001"
         existing_user.privacy_policy_accepted = False
 
-        bg = await self._run_trakt_callback(monkeypatch, existing_user)
+        _, bg = await self._run_trakt_callback(monkeypatch, existing_user)
 
         funcs = [t.func for t in bg.tasks]
         assert sync_pool_background not in funcs
@@ -1367,7 +1510,7 @@ class TestPKCE:
         existing_user.id = "00000000-0000-0000-0000-000000000001"
         existing_user.privacy_policy_accepted = True
 
-        bg = await self._run_trakt_callback(monkeypatch, existing_user)
+        _, bg = await self._run_trakt_callback(monkeypatch, existing_user)
 
         sync_tasks = [t for t in bg.tasks if t.func is sync_pool_background]
         assert len(sync_tasks) == 1
@@ -1380,7 +1523,7 @@ class TestPKCE:
         # The real User row encrypts tokens on construction; keep this test independent of TOKEN_ENC_KEY.
         monkeypatch.setattr("backend.services.token_crypto.encrypt_token", lambda v: v)
 
-        bg = await self._run_trakt_callback(monkeypatch, existing_user=None)
+        _, bg = await self._run_trakt_callback(monkeypatch, existing_user=None)
 
         assert sync_pool_background not in [t.func for t in bg.tasks]
 

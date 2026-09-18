@@ -39,7 +39,7 @@ requirements:
 
   - id: FD-003
     title: OAuth callback establishes session
-    statement: "When the OAuth callback succeeds, the system shall exchange the code for tokens, fetch the provider profile, upsert the user row, issue a signed session JWT as an httpOnly cookie named filmduel_session, and redirect to the SPA root."
+    statement: "When the OAuth callback succeeds, the system shall exchange the code for tokens, fetch the provider profile, upsert the user row, issue a signed session JWT as an httpOnly cookie named filmduel_session (prefixed with __Host- when Secure, per FD-048), and redirect to the SPA root."
     category: functional
     priority: must
     status: active
@@ -596,14 +596,17 @@ requirements:
 
   - id: FD-048
     title: Cookie Secure flag control
-    statement: "While SECURE_COOKIES is set, the system shall honor it for the session-cookie Secure flag; otherwise it shall infer from BASE_URL https, and at startup it shall log a warning when a TLS-terminating proxy platform is detected with the flag effectively off."
+    statement: "While SECURE_COOKIES is set, the system shall honor it for the session-cookie Secure flag; otherwise it shall infer from BASE_URL https, and at startup it shall log a warning when a TLS-terminating proxy platform is detected with the flag effectively off; while the Secure flag is on, the session and OAuth state/PKCE cookies shall be issued, read and expired under names prefixed with __Host- so a sibling subdomain cannot overwrite them."
     category: non-functional
     priority: must
     status: active
-    source: "PRs #497, #506 (SEC-006)"
+    source: "PRs #497, #506 (SEC-006); issue #578 (SEC-10)"
     acceptance:
       - "SECURE_COOKIES=true with http:// BASE_URL still issues Secure cookies"
       - "Railway env detected + flag unset + http BASE_URL logs cookie_secure_unset at startup"
+      - "With cookie_secure true, Set-Cookie names are __Host-filmduel_session / __Host-filmduel_oauth_* and every expiry Set-Cookie for them carries Secure"
+      - "With cookie_secure true, an unprefixed filmduel_session cookie is ignored (401)"
+      - "With cookie_secure false, names are unprefixed and unchanged"
 
   - id: FD-049
     title: SSRF-safe provider URL construction
