@@ -6,6 +6,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +22,7 @@ from backend.routers.auth import (
     require_consent,
 )
 from backend.schemas import ConsentAccept, UserResponse, UserSettingsUpdate
+from backend.services.data_export import export_user_data
 from backend.services.pool import populate_movie_pool
 from backend.services.tmdb import backfill_posters_background
 from backend.services.trakt import TraktClient
@@ -168,6 +170,26 @@ async def delete_account(
     response = Response(status_code=204)
     delete_session_cookie(response, settings)
     return response
+
+
+@router.get("/api/me/export")
+# per-user via _rate_limit_key; matches the rankings CSV export cap
+@limiter.limit("10/hour")
+async def export_my_data(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Download every personal-data record held for the user as JSON (GDPR Art. 15 / 20).
+
+    Uses get_current_user, not require_consent: the right of access does not
+    depend on consent, and a user who withdrew it still needs their data out.
+    """
+    payload = await export_user_data(db, current_user)
+    return JSONResponse(
+        content=payload,
+        headers={"Content-Disposition": "attachment; filename=filmduel_data_export.json"},
+    )
 
 
 @router.post("/api/sync")

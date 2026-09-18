@@ -16,4 +16,13 @@ describe("PrivacyPolicy", () => {
     const aiTournamentEls = screen.getAllByText(/AI-Curated Tournaments/i);
     expect(aiTournamentEls.length).toBeGreaterThan(0);
   });
+
+  it("points the Access right at the Download My Data export", () => {
+    render(
+      <MemoryRouter>
+        <PrivacyPolicy />
+      </MemoryRouter>
+    );
+    expect(screen.getByText(/Download My Data/)).toBeInTheDocument();
+  });
 });

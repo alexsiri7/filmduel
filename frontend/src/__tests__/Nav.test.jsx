@@ -346,4 +346,11 @@ describe("Nav", () => {
     expect(link).toBeInTheDocument();
     expect(link).toHaveAttribute("href", "/privacy");
   });
+
+  it("renders Download My Data link to the personal-data export", () => {
+    renderNav();
+    const link = screen.getByRole("link", { name: /download my data/i });
+    expect(link).toHaveAttribute("href", "/api/me/export");
+    expect(link).toHaveAttribute("download");
+  });
 });

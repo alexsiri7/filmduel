@@ -20,7 +20,7 @@ The experience should feel like a game — fast, opinionated, oddly compelling.
 - Surface films the user has forgotten they've seen
 - Optionally sync ELO ratings back to Trakt (user opt-in) so the data lives somewhere useful
 - Export rankings to Letterboxd CSV format
-- Comply with GDPR: gate app access behind explicit privacy policy consent on first login; provide a public `/privacy` page listing data collected and user rights
+- Comply with GDPR: gate app access behind explicit privacy policy consent on first login; provide a public `/privacy` page listing data collected and user rights; self-service export of all personal data as JSON (`GET /api/me/export`)
 
 ---
 
@@ -560,6 +560,7 @@ GET  /auth/login
 GET  /auth/callback
 POST /auth/logout
 GET  /api/me
+GET  /api/me/export
 
 GET  /api/swipe/cards
 POST /api/swipe/results
