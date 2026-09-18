@@ -213,6 +213,7 @@ POST /api/tournaments/:id/matches/:match_id
      to the linked provider, returns updated tournament state + next_match
      (or champion if final). Byes exist only in round 1 and are already
      resolved at creation, so there are never downstream byes to resolve.
+     403 { detail: "Privacy policy consent required" } — when policy not accepted
 
 POST /api/tournaments/:id/regenerate
      AI-curated only. Re-runs LLM with same candidate pool. 
