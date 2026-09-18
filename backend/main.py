@@ -100,21 +100,28 @@ _PROXY_PLATFORM_ENV_VARS = (
 async def lifespan(app: FastAPI):
     _scheduler.start()
     logger.info("retention_scheduler started")
-    # Warn operators who deploy to TLS-terminating proxy platforms without
-    # explicitly setting SECURE_COOKIES=true.
-    if settings.SECURE_COOKIES is None and not settings.is_https:
-        detected = next(
-            (v for v in _PROXY_PLATFORM_ENV_VARS if os.environ.get(v)), None
+    # Warn operators who deploy to hosted platforms without the settings those
+    # deployments need.
+    detected = next((v for v in _PROXY_PLATFORM_ENV_VARS if os.environ.get(v)), None)
+    if settings.SECURE_COOKIES is None and not settings.is_https and detected:
+        logger.warning(
+            "cookie_secure_unset: detected platform env var %r but SECURE_COOKIES is "
+            "not explicitly configured and BASE_URL=%r does not use https://. "
+            "Session cookies will be issued WITHOUT the Secure flag. "
+            "Set SECURE_COOKIES=true in your environment to fix this.",
+            detected,
+            settings.BASE_URL,
         )
-        if detected:
-            logger.warning(
-                "cookie_secure_unset: detected platform env var %r but SECURE_COOKIES is "
-                "not explicitly configured and BASE_URL=%r does not use https://. "
-                "Session cookies will be issued WITHOUT the Secure flag. "
-                "Set SECURE_COOKIES=true in your environment to fix this.",
-                detected,
-                settings.BASE_URL,
-            )
+    if settings.RATE_LIMIT_STORAGE_URI:
+        logger.info("rate_limit_storage: redis (shared, survives restarts)")
+    elif detected:
+        logger.warning(
+            "rate_limit_storage_unset: detected platform env var %r but "
+            "RATE_LIMIT_STORAGE_URI is not set. Rate-limit counters are per-process: "
+            "they reset on every deploy and are not shared across replicas. "
+            "Set RATE_LIMIT_STORAGE_URI to a redis:// URI to fix this.",
+            detected,
+        )
     yield
     _scheduler.shutdown(wait=False)
     logger.info("retention_scheduler stopped")

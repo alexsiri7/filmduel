@@ -78,7 +78,7 @@ async def submit_feedback(
     """Submit a new feedback report.
 
     Enforces two independent rate limits:
-    - slowapi: 5 requests/hour (in-memory, by IP/user via @limiter.limit)
+    - slowapi: 5 requests/hour (by IP/user via @limiter.limit; storage per RATE_LIMIT_STORAGE_URI)
     - DB guard: MAX_FEEDBACK_PER_DAY (20) submissions per user in any rolling 24-hour window
 
     Both limits return HTTP 429. The DB guard uses `or 0` to handle None

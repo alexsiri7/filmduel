@@ -7,7 +7,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from starlette.requests import Request
 
-from backend.config import get_settings
+from backend.config import Settings, get_settings
 
 
 def _rate_limit_key(request: Request) -> str:
@@ -37,4 +37,27 @@ def _rate_limit_key(request: Request) -> str:
     return f"ip:{get_remote_address(request)}"
 
 
-limiter = Limiter(key_func=_rate_limit_key)
+# Bounded socket timeouts are load-bearing: without them an unreachable Redis
+# host stalls the first request for minutes (OS TCP timeout × client retries)
+# before slowapi falls back to in-memory counters.
+_REDIS_STORAGE_OPTIONS = {"socket_connect_timeout": 1, "socket_timeout": 1}
+
+
+def _build_limiter(settings: Settings) -> Limiter:
+    """Build the app limiter; Redis-backed when RATE_LIMIT_STORAGE_URI is set.
+
+    in_memory_fallback_enabled keeps rate-limited routes (including /health)
+    serving during a Redis outage by degrading to per-process counters; slowapi
+    re-checks the backend with exponential backoff and recovers automatically.
+    """
+    if not settings.RATE_LIMIT_STORAGE_URI:
+        return Limiter(key_func=_rate_limit_key)
+    return Limiter(
+        key_func=_rate_limit_key,
+        storage_uri=settings.RATE_LIMIT_STORAGE_URI,
+        storage_options=dict(_REDIS_STORAGE_OPTIONS),
+        in_memory_fallback_enabled=True,
+    )
+
+
+limiter = _build_limiter(get_settings())
