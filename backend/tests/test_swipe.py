@@ -1,5 +1,6 @@
 """Tests for swipe logic (band indexing, community rating, next_action) and purge endpoint."""
 
+import logging
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -390,6 +391,29 @@ class TestSubmitSwipeResults:
         selects = self._user_movie_selects(statements)
         assert len(selects) == 2
         assert all("seen is null" in c for c in selects)
+
+    def test_skipped_items_are_not_logged_at_warning(self, caplog):
+        """Skips pair a user id with a movie id and fire on benign duel races,
+        so they are summarized at DEBUG only, never WARNING (SEC-21, #589)."""
+        served, resolved = uuid.uuid4(), uuid.uuid4()
+        user, _, _ = self._install(user_movies={served: MagicMock()})
+
+        with caplog.at_level(logging.DEBUG, logger="backend.routers.swipe"):
+            resp, _ = self._post(
+                [
+                    {"movie_id": str(served), "seen": True},
+                    {"movie_id": str(resolved), "seen": True},
+                ]
+            )
+
+        assert resp.status_code == 200
+        records = [r for r in caplog.records if r.name == "backend.routers.swipe"]
+        assert not [r for r in records if r.levelno >= logging.WARNING]
+        assert any(
+            r.levelno == logging.DEBUG
+            and r.getMessage() == f"swipe_submit_skipped user_id={user.id} skipped=1"
+            for r in records
+        )
 
     def test_duplicate_movie_ids_in_one_batch_write_one_row(self):
         served = uuid.uuid4()
