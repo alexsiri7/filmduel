@@ -78,6 +78,11 @@ class TestExpandPoolInner:
                 "backend.services.expand.async_session_factory",
                 return_value=_mock_session_factory(db),
             ),
+            patch(
+                "backend.services.expand.try_acquire_xact_lock",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
             patch("backend.services.expand.TraktClient", return_value=trakt_mock),
             patch("backend.services.expand.get_settings") as mock_settings,
             patch("backend.services.expand.backfill_posters", new_callable=AsyncMock),
@@ -129,6 +134,11 @@ class TestExpandPoolInner:
                 "backend.services.expand.async_session_factory",
                 return_value=_mock_session_factory(db),
             ),
+            patch(
+                "backend.services.expand.try_acquire_xact_lock",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
             patch("backend.services.expand.TraktClient", return_value=trakt_mock),
             patch("backend.services.expand.get_settings") as mock_settings,
             patch("backend.services.expand.backfill_posters", new_callable=AsyncMock),
@@ -140,6 +150,95 @@ class TestExpandPoolInner:
 
         # Recommendations should NOT be called (cooldown active)
         trakt_mock.get_recommendations.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_skips_run_when_expansion_lock_held(self):
+        """A concurrent expansion for the same user must not repeat external work."""
+        user_id = uuid.uuid4()
+        user = _make_user(user_id)
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.get = AsyncMock(return_value=user)
+
+        trakt_mock = AsyncMock()
+
+        with (
+            patch(
+                "backend.services.expand.async_session_factory",
+                return_value=_mock_session_factory(db),
+            ),
+            patch(
+                "backend.services.expand.try_acquire_xact_lock",
+                new_callable=AsyncMock,
+                return_value=False,
+            ),
+            patch("backend.services.expand.TraktClient", return_value=trakt_mock),
+            patch("backend.services.expand.get_settings") as mock_settings,
+            patch("backend.services.expand.backfill_posters", new_callable=AsyncMock),
+        ):
+            mock_settings.return_value = MagicMock(
+                TRAKT_CLIENT_ID="fake", TMDB_API_KEY=""
+            )
+            result = await _expand_pool_inner(user_id, "movie")
+
+        assert result == 0
+        trakt_mock.get_recommendations.assert_not_awaited()
+        trakt_mock.get_anticipated.assert_not_awaited()
+        trakt_mock.get_popular_page.assert_not_awaited()
+        db.add.assert_not_called()
+        db.commit.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("media_type", ["movie", "show"])
+    async def test_acquires_lock_before_reading_cooldowns(self, media_type):
+        """The lock must be taken before the cooldown read, keyed per media_type."""
+        user_id = uuid.uuid4()
+        user = _make_user(user_id)
+        db = AsyncMock()
+        db.get = AsyncMock(return_value=user)
+        events: list[str] = []
+
+        async def fake_lock(db_, scope, key):
+            events.append("lock")
+            return True
+
+        async def fake_execute(stmt):
+            result = MagicMock()
+            if "pool_expansion" in str(stmt).lower():
+                events.append("recent")
+            result.all.return_value = []
+            result.scalar_one_or_none.return_value = None
+            result.rowcount = 0
+            return result
+
+        db.execute = fake_execute
+
+        trakt_mock = AsyncMock()
+        trakt_mock.get_recommendations.return_value = []
+        trakt_mock.get_anticipated.return_value = []
+        trakt_mock.get_popular_page.return_value = []
+
+        with (
+            patch(
+                "backend.services.expand.async_session_factory",
+                return_value=_mock_session_factory(db),
+            ),
+            patch(
+                "backend.services.expand.try_acquire_xact_lock",
+                new_callable=AsyncMock,
+                side_effect=fake_lock,
+            ) as lock_mock,
+            patch("backend.services.expand.TraktClient", return_value=trakt_mock),
+            patch("backend.services.expand.get_settings") as mock_settings,
+            patch("backend.services.expand.backfill_posters", new_callable=AsyncMock),
+        ):
+            mock_settings.return_value = MagicMock(
+                TRAKT_CLIENT_ID="fake", TMDB_API_KEY=""
+            )
+            await _expand_pool_inner(user_id, media_type)
+
+        assert events[:2] == ["lock", "recent"]
+        lock_mock.assert_awaited_once_with(db, f"pool_expansion_{media_type}", user_id)
 
     @pytest.mark.asyncio
     async def test_returns_zero_when_user_not_found(self):

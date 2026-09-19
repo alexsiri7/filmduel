@@ -56,3 +56,21 @@ async def acquire_quota_lock(db: AsyncSession, scope: str, key: uuid.UUID) -> No
     await db.execute(
         select(func.pg_advisory_xact_lock(func.hashtext(scope), func.hashtext(str(key))))
     )
+
+
+async def try_acquire_xact_lock(db: AsyncSession, scope: str, key: uuid.UUID) -> bool:
+    """Non-blocking variant of acquire_quota_lock for work that should be skipped,
+    not queued, when another run for the same (scope, key) is in flight.
+
+    Same transaction-scoped semantics (pg_try_advisory_xact_lock), so it is safe
+    behind the PgBouncer transaction-mode pooler and released on commit/rollback.
+    Returns True if this transaction now holds the lock, False if another does.
+    """
+    result = await db.execute(
+        select(
+            func.pg_try_advisory_xact_lock(
+                func.hashtext(scope), func.hashtext(str(key))
+            )
+        )
+    )
+    return bool(result.scalar_one())

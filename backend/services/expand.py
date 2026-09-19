@@ -13,7 +13,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import get_settings
-from backend.db import async_session_factory
+from backend.db import async_session_factory, try_acquire_xact_lock
 from backend.db_models import Movie, PoolExpansion, User, UserMovie
 from backend.services.pool import build_movie_upsert
 from backend.services.tmdb import backfill_posters, fetch_similar_films
@@ -28,7 +28,9 @@ TARGET_ADDED = 100
 async def expand_pool(user_id: uuid.UUID, media_type: str = "movie") -> int:
     """Expand a user's movie/show pool. Returns count of films added.
 
-    Runs in a background task with its own DB session.
+    Runs in a background task with its own DB session. Concurrent runs for the
+    same user/media_type are serialized by a transaction-scoped advisory lock; a
+    run that finds the lock held returns 0 without calling any external API.
     """
     try:
         return await _expand_pool_inner(user_id, media_type)
@@ -47,6 +49,19 @@ async def _expand_pool_inner(user_id: uuid.UUID, media_type: str = "movie") -> i
         user = await db.get(User, user_id)
         if not user:
             logger.warning("expand_pool: user %s not found", user_id)
+            return 0
+
+        # Serialize expansion per (user, media_type) so concurrent background
+        # tasks don't all repeat the same Trakt/TMDB work (#588). Losers exit
+        # rather than queue: the holder is already refilling this pool. The lock
+        # rides the transaction that already spans this run and is released at
+        # the commit below or on rollback.
+        if not await try_acquire_xact_lock(db, f"pool_expansion_{media_type}", user_id):
+            logger.info(
+                "expand_pool: expansion already in progress for user %s (%s), skipping",
+                user_id,
+                media_type,
+            )
             return 0
 
         now = datetime.now(timezone.utc)
