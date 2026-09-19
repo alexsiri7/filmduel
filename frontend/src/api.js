@@ -113,26 +113,26 @@ export function createTournament(name, bracketSize, filterType, filterValue, aiC
 }
 
 export function getTournament(id) {
-  return request(`/api/tournaments/${id}`);
+  return request(`/api/tournaments/${encodeURIComponent(id)}`);
 }
 
 export function getNextMatch(tournamentId) {
-  return request(`/api/tournaments/${tournamentId}/next`);
+  return request(`/api/tournaments/${encodeURIComponent(tournamentId)}/next`);
 }
 
 export function submitTournamentMatch(tournamentId, matchId, winnerMovieId) {
-  return request(`/api/tournaments/${tournamentId}/matches/${matchId}`, {
+  return request(`/api/tournaments/${encodeURIComponent(tournamentId)}/matches/${encodeURIComponent(matchId)}`, {
     method: "POST",
     body: JSON.stringify({ winner_movie_id: winnerMovieId }),
   });
 }
 
 export function abandonTournament(id) {
-  return request(`/api/tournaments/${id}`, { method: "DELETE" });
+  return request(`/api/tournaments/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 export function regenerateTournament(id) {
-  return request(`/api/tournaments/${id}/regenerate`, { method: "POST" });
+  return request(`/api/tournaments/${encodeURIComponent(id)}/regenerate`, { method: "POST" });
 }
 
 // ── Suggestions ─────────────────────────────────────────────────────
@@ -146,15 +146,15 @@ export function regenerateSuggestions(mediaType = "movie") {
 }
 
 export function dismissSuggestion(id) {
-  return request(`/api/suggestions/${id}/dismiss`, { method: "POST" });
+  return request(`/api/suggestions/${encodeURIComponent(id)}/dismiss`, { method: "POST" });
 }
 
 export function addToWatchlist(id) {
-  return request(`/api/suggestions/${id}/watchlist`, { method: "POST" });
+  return request(`/api/suggestions/${encodeURIComponent(id)}/watchlist`, { method: "POST" });
 }
 
 export function markSuggestionSeen(id) {
-  return request(`/api/suggestions/${id}/seen`, { method: "POST" });
+  return request(`/api/suggestions/${encodeURIComponent(id)}/seen`, { method: "POST" });
 }
 
 // ── Feedback ────────────────────────────────────────────────────────

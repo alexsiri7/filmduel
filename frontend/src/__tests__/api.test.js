@@ -10,6 +10,14 @@ import {
   submitFeedback,
   updateSettings,
   acceptConsent,
+  getTournament,
+  getNextMatch,
+  submitTournamentMatch,
+  abandonTournament,
+  regenerateTournament,
+  dismissSuggestion,
+  addToWatchlist,
+  markSuggestionSeen,
 } from "../api";
 
 describe("api", () => {
@@ -255,6 +263,35 @@ describe("api", () => {
       mockFetch401();
       await acceptConsent("1.0");
       expect(window.location.href).toBe("/login");
+    });
+  });
+
+  // Path parameter encoding
+  describe("path parameter encoding", () => {
+    const rawId = "a/b?c#d";
+    const encodedId = "a%2Fb%3Fc%23d";
+
+    it.each([
+      ["getTournament", () => getTournament(rawId), `/api/tournaments/${encodedId}`],
+      ["getNextMatch", () => getNextMatch(rawId), `/api/tournaments/${encodedId}/next`],
+      ["abandonTournament", () => abandonTournament(rawId), `/api/tournaments/${encodedId}`],
+      ["regenerateTournament", () => regenerateTournament(rawId), `/api/tournaments/${encodedId}/regenerate`],
+      ["dismissSuggestion", () => dismissSuggestion(rawId), `/api/suggestions/${encodedId}/dismiss`],
+      ["addToWatchlist", () => addToWatchlist(rawId), `/api/suggestions/${encodedId}/watchlist`],
+      ["markSuggestionSeen", () => markSuggestionSeen(rawId), `/api/suggestions/${encodedId}/seen`],
+    ])("%s percent-encodes the id path segment", async (_name, call, expectedUrl) => {
+      mockFetchOk({});
+      await call();
+      expect(fetch).toHaveBeenCalledWith(expectedUrl, expect.any(Object));
+    });
+
+    it("submitTournamentMatch percent-encodes both path segments", async () => {
+      mockFetchOk({});
+      await submitTournamentMatch(rawId, "m/1", 42);
+      expect(fetch).toHaveBeenCalledWith(
+        `/api/tournaments/${encodedId}/matches/m%2F1`,
+        expect.objectContaining({ method: "POST" })
+      );
     });
   });
 
