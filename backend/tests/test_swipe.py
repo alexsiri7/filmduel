@@ -1,9 +1,11 @@
 """Tests for swipe logic (band indexing, community rating, next_action) and purge endpoint."""
 
+import logging
 import uuid
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
+from sqlalchemy.dialects import postgresql
 
 from backend.db import get_db
 from backend.main import app
@@ -11,6 +13,7 @@ from backend.tests import SPA_HEADERS
 from backend.routers.auth import get_current_user
 from backend.routers.swipe import (
     BANDS,
+    MAX_SWIPES_PER_DAY,
     _community_rating_range,
     _elo_to_band_index,
 )
@@ -298,3 +301,168 @@ class TestDeduplicateRows:
         result = self._dedup(rows)
         assert len(result) == 1
         assert result[0].id == 42
+
+
+# ---------------------------------------------------------------------------
+# Submit results — unresolved-card filter and daily cap (SEC-21, #589)
+# ---------------------------------------------------------------------------
+
+
+class TestSubmitSwipeResults:
+    def setup_method(self):
+        app.dependency_overrides.clear()
+
+    def teardown_method(self):
+        app.dependency_overrides.clear()
+
+    def _install(self, *, user_movies, daily_count=0):
+        """Install a consented user and a db fake that dispatches on compiled SQL.
+
+        `user_movies` maps movie_id -> UserMovie mock for the ids that are still
+        unresolved; any other id resolves to None. Returns (user, db, statements).
+        """
+        user = _make_user()
+        user.is_admin = False
+        user.privacy_policy_accepted = True
+        db = _make_db()
+        db.add = MagicMock()
+        statements: list = []
+
+        async def fake_execute(stmt, *args, **kwargs):
+            statements.append(stmt)
+            compiled = stmt.compile(dialect=postgresql.dialect())
+            sql = str(compiled).lower()
+            result = MagicMock()
+            if "pg_advisory_xact_lock" in sql:
+                return result
+            if "count(" in sql and "swipe_results" in sql:
+                result.scalar_one.return_value = daily_count
+            elif "count(" in sql and "user_movies" in sql:
+                result.scalar.return_value = 100  # pool not low; no expand_pool
+            else:
+                # Both user_id and movie_id are UUID params; match on registered ids.
+                um = next(
+                    (user_movies[v] for v in compiled.params.values() if v in user_movies),
+                    None,
+                )
+                result.scalar_one_or_none.return_value = um
+            return result
+
+        db.execute = AsyncMock(side_effect=fake_execute)
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: db
+        return user, db, statements
+
+    def _post(self, results):
+        with patch(
+            "backend.routers.swipe.compute_next_action",
+            new_callable=AsyncMock,
+            return_value="duel",
+        ) as mock_next:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.post("/api/swipe/results", json={"results": results})
+        return resp, mock_next
+
+    @staticmethod
+    def _user_movie_selects(statements):
+        compiled = [str(s.compile(dialect=postgresql.dialect())).lower() for s in statements]
+        return [c for c in compiled if "from user_movies" in c and "count(" not in c]
+
+    def test_skips_movies_that_are_not_unresolved_cards(self):
+        served, resolved = uuid.uuid4(), uuid.uuid4()
+        um = MagicMock()
+        _, db, statements = self._install(user_movies={served: um})
+
+        resp, _ = self._post(
+            [
+                {"movie_id": str(served), "seen": True},
+                {"movie_id": str(resolved), "seen": True},
+            ]
+        )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["seen_count"] == 1
+        assert body["unseen_count"] == 0
+        assert um.seen is True
+        assert db.add.call_count == 1
+        assert db.add.call_args.args[0].movie_id == served
+
+        selects = self._user_movie_selects(statements)
+        assert len(selects) == 2
+        assert all("seen is null" in c for c in selects)
+
+    def test_skipped_items_are_not_logged_at_warning(self, caplog):
+        """Skips pair a user id with a movie id and fire on benign duel races,
+        so they are summarized at DEBUG only, never WARNING (SEC-21, #589)."""
+        served, resolved = uuid.uuid4(), uuid.uuid4()
+        user, _, _ = self._install(user_movies={served: MagicMock()})
+
+        with caplog.at_level(logging.DEBUG, logger="backend.routers.swipe"):
+            resp, _ = self._post(
+                [
+                    {"movie_id": str(served), "seen": True},
+                    {"movie_id": str(resolved), "seen": True},
+                ]
+            )
+
+        assert resp.status_code == 200
+        records = [r for r in caplog.records if r.name == "backend.routers.swipe"]
+        assert not [r for r in records if r.levelno >= logging.WARNING]
+        assert any(
+            r.levelno == logging.DEBUG
+            and r.getMessage() == f"swipe_submit_skipped user_id={user.id} skipped=1"
+            for r in records
+        )
+
+    def test_duplicate_movie_ids_in_one_batch_write_one_row(self):
+        served = uuid.uuid4()
+        um = MagicMock()
+        _, db, statements = self._install(user_movies={served: um})
+
+        resp, _ = self._post(
+            [
+                {"movie_id": str(served), "seen": True},
+                {"movie_id": str(served), "seen": True},
+                {"movie_id": str(served), "seen": False},
+            ]
+        )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["seen_count"] == 0
+        assert body["unseen_count"] == 1
+        assert um.seen is False
+        assert db.add.call_count == 1
+        assert len(self._user_movie_selects(statements)) == 1
+
+    def test_daily_cap_returns_429(self):
+        served = uuid.uuid4()
+        _, db, _ = self._install(
+            user_movies={served: MagicMock()}, daily_count=MAX_SWIPES_PER_DAY
+        )
+
+        resp, mock_next = self._post([{"movie_id": str(served), "seen": True}])
+
+        assert resp.status_code == 429
+        assert "Daily swipe limit" in resp.json()["detail"]
+        db.add.assert_not_called()
+        mock_next.assert_not_awaited()
+
+    def test_daily_cap_check_is_serialized_per_user(self):
+        """The cap count must run under a per-user advisory lock (SEC-02, #570)."""
+        user, _, statements = self._install(user_movies={}, daily_count=MAX_SWIPES_PER_DAY)
+
+        resp, _ = self._post([{"movie_id": str(uuid.uuid4()), "seen": True}])
+        assert resp.status_code == 429
+
+        compiled = [stmt.compile(dialect=postgresql.dialect()) for stmt in statements]
+        lock_idx = next(
+            i for i, c in enumerate(compiled) if "pg_advisory_xact_lock" in str(c)
+        )
+        count_idx = next(i for i, c in enumerate(compiled) if "count(" in str(c).lower())
+        assert lock_idx < count_idx, "advisory lock must be taken before the daily count"
+
+        lock_params = set(compiled[lock_idx].params.values())
+        assert "swipe_daily_cap" in lock_params
+        assert str(user.id) in lock_params

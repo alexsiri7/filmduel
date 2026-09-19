@@ -742,9 +742,17 @@ class TestDataCollectionConsentGuard:
     def test_submit_swipe_results_allowed_with_consent(self):
         user = _make_user(privacy_policy_accepted=True)
         mock_db = AsyncMock()
-        count_result = MagicMock()
-        count_result.scalar.return_value = 100
-        mock_db.execute.return_value = count_result
+
+        async def fake_execute(stmt, *args, **kwargs):
+            sql = str(stmt.compile(dialect=postgresql.dialect())).lower()
+            result = MagicMock()
+            if "swipe_results" in sql:
+                result.scalar_one.return_value = 0  # under the daily cap
+            else:
+                result.scalar.return_value = 100  # pool not low
+            return result
+
+        mock_db.execute = AsyncMock(side_effect=fake_execute)
         self._install(user, mock_db)
 
         with patch(
