@@ -9,7 +9,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, R
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.db import get_db
+from backend.db import acquire_quota_lock, get_db
 from backend.db_models import Movie, SwipeResult, User, UserMovie
 from backend.rate_limit import limiter
 from backend.config import get_settings
@@ -23,6 +23,10 @@ from backend.services.pair_selection import BANDS
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/swipe", tags=["swipe"])
+
+# Per-user daily cap on swipe_results rows (SEC-21, #589). A session is at most
+# 10 cards, so this allows ~200 sessions/day while bounding 180-day retention growth.
+MAX_SWIPES_PER_DAY = 2000
 
 
 def _elo_to_band_index(elo: int) -> int:
@@ -185,28 +189,54 @@ async def submit_swipe_results(
     """Submit all swipe results at once — bulk update seen status."""
     uid = current_user.id
     now = datetime.now(timezone.utc)
+
+    # Serialize the cap check per user (SEC-02, #570); held until get_db commits.
+    await acquire_quota_lock(db, "swipe_daily_cap", uid)
+
+    # Per-user daily cap on swipe_results rows: prevents database bloat (SEC-21, #589).
+    window_start = now - timedelta(hours=24)
+    count_stmt = select(func.count()).where(
+        SwipeResult.user_id == uid,
+        SwipeResult.created_at >= window_start,
+    )
+    daily_count = (await db.execute(count_stmt)).scalar_one()
+    if daily_count >= MAX_SWIPES_PER_DAY:
+        logger.warning("swipe_daily_cap_hit user_id=%s count=%d", uid, daily_count)
+        raise HTTPException(
+            status_code=429,
+            detail=f"Daily swipe limit reached ({MAX_SWIPES_PER_DAY} per 24 hours). Please try again later.",
+        )
+
     seen_count = 0
     unseen_count = 0
+    skipped = 0
 
-    for item in body.results:
-        # Update user_movies.seen
+    # Collapse repeated movie_ids so one batch writes at most one row per movie.
+    seen_by_movie = {item.movie_id: item.seen for item in body.results}
+
+    for movie_id, seen in seen_by_movie.items():
+        # Only unresolved rows are accepted (SEC-21, #589): a resolved movie is
+        # skipped rather than rejected, because a duel or mark-seen in another tab
+        # can legitimately resolve a served card before this batch lands, and the
+        # counts in the response already make partial application visible.
         stmt = select(UserMovie).where(
-            UserMovie.user_id == uid, UserMovie.movie_id == item.movie_id
+            UserMovie.user_id == uid,
+            UserMovie.movie_id == movie_id,
+            UserMovie.seen.is_(None),
         )
         result = await db.execute(stmt)
         um = result.scalar_one_or_none()
-        if um:
-            um.seen = item.seen
-            um.updated_at = now
-        else:
-            logger.warning("UserMovie not found for user=%s movie=%s", uid, item.movie_id)
+        if um is None:
+            skipped += 1
             continue
+        um.seen = seen
+        um.updated_at = now
 
         # Insert swipe_results record
-        sr = SwipeResult(user_id=uid, movie_id=item.movie_id, seen=item.seen)
+        sr = SwipeResult(user_id=uid, movie_id=movie_id, seen=seen)
         db.add(sr)
 
-        if item.seen:
+        if seen:
             seen_count += 1
         else:
             unseen_count += 1
@@ -220,6 +250,8 @@ async def submit_swipe_results(
         unseen_count,
         next_action,
     )
+    if skipped:
+        logger.debug("swipe_submit_skipped user_id=%s skipped=%d", uid, skipped)
 
     # Check if pool needs expansion (scoped by media_type)
     unknown_stmt = (
