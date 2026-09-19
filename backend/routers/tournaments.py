@@ -475,6 +475,12 @@ async def submit_match_result_endpoint(
 ):
     """Submit a tournament match result."""
     uid = current_user.id
+
+    # Serialize against abandon_tournament (SEC-19, #587): held until get_db
+    # commits, so the status validate_match reads cannot be flipped underneath
+    # the bracket write.
+    await acquire_quota_lock(db, "tournament_status", tournament_id)
+
     tournament = await _load_tournament(tournament_id, uid, db)
     try:
         winner_id = uuid.UUID(body.winner_movie_id)
@@ -521,6 +527,10 @@ async def abandon_tournament(
     """Abandon a tournament (soft delete)."""
     uid = current_user.id
 
+    # Same lock as submit_match_result_endpoint (SEC-19, #587), taken before
+    # the read so a match result that just completed the bracket is visible.
+    await acquire_quota_lock(db, "tournament_status", tournament_id)
+
     stmt = select(Tournament).where(Tournament.id == tournament_id)
     result = await db.execute(stmt)
     tournament = result.scalar_one_or_none()
@@ -529,6 +539,10 @@ async def abandon_tournament(
 
     if tournament.status == "abandoned":
         raise HTTPException(status_code=400, detail="Tournament already abandoned")
+    if tournament.status == "completed":
+        raise HTTPException(
+            status_code=400, detail="Cannot abandon a completed tournament"
+        )
 
     tournament.status = "abandoned"
     return {"status": "abandoned"}

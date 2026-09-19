@@ -762,3 +762,157 @@ class TestMatchResultSyncsRatings:
 
         assert resp.status_code == 200
         mock_sync.assert_awaited_once_with(user.id, winner_id, 1210, loser_id, 1090)
+
+
+# ---------------------------------------------------------------------------
+# Tournament state machine: status transitions are locked and guarded (SEC-19, #587)
+# ---------------------------------------------------------------------------
+
+
+def _lock_index(events: list, scope: str, key) -> int:
+    """Index of the pg_advisory_xact_lock statement for (scope, key) in `events`."""
+    from sqlalchemy.dialects import postgresql
+
+    for i, e in enumerate(events):
+        if isinstance(e, str):
+            continue
+        compiled = e.compile(dialect=postgresql.dialect())
+        if "pg_advisory_xact_lock" not in str(compiled):
+            continue
+        params = set(compiled.params.values())
+        if scope in params and str(key) in params:
+            return i
+    raise AssertionError(f"no advisory lock taken for ({scope}, {key})")
+
+
+class TestTournamentStatusTransitions:
+    def setup_method(self):
+        app.dependency_overrides.clear()
+
+    def teardown_method(self):
+        app.dependency_overrides.clear()
+
+    def _abandon(self, tournament, user):
+        """DELETE the tournament, returning (response, statements executed)."""
+        events: list = []
+        mock_db = AsyncMock()
+
+        async def record_execute(stmt, *args, **kwargs):
+            events.append(stmt)
+            result = MagicMock()
+            result.scalar_one_or_none.return_value = tournament
+            return result
+
+        mock_db.execute = AsyncMock(side_effect=record_execute)
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+            resp = client.delete(f"/api/tournaments/{tournament.id}")
+        return resp, events
+
+    def test_abandon_rejects_a_completed_tournament(self):
+        user = _make_user()
+        tournament = _make_tournament(user.id, status="completed")
+
+        resp, _ = self._abandon(tournament, user)
+
+        assert resp.status_code == 400
+        assert tournament.status == "completed"
+
+    def test_abandon_rejects_an_already_abandoned_tournament(self):
+        user = _make_user()
+        tournament = _make_tournament(user.id, status="abandoned")
+
+        resp, _ = self._abandon(tournament, user)
+
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "Tournament already abandoned"
+
+    def test_abandon_locks_the_tournament_before_reading_its_status(self):
+        """A concurrent completion must be visible to the status guard, so the
+        lock has to be taken before the row is read."""
+        user = _make_user()
+        tournament = _make_tournament(user.id, status="active")
+
+        resp, events = self._abandon(tournament, user)
+
+        assert resp.status_code == 200
+        assert tournament.status == "abandoned"
+        lock_idx = _lock_index(events, "tournament_status", tournament.id)
+        assert lock_idx == 0, "tournament must be locked before its status is read"
+
+    def test_match_result_locks_the_tournament_before_loading_it(self):
+        """The status check in validate_match is only authoritative if the load
+        it reads from happens under the same lock abandon_tournament takes."""
+        user = _make_user()
+        tournament_id = uuid.uuid4()
+        match = _mock_bracket_match(1, 0)
+        match.movie_a_id, match.movie_b_id = match.movie_a.id, match.movie_b.id
+        tournament = _make_tournament(user.id, id=tournament_id, matches=[match])
+
+        events: list = []
+        mock_db = AsyncMock()
+
+        async def record_execute(stmt, *args, **kwargs):
+            events.append(stmt)
+            return MagicMock()
+
+        async def load_tournament(*args, **kwargs):
+            events.append("load_tournament")
+            return tournament
+
+        mock_db.execute = AsyncMock(side_effect=record_execute)
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with patch(
+            "backend.routers.tournaments._load_tournament",
+            new_callable=AsyncMock,
+            side_effect=load_tournament,
+        ), patch(
+            "backend.routers.tournaments.record_match_winner",
+            new_callable=AsyncMock,
+            return_value=(1210, 1090),
+        ), patch(
+            "backend.routers.tournaments.sync_ratings_background",
+            new_callable=AsyncMock,
+        ):
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.post(
+                    f"/api/tournaments/{tournament_id}/matches/{match.id}",
+                    json={"winner_movie_id": str(match.movie_a.id)},
+                )
+
+        assert resp.status_code == 200
+        lock_idx = _lock_index(events, "tournament_status", tournament_id)
+        assert lock_idx < events.index("load_tournament")
+
+    def test_match_result_on_an_abandoned_tournament_is_rejected(self):
+        user = _make_user()
+        tournament_id = uuid.uuid4()
+        match = _mock_bracket_match(1, 0)
+        tournament = _make_tournament(
+            user.id, id=tournament_id, status="abandoned", matches=[match]
+        )
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+
+        with patch(
+            "backend.routers.tournaments._load_tournament",
+            new_callable=AsyncMock,
+            return_value=tournament,
+        ), patch(
+            "backend.routers.tournaments.record_match_winner",
+            new_callable=AsyncMock,
+        ) as mock_record:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.post(
+                    f"/api/tournaments/{tournament_id}/matches/{match.id}",
+                    json={"winner_movie_id": str(match.movie_a.id)},
+                )
+
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "Tournament is not active"
+        mock_record.assert_not_awaited()
