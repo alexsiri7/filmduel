@@ -85,4 +85,4 @@ jobs:
 
       - name: Audit npm dependencies
         working-directory: frontend
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=moderate
