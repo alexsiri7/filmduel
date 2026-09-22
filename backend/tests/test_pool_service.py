@@ -10,10 +10,14 @@ import pytest
 from sqlalchemy.sql import Select
 from sqlalchemy.sql.dml import Insert, Update
 
+from sqlalchemy import Column
+
 from backend.services.pool import (
     populate_movie_pool,
     build_movie_upsert,
+    _upsert_pool,
     _upsert_simkl_pool,
+    _upsert_user_movie,
 )
 
 
@@ -310,3 +314,231 @@ class TestUpsertSimklPool:
         assert params["trakt_id"] == 901
         assert params["simkl_id"] == 901
         assert params["imdb_id"] == "tt9999999"
+
+
+# ---------------------------------------------------------------------------
+# _upsert_user_movie — conflict resolution must never clobber good data
+#
+# There is no real database fixture anywhere in this test suite (every test
+# here mocks AsyncSession.execute and inspects the compiled statement); a
+# live Postgres is not available in CI either. So "behavior" is verified at
+# the same boundary as the rest of the file: the exact SQL contract sent to
+# Postgres. _upsert_user_movie decides in Python (not in the ON CONFLICT
+# clause) whether to preserve or overwrite each column, so inspecting the
+# compiled statement's on-conflict SET clause is a faithful proxy for what a
+# real conflicting row would end up with.
+# ---------------------------------------------------------------------------
+
+
+class TestUpsertUserMovie:
+    def _fake_db(self):
+        captured = []
+
+        async def fake_execute(stmt):
+            captured.append(stmt)
+            return None
+
+        db = AsyncMock()
+        db.execute = fake_execute
+        return db, captured
+
+    def _conflict_set_map(self, stmt):
+        """The ON CONFLICT DO UPDATE SET clause as {column_name: value_or_column}."""
+        return dict(stmt._post_values_clause.update_values_to_set)
+
+    @pytest.mark.asyncio
+    async def test_none_seen_and_rating_preserve_existing_row_on_conflict(self):
+        """Re-upserting with seen=None, rating=None must not clobber a previously seeded row."""
+        db, captured = self._fake_db()
+        now = datetime.now(timezone.utc)
+        user_id, movie_id = uuid.uuid4(), uuid.uuid4()
+
+        await _upsert_user_movie(db, user_id, movie_id, True, 8, now)
+        await _upsert_user_movie(db, user_id, movie_id, None, None, now)
+
+        seeded = captured[0].compile().params
+        assert seeded["seen"] is True
+        assert seeded["seeded_elo"] is not None
+        assert seeded["trakt_rating"] == 8
+
+        set_map = self._conflict_set_map(captured[1])
+        # A Column reference (e.g. `seen = user_movies.seen`) means "keep whatever is
+        # already there" — the opposite would silently overwrite good data with NULL.
+        assert isinstance(set_map["seen"], Column)
+        assert isinstance(set_map["seeded_elo"], Column)
+        assert isinstance(set_map["trakt_rating"], Column)
+        assert set_map["updated_at"] == now
+
+    @pytest.mark.asyncio
+    async def test_seen_and_rating_provided_populate_a_previously_blank_row(self):
+        """Re-upserting with seen=True, rating=7 fills in a row that started with no data."""
+        db, captured = self._fake_db()
+        now = datetime.now(timezone.utc)
+        user_id, movie_id = uuid.uuid4(), uuid.uuid4()
+
+        await _upsert_user_movie(db, user_id, movie_id, None, None, now)
+        await _upsert_user_movie(db, user_id, movie_id, True, 7, now)
+
+        blank = captured[0].compile().params
+        assert blank["seen"] is None
+        assert blank["seeded_elo"] is None
+        assert blank["trakt_rating"] is None
+
+        set_map = self._conflict_set_map(captured[1])
+        assert set_map["seen"] is True
+        assert set_map["seeded_elo"] is not None
+        assert set_map["trakt_rating"] == 7
+
+
+# ---------------------------------------------------------------------------
+# _upsert_pool — unmapped trakt_ids must not fail the whole batch
+# ---------------------------------------------------------------------------
+
+
+class TestUpsertPoolUnmappedTraktId:
+    @pytest.mark.asyncio
+    async def test_unmapped_trakt_id_is_skipped_without_raising(self):
+        """A trakt_id with no matching movies row (e.g. excluded by a media_type mismatch
+        in the WHERE clause) is skipped instead of raising, and the rest of the batch
+        still completes."""
+        mapped_movie_id = uuid.uuid4()
+        stmts = []
+
+        async def fake_execute(stmt):
+            stmts.append(stmt)
+            result = MagicMock()
+            if isinstance(stmt, Select):
+                # Only trakt_id 1 resolves to a movies row; trakt_id 2 has no match.
+                row = MagicMock()
+                row.trakt_id = 1
+                row.id = mapped_movie_id
+                result.all.return_value = [row]
+            return result
+
+        db = AsyncMock()
+        db.execute = fake_execute
+
+        pool = {
+            1: {"ids": {"trakt": 1}, "title": "Seen Film"},
+            2: {"ids": {"trakt": 2}, "title": "Unseen Film"},
+        }
+
+        await _upsert_pool(
+            db,
+            _make_user(),
+            pool,
+            seen_trakt_ids={1},
+            ratings_by_trakt_id={},
+            media_type="movie",
+            now=datetime.now(timezone.utc),
+        )
+
+        user_movie_inserts = [
+            s for s in stmts if isinstance(s, Insert) and s.table.name == "user_movies"
+        ]
+        assert len(user_movie_inserts) == 1
+        params = user_movie_inserts[0].compile().params
+        assert params["movie_id"] == mapped_movie_id
+        assert params["seen"] is True
+
+    @pytest.mark.asyncio
+    async def test_unmapped_unseen_trakt_id_is_skipped_without_raising(self):
+        """Same as above but for an unseen trakt_id, to cover both seen-flag branches."""
+        mapped_movie_id = uuid.uuid4()
+        stmts = []
+
+        async def fake_execute(stmt):
+            stmts.append(stmt)
+            result = MagicMock()
+            if isinstance(stmt, Select):
+                row = MagicMock()
+                row.trakt_id = 2
+                row.id = mapped_movie_id
+                result.all.return_value = [row]
+            return result
+
+        db = AsyncMock()
+        db.execute = fake_execute
+
+        pool = {
+            1: {"ids": {"trakt": 1}, "title": "Unmapped Film"},
+            2: {"ids": {"trakt": 2}, "title": "Mapped Unseen Film"},
+        }
+
+        await _upsert_pool(
+            db,
+            _make_user(),
+            pool,
+            seen_trakt_ids=set(),
+            ratings_by_trakt_id={},
+            media_type="movie",
+            now=datetime.now(timezone.utc),
+        )
+
+        user_movie_inserts = [
+            s for s in stmts if isinstance(s, Insert) and s.table.name == "user_movies"
+        ]
+        assert len(user_movie_inserts) == 1
+        params = user_movie_inserts[0].compile().params
+        assert params["movie_id"] == mapped_movie_id
+        assert params["seen"] is None
+
+
+# ---------------------------------------------------------------------------
+# populate_movie_pool — partial provider failure, SIMKL-down direction
+# (mirrors TestSafeFetch.test_partial_provider_failure_continues_other, which
+# only covers the Trakt-down direction)
+# ---------------------------------------------------------------------------
+
+
+class TestPartialProviderFailureSimklDown:
+    @pytest.mark.asyncio
+    async def test_simkl_failure_still_populates_trakt_movies(self):
+        """When SIMKL fails, Trakt-sourced movies should still be upserted."""
+        user = _make_user(last_seen_at=None)
+        user.simkl_user_id = "simkluser"
+        user.simkl_access_token = "fake-simkl-token"
+        db = AsyncMock()
+
+        stmts = []
+
+        async def fake_execute(stmt):
+            stmts.append(stmt)
+            result = MagicMock()
+            result.all.return_value = []
+            result.rowcount = 0
+            return result
+
+        db.execute = fake_execute
+
+        trakt_mock = AsyncMock()
+        trakt_mock.get_popular.return_value = [
+            {"ids": {"trakt": 1, "imdb": "tt001"}, "title": "Trakt Film", "year": 2024}
+        ]
+        trakt_mock.get_trending.return_value = []
+        trakt_mock.get_recommendations.return_value = []
+        trakt_mock.get_user_watched.return_value = []
+        trakt_mock.get_user_ratings.return_value = []
+
+        simkl_mock = AsyncMock()
+        simkl_mock.get_popular.side_effect = RuntimeError("SIMKL down")
+        simkl_mock.get_trending.side_effect = RuntimeError("SIMKL down")
+        simkl_mock.get_user_watched.side_effect = RuntimeError("SIMKL down")
+        simkl_mock.get_user_ratings.side_effect = RuntimeError("SIMKL down")
+
+        with (
+            patch("backend.services.pool.TraktClient", return_value=trakt_mock),
+            patch("backend.services.pool.SimklClient", return_value=simkl_mock),
+            patch("backend.services.pool.get_settings") as mock_settings,
+        ):
+            mock_settings.return_value = MagicMock(TRAKT_CLIENT_ID="fake", SIMKL_CLIENT_ID="fake")
+            # Should not raise — _safe_fetch swallows the SIMKL errors
+            await populate_movie_pool(user, db)
+
+        movie_inserts = [s for s in stmts if isinstance(s, Insert) and s.table.name == "movies"]
+        assert any(i.compile().params.get("trakt_id") == 1 for i in movie_inserts)
+        assert user.last_seen_at is not None
+        # Confirm the SIMKL path actually ran (and failed) rather than being skipped
+        # because has_simkl evaluated False — _make_user()'s plain MagicMock attrs
+        # are truthy by default, so this pins that has_simkl is genuinely True here.
+        assert simkl_mock.get_popular.await_count >= 1

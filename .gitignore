@@ -3,6 +3,7 @@ __pycache__/
 .env
 node_modules/
 frontend/dist/
+frontend/coverage/
 .vite/
 
 # Beads / Dolt files (added by bd init)

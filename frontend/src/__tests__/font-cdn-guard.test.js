@@ -10,8 +10,8 @@ const CDN_PATTERNS = [
 // Files in the frontend that previously referenced Google Fonts CDN
 const FILES_TO_CHECK = [
   ['index.html', resolve('index.html')],
-  ['src/index.css', resolve('src/index.css')],
-  ['src/main.jsx', resolve('src/main.jsx')],
+  ['src/index.css', resolve('src', 'index.css')],
+  ['src/main.jsx', resolve('src', 'main.jsx')],
 ];
 
 describe('Google Fonts CDN guard', () => {
