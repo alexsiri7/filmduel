@@ -24,8 +24,6 @@ from backend.config import _PROXY_PLATFORM_ENV_VARS
 for _var in _PROXY_PLATFORM_ENV_VARS:
     os.environ.pop(_var, None)
 
-from unittest.mock import patch
-
 import pytest
 
 from backend.rate_limit import limiter
@@ -37,19 +35,3 @@ def _reset_limiter():
     limiter.reset()
     yield
     limiter.reset()
-
-
-@pytest.fixture(autouse=True)
-def _no_real_scheduler():
-    """Prevent TestClient(app)'s lifespan from starting a real APScheduler.
-
-    backend.main builds one module-level `_scheduler` singleton shared by every
-    TestClient(app) instantiation across the suite. Patching its start/shutdown
-    here — rather than in backend.scheduler.build_scheduler — leaves
-    test_scheduler.py (which builds its own scheduler via build_scheduler()
-    directly, never through the app lifespan) unaffected.
-    """
-    from backend import main as _main
-
-    with patch.object(_main._scheduler, "start"), patch.object(_main._scheduler, "shutdown"):
-        yield
