@@ -28,6 +28,19 @@ from backend.services.token_crypto import _fernet, encrypt_token
 TEST_KEY = "a-very-long-test-key-that-is-at-least-32-characters"
 
 
+@pytest.fixture(autouse=True)
+def _clean_fernet_cache():
+    """Clear the shared _fernet LRU cache even if a test fails mid-way.
+
+    Without this, a failure between the two inline cache_clear() calls left
+    later tests (in this or other modules) picking up a Fernet built from a
+    MagicMock-patched get_settings().
+    """
+    _fernet.cache_clear()
+    yield
+    _fernet.cache_clear()
+
+
 class TestMakeFernets:
     def test_old_and_new_keys_differ(self):
         """SHA-256 and HKDF derivations must produce different keys."""
@@ -39,13 +52,11 @@ class TestMakeFernets:
 
     def test_new_key_matches_token_crypto(self):
         """New Fernet key in migration must match what token_crypto._fernet() produces."""
-        _fernet.cache_clear()
         mock_settings = MagicMock()
         mock_settings.TOKEN_ENC_KEY = TEST_KEY
         with patch("backend.services.token_crypto.get_settings", return_value=mock_settings):
             ciphertext = encrypt_token("alignment-check")
 
-        _fernet.cache_clear()
         _, new_fernet = _make_fernets(TEST_KEY)
         assert new_fernet.decrypt(ciphertext.encode()) == b"alignment-check"
 

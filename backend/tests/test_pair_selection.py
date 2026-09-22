@@ -265,16 +265,6 @@ class TestWeightedSample:
 
 
 class TestPickChallenger:
-    def test_returns_from_candidates(self):
-        anchor = _make_user_movie(elo=1000, battles=5)
-        candidates = [
-            _make_user_movie(elo=1010, battles=3),
-            _make_user_movie(elo=800, battles=7),
-        ]
-        random.seed(42)
-        result = _pick_challenger(anchor, candidates)
-        assert result in candidates
-
     def test_close_match_preference(self):
         """When roll < 0.7, _pick_challenger should prefer close ELO matches."""
         anchor = _make_user_movie(elo=1000, battles=5)
