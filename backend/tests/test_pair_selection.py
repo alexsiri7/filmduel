@@ -1,6 +1,5 @@
 """Tests for pair selection algorithm in routers/movies.py."""
 
-import random
 import unittest.mock
 import uuid
 from unittest.mock import AsyncMock, MagicMock

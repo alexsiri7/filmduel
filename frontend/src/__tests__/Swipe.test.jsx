@@ -95,8 +95,9 @@ describe("Swipe", () => {
     expect(screen.getByText("Loading more films...")).toBeInTheDocument();
     expect(screen.queryByText("Start Dueling")).not.toBeInTheDocument();
 
-    expect(fetchSwipeCards).toHaveBeenCalledTimes(1);
-
+    // No intermediate call-count assertion here: with shouldAdvanceTime: true the
+    // fake clock also tracks real elapsed time, so on a slow/loaded runner the
+    // 1500ms timer could already have fired by this point.
     await vi.advanceTimersByTimeAsync(1500);
 
     await waitFor(() => expect(fetchSwipeCards).toHaveBeenCalledTimes(2));
@@ -127,8 +128,9 @@ describe("Swipe", () => {
 
     // Known gap: Swipe.jsx's error screen only renders when `!cards.length`,
     // but cards are still populated after the last swipe, so the "boom"
-    // error is never shown to the user. Pinning current behavior here;
-    // see bd issue filed for the silent-failure UX bug.
+    // error is never shown to the user. Pinning current behavior here —
+    // flagged separately as a silent-failure UX bug, not filed as a bd
+    // issue (bd's Dolt database isn't initialized in this worktree).
     expect(screen.queryByText("boom")).not.toBeInTheDocument();
   });
 

@@ -171,10 +171,14 @@ describe("Suggestions", () => {
 
   it("shows the all-caught-up screen once every active suggestion is cleared", async () => {
     // `allDismissed` (Suggestions.jsx:93) requires suggestions.length > 0 with zero
-    // active (non-dismissed) entries. handleDismiss/handleMarkSeen remove items from
-    // local state entirely, so this only fires when a suggestion arrives already
-    // dismissed (e.g. returned by the backend from a prior session) and the
-    // remaining active suggestion is then cleared via the UI.
+    // active (non-dismissed) entries. In the real app this branch is unreachable:
+    // GET /api/suggestions only ever returns rows with dismissed_at == null
+    // (backend/routers/suggestions.py's _get_active_suggestions filters
+    // Suggestion.dismissed_at.is_(None) at the SQL level), and handleDismiss/
+    // handleMarkSeen remove items from local state entirely rather than setting
+    // dismissed_at. This test exercises the computation directly via a synthetic
+    // already-dismissed suggestion the API can never actually send — pinning
+    // dead code, not a real user-reachable path.
     const active = makeSuggestion({ id: "active" });
     const alreadyDismissed = makeSuggestion({
       id: "stale",

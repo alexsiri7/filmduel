@@ -538,3 +538,7 @@ class TestPartialProviderFailureSimklDown:
         movie_inserts = [s for s in stmts if isinstance(s, Insert) and s.table.name == "movies"]
         assert any(i.compile().params.get("trakt_id") == 1 for i in movie_inserts)
         assert user.last_seen_at is not None
+        # Confirm the SIMKL path actually ran (and failed) rather than being skipped
+        # because has_simkl evaluated False — _make_user()'s plain MagicMock attrs
+        # are truthy by default, so this pins that has_simkl is genuinely True here.
+        assert simkl_mock.get_popular.await_count >= 1
