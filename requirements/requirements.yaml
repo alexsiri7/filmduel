@@ -647,7 +647,7 @@ requirements:
 
   - id: FD-052
     title: Database constraint - pooled Postgres via SQLAlchemy
-    statement: "While connecting to Supabase Postgres through PgBouncer transaction pooling, the system shall use SQLAlchemy 2.0 async with asyncpg and statement_cache_size=0, never the supabase-py SDK, with schema changes applied exclusively through Alembic migrations."
+    statement: "While connecting to Supabase Postgres through the Supabase session pooler (port 5432) as the filmduel role, the system shall use SQLAlchemy 2.0 async with asyncpg and statement_cache_size=0, never the supabase-py SDK, with schema changes applied exclusively through Alembic migrations."
     category: constraint
     priority: must
     status: active
@@ -656,6 +656,7 @@ requirements:
       - "Engine construction sets statement_cache_size=0"
       - "No supabase-py dependency exists in backend/requirements.in"
       - "Every schema change ships as an Alembic revision (backend/migrations)"
+    notes: "The filmduel role's search_path is (filmduel, extensions), so unqualified table names resolve to the filmduel schema without startup search_path parameters. statement_cache_size=0 is kept so the engine also works behind the transaction pooler (port 6543)."
 
   # ── Cross-provider catalog integrity ────────────────────────────────────
 
