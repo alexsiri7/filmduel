@@ -42,7 +42,7 @@ The experience should feel like a game — fast, opinionated, oddly compelling.
 **Key constraints:**
 - No separate frontend deployment. FastAPI serves the React build from `/static` and catches all non-API routes with a wildcard returning `index.html`.
 - No supabase-py SDK — connect directly via `DATABASE_URL` using SQLAlchemy + asyncpg.
-- Supabase uses PgBouncer in transaction mode — asyncpg must set `statement_cache_size=0`.
+- Supabase Postgres is reached through the session pooler (port 5432) as role `filmduel`, whose `search_path` is `filmduel, extensions` — unqualified table names resolve to the `filmduel` schema. asyncpg still sets `statement_cache_size=0`, so the transaction pooler (port 6543) keeps working too.
 - Branch protection on `main` — all changes via PR. Railway auto-deploys on merge.
 
 ### Design Decisions
@@ -50,7 +50,7 @@ The experience should feel like a game — fast, opinionated, oddly compelling.
 1. **SQLAlchemy + Alembic over raw Supabase client** — proper ORM, typed models, versioned migrations, no vendor lock-in.
 2. **Direct Postgres over Supabase SDK** — full SQLAlchemy power (joins, eager loading, transactions).
 3. **Tailwind + shadcn/ui** — polished accessible components, `cn()` utility for conditional classes.
-4. **Transaction pooler (port 6543)** — better for short-lived connections. Requires `statement_cache_size=0`.
+4. **Session pooler (port 5432)** — the database lives in schema `filmduel` of a Supabase project shared with other apps; the `filmduel` role's `search_path` (`filmduel, extensions`) scopes it without connection parameters. `statement_cache_size=0` keeps it compatible with the transaction pooler.
 5. **Sentry from day one** — catch issues immediately after deploy.
 6. **SQLAlchemy models separated from Pydantic schemas** — `db_models.py` for ORM, `schemas.py` for request/response. Never conflate.
 7. **Swipe phase separated from duel phase** — classification (seen/unseen) and ranking are distinct activities with distinct UIs. Mixing them makes both feel like homework.
@@ -107,8 +107,8 @@ filmduel/
 ## Environment Variables
 
 ```bash
-# Database — Supabase Postgres via transaction pooler (port 6543)
-DATABASE_URL=postgresql+asyncpg://postgres.PROJECT_REF:PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres
+# Database — Supabase Postgres via session pooler (port 5432), role `filmduel` (search_path = filmduel, extensions)
+DATABASE_URL=postgresql+asyncpg://filmduel.PROJECT_REF:PASSWORD@aws-0-REGION.pooler.supabase.com:5432/postgres
 
 # Trakt OAuth2 — https://trakt.tv/oauth/applications
 TRAKT_CLIENT_ID=
