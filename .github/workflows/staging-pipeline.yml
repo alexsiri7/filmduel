@@ -15,10 +15,14 @@ jobs:
     name: Deploy to staging
     runs-on: ubuntu-latest
     timeout-minutes: 52  # guard: Railway build ≤22 min + 16 min health-poll + 7 min railway-up retries + 7 min buffer
+    # Only deploy commits pushed to main in this repository (never pull_request
+    # runs, whose head branch could also be named "main" in a fork).
     if: >-
-      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
       (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'main')
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
