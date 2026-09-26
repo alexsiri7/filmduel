@@ -17,8 +17,13 @@ engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,
     pool_pre_ping=True,
-    pool_size=5,
-    max_overflow=10,
+    # Kept small: the database lives in schema `filmduel` of a Supabase project
+    # shared with other apps, so its pooler connection budget is shared too.
+    # Worst case per replica is 5 app connections + 1 for alembic (NullPool) at
+    # startup. Nothing here pins a schema: the `filmduel` role's search_path
+    # (filmduel, extensions) resolves every unqualified table name.
+    pool_size=3,
+    max_overflow=2,
     # Supabase pooler (PgBouncer transaction mode) doesn't support prepared statements
     connect_args={"statement_cache_size": 0, "prepared_statement_cache_size": 0},
 )
