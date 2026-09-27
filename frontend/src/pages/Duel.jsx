@@ -88,6 +88,9 @@ export default function Duel({ mediaType = "movie" }) {
     loadStats();
   }, [loadPair, loadStats]);
 
+  const pickedWinner =
+    result?.outcome === "a_wins" || result?.outcome === "b_wins" ? result.outcome : null;
+
   const handleSubmit = (outcome) => {
     if (!pair || submitting) return;
     setSubmitting(true);
@@ -235,7 +238,7 @@ export default function Duel({ mediaType = "movie" }) {
                   onClick={() => handleSubmit("a_wins")}
                   clickable={!submitting && !result}
                   compact={windowWidth < 768}
-                  chosen={result ? (result.outcome === "a_wins" ? "winner" : "loser") : undefined}
+                  chosen={pickedWinner ? (pickedWinner === "a_wins" ? "winner" : "loser") : undefined}
                 />
               </div>
 
@@ -255,7 +258,7 @@ export default function Duel({ mediaType = "movie" }) {
                   onClick={() => handleSubmit("b_wins")}
                   clickable={!submitting && !result}
                   compact={windowWidth < 768}
-                  chosen={result ? (result.outcome === "b_wins" ? "winner" : "loser") : undefined}
+                  chosen={pickedWinner ? (pickedWinner === "b_wins" ? "winner" : "loser") : undefined}
                 />
               </div>
             </div>
