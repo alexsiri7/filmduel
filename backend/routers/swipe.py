@@ -18,11 +18,21 @@ from backend.schemas import MediaType, SwipeCardSchema, SwipeResponse, SwipeSubm
 from backend.services.duel import compute_next_action
 from backend.services.expand import expand_pool
 from backend.services.retention import purge_old_swipe_results as _purge_old_swipe_results
-from backend.services.pair_selection import BANDS
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/swipe", tags=["swipe"])
+
+# (name, elo_low, elo_high, community_rating_low, community_rating_high)
+# Movie.community_rating is Numeric(4,1), so the upper bounds carry a .9 tenth to
+# reach the next band's lower bound without leaving a value unclassified.
+BANDS = [
+    ("elite", 1300, 9999, 80, 100),
+    ("strong", 1100, 1299, 65, 79.9),
+    ("mid", 900, 1099, 45, 64.9),
+    ("weak", 700, 899, 25, 44.9),
+    ("poor", 0, 699, 0, 24.9),
+]
 
 # Per-user daily cap on swipe_results rows (SEC-21, #589). A session is at most
 # 10 cards, so this allows ~200 sessions/day while bounding 180-day retention growth.
