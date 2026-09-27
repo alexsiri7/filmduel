@@ -130,3 +130,38 @@ class TestRankingsRouter:
         assert resp.status_code == 200
         assert mock_elos.await_args.args[1:] == (user.id, "show")
         assert not mock_elos.await_args.kwargs
+
+    def test_get_stats_rates_highest_and_lowest_by_percentile(self):
+        """Stats rate the highest and lowest films against the media_type population."""
+        user = _make_user()
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+        stats = {
+            "total_duels": 5,
+            "total_movies_ranked": 3,
+            "unseen_count": 0,
+            "average_elo": 1000.0,
+            "highest_rated": _make_user_movie(1100),
+            "lowest_rated": _make_user_movie(900),
+        }
+        with (
+            patch(
+                "backend.routers.rankings.get_user_stats",
+                new_callable=AsyncMock,
+                return_value=stats,
+            ),
+            patch(
+                "backend.routers.rankings.get_ranked_elos",
+                new_callable=AsyncMock,
+                return_value=[900, 1000, 1100],
+            ) as mock_elos,
+        ):
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.get("/api/rankings/stats?media_type=show")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["highest_rated"]["trakt_rating"] == 9
+        assert body["lowest_rated"]["trakt_rating"] == 2
+        mock_elos.assert_awaited_once()
+        assert mock_elos.await_args.args[1:] == (user.id, "show")
