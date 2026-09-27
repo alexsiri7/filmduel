@@ -1,4 +1,4 @@
-"""Duel pair selection algorithm with quality band matching."""
+"""Duel pair selection: least-dueled anchor, closest-rated challenger."""
 
 from __future__ import annotations
 
@@ -9,66 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from backend.db_models import Movie, UserMovie
+from backend.services.elo import get_initial_elo
 
-# ---------------------------------------------------------------------------
-# Quality band helpers
-# ---------------------------------------------------------------------------
-
-# (name, elo_low, elo_high, community_rating_low, community_rating_high)
-# Movie.community_rating is Numeric(4,1), so the upper bounds carry a .9 tenth to
-# reach the next band's lower bound without leaving a value unclassified.
-BANDS = [
-    ("elite", 1300, 9999, 80, 100),
-    ("strong", 1100, 1299, 65, 79.9),
-    ("mid", 900, 1099, 45, 64.9),
-    ("weak", 700, 899, 25, 44.9),
-    ("poor", 0, 699, 0, 24.9),
-]
-
-BAND_ORDER = [b[0] for b in BANDS]
+CLOSEST_CANDIDATES = 5
 
 
-def elo_to_band(elo: int | None) -> str:
-    if elo is None:
-        return "mid"
-    for name, low, high, _, _ in BANDS:
-        if low <= elo <= high:
-            return name
-    return "poor"
-
-
-def community_rating_to_band(rating: float | None) -> str:
-    if rating is None:
-        return "mid"
-    for name, _, _, cr_low, cr_high in BANDS:
-        if cr_low <= rating <= cr_high:
-            return name
-    return "mid"
-
-
-def bands_adjacent(band_a: str, band_b: str) -> bool:
-    ia = BAND_ORDER.index(band_a)
-    ib = BAND_ORDER.index(band_b)
-    return abs(ia - ib) <= 1
-
-
-def _film_band(um: UserMovie) -> str:
-    """Determine quality band for a UserMovie.
-
-    Ranked films (battles >= 1) use ELO; unranked use community_rating.
-    """
-    if um.battles >= 1:
-        return elo_to_band(um.elo)
-    return community_rating_to_band(
-        float(um.movie.community_rating)
-        if um.movie.community_rating is not None
-        else None
-    )
-
-
-# ---------------------------------------------------------------------------
-# Pair selection
-# ---------------------------------------------------------------------------
+def _effective_elo(um: UserMovie) -> int:
+    """ELO the duel will be scored with: current ELO, else the seeded/default start."""
+    return um.elo if um.elo is not None else get_initial_elo(um.seeded_elo)
 
 
 async def select_pair(
@@ -77,17 +25,15 @@ async def select_pair(
     last_pair_ids: set[str] | None,
     media_type: str = "movie",
 ) -> tuple[UserMovie, UserMovie]:
-    """Select a duel pair from seen films with quality band matching.
+    """Select a duel pair from all of the user's seen films.
 
-    1. Pick anchor (film A) weighted by settlement: 1/(battles+1).
-    2. Determine anchor's band.
-    3. Filter candidates to same band, then adjacent, then full pool.
-    4. For ranked-vs-ranked: 70% close matches, 30% wide matches.
+    1. Anchor: a film with the fewest battles, ties broken at random.
+    2. Challenger: a random pick among the CLOSEST_CANDIDATES films nearest the
+       anchor's effective ELO, skipping the anchor's partner from the last pair
+       unless it is the only other film.
 
     Raises ValueError if fewer than 2 seen films exist.
     """
-
-    # All seen films of the requested media_type
     seen_stmt = (
         select(UserMovie)
         .options(joinedload(UserMovie.movie))
@@ -97,8 +43,6 @@ async def select_pair(
             UserMovie.seen.is_(True),
             Movie.media_type == media_type,
         )
-        .order_by(UserMovie.updated_at.desc())
-        .limit(500)
     )
     seen_result = await db.execute(seen_stmt)
     seen_films = list(seen_result.unique().scalars().all())
@@ -108,110 +52,16 @@ async def select_pair(
             f"Need more seen {media_type}s to duel. Swipe to classify some {media_type}s first!"
         )
 
-    # Split into anchors (ranked, battles >= 1) and full pool
-    anchor_pool = [f for f in seen_films if f.battles >= 1 and f.elo is not None]
+    fewest = min(f.battles for f in seen_films)
+    anchor = random.choice([f for f in seen_films if f.battles == fewest])
 
-    # Bootstrap: no anchors yet — pick two band-matched seen films
-    if len(anchor_pool) == 0:
-        return _pick_bootstrap_pair(seen_films, last_pair_ids)
+    candidates = [f for f in seen_films if f.movie_id != anchor.movie_id]
+    if last_pair_ids and str(anchor.movie_id) in last_pair_ids:
+        fresh = [f for f in candidates if str(f.movie_id) not in last_pair_ids]
+        if fresh:
+            candidates = fresh
 
-    # Normal: anchor + challenger from band-filtered pool
-    for _ in range(5):
-        anchor = _weighted_sample(anchor_pool)
-        anchor_band = elo_to_band(anchor.elo)
-
-        # Build candidate pool excluding anchor
-        all_candidates = [f for f in seen_films if f.movie_id != anchor.movie_id]
-        if not all_candidates:
-            break
-
-        # Band filter: same band first, then adjacent, then full pool
-        candidates = _band_filtered_candidates(anchor_band, all_candidates)
-
-        # Match distance variation for ranked-vs-ranked
-        challenger = _pick_challenger(anchor, candidates)
-
-        # Anti-repeat
-        pair_ids = {str(anchor.movie_id), str(challenger.movie_id)}
-        if last_pair_ids is None or pair_ids != last_pair_ids:
-            return anchor, challenger
-
-    # Fallback after retries
-    return anchor, challenger  # type: ignore
-
-
-def _band_filtered_candidates(
-    anchor_band: str,
-    candidates: list[UserMovie],
-) -> list[UserMovie]:
-    """Filter candidates by quality band: same > adjacent > all."""
-    # Same band
-    same = [f for f in candidates if _film_band(f) == anchor_band]
-    if same:
-        return same
-
-    # Adjacent bands (±1 step)
-    adjacent = [f for f in candidates if bands_adjacent(anchor_band, _film_band(f))]
-    if adjacent:
-        return adjacent
-
-    # Full pool fallback
-    return candidates
-
-
-def _pick_challenger(anchor: UserMovie, candidates: list[UserMovie]) -> UserMovie:
-    """Pick challenger with match distance variation for ranked-vs-ranked pairs.
-
-    - 70%: prefer close matches (ELO diff < 150), sample from top 10
-    - 30%: prefer wide matches (ELO diff > 300)
-    Falls back to settlement-weighted sample if filters produce nothing.
-    """
-    # Separate ranked candidates (both anchor and candidate have battles >= 1)
-    ranked = [f for f in candidates if f.battles >= 1 and f.elo is not None]
-
-    if ranked and anchor.elo is not None:
-        roll = random.random()
-        if roll < 0.70:
-            # Close match: sort by abs ELO diff, take top 10
-            ranked_sorted = sorted(ranked, key=lambda f: abs(f.elo - anchor.elo))
-            close = [f for f in ranked_sorted[:10] if abs(f.elo - anchor.elo) < 150]
-            if close:
-                return _weighted_sample(close)
-            # If no close matches in top 10, use top 10 anyway
-            return _weighted_sample(ranked_sorted[:10])
-        else:
-            # Wide match: ELO diff > 300
-            wide = [f for f in ranked if abs(f.elo - anchor.elo) > 300]
-            if wide:
-                return _weighted_sample(wide)
-
-    # Default: settlement-weighted from full candidate pool
-    return _weighted_sample(candidates)
-
-
-def _pick_bootstrap_pair(
-    seen_films: list[UserMovie],
-    last_pair_ids: set[str] | None,
-) -> tuple[UserMovie, UserMovie]:
-    """Bootstrap: pick two seen films when no anchors exist.
-
-    Anchor is settlement-weighted; the challenger comes from the anchor's
-    quality band (same > adjacent > full pool), which for unranked films is
-    derived from community rating. Callers guarantee at least 2 seen films.
-    """
-    for _ in range(5):
-        anchor = _weighted_sample(seen_films)
-        candidates = [f for f in seen_films if f.movie_id != anchor.movie_id]
-        challenger = _weighted_sample(
-            _band_filtered_candidates(_film_band(anchor), candidates)
-        )
-        pair_ids = {str(anchor.movie_id), str(challenger.movie_id)}
-        if last_pair_ids is None or pair_ids != last_pair_ids:
-            return anchor, challenger
-    return anchor, challenger  # type: ignore
-
-
-def _weighted_sample(films: list[UserMovie]) -> UserMovie:
-    """Sample one film weighted by settlement: 1/(battles+1)."""
-    weights = [1.0 / (f.battles + 1) for f in films]
-    return random.choices(films, weights=weights, k=1)[0]
+    anchor_elo = _effective_elo(anchor)
+    candidates.sort(key=lambda f: abs(_effective_elo(f) - anchor_elo))
+    challenger = random.choice(candidates[:CLOSEST_CANDIDATES])
+    return anchor, challenger

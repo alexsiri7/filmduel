@@ -360,7 +360,7 @@ describe("Duel", () => {
     });
   });
 
-  it("prefetches next pair on load", async () => {
+  it("does not fetch the next pair before the duel is submitted", async () => {
     const mockFetch = setupFetch();
     vi.stubGlobal("fetch", mockFetch);
 
@@ -374,12 +374,55 @@ describe("Duel", () => {
       expect(screen.getByText("Alien")).toBeInTheDocument();
     });
 
-    // loadPair calls fetchPair once, then prefetchNext calls it again
-    await waitFor(() => {
-      const pairCalls = mockFetch.mock.calls.filter(([url]) =>
-        url.includes("/api/movies/pair")
-      );
-      expect(pairCalls.length).toBeGreaterThanOrEqual(2);
+    const pairCalls = mockFetch.mock.calls.filter(([url]) =>
+      url.includes("/api/movies/pair")
+    );
+    expect(pairCalls).toHaveLength(1);
+  });
+
+  it("fetches the next pair after the submit, passing the pair token", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const baseFetch = setupFetch({ pair: { ...fakePair, next_pair_token: "tok" } });
+    let resolveDuel;
+    const mockFetch = vi.fn((url, opts) => {
+      if (url === "/api/duels" && opts?.method === "POST") {
+        return new Promise((resolve) => {
+          resolveDuel = () =>
+            resolve({ ok: true, status: 200, json: () => Promise.resolve(fakeDuelResult) });
+        });
+      }
+      return baseFetch(url, opts);
     });
+    vi.stubGlobal("fetch", mockFetch);
+
+    render(
+      <MemoryRouter>
+        <Duel />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Alien")).toBeInTheDocument();
+    });
+
+    const buttons = screen.getAllByRole("button");
+    const alienButton = buttons.find(
+      (b) => b.textContent.includes("Alien") && !b.textContent.includes("Aliens")
+    );
+    fireEvent.click(alienButton);
+
+    await vi.advanceTimersByTimeAsync(700);
+
+    const urls = () => mockFetch.mock.calls.map(([url]) => url);
+    const pairUrls = () => urls().filter((u) => u.includes("/api/movies/pair"));
+    expect(urls()).toContain("/api/duels");
+    expect(pairUrls()).toHaveLength(1);
+
+    resolveDuel();
+
+    await waitFor(() => {
+      expect(pairUrls()).toHaveLength(2);
+    });
+    expect(pairUrls()[1]).toContain("last_pair_token=tok");
   });
 });

@@ -254,7 +254,7 @@ On first login:
   4. After swipe: enter Duel Loop
 
 Duel Loop:
-  - Select pair using weighted selection (see Duel Pair Selection below)
+  - Select pair: least-dueled anchor, closest-rated challenger (see Duel Pair Selection below)
   - After each duel result: backend returns next_action
   - If next_action == "swipe": frontend shows swipe interstitial before next duel
   - Otherwise: animate next pair in immediately
@@ -271,7 +271,7 @@ Swipe Session:
   - On completion: show summary ("You've seen 6 of these") then return to duel
 ```
 
-The loop is **organic, not staged**. There is no "finish introducing all unranked films before refining" — every duel draw comes from a single weighted pool that naturally balances new introductions against refinement based on how settled each film's ranking is. Swipe sessions feed that pool on demand rather than on a fixed schedule.
+The loop is **organic, not staged**. There is no "finish introducing all unranked films before refining" as a separate phase — every duel anchors on whichever seen film has been dueled least, so untouched films are always drawn in before any film gets a second duel. Swipe sessions feed that pool on demand rather than on a fixed schedule.
 
 ---
 
@@ -362,128 +362,44 @@ Trakt sync, the Letterboxd CSV `Rating10` column and the rankings display all us
 
 ## Duel Pair Selection
 
-### Philosophy
-
-The pair selection is a **single weighted pool** — not discrete stages with shifting ratios. Every seen film has a weight based on how settled its ranking is. Films that need more duels naturally get selected more often. New films entering the pool (from swipe sessions) automatically compete for selection without any special-casing.
-
-This produces a living ranking that is always refining itself, with new films trickling in continuously rather than being processed in batches.
-
-### Settlement weight
-
-Every seen film (`seen=true`) gets a selection weight:
-
-```python
-weight = 1 / (battles + 1)
-```
-
-| Battles | Weight | Meaning |
-|---|---|---|
-| 0 | 1.000 | Unranked — highest priority |
-| 1 | 0.500 | Very noisy — high priority |
-| 4 | 0.200 | Settling — medium priority |
-| 9 | 0.100 | Stable — low priority |
-| 19 | 0.050 | Settled — occasional calibration |
-
-A film with 0 battles is selected 10× more often than one with 9 battles. This ensures new films get introduced quickly while established films keep getting refined — without either dominating.
-
-### Anchor rule
-
-Every duel must include at least one **anchor** — a film with `battles ≥ 1` and a real ELO. This gives the challenger a reference point and keeps duels meaningful.
-
-- Draw film A from all seen films using settlement weights, **excluding `battles=0`** (anchor pool)
-- Draw film B from all seen films using settlement weights, **including `battles=0`** (full pool minus A)
-
-If the anchor pool is empty (no film has been dueled yet — bootstrap state): draw both from `seen=true, battles=0` films, matched by community rating band. The first duel is the only exception to the anchor rule.
-
-### Quality band matching
-
-After selecting the anchor (film A), constrain film B to the same community rating band as A's current ELO band. This enforces good-vs-good and bad-vs-bad matchups.
-
-```python
-def elo_to_band(elo: int | None) -> str:
-    if elo is None: return "mid"      # unranked films use community_rating directly
-    if elo >= 1300: return "elite"
-    if elo >= 1100: return "strong"
-    if elo >= 900:  return "mid"
-    if elo >= 700:  return "weak"
-    return "poor"
-
-def community_rating_to_band(rating: float | None) -> str:
-    if rating is None: return "mid"
-    if rating >= 80: return "elite"
-    if rating >= 65: return "strong"
-    if rating >= 45: return "mid"
-    if rating >= 25: return "weak"
-    return "poor"
-```
-
-For film B:
-- If `battles ≥ 1`: match on `elo_to_band(b.elo) == elo_to_band(a.elo)`
-- If `battles == 0`: match on `community_rating_to_band(b.community_rating) == elo_to_band(a.elo)`
-
-If no film in the target band is available, expand to adjacent bands (±1 step).
-
-### Match distance variation
-
-Within same-band ranked-vs-ranked pairs, vary the ELO distance to produce both refinement and sanity-check duels:
-
-- 70% **close matches** (ELO diff < 150) — resolves genuine toss-ups
-- 30% **wide matches** (ELO diff > 300) — catches films that drifted to wrong tier
-
-Apply this only when both films have `battles ≥ 1`. For introductory duels (B has `battles=0`), distance variation doesn't apply.
-
 ### Algorithm
+
+Every duel anchors on a film that needs a duel most, and matches it with a film it is genuinely close to (#650):
+
+- **Anchor (film A):** a seen film with the fewest `battles`, across all of the user's seen films of the media type — no cap, no recency ordering. Ties (typically many films at 0 battles) are broken uniformly at random.
+- **Challenger (film B):** a uniform random pick from the 5 other seen films whose effective ELO is closest to the anchor's. Effective ELO is the rating the duel will be scored with: `elo`, else `seeded_elo`, else 1000.
+- **Anti-repeat:** if the anchor was in the last pair, its partner from that pair is excluded — unless it is the only other film.
+
+There is no weighting, no quality-band filtering and no wide-match branch.
 
 ```python
 def select_duel_pair(user_id, last_pair=None):
     seen_films = query(user_movies, user_id=user_id, seen=True)
+    if len(seen_films) < 2:
+        raise NeedMoreSeenFilms
 
-    anchor_pool    = [f for f in seen_films if f.battles >= 1]
-    full_pool      = seen_films  # all seen films
+    fewest = min(f.battles for f in seen_films)
+    a = random.choice([f for f in seen_films if f.battles == fewest])
 
-    # Bootstrap: no anchors yet
-    if len(anchor_pool) == 0:
-        if len(full_pool) < 2:
-            return signal("swipe_needed")
-        a, b = pick_two_by_community_rating(full_pool)
-        return (a, b)
+    candidates = [f for f in seen_films if f.id != a.id]
+    if last_pair and a.id in last_pair:
+        fresh = [f for f in candidates if f.id not in last_pair]
+        candidates = fresh or candidates
 
-    # Select anchor (film A) — weighted, battles >= 1 only
-    a = weighted_sample(anchor_pool, weight_fn=lambda f: 1/(f.battles+1))
-
-    # Determine match distance for same-band ranked pairs
-    use_close = random() < 0.70
-
-    # Select challenger (film B) — weighted, full pool, same band as A
-    target_band = elo_to_band(a.elo)
-    candidates = [f for f in full_pool if f.id != a.id and band_matches(f, target_band)]
-
-    if len(candidates) == 0:
-        # Expand to adjacent bands
-        candidates = [f for f in full_pool if f.id != a.id]
-
-    if use_close and all(f.battles >= 1 for f in candidates):
-        # Prefer close ELO match
-        candidates.sort(key=lambda f: abs(f.elo - a.elo))
-        b = weighted_sample(candidates[:10], weight_fn=lambda f: 1/(f.battles+1))
-    else:
-        b = weighted_sample(candidates, weight_fn=lambda f: 1/(f.battles+1))
-
-    # Anti-repeat
-    if last_pair and {a.id, b.id} == set(last_pair):
-        candidates = [f for f in candidates if f.id != b.id]
-        b = weighted_sample(candidates, weight_fn=lambda f: 1/(f.battles+1))
-
-    pair_type = classify_pair(a, b)  # for analytics
-    return (a, b, pair_type)
+    effective_elo = lambda f: f.elo if f.elo is not None else (f.seeded_elo or 1000)
+    candidates.sort(key=lambda f: abs(effective_elo(f) - effective_elo(a)))
+    b = random.choice(candidates[:5])
+    return (a, b)
 ```
+
+The frontend fetches the next pair only after the current duel is submitted, passing `last_pair_token`, so selection always sees up-to-date ratings and battle counts.
 
 ### Pair type (for analytics only)
 
 Still store on the `duels` table for future analysis, but it's derived from the result, not used to drive selection:
 
 - `ranked_vs_ranked` — both `battles ≥ 1`
-- `ranked_vs_unranked` — A has `battles ≥ 1`, B has `battles = 0`
+- `ranked_vs_unranked` — at least one film has `battles = 0`
 
 ### Swipe refill trigger
 
@@ -645,7 +561,7 @@ Leaderboard. Filter pills: All · Genre · Decade. Row: rank number (large amber
 - Swipe results: single bulk upsert, not 10 individual queries
 - `next_action` is computed server-side after every `POST /api/duels` — check `count(seen=true, battles=0) < 3`
 - There is no `/api/swipe/status` endpoint — swipe trigger is embedded in duel result response
-- Pair selection uses `weight = 1/(battles+1)` — never blend ratios or staged modes
+- Pair selection anchors on the least-dueled seen film and matches the closest effective ELO — no weighting, bands, or wide matches
 - Pair selection never returns `seen=false` films
 - Store `pair_type` on every duel record (derived from result, not used for selection)
 - Swipe gesture: CSS transform + transition, 80px horizontal threshold

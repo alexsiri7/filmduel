@@ -296,17 +296,20 @@ requirements:
   # ── Duels ───────────────────────────────────────────────────────────────
 
   - id: FD-024
-    title: Weighted anchor/challenger pair selection
-    statement: "When a user requests GET /api/movies/pair, the system shall return two seen films where at least one (the anchor) has battles>=1, sampling with weight 1/(battles+1), constraining the challenger to the anchor's quality band (by ELO when ranked, by community rating when unranked, expanding to adjacent bands then all films when empty), preferring close ELO matches (<150) 70% of the time and wide matches (>300) otherwise for ranked-vs-ranked, and avoiding an immediate repeat of the previous pair."
+    title: Least-dueled anchor, closest-rated challenger pair selection
+    statement: "When a user requests GET /api/movies/pair, the system shall choose the anchor uniformly at random among the seen films with the fewest battles (across all of the user's seen films of that media type, uncapped), choose the challenger uniformly at random among the 5 other seen films closest to the anchor in effective ELO (elo, else seeded/default starting ELO), and avoid an immediate repeat of the previous pair."
     category: functional
     priority: must
     status: active
     source: back-ported
     acceptance:
       - "Returned pairs never include a seen=false or seen=NULL film"
-      - "With no ranked films yet, a bootstrap pair of two seen battles=0 films matched by community rating band is returned"
+      - "The anchor always has the minimum battle count among the user's seen films, so battles=0 films (ranked or not) are dueled before any other"
+      - "The challenger is always one of the 5 films nearest the anchor's effective ELO"
       - "With fewer than 2 eligible films the endpoint returns 404 (client interprets as 'go swipe')"
-      - "When last_pair_token matches the newly selected pair, a different challenger is chosen if one exists"
+      - "When last_pair_token matches the anchor, a different challenger is chosen if one exists"
+      - "The frontend requests the next pair only after the current duel is submitted, passing last_pair_token"
+    notes: "#650 replaced 1/(battles+1) weighting over ranked-only anchors, band-matched challengers and a 70/30 close/wide split; that selection capped the pool at 500 films and left most films un-dueled."
 
   - id: FD-025
     title: Tamper-proof pair tokens
