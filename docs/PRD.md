@@ -271,7 +271,7 @@ Swipe Session:
   - On completion: show summary ("You've seen 6 of these") then return to duel
 ```
 
-The loop is **organic, not staged**. There is no "finish introducing all unranked films before refining" — every duel draw comes from a single weighted pool that naturally balances new introductions against refinement based on how settled each film's ranking is. Swipe sessions feed that pool on demand rather than on a fixed schedule.
+The loop is **organic, not staged**. There is no "finish introducing all unranked films before refining" as a separate phase — every duel anchors on whichever seen film has been dueled least, so untouched films are always drawn in before any film gets a second duel. Swipe sessions feed that pool on demand rather than on a fixed schedule.
 
 ---
 
