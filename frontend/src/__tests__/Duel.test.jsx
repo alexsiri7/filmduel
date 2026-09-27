@@ -205,6 +205,48 @@ describe("Duel", () => {
     });
   });
 
+  it.each([
+    ["Only seen Alien", "a_only"],
+    ["Only seen Aliens", "b_only"],
+    ["Haven't seen either", "neither"],
+  ])("'%s' submits %s", async (label, outcome) => {
+    const mockFetch = setupFetch();
+    vi.stubGlobal("fetch", mockFetch);
+
+    render(
+      <MemoryRouter>
+        <Duel />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: label }));
+
+    await waitFor(() => {
+      const duelCall = mockFetch.mock.calls.find(
+        ([url, opts]) => url === "/api/duels" && opts?.method === "POST"
+      );
+      expect(duelCall).toBeDefined();
+      const body = JSON.parse(duelCall[1].body);
+      expect(body.outcome).toBe(outcome);
+      expect(body.movie_a_id).toBe(1);
+      expect(body.movie_b_id).toBe(2);
+    });
+  });
+
+  it("disables the not-seen buttons once an outcome is submitted", async () => {
+    render(
+      <MemoryRouter>
+        <Duel />
+      </MemoryRouter>
+    );
+
+    const neither = await screen.findByRole("button", { name: "Haven't seen either" });
+    fireEvent.click(neither);
+
+    expect(neither).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Only seen Alien" })).toBeDisabled();
+  });
+
   it("shows swipe interstitial when next_action is swipe", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const mockFetch = setupFetch({
