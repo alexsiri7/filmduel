@@ -360,7 +360,7 @@ describe("Duel", () => {
     });
   });
 
-  it("prefetches next pair on load", async () => {
+  it("does not fetch the next pair before the duel is submitted", async () => {
     const mockFetch = setupFetch();
     vi.stubGlobal("fetch", mockFetch);
 
@@ -374,12 +374,45 @@ describe("Duel", () => {
       expect(screen.getByText("Alien")).toBeInTheDocument();
     });
 
-    // loadPair calls fetchPair once, then prefetchNext calls it again
+    const pairCalls = mockFetch.mock.calls.filter(([url]) =>
+      url.includes("/api/movies/pair")
+    );
+    expect(pairCalls).toHaveLength(1);
+  });
+
+  it("fetches the next pair after the submit, passing the pair token", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const mockFetch = setupFetch({ pair: { ...fakePair, next_pair_token: "tok" } });
+    vi.stubGlobal("fetch", mockFetch);
+
+    render(
+      <MemoryRouter>
+        <Duel />
+      </MemoryRouter>
+    );
+
     await waitFor(() => {
-      const pairCalls = mockFetch.mock.calls.filter(([url]) =>
-        url.includes("/api/movies/pair")
-      );
-      expect(pairCalls.length).toBeGreaterThanOrEqual(2);
+      expect(screen.getByText("Alien")).toBeInTheDocument();
     });
+
+    const buttons = screen.getAllByRole("button");
+    const alienButton = buttons.find(
+      (b) => b.textContent.includes("Alien") && !b.textContent.includes("Aliens")
+    );
+    fireEvent.click(alienButton);
+
+    await vi.advanceTimersByTimeAsync(700);
+
+    const pairUrls = () =>
+      mockFetch.mock.calls.map(([url]) => url).filter((u) => u.includes("/api/movies/pair"));
+    await waitFor(() => {
+      expect(pairUrls()).toHaveLength(2);
+    });
+    const urls = mockFetch.mock.calls.map(([url]) => url);
+    const duelIdx = urls.indexOf("/api/duels");
+    const nextPairIdx = urls.findLastIndex((u) => u.includes("/api/movies/pair"));
+    expect(duelIdx).toBeGreaterThan(-1);
+    expect(nextPairIdx).toBeGreaterThan(duelIdx);
+    expect(urls[nextPairIdx]).toContain("last_pair_token=tok");
   });
 });

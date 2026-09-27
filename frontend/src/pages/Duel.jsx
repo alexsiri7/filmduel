@@ -44,10 +44,6 @@ export default function Duel({ mediaType = "movie" }) {
     }
   }, [mediaType]);
 
-  const prefetchNext = useCallback(() => {
-    prefetchRef.current = fetchPair(MODE, null, mediaType).catch(() => null);
-  }, [mediaType]);
-
   const loadPair = useCallback(
     async (usePrefetch = false) => {
       setLoading(true);
@@ -64,8 +60,6 @@ export default function Duel({ mediaType = "movie" }) {
         }
         setPair(data);
         setAnimateKey((k) => k + 1);
-        // Eagerly preload the next pair while user considers this one
-        prefetchNext();
       } catch (err) {
         console.error("Failed to load movie pair:", err);
         // If not enough seen films, redirect to swipe
@@ -97,7 +91,12 @@ export default function Duel({ mediaType = "movie" }) {
     setResult({ outcome });
 
     // Fire-and-forget: submit duel in background, don't block the UI
-    submitDuel(pair.movie_a.id, pair.movie_b.id, outcome, MODE)
+    const submitted = submitDuel(pair.movie_a.id, pair.movie_b.id, outcome, MODE);
+    // The next pair must be chosen from ratings and battle counts that include this duel
+    prefetchRef.current = submitted
+      .then(() => fetchPair(MODE, pair.next_pair_token ?? null, mediaType))
+      .catch(() => null);
+    submitted
       .then((res) => {
         // Check if we need to swipe — handle asynchronously
         if (res.next_action === "swipe") {
@@ -108,7 +107,7 @@ export default function Duel({ mediaType = "movie" }) {
       })
       .catch((err) => console.error("Failed to submit duel:", err));
 
-    // Immediately show winner flash for 600ms, then load next pair from prefetch
+    // Immediately show winner flash for 600ms, then load the pair fetched after submit
     setTimeout(() => {
       setSubmitting(false);
       loadPair(true);
