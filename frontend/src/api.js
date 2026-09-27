@@ -89,6 +89,10 @@ export function acceptConsent(version) {
   });
 }
 
+export function retryPoolImport() {
+  return request("/api/me/pool-import", { method: "POST" });
+}
+
 // ── Tournaments ──────────────────────────────────────────────────────
 
 export function getTournaments() {

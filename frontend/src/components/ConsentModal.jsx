@@ -10,8 +10,8 @@ export default function ConsentModal({ onAccepted }) {
     setLoading(true);
     setError(null);
     try {
-      await acceptConsent(CURRENT_PRIVACY_POLICY_VERSION);
-      onAccepted();
+      const user = await acceptConsent(CURRENT_PRIVACY_POLICY_VERSION);
+      onAccepted(user);
     } catch (err) {
       console.error("Failed to record consent:", err);
       setError(err.message || "Failed to save. Please try again.");

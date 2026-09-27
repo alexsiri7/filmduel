@@ -273,6 +273,35 @@ describe("App", () => {
     });
   });
 
+  it("shows the import screen instead of the page while the library imports", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              privacy_policy_accepted: true,
+              privacy_policy_version: "2.1",
+              pool_import_status: "importing",
+            }),
+        })
+      )
+    );
+    render(
+      <MemoryRouter initialEntries={["/rankings"]}>
+        <App />
+      </MemoryRouter>
+    );
+    await waitFor(() => {
+      expect(screen.getByText(/importing your library/i)).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByText("No rankings yet. Start dueling to build your list!")
+    ).not.toBeInTheDocument();
+  });
+
   it("routes to /rankings correctly", async () => {
     vi.stubGlobal(
       "fetch",
