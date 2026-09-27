@@ -183,7 +183,7 @@ create table user_movies (
   user_id uuid references users(id) on delete cascade,
   movie_id uuid references movies(id) on delete cascade,
   seen boolean,              -- null=unknown, true=seen, false=not seen
-  elo integer,               -- NULL until first real duel (seen=true, battles>=1)
+  elo real,                  -- NULL until first real duel (seen=true, battles>=1); unrounded
   seeded_elo integer,        -- from imported Trakt rating, used as first-duel starting point
   battles integer not null default 0,
   trakt_rating integer,      -- last value synced to Trakt (1-10)
@@ -198,10 +198,10 @@ create table duels (
   user_id uuid references users(id) on delete cascade,
   winner_movie_id uuid references movies(id),
   loser_movie_id uuid references movies(id),
-  winner_elo_before integer,
-  loser_elo_before integer,
-  winner_elo_after integer,
-  loser_elo_after integer,
+  winner_elo_before real,
+  loser_elo_before real,
+  winner_elo_after real,
+  loser_elo_after real,
   pair_type text not null,   -- 'ranked_vs_ranked' | 'ranked_vs_unranked' | 'ranked_vs_unknown'
   created_at timestamptz default now()
 );
