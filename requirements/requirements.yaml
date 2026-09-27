@@ -135,7 +135,7 @@ requirements:
 
   - id: FD-011
     title: Scheduled data-retention purge
-    statement: "While the app is running, the system shall run a daily scheduled purge (default 02:00 UTC, configurable via PURGE_SCHEDULE_HOUR) that deletes duels, swipe results and suggestions past their retention windows (default 180 days), nulls tournament llm_response payloads past 180 days, deletes feedback reports past 365 days, and nulls encrypted screenshots past their purge_after date."
+    statement: "While the app is running, the system shall run a daily scheduled purge (default 02:00 UTC, configurable via PURGE_SCHEDULE_HOUR) that moves duels past their retention window (default 180 days) into a minimal duel_history record (user, winner, loser, skip outcome, date) kept until account deletion, deletes swipe results and suggestions past their retention windows (default 180 days), nulls tournament llm_response payloads past 180 days, deletes feedback reports past 365 days, and nulls encrypted screenshots past their purge_after date."
     category: non-functional
     priority: must
     status: active

@@ -311,6 +311,7 @@ async def test_process_duel_records_skip_outcome(outcome):
     assert len(duel_adds) == 1
     assert duel_adds[0].outcome == outcome
     assert duel_adds[0].winner_movie_id is None
+    assert duel_adds[0].loser_movie_id is None
 
 
 # ---------------------------------------------------------------------------

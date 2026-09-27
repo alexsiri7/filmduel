@@ -20,12 +20,8 @@ from backend.db_models import (
 
 logger = logging.getLogger(__name__)
 
-_DUEL_HISTORY_COLUMNS = (
-    "user_id",
-    "winner_movie_id",
-    "loser_movie_id",
-    "outcome",
-    "created_at",
+_DUEL_HISTORY_COLUMNS = tuple(
+    c.name for c in DuelHistory.__table__.columns if c.name != "id"
 )
 
 
