@@ -90,6 +90,7 @@ def _empty_sections():
     return dict(
         user_movies=[],
         duels=[],
+        duel_history=[],
         tournaments=[],
         suggestions=[],
         swipe_results=[],
@@ -185,7 +186,7 @@ def test_movie_identity_is_inlined_as_compact_ref():
     )
     duel = SimpleNamespace(
         id=uuid.uuid4(), created_at=NOW, mode="discovery", pair_type="close",
-        winner_movie=heat, loser_movie=None,
+        outcome=None, winner_movie=heat, loser_movie=None,
         winner_elo_before=1500, winner_elo_after=1510,
         loser_elo_before=1500, loser_elo_after=1490,
     )
@@ -226,6 +227,16 @@ def test_movie_identity_is_inlined_as_compact_ref():
     assert refs["tournaments.matches.movie_b"]["title"] == "Ronin"
     assert payload["duels"][0]["loser"] is None
     assert payload["tournaments"][0]["llm_response"] == {"raw": "x"}
+
+
+def test_duel_history_skip_entry_has_outcome_and_no_films():
+    entry = SimpleNamespace(
+        created_at=NOW, winner_movie=None, loser_movie=None, outcome="a_only"
+    )
+    payload = _build(duel_history=[entry])
+    assert payload["duel_history"] == [
+        {"created_at": NOW.isoformat(), "winner": None, "loser": None, "outcome": "a_only"}
+    ]
 
 
 def test_feedback_reports_expose_screenshot_presence_not_bytes():
@@ -273,6 +284,7 @@ def test_tournament_matches_sorted_by_round_then_position():
 MODEL_TO_SECTION = {
     "UserMovie": "library",
     "Duel": "duels",
+    "DuelHistory": "duel_history",
     "Tournament": "tournaments",
     "Suggestion": "suggestions",
     "SwipeResult": "swipe_results",
@@ -314,10 +326,10 @@ def _db_returning(rows_per_call):
 @pytest.mark.asyncio
 async def test_loader_statements_are_capped_and_filtered_to_the_given_user():
     user = _user()
-    db = _db_returning([[]] * 7)
+    db = _db_returning([[]] * 8)
     await export_user_data(db, user)
 
-    assert db.execute.call_count == 7
+    assert db.execute.call_count == 8
     for call in db.execute.call_args_list:
         compiled = str(
             call.args[0].compile(
@@ -341,12 +353,12 @@ async def test_truncation_is_reported_not_silent(monkeypatch):
             trakt_rating=None, last_dueled_at=None, updated_at=NOW,
         )
 
-    db = _db_returning([[um(), um(), um()]] + [[]] * 6)
+    db = _db_returning([[um(), um(), um()]] + [[]] * 7)
     payload = await export_user_data(db, _user())
     assert len(payload["library"]) == 2
     assert payload["truncated_sections"] == ["library"]
 
-    db = _db_returning([[um(), um()]] + [[]] * 6)
+    db = _db_returning([[um(), um()]] + [[]] * 7)
     payload = await export_user_data(db, _user())
     assert len(payload["library"]) == 2
     assert payload["truncated_sections"] == []

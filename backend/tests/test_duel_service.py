@@ -286,6 +286,31 @@ async def test_process_duel_creates_duel_record():
     assert duel.winner_movie_id == mid_a
     assert duel.loser_movie_id == mid_b
     assert duel.mode == "ranked"
+    assert duel.outcome is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("outcome", ["a_only", "b_only", "neither"])
+async def test_process_duel_records_skip_outcome(outcome):
+    """Skip duels carry no movie ids, so the outcome is the only record of them."""
+    uid = uuid.uuid4()
+    mid_a = uuid.uuid4()
+    mid_b = uuid.uuid4()
+
+    um_a = _make_user_movie(uid, mid_a, elo=1000, battles=3)
+    um_b = _make_user_movie(uid, mid_b, elo=1000, battles=3)
+
+    db = AsyncMock()
+    db.execute = _make_fake_execute(um_a, um_b)
+
+    await process_duel(db, uid, mid_a, mid_b, outcome, "ranked")
+
+    duel_adds = [
+        call.args[0] for call in db.add.call_args_list if isinstance(call.args[0], Duel)
+    ]
+    assert len(duel_adds) == 1
+    assert duel_adds[0].outcome == outcome
+    assert duel_adds[0].winner_movie_id is None
 
 
 # ---------------------------------------------------------------------------

@@ -15,6 +15,7 @@ from sqlalchemy import (
     Numeric,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -277,7 +278,7 @@ class TournamentMatch(Base):
         UUID(as_uuid=True), ForeignKey("movies.id"), nullable=True
     )
     duel_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("duels.id"), nullable=True
+        UUID(as_uuid=True), ForeignKey("duels.id", ondelete="SET NULL"), nullable=True
     )
     is_bye: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
@@ -315,11 +316,44 @@ class Duel(Base):
     loser_elo_after: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     mode: Mapped[str] = mapped_column(Text, nullable=False, server_default="discovery")
     pair_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Set only for a_only/b_only/neither; NULL for decided duels (winner/loser
+    # set) and for skip duels recorded before migration 023.
+    outcome: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
     user: Mapped[User] = relationship(back_populates="duels")
+    winner_movie: Mapped[Optional[Movie]] = relationship(foreign_keys=[winner_movie_id])
+    loser_movie: Mapped[Optional[Movie]] = relationship(foreign_keys=[loser_movie_id])
+
+
+class DuelHistory(Base):
+    """Minimal record of a duel removed by the retention purge (#654).
+
+    Kept until account deletion so rankings can be recalculated.
+    """
+
+    __tablename__ = "duel_history"
+    __table_args__ = (Index("ix_duel_history_user_id", "user_id"),)
+
+    # No Python-side default: the purge fills this table with INSERT ... SELECT,
+    # which would bind a single uuid4() value to every row.
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    winner_movie_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("movies.id"), nullable=True
+    )
+    loser_movie_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("movies.id"), nullable=True
+    )
+    outcome: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
     winner_movie: Mapped[Optional[Movie]] = relationship(foreign_keys=[winner_movie_id])
     loser_movie: Mapped[Optional[Movie]] = relationship(foreign_keys=[loser_movie_id])
 
