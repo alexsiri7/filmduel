@@ -25,4 +25,17 @@ describe("PrivacyPolicy", () => {
     );
     expect(screen.getByText(/Download My Data/)).toBeInTheDocument();
   });
+
+  it("discloses the 180-day duel retention and the duel history kept until deletion", () => {
+    render(
+      <MemoryRouter>
+        <PrivacyPolicy />
+      </MemoryRouter>
+    );
+    const duelRetention = screen.getByText(/full record of each duel/);
+    expect(duelRetention).toHaveTextContent(/kept for 180 days/);
+    expect(duelRetention).toHaveTextContent(
+      /duel history is kept until you delete your account/
+    );
+  });
 });

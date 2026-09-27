@@ -11,6 +11,7 @@ from sqlalchemy.orm import joinedload
 
 from backend.db_models import (
     Duel,
+    DuelHistory,
     FeedbackReport,
     Movie,
     PoolExpansion,
@@ -62,6 +63,7 @@ def build_export_payload(
     *,
     user_movies: list[UserMovie],
     duels: list[Duel],
+    duel_history: list[DuelHistory],
     tournaments: list[Tournament],
     suggestions: list[Suggestion],
     swipe_results: list[SwipeResult],
@@ -117,6 +119,7 @@ def build_export_payload(
                 "created_at": _iso(d.created_at),
                 "mode": d.mode,
                 "pair_type": d.pair_type,
+                "outcome": d.outcome,
                 "winner": _movie_ref(d.winner_movie),
                 "loser": _movie_ref(d.loser_movie),
                 "winner_elo_before": d.winner_elo_before,
@@ -125,6 +128,15 @@ def build_export_payload(
                 "loser_elo_after": d.loser_elo_after,
             }
             for d in duels
+        ],
+        "duel_history": [
+            {
+                "created_at": _iso(h.created_at),
+                "winner": _movie_ref(h.winner_movie),
+                "loser": _movie_ref(h.loser_movie),
+                "outcome": h.outcome,
+            }
+            for h in duel_history
         ],
         "tournaments": [
             {
@@ -213,6 +225,12 @@ async def export_user_data(db: AsyncSession, user: User) -> dict:
         .options(joinedload(Duel.winner_movie), joinedload(Duel.loser_movie))
         .where(Duel.user_id == uid)
         .order_by(Duel.created_at, Duel.id),
+        "duel_history": select(DuelHistory)
+        .options(
+            joinedload(DuelHistory.winner_movie), joinedload(DuelHistory.loser_movie)
+        )
+        .where(DuelHistory.user_id == uid)
+        .order_by(DuelHistory.created_at, DuelHistory.id),
         "tournaments": select(Tournament)
         .options(
             joinedload(Tournament.champion_movie),
@@ -249,6 +267,7 @@ async def export_user_data(db: AsyncSession, user: User) -> dict:
         user,
         user_movies=sections["library"],
         duels=sections["duels"],
+        duel_history=sections["duel_history"],
         tournaments=sections["tournaments"],
         suggestions=sections["suggestions"],
         swipe_results=sections["swipe_results"],

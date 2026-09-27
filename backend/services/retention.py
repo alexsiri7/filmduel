@@ -5,13 +5,24 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import delete, update
+from sqlalchemy import delete, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import get_settings
-from backend.db_models import Duel, FeedbackReport, Suggestion, SwipeResult, Tournament
+from backend.db_models import (
+    Duel,
+    DuelHistory,
+    FeedbackReport,
+    Suggestion,
+    SwipeResult,
+    Tournament,
+)
 
 logger = logging.getLogger(__name__)
+
+_DUEL_HISTORY_COLUMNS = tuple(
+    c.name for c in DuelHistory.__table__.columns if c.name != "id"
+)
 
 
 async def _purge_by_age(
@@ -31,12 +42,34 @@ async def _purge_by_age(
 
 
 async def purge_old_duels(db: AsyncSession) -> int:
-    """Delete duels older than DUEL_RETENTION_DAYS. Does not commit; caller must commit.
+    """Move duels older than DUEL_RETENTION_DAYS into duel_history.
+
+    Only the minimal columns are kept; the full row (Elo snapshots, mode,
+    pair_type) is deleted. Delete and insert run as one statement, so
+    concurrent purges cannot copy the same duel twice.
+    Does not commit; caller must commit.
 
     Returns:
-        Number of rows deleted.
+        Number of rows moved.
     """
-    return await _purge_by_age(db, Duel, get_settings().DUEL_RETENTION_DAYS, "duels")
+    retention_days = get_settings().DUEL_RETENTION_DAYS
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+    moved = (
+        delete(Duel)
+        .where(Duel.created_at < cutoff)
+        .returning(*(getattr(Duel, c) for c in _DUEL_HISTORY_COLUMNS))
+        .cte("moved_duels")
+    )
+    result = await db.execute(
+        insert(DuelHistory)
+        .from_select(
+            _DUEL_HISTORY_COLUMNS, select(*(moved.c[c] for c in _DUEL_HISTORY_COLUMNS))
+        )
+        .returning(DuelHistory.id)
+    )
+    count = len(result.fetchall())
+    logger.info("purged_duels count=%d retention_days=%d", count, retention_days)
+    return count
 
 
 async def purge_old_swipe_results(db: AsyncSession) -> int:

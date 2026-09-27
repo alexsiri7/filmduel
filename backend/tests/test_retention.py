@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy.dialects import postgresql
 
+from backend.db_models import DuelHistory, TournamentMatch
 from backend.services.retention import (
     purge_expired_screenshots,
     purge_old_duels,
@@ -39,6 +42,54 @@ class TestPurgeOldDuels:
         db = _make_db([])
         count = await purge_old_duels(db)
         assert count == 0
+
+    @pytest.mark.asyncio
+    async def test_moves_rows_into_duel_history_in_one_statement(self):
+        db = _make_db([])
+        await purge_old_duels(db)
+        db.execute.assert_awaited_once()
+        compiled = str(db.execute.call_args[0][0].compile(dialect=postgresql.dialect()))
+        assert "DELETE FROM duels" in compiled
+        assert "INSERT INTO duel_history" in compiled
+        assert "duels.created_at <" in compiled
+
+    @pytest.mark.asyncio
+    async def test_history_keeps_only_minimal_columns(self):
+        db = _make_db([])
+        await purge_old_duels(db)
+        compiled = str(db.execute.call_args[0][0].compile(dialect=postgresql.dialect()))
+        insert_columns = re.search(r"INSERT INTO duel_history \(([^)]*)\)", compiled)
+        assert insert_columns.group(1) == (
+            "user_id, winner_movie_id, loser_movie_id, outcome, created_at"
+        )
+        for dropped in ("elo", "pair_type", "mode"):
+            assert dropped not in compiled
+
+    def test_duel_history_table_has_no_extra_columns(self):
+        assert set(DuelHistory.__table__.columns.keys()) == {
+            "id",
+            "user_id",
+            "winner_movie_id",
+            "loser_movie_id",
+            "outcome",
+            "created_at",
+        }
+
+    def test_duel_history_id_has_no_python_default(self):
+        """INSERT ... SELECT would bind one Python-generated id to every moved row."""
+        id_column = DuelHistory.__table__.c.id
+        assert id_column.default is None
+        assert id_column.server_default is not None
+
+    def test_duel_history_cascades_on_user_delete(self):
+        (fk,) = DuelHistory.__table__.c.user_id.foreign_keys
+        assert fk.target_fullname == "users.id"
+        assert fk.ondelete == "CASCADE"
+
+    def test_tournament_match_duel_fk_sets_null(self):
+        """Purging a duel a tournament match points at must not violate the FK."""
+        (fk,) = TournamentMatch.__table__.c.duel_id.foreign_keys
+        assert fk.ondelete == "SET NULL"
 
 
 class TestPurgeOldSwipeResults:

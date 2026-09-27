@@ -220,7 +220,7 @@ async def process_duel(
         um_b.updated_at = now
 
     if outcome not in ("a_wins", "b_wins"):
-        duel = Duel(user_id=user_id, mode=mode, pair_type=pair_type)
+        duel = Duel(user_id=user_id, mode=mode, pair_type=pair_type, outcome=outcome)
         db.add(duel)
 
     # DEBUG, not INFO: user_id + preference data is behavioral personal data (SEC-15, #583).
