@@ -104,8 +104,8 @@ class ProcessDuelResult:
     """Internal result carrying both the API response and data needed by background tasks."""
 
     api_result: DuelResult
-    new_elo_a: int | None
-    new_elo_b: int | None
+    new_elo_a: float | None
+    new_elo_b: float | None
 
 
 async def get_user_movie(
@@ -164,8 +164,8 @@ async def process_duel(
         pair_type = "ranked_vs_unranked"
 
     # ── ELO math + duel record ───────────────────────────────────────
-    new_elo_a: int | None = um_a.elo
-    new_elo_b: int | None = um_b.elo
+    new_elo_a: float | None = um_a.elo
+    new_elo_b: float | None = um_b.elo
     delta_a = 0
     delta_b = 0
 
@@ -195,8 +195,8 @@ async def process_duel(
 
         new_elo_a = um_a.elo
         new_elo_b = um_b.elo
-        delta_a = new_elo_a - elo_a_before
-        delta_b = new_elo_b - elo_b_before
+        delta_a = round(new_elo_a) - round(elo_a_before)
+        delta_b = round(new_elo_b) - round(elo_b_before)
     elif outcome == "a_only":
         if um_a_seen_was_none:
             um_a.seen = True

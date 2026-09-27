@@ -55,7 +55,7 @@ async def _build_taste_profile(
     bottom_5 = bottom_result.unique().scalars().all()
 
     # Genre affinities: avg ELO per genre (only genres with 3+ films)
-    genre_elos: dict[str, list[int]] = defaultdict(list)
+    genre_elos: dict[str, list[float]] = defaultdict(list)
     for um in ranked:
         if um.movie.genres:
             for g in um.movie.genres:

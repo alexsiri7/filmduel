@@ -166,6 +166,13 @@ class TestGetMoviePair:
         assert resp.status_code == 200, resp.text
         return resp.json(), mock_select_pair
 
+    def test_elo_is_served_rounded(self):
+        self.pair[0].elo = 1045.23
+        body, _ = self._get_pair()
+
+        assert body["movie_a"]["elo"] == 1045
+        assert body["movie_b"]["elo"] is None
+
     def test_minted_token_is_bound_to_requesting_user(self):
         body, _ = self._get_pair()
         token = body["next_pair_token"]

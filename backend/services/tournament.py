@@ -332,7 +332,7 @@ async def record_match_winner(
     winner_id: uuid.UUID,
     loser_id: uuid.UUID,
     user_id: uuid.UUID,
-) -> tuple[int, int]:
+) -> tuple[float, float]:
     """Record match result: set winner, propagate, ELO update, duel record.
 
     All on the caller's session — no background tasks, no connection pool issues.
