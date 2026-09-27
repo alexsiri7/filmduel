@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import get_settings
-from backend.db import get_db
+from backend.db import async_session_factory, get_db
 from backend.rate_limit import limiter
 from backend.db_models import User, UserMovie
 from backend.routers.auth import (
@@ -39,6 +40,24 @@ router = APIRouter(tags=["users"])
 # Mismatch between this constant and the stored user value triggers re-consent for existing users.
 CURRENT_PRIVACY_POLICY_VERSION = "2.1"
 
+# An import still "importing" after this long is reported as failed: its process
+# died (e.g. a deploy restart). Must exceed the worst case of every provider
+# fetch exhausting its retries (~13 minutes).
+POOL_IMPORT_STALE_AFTER = timedelta(minutes=20)
+
+
+def _effective_pool_import_status(user: User) -> str | None:
+    if user.pool_import_status != "importing":
+        return user.pool_import_status
+    started = user.pool_import_started_at
+    if started is None:
+        return "failed"
+    if started.tzinfo is None:
+        started = started.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) - started > POOL_IMPORT_STALE_AFTER:
+        return "failed"
+    return "importing"
+
 
 def _build_user_response(user: User) -> UserResponse:
     return UserResponse(
@@ -51,6 +70,7 @@ def _build_user_response(user: User) -> UserResponse:
         use_ai_features=user.use_ai_features,
         privacy_policy_accepted=user.privacy_policy_accepted,
         privacy_policy_version=user.privacy_policy_version,
+        pool_import_status=_effective_pool_import_status(user),
     )
 
 
@@ -79,8 +99,11 @@ async def update_settings(
     return _build_user_response(current_user)
 
 
-async def _force_pool_sync(user: User, db: AsyncSession) -> User:
-    """Refresh provider tokens, then run a pool sync that bypasses the 1-hour cooldown."""
+async def _force_pool_sync(user: User, db: AsyncSession) -> tuple[User, bool]:
+    """Refresh provider tokens, then run a pool sync that bypasses the 1-hour cooldown.
+
+    The bool is False when some provider fetch failed after retries.
+    """
     if user.trakt_access_token_enc:
         user = await ensure_fresh_token(user, db)
     if user.simkl_access_token_enc:
@@ -90,8 +113,39 @@ async def _force_pool_sync(user: User, db: AsyncSession) -> User:
     user.last_seen_at = datetime.now(timezone.utc) - timedelta(hours=2)
     await db.flush()
 
-    await populate_movie_pool(user, db)
-    return user
+    complete = await populate_movie_pool(user, db)
+    return user, complete
+
+
+def _start_pool_import(user: User) -> None:
+    user.pool_import_status = "importing"
+    user.pool_import_started_at = datetime.now(timezone.utc)
+
+
+async def _run_pool_import(user_id: uuid.UUID) -> None:
+    """Background provider import that records its outcome in pool_import_status."""
+    try:
+        async with async_session_factory() as session:
+            user = await session.get(User, user_id)
+            if user is None:
+                return
+            user, complete = await _force_pool_sync(user, session)
+            user.pool_import_status = "complete" if complete else "failed"
+            await session.commit()
+            return
+    except Exception:
+        logger.exception("Pool import failed for user %s", user_id)
+
+    try:
+        async with async_session_factory() as session:
+            await session.execute(
+                update(User)
+                .where(User.id == user_id)
+                .values(pool_import_status="failed")
+            )
+            await session.commit()
+    except Exception:
+        logger.exception("Could not mark pool import failed for user %s", user_id)
 
 
 @router.post("/api/me/consent", response_model=UserResponse)
@@ -105,8 +159,8 @@ async def accept_consent(
 ):
     """Record that the user has accepted the privacy policy (GDPR consent).
 
-    The first acceptance also runs the initial provider import inline, so the
-    user lands on a populated pool once the request returns.
+    The first acceptance also starts the initial provider import in the
+    background; its progress is reported as pool_import_status.
     """
     if body.version != CURRENT_PRIVACY_POLICY_VERSION:
         raise HTTPException(
@@ -117,25 +171,39 @@ async def accept_consent(
     current_user.privacy_policy_accepted = True
     current_user.privacy_policy_accepted_at = datetime.now(timezone.utc)
     current_user.privacy_policy_version = CURRENT_PRIVACY_POLICY_VERSION
+    if first_consent:
+        _start_pool_import(current_user)
     await db.commit()
-
-    # Built before the sync: a rollback below expires the user instance.
-    response = _build_user_response(current_user)
 
     if first_consent:
         # Initial library import is deferred from the OAuth callback to here so no
         # provider data is ingested before consent is recorded (#571).
-        try:
-            await _force_pool_sync(current_user, db)
-            await db.commit()
-        except Exception:
-            logger.exception(
-                "Initial pool sync after consent failed for user %s", current_user.id
-            )
-            await db.rollback()
+        background_tasks.add_task(_run_pool_import, current_user.id)
         background_tasks.add_task(backfill_posters_background)
 
-    return response
+    return _build_user_response(current_user)
+
+
+@router.post("/api/me/pool-import", response_model=UserResponse)
+@limiter.limit("3/hour")
+async def retry_pool_import(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(require_consent),
+    db: AsyncSession = Depends(get_db),
+):
+    """Manually retry the background provider import (#653).
+
+    A no-op while an import is still running.
+    """
+    if _effective_pool_import_status(current_user) == "importing":
+        return _build_user_response(current_user)
+
+    _start_pool_import(current_user)
+    await db.commit()
+    background_tasks.add_task(_run_pool_import, current_user.id)
+    background_tasks.add_task(backfill_posters_background)
+    return _build_user_response(current_user)
 
 
 @router.delete("/api/me", status_code=204)
@@ -212,7 +280,7 @@ async def sync_providers(
         .where(UserMovie.user_id == current_user.id)
     ) or 0
 
-    current_user = await _force_pool_sync(current_user, db)
+    current_user, _ = await _force_pool_sync(current_user, db)
     await db.commit()
 
     # Count movies after sync

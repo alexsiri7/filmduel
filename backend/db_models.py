@@ -122,6 +122,11 @@ class User(Base):
     privacy_policy_version: Mapped[Optional[str]] = mapped_column(
         Text, nullable=True
     )
+    # NULL | "importing" | "complete" | "failed"; see _run_pool_import in routers/users.py
+    pool_import_status: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    pool_import_started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     user_movies: Mapped[list[UserMovie]] = relationship(
         back_populates="user", cascade="all, delete-orphan"

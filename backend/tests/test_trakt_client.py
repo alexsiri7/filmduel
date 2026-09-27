@@ -23,6 +23,13 @@ def _mock_response(json_data, status_code=200):
     return resp
 
 
+def test_client_read_timeout_outlasts_slow_trakt_responses():
+    """httpx's 5 s default read timeout dropped slow Trakt list fetches (#653)."""
+    client = TraktClient(client_id="id")._client()
+    assert client.timeout.read == 20.0
+    assert client.timeout.connect == 5.0
+
+
 class TestTraktClientExchangeCode:
     @pytest.mark.asyncio
     async def test_exchange_code_posts_correct_payload(self):

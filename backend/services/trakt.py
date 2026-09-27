@@ -29,6 +29,7 @@ class TraktClient:
         return httpx.AsyncClient(
             base_url=self.BASE_URL,
             headers=self._headers,
+            timeout=httpx.Timeout(20.0, connect=5.0),
         )
 
     async def exchange_code(
