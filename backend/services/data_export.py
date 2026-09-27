@@ -32,6 +32,10 @@ def _iso(dt: datetime | None) -> str | None:
     return dt.isoformat() if dt is not None else None
 
 
+def _elo(elo: float | None) -> int | None:
+    return round(elo) if elo is not None else None
+
+
 def _movie_ref(movie: Movie | None) -> dict | None:
     if movie is None:
         return None
@@ -104,7 +108,7 @@ def build_export_payload(
             {
                 "movie": _movie_ref(um.movie),
                 "seen": um.seen,
-                "elo": um.elo,
+                "elo": _elo(um.elo),
                 "seeded_elo": um.seeded_elo,
                 "battles": um.battles,
                 "trakt_rating": um.trakt_rating,
@@ -122,10 +126,10 @@ def build_export_payload(
                 "outcome": d.outcome,
                 "winner": _movie_ref(d.winner_movie),
                 "loser": _movie_ref(d.loser_movie),
-                "winner_elo_before": d.winner_elo_before,
-                "winner_elo_after": d.winner_elo_after,
-                "loser_elo_before": d.loser_elo_before,
-                "loser_elo_after": d.loser_elo_after,
+                "winner_elo_before": _elo(d.winner_elo_before),
+                "winner_elo_after": _elo(d.winner_elo_after),
+                "loser_elo_before": _elo(d.loser_elo_before),
+                "loser_elo_after": _elo(d.loser_elo_after),
             }
             for d in duels
         ],
