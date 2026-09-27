@@ -150,7 +150,13 @@ async def testsync_ratings_background_refreshes_expired_token():
         mock_user_result.scalar_one_or_none.return_value = mock_user
         mock_movies_result = MagicMock()
         mock_movies_result.all.return_value = mock_rows
-        mock_session.execute.side_effect = [mock_user_result, mock_movies_result]
+        mock_elos_result = MagicMock()
+        mock_elos_result.scalars.return_value.all.return_value = [900, 1100]
+        mock_session.execute.side_effect = [
+            mock_user_result,
+            mock_movies_result,
+            mock_elos_result,
+        ]
 
         await sync_ratings_background(uid, mid_a, 1100, mid_b, 900)
 
@@ -160,7 +166,8 @@ async def testsync_ratings_background_refreshes_expired_token():
         call_args = mock_sync.call_args
         assert call_args[0][0] == "fresh-token"
         assert set(call_args[0][1]) == {(trakt_id_a, 1100), (trakt_id_b, 900)}
-        assert call_args[0][2] == "movie"
+        assert call_args[0][2] == [900, 1100]
+        assert call_args[0][3] == "movie"
 
 
 @pytest.mark.asyncio
@@ -316,8 +323,15 @@ async def testsync_ratings_background_syncs_when_opt_in():
     mock_movies_result = MagicMock()
     mock_movies_result.all.return_value = [mock_movie_row_a, mock_movie_row_b]
 
+    mock_elos_result = MagicMock()
+    mock_elos_result.scalars.return_value.all.return_value = [850, 900, 1100]
+
     mock_session = AsyncMock()
-    mock_session.execute.side_effect = [mock_user_result, mock_movies_result]
+    mock_session.execute.side_effect = [
+        mock_user_result,
+        mock_movies_result,
+        mock_elos_result,
+    ]
 
     with (
         patch("backend.services.sync.async_session_factory") as mock_factory,
@@ -335,7 +349,9 @@ async def testsync_ratings_background_syncs_when_opt_in():
 
         await sync_ratings_background(uid, mid_a, 1100, mid_b, 900)
 
-        mock_sync.assert_awaited_once()
+        mock_sync.assert_awaited_once_with(
+            "valid_token", [(111, 1100), (222, 900)], [850, 900, 1100], "movie"
+        )
 
 
 @pytest.mark.asyncio
