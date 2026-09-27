@@ -208,15 +208,39 @@ async def test_export_rankings_csv_rates_by_percentile():
         for i, elo in enumerate(elos)
     ]
 
-    mock_result = MagicMock()
-    mock_result.unique.return_value.scalars.return_value.all.return_value = fake_ums
+    rows_result = MagicMock()
+    rows_result.unique.return_value.scalars.return_value.all.return_value = fake_ums
+    elos_result = MagicMock()
+    elos_result.scalars.return_value.all.return_value = sorted(elos)
     db = AsyncMock()
-    db.execute.return_value = mock_result
+    db.execute.side_effect = [rows_result, elos_result]
 
     csv_content = await export_rankings_csv(db, uuid.uuid4(), media_type="movie")
     rows = list(csv.reader(io.StringIO(csv_content)))
 
     assert [row[4] for row in rows[1:]] == [str(r) for r in range(10, 0, -1)]
+
+
+@pytest.mark.asyncio
+async def test_export_rankings_csv_rates_against_full_population_not_capped_rows():
+    """Rating10 ranks against get_ranked_elos, not only the rows under the export cap."""
+    fake_ums = [_make_export_user_movie("Kept", 2020, "tt0000001", 1100)]
+
+    rows_result = MagicMock()
+    rows_result.unique.return_value.scalars.return_value.all.return_value = fake_ums
+    elos_result = MagicMock()
+    elos_result.scalars.return_value.all.return_value = [900, 1100]
+    db = AsyncMock()
+    db.execute.side_effect = [rows_result, elos_result]
+
+    csv_content = await export_rankings_csv(db, uuid.uuid4(), media_type="show")
+    rows = list(csv.reader(io.StringIO(csv_content)))
+
+    assert rows[1][4] == "8"
+    elos_stmt = db.execute.await_args_list[1].args[0]
+    assert "ORDER BY user_movies.elo ASC" in str(elos_stmt)
+    assert "LIMIT" not in str(elos_stmt)
+    assert "show" in elos_stmt.compile().params.values()
 
 
 # --- get_ranked_elos ---

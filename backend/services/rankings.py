@@ -211,7 +211,9 @@ async def export_rankings_csv(
     )
     result = await db.execute(stmt)
     user_movies = result.unique().scalars().all()
-    sorted_elos = sorted(um.elo for um in user_movies)
+    sorted_elos = (
+        await get_ranked_elos(db, user_id, media_type) if user_movies else []
+    )
 
     output = io.StringIO()
     writer = csv.writer(output)
