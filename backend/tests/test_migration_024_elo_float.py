@@ -51,5 +51,6 @@ def test_downgrade_rounds_every_elo_column_back_to_integer(monkeypatch):
     assert {c.args for c in calls} == ELO_COLUMNS
     assert len(calls) == len(ELO_COLUMNS)
     for c in calls:
+        _table, column = c.args
         assert isinstance(c.kwargs["type_"], sa.Integer)
-        assert "round(" in c.kwargs["postgresql_using"]
+        assert c.kwargs["postgresql_using"] == f"round({column})::integer"
