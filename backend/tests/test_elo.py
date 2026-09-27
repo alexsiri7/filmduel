@@ -1,7 +1,7 @@
 """Tests for ELO calculation logic."""
 
 from backend.services.elo import (
-    elo_to_trakt_rating,
+    elo_to_rating,
     expected_score,
     get_initial_elo,
     k_factor,
@@ -100,24 +100,38 @@ def test_trakt_rating_to_seeded_elo_max():
     assert trakt_rating_to_seeded_elo(10) == 1400
 
 
-# --- elo_to_trakt_rating ---
+# --- elo_to_rating ---
 
 
-def test_elo_to_trakt_rating_boundaries():
-    assert elo_to_trakt_rating(600) == 1
-    assert elo_to_trakt_rating(1400) == 10
+def test_elo_to_rating_ten_films_fill_the_scale_on_a_narrow_range():
+    elos = [813, 850, 900, 940, 1000, 1050, 1100, 1150, 1250, 1342]
+    assert [elo_to_rating(e, elos) for e in elos] == list(range(1, 11))
 
 
-def test_elo_to_trakt_rating_clamps():
-    assert elo_to_trakt_rating(100) == 1
-    assert elo_to_trakt_rating(2000) == 10
+def test_elo_to_rating_clumped_population_splits_into_equal_deciles():
+    elos = list(range(950, 1050))
+    ratings = [elo_to_rating(e, elos) for e in elos]
+    assert all(ratings.count(r) == 10 for r in range(1, 11))
+    assert ratings == sorted(ratings)
 
 
-def test_trakt_rating_round_trip():
-    """Converting trakt->elo->trakt should preserve the original rating."""
-    for r in range(1, 11):
-        elo = trakt_rating_to_seeded_elo(r)
-        assert elo_to_trakt_rating(elo) == r
+def test_elo_to_rating_ties_share_a_rating():
+    elos = [900, 1000, 1000, 1100]
+    assert elo_to_rating(1000, elos) == 5
+    assert elo_to_rating(1000, [1000] * 7) == 5
+
+
+def test_elo_to_rating_small_populations():
+    assert elo_to_rating(1000, [1000]) == 5
+    assert elo_to_rating(900, [900, 1100]) == 3
+    assert elo_to_rating(1100, [900, 1100]) == 8
+
+
+def test_elo_to_rating_outside_population_and_empty():
+    elos = [900, 1000, 1100]
+    assert elo_to_rating(500, elos) == 1
+    assert elo_to_rating(2000, elos) == 10
+    assert elo_to_rating(1000, []) == 5
 
 
 # --- get_initial_elo ---

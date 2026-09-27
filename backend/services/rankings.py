@@ -12,17 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from backend.db_models import Movie, UserMovie
+from backend.services.elo import elo_to_rating
 
 
 def parse_decade(decade: str) -> tuple[int, int]:
     """Parse a decade string like '1990s' into (start, end) years inclusive."""
     start = int(decade.rstrip("s"))
     return start, start + 9
-
-
-def elo_to_letterboxd_rating(elo: int) -> int:
-    """Map ELO to a 1-10 scale for Letterboxd/Trakt export."""
-    return max(1, min(10, round((elo - 600) * 9 / 800) + 1))
 
 
 async def get_user_rankings(
@@ -79,6 +75,29 @@ async def get_user_rankings(
     total = count_result.scalar() or 0
 
     return user_movies, total
+
+
+async def get_ranked_elos(
+    db: AsyncSession, user_id: uuid.UUID, media_type: str = "movie"
+) -> list[int]:
+    """Return the ELOs of the user's ranked films of this media_type, ascending.
+
+    This is the population elo_to_rating() ranks against; genre/decade filters
+    deliberately do not apply, so a film's rating is the same everywhere.
+    """
+    stmt = (
+        select(UserMovie.elo)
+        .join(Movie, UserMovie.movie_id == Movie.id)
+        .where(
+            UserMovie.user_id == user_id,
+            UserMovie.seen.is_(True),
+            UserMovie.battles > 0,
+            Movie.media_type == media_type,
+        )
+        .order_by(UserMovie.elo.asc())
+    )
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
 
 
 async def get_user_stats(
@@ -192,6 +211,7 @@ async def export_rankings_csv(
     )
     result = await db.execute(stmt)
     user_movies = result.unique().scalars().all()
+    sorted_elos = sorted(um.elo for um in user_movies)
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -199,14 +219,14 @@ async def export_rankings_csv(
 
     for i, um in enumerate(user_movies):
         movie = um.movie
-        trakt_rating = elo_to_letterboxd_rating(um.elo)
+        rating = elo_to_rating(um.elo, sorted_elos)
         writer.writerow(
             [
                 i + 1,
                 _sanitize_csv_cell(movie.title),
                 movie.year or "",
                 _sanitize_csv_cell(movie.imdb_id or ""),
-                trakt_rating,
+                rating,
             ]
         )
 

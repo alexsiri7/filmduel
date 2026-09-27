@@ -281,15 +281,17 @@ requirements:
       - "get_initial_elo(seeded) returns seeded when set, else 1000"
 
   - id: FD-023
-    title: ELO to 1-10 rating mapping
-    statement: "When exporting or syncing ratings, the system shall map ELO to a 1-10 scale via round((elo-600)*9/800)+1, clamped to [1,10]."
+    title: ELO to 1-10 percentile rating mapping
+    statement: "When exporting, syncing or displaying ratings, the system shall map a film's ELO to a 1-10 scale by its mid-rank percentile among the user's ranked films of the same media_type (seen, battles>0), as ceil(10*(below + ties/2)/N) clamped to [1,10], via a single function elo_to_rating."
     category: functional
     priority: must
     status: active
     source: back-ported
     acceptance:
-      - "elo_to_trakt_rating(600)==1, (1400)==10, values outside the range clamp"
-      - "The same mapping is used for Trakt sync, Letterboxd CSV Rating10, and rankings display"
+      - "Ten films with distinct ELOs rate 1 through 10 in ELO order"
+      - "Tied ELOs receive the same rating; a single ranked film rates 5"
+      - "The same function (elo_to_rating) and population is used for Trakt sync, Letterboxd CSV Rating10, and rankings display; genre/decade filters do not change a film's rating"
+    notes: "#652 replaced the fixed linear mapping round((elo-600)*9/800)+1, which clumped 76% of films at 5-6 because real ELOs span a much narrower range than 600-1400."
 
   # ── Duels ───────────────────────────────────────────────────────────────
 
@@ -414,7 +416,7 @@ requirements:
     acceptance:
       - "Response has Content-Disposition attachment; filename=filmduel_rankings.csv"
       - "A title beginning with '=' is emitted as \"'=...\" (CSV formula-injection guard)"
-      - "Rating10 equals elo_to_trakt_rating(elo)"
+      - "Rating10 equals elo_to_rating(elo, the user's ranked ELOs of that media_type)"
 
   # ── TV show support ─────────────────────────────────────────────────────
 

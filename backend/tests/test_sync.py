@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
 
-from backend.services.sync import _rate_with_retry
+from backend.services.sync import _rate_with_retry, sync_post_duel
 
 
 def _make_client(side_effects=None):
@@ -77,3 +77,18 @@ class TestRateWithRetry:
         client = _make_client()
         await _rate_with_retry(client, trakt_id=10, rating=9, media_type="show")
         client.rate.assert_awaited_once_with(10, 9, media_type="show")
+
+
+@pytest.mark.asyncio
+async def test_sync_post_duel_rates_by_percentile_of_population():
+    """Each dueled film is pushed at its percentile rating within sorted_elos."""
+    client = AsyncMock()
+    with patch("backend.services.sync.TraktClient", return_value=client):
+        await sync_post_duel(
+            "token", [(111, 1100), (222, 900)], [900, 1100], media_type="show"
+        )
+
+    assert client.rate.await_args_list == [
+        ((111, 8), {"media_type": "show"}),
+        ((222, 3), {"media_type": "show"}),
+    ]

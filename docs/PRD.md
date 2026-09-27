@@ -350,9 +350,13 @@ def update_elo(winner_elo: int, loser_elo: int,
 
 ### ELO → Trakt rating
 
+A film's 1–10 rating is its percentile among the user's ranked films of the same media type, so every user's ratings span the whole scale. `elo_to_rating` (in `backend/services/elo.py`) uses the mid-rank percentile, so tied ELOs share a rating:
+
 ```python
-trakt_rating = max(1, min(10, round((elo - 600) * 9 / 800) + 1))
+rating = max(1, min(10, ceil(10 * (below + ties / 2) / n)))
 ```
+
+Trakt sync, the Letterboxd CSV `Rating10` column and the rankings display all use this function and population. Genre/decade filters do not change a film's rating.
 
 ---
 

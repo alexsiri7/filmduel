@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Sequence
 
 import httpx
 from sqlalchemy import select
@@ -11,7 +12,8 @@ from sqlalchemy import select
 from backend.config import get_settings
 from backend.db import async_session_factory
 from backend.db_models import Movie, User
-from backend.services.elo import elo_to_trakt_rating
+from backend.services.elo import elo_to_rating
+from backend.services.rankings import get_ranked_elos
 from backend.services.token_refresh import ensure_fresh_token
 from backend.services.trakt import TraktClient
 
@@ -45,6 +47,7 @@ async def _rate_with_retry(
 async def sync_post_duel(
     access_token: str,
     movie_ratings: list[tuple[int, int]],
+    sorted_elos: Sequence[int],
     media_type: str = "movie",
 ) -> None:
     """Fire-and-forget: sync two specific movie/show ratings to Trakt after a duel.
@@ -52,12 +55,14 @@ async def sync_post_duel(
     Args:
         access_token: User's current Trakt access token.
         movie_ratings: List of (trakt_id, elo) pairs to sync.
+        sorted_elos: The user's ranked ELOs of this media_type, ascending —
+            the population each ELO is rated against.
         media_type: "movie" or "show".
     """
     settings = get_settings()
     client = TraktClient(client_id=settings.TRAKT_CLIENT_ID, access_token=access_token)
     for trakt_id, elo in movie_ratings:
-        rating = elo_to_trakt_rating(elo)
+        rating = elo_to_rating(elo, sorted_elos)
         await _rate_with_retry(client, trakt_id, rating, media_type)
 
 
@@ -91,13 +96,14 @@ async def sync_ratings_background(
             trakt_map = {row.id: row.trakt_id for row in rows}
             # Both movies in a duel are the same media_type
             media_type = rows[0].media_type if rows else "movie"
+            sorted_elos = await get_ranked_elos(session, user_id, media_type)
         movie_ratings = []
         if movie_a_id in trakt_map:
             movie_ratings.append((trakt_map[movie_a_id], new_elo_a))
         if movie_b_id in trakt_map:
             movie_ratings.append((trakt_map[movie_b_id], new_elo_b))
         if movie_ratings:
-            await sync_post_duel(access_token, movie_ratings, media_type)
+            await sync_post_duel(access_token, movie_ratings, sorted_elos, media_type)
     except Exception:
         logger.exception(
             "Background rating sync failed for user %s (token refresh or sync error)",

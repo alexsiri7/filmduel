@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from backend.services.rankings import (
-    elo_to_letterboxd_rating,
     export_rankings_csv,
+    get_ranked_elos,
     get_user_stats,
     parse_decade,
 )
@@ -146,35 +146,6 @@ def test_parse_decade_partial_numeric_raises_value_error():
         parse_decade("19x0s")
 
 
-# --- elo_to_letterboxd_rating ---
-
-
-def test_elo_low_clamp():
-    """ELO well below 600 should clamp to rating 1."""
-    assert elo_to_letterboxd_rating(200) == 1
-
-
-def test_elo_high_clamp():
-    """ELO well above 1400 should clamp to rating 10."""
-    assert elo_to_letterboxd_rating(2000) == 10
-
-
-def test_elo_midpoint():
-    """ELO at 1000 (midrange) should give a mid-range rating."""
-    rating = elo_to_letterboxd_rating(1000)
-    assert 4 <= rating <= 7
-
-
-def test_elo_at_600():
-    """ELO at 600 should map to rating 1."""
-    assert elo_to_letterboxd_rating(600) == 1
-
-
-def test_elo_at_1400():
-    """ELO at 1400 should map to rating 10."""
-    assert elo_to_letterboxd_rating(1400) == 10
-
-
 # --- export_rankings_csv (integration with mock DB) ---
 
 
@@ -226,6 +197,45 @@ async def test_export_rankings_csv_sanitizes_formula_title():
     rows = list(reader)
 
     assert rows[1][1] == "'=CMD()"
+
+
+@pytest.mark.asyncio
+async def test_export_rankings_csv_rates_by_percentile():
+    """Ten films on a narrow ELO range export Rating10 of 10 down to 1."""
+    elos = [1342, 1250, 1150, 1100, 1050, 1000, 940, 900, 850, 813]
+    fake_ums = [
+        _make_export_user_movie(f"Film {i}", 2020, f"tt{i:07d}", elo)
+        for i, elo in enumerate(elos)
+    ]
+
+    mock_result = MagicMock()
+    mock_result.unique.return_value.scalars.return_value.all.return_value = fake_ums
+    db = AsyncMock()
+    db.execute.return_value = mock_result
+
+    csv_content = await export_rankings_csv(db, uuid.uuid4(), media_type="movie")
+    rows = list(csv.reader(io.StringIO(csv_content)))
+
+    assert [row[4] for row in rows[1:]] == [str(r) for r in range(10, 0, -1)]
+
+
+# --- get_ranked_elos ---
+
+
+@pytest.mark.asyncio
+async def test_get_ranked_elos_returns_ascending_ranked_population():
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = [900, 1000]
+    db = AsyncMock()
+    db.execute.return_value = mock_result
+
+    assert await get_ranked_elos(db, uuid.uuid4(), media_type="show") == [900, 1000]
+
+    sql = str(db.execute.call_args[0][0])
+    assert "media_type" in sql
+    assert "battles" in sql
+    assert "seen" in sql
+    assert "ORDER BY user_movies.elo ASC" in sql
 
 
 # --- CSV format ---

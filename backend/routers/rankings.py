@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+from collections.abc import Sequence
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -20,9 +21,10 @@ from backend.schemas import (
     RankingsResponse,
     StatsResponse,
 )
-from backend.services.elo import elo_to_trakt_rating
+from backend.services.elo import elo_to_rating
 from backend.services.rankings import (
     export_rankings_csv,
+    get_ranked_elos,
     get_user_rankings,
     get_user_stats,
 )
@@ -30,13 +32,15 @@ from backend.services.rankings import (
 router = APIRouter(prefix="/api/rankings", tags=["rankings"])
 
 
-def _build_ranked_movie(um: UserMovie, rank: int) -> RankedMovie:
+def _build_ranked_movie(
+    um: UserMovie, rank: int, sorted_elos: Sequence[int]
+) -> RankedMovie:
     return RankedMovie(
         rank=rank,
         movie=MovieSchema.from_model(um.movie),
         elo=um.elo,
         battles=um.battles,
-        trakt_rating=elo_to_trakt_rating(um.elo),
+        trakt_rating=elo_to_rating(um.elo, sorted_elos),
     )
 
 
@@ -65,8 +69,12 @@ async def get_rankings(
         )
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid decade format")
+    sorted_elos = (
+        await get_ranked_elos(db, current_user.id, media_type) if user_movies else []
+    )
     rankings = [
-        _build_ranked_movie(um, rank=offset + i + 1) for i, um in enumerate(user_movies)
+        _build_ranked_movie(um, rank=offset + i + 1, sorted_elos=sorted_elos)
+        for i, um in enumerate(user_movies)
     ]
     return RankingsResponse(rankings=rankings, total=total)
 
@@ -90,9 +98,10 @@ async def get_stats(
             average_elo=stats["average_elo"],
         )
 
-    highest = _build_ranked_movie(stats["highest_rated"], rank=1)
+    sorted_elos = await get_ranked_elos(db, current_user.id, media_type)
+    highest = _build_ranked_movie(stats["highest_rated"], 1, sorted_elos)
     lowest = _build_ranked_movie(
-        stats["lowest_rated"], rank=stats["total_movies_ranked"]
+        stats["lowest_rated"], stats["total_movies_ranked"], sorted_elos
     )
 
     return StatsResponse(

@@ -5,6 +5,9 @@ count (provisional K=64 for fewer than 5 battles, otherwise K=32).
 Default starting rating is 1000.
 """
 
+from bisect import bisect_left, bisect_right
+from collections.abc import Sequence
+
 PROVISIONAL_THRESHOLD = 5
 K_PROVISIONAL = 64
 K_ESTABLISHED = 32
@@ -65,9 +68,22 @@ def trakt_rating_to_seeded_elo(rating: int) -> int:
     return round(600 + (rating - 1) * (800 / 9))
 
 
-def elo_to_trakt_rating(elo: int) -> int:
-    """Convert ELO to Trakt's 1-10 scale."""
-    return max(1, min(10, round((elo - 600) * 9 / 800) + 1))
+def elo_to_rating(elo: int, sorted_elos: Sequence[int]) -> int:
+    """Map an ELO to the 1-10 scale by its percentile among the user's ranked ELOs.
+
+    ``sorted_elos`` must be ascending. Uses the mid-rank percentile, so N
+    distinct films split into N equal slices of the scale and ties share a
+    rating. An empty population rates 5.
+    """
+    n = len(sorted_elos)
+    if n == 0:
+        return 5
+    below = bisect_left(sorted_elos, elo)
+    equal = bisect_right(sorted_elos, elo) - below
+    # ceil(10 * (below + equal/2) / n) in integer arithmetic, so exact decile
+    # boundaries don't round up through float error.
+    rating = -(-10 * (2 * below + equal) // (2 * n))
+    return max(1, min(10, rating))
 
 
 def get_initial_elo(seeded_elo: int | None) -> int:
