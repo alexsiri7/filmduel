@@ -88,6 +88,9 @@ export default function Duel({ mediaType = "movie" }) {
     loadStats();
   }, [loadPair, loadStats]);
 
+  const pickedWinner =
+    result?.outcome === "a_wins" || result?.outcome === "b_wins" ? result.outcome : null;
+
   const handleSubmit = (outcome) => {
     if (!pair || submitting) return;
     setSubmitting(true);
@@ -235,7 +238,7 @@ export default function Duel({ mediaType = "movie" }) {
                   onClick={() => handleSubmit("a_wins")}
                   clickable={!submitting && !result}
                   compact={windowWidth < 768}
-                  chosen={result ? (result.outcome === "a_wins" ? "winner" : "loser") : undefined}
+                  chosen={pickedWinner ? (pickedWinner === "a_wins" ? "winner" : "loser") : undefined}
                 />
               </div>
 
@@ -255,12 +258,28 @@ export default function Duel({ mediaType = "movie" }) {
                   onClick={() => handleSubmit("b_wins")}
                   clickable={!submitting && !result}
                   compact={windowWidth < 768}
-                  chosen={result ? (result.outcome === "b_wins" ? "winner" : "loser") : undefined}
+                  chosen={pickedWinner ? (pickedWinner === "b_wins" ? "winner" : "loser") : undefined}
                 />
               </div>
             </div>
 
-            {/* Result feedback — brief winner flash before next pair */}
+            {/* Not-seen outcomes: recorded without touching ratings */}
+            <div className="w-full max-w-2xl flex flex-col md:flex-row gap-3">
+              {[
+                { outcome: "a_only", text: `Only seen ${pair.movie_a.title}` },
+                { outcome: "b_only", text: `Only seen ${pair.movie_b.title}` },
+                { outcome: "neither", text: "Haven't seen either" },
+              ].map(({ outcome, text }) => (
+                <button
+                  key={outcome}
+                  onClick={() => handleSubmit(outcome)}
+                  disabled={submitting || !!result}
+                  className="flex-1 min-w-0 truncate border border-[#514534]/30 hover:border-primary-container/50 hover:bg-[#1d1b1a] text-[#d6c4ae] font-headline font-bold uppercase tracking-widest text-xs py-4 px-4 transition-all disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  {text}
+                </button>
+              ))}
+            </div>
           </>
         )}
       </section>
