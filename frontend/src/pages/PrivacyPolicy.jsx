@@ -95,10 +95,17 @@ export default function PrivacyPolicy() {
           <h2 className="font-headline font-bold text-lg text-[#F5F0E8] uppercase tracking-wider mb-4">
             Data Retention
           </h2>
+          <ul className="space-y-2 text-[#d6c4ae] text-sm font-body mb-4">
+            <li>• <strong className="text-[#F5F0E8]">Duel choices</strong> — the full record of each duel, including the ELO ratings at the time, is kept for 180 days. After that it is deleted and only a minimal duel history entry remains: which film won and which lost (or that you hadn't seen one or both films), and the date. This duel history is kept until you delete your account, so your rankings can be recalculated.</li>
+            <li>• <strong className="text-[#F5F0E8]">Swipe answers and Watch Suggestions</strong> — deleted after 180 days</li>
+            <li>• <strong className="text-[#F5F0E8]">AI tournament responses</strong> — the AI response stored with a tournament is removed after 180 days; the tournament itself is kept</li>
+            <li>• <strong className="text-[#F5F0E8]">Feedback reports</strong> — deleted after 365 days; attached screenshots are deleted after 90 days</li>
+            <li>• <strong className="text-[#F5F0E8]">Everything else</strong> — your account, rankings, tournaments, and duel history are kept until you delete your account</li>
+          </ul>
           <p className="text-[#d6c4ae] text-sm font-body leading-relaxed">
-            Your account data is retained until you choose to delete it. You can delete your account
-            at any time through the application settings. Deletion is permanent and removes all
-            associated data including rankings, duels, and tournament history.
+            You can delete your account at any time through the application settings. Deletion is
+            permanent and removes all associated data, including rankings, duels, duel history, and
+            tournament history.
             AI requests processed via Requesty.ai are not stored by Requesty.ai; prompt content is discarded after delivery.
           </p>
         </section>
