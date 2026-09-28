@@ -1,9 +1,9 @@
 ---
-id: "011"
-title: "TV show support"
-status: "in_progress"
 github_issue: 204
-updated: 2026-05-12
+id: '011'
+status: done
+title: TV show support
+updated: '2026-09-28'
 ---
 
 ## Why
