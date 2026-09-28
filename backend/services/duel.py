@@ -135,6 +135,8 @@ async def process_duel(
     movie_b_id: uuid.UUID,
     outcome: str,
     mode: str,
+    *,
+    pair_token_digest: str | None = None,
 ) -> ProcessDuelResult:
     """Run the full duel pipeline: ELO math, DB mutations, duel record.
 
@@ -222,6 +224,7 @@ async def process_duel(
     if outcome not in ("a_wins", "b_wins"):
         duel = Duel(user_id=user_id, mode=mode, pair_type=pair_type, outcome=outcome)
         db.add(duel)
+    duel.pair_token_digest = pair_token_digest
 
     # DEBUG, not INFO: user_id + preference data is behavioral personal data (SEC-15, #583).
     logger.debug(

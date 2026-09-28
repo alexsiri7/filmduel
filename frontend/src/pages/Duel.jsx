@@ -99,6 +99,17 @@ export default function Duel({ mediaType = "movie" }) {
       outcome,
       pair.next_pair_token,
       MODE
+    ).then(
+      (res) => {
+        // request() resolves null on 401 while it redirects to /login
+        if (res === null) throw new Error("Not authenticated");
+        return res;
+      },
+      (err) => {
+        // A retry whose first attempt reached the server but lost its response
+        if (err.status === 409) return null;
+        throw err;
+      }
     );
     // The next pair must be chosen from ratings and battle counts that include this duel
     prefetchRef.current = submitted

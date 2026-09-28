@@ -335,6 +335,28 @@ async def test_process_duel_records_skip_outcome(outcome):
     assert duel_adds[0].loser_movie_id is None
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("outcome", ["a_wins", "b_wins", "a_only", "b_only", "neither"])
+async def test_process_duel_records_the_consumed_pair_token(outcome):
+    uid = uuid.uuid4()
+    mid_a = uuid.uuid4()
+    mid_b = uuid.uuid4()
+
+    um_a = _make_user_movie(uid, mid_a, elo=1000, battles=3)
+    um_b = _make_user_movie(uid, mid_b, elo=1000, battles=3)
+
+    db = AsyncMock()
+    db.execute = _make_fake_execute(um_a, um_b)
+
+    await process_duel(
+        db, uid, mid_a, mid_b, outcome, "discovery", pair_token_digest="digest"
+    )
+
+    (duel,) = [
+        call.args[0] for call in db.add.call_args_list if isinstance(call.args[0], Duel)
+    ]
+    assert duel.pair_token_digest == "digest"
+
 # ---------------------------------------------------------------------------
 # next_action = "swipe" when seen_unranked < 3
 # ---------------------------------------------------------------------------

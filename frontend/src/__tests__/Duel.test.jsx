@@ -494,4 +494,64 @@ describe("Duel", () => {
     expect(duelBodies[1]).toMatchObject({ outcome: "a_only", pair_token: "tok" });
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
+  it("treats a retry the server already recorded as saved", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const baseFetch = setupFetch({ pair: { ...fakePair, next_pair_token: "tok" } });
+    const submitResponses = [
+      { ok: false, status: 502, json: () => Promise.resolve({ detail: "Bad Gateway" }) },
+      { ok: false, status: 409, json: () => Promise.resolve({ detail: "Duel already recorded" }) },
+    ];
+    const mockFetch = vi.fn((url, opts) => {
+      if (url === "/api/duels" && opts?.method === "POST") {
+        return Promise.resolve(submitResponses.shift());
+      }
+      return baseFetch(url, opts);
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    render(
+      <MemoryRouter>
+        <Duel />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Only seen Alien" }));
+    await vi.advanceTimersByTimeAsync(700);
+    fireEvent.click(await screen.findByRole("button", { name: "Retry" }));
+    await vi.advanceTimersByTimeAsync(700);
+
+    const pairUrls = () =>
+      mockFetch.mock.calls.filter(([url]) => url.includes("/api/movies/pair"));
+    await waitFor(() => {
+      expect(pairUrls()).toHaveLength(2);
+    });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("does not treat a submit cut short by an expired session as saved", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const baseFetch = setupFetch({ pair: { ...fakePair, next_pair_token: "tok" } });
+    const mockFetch = vi.fn((url, opts) => {
+      if (url === "/api/duels" && opts?.method === "POST") {
+        return Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({}) });
+      }
+      return baseFetch(url, opts);
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    render(
+      <MemoryRouter>
+        <Duel />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Only seen Alien" }));
+    await vi.advanceTimersByTimeAsync(700);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't save your pick.");
+    const pairUrls = mockFetch.mock.calls.filter(([url]) => url.includes("/api/movies/pair"));
+    expect(pairUrls).toHaveLength(1);
+  });
 });

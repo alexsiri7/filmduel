@@ -297,7 +297,10 @@ class TournamentMatch(Base):
 
 class Duel(Base):
     __tablename__ = "duels"
-    __table_args__ = (Index("ix_duels_user_id", "user_id"),)
+    __table_args__ = (
+        Index("ix_duels_user_id", "user_id"),
+        Index("uq_duels_pair_token_digest", "pair_token_digest", unique=True),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -320,6 +323,9 @@ class Duel(Base):
     # Set only for a_only/b_only/neither; NULL for decided duels (winner/loser
     # set) and for skip duels recorded before migration 023.
     outcome: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # SHA-256 of the pair token the submission consumed; NULL for duels
+    # recorded before migration 025 and for tournament duels.
+    pair_token_digest: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
