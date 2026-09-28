@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db import get_db
@@ -53,11 +55,26 @@ async def submit_duel(
     if token_ids is None or token_ids != submitted_ids:
         raise HTTPException(status_code=400, detail="Invalid pair token")
 
+    # Each served token is unique, so its digest identifies one submission: a
+    # retry after a lost response re-sends it and must not apply the duel twice.
+    pair_token_digest = hashlib.sha256(body.pair_token.encode()).hexdigest()
     try:
-        result = await process_duel(db, uid, movie_a_id, movie_b_id, outcome, mode)
+        result = await process_duel(
+            db,
+            uid,
+            movie_a_id,
+            movie_b_id,
+            outcome,
+            mode,
+            pair_token_digest=pair_token_digest,
+        )
+        await db.flush()
     except ValueError:
         logger.warning("Invalid duel submission for user %s", uid)
         raise HTTPException(status_code=400, detail="Invalid duel submission")
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Duel already recorded")
 
     # Trakt sync in background (fire-and-forget)
     if (

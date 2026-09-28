@@ -9,6 +9,7 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import IntegrityError
 
 # Pair tokens need a TOKEN_ENC_KEY; set it and clear the cached settings/Fernet
 # before importing backend modules so this file also passes when run alone.
@@ -348,6 +349,95 @@ class TestSubmitDuel:
         assert response.status_code == 400
         assert response.json()["detail"] == "Invalid duel submission"
         assert "pool" not in response.json()["detail"]
+
+    def test_submitting_a_served_pair_is_accepted(self):
+        """Contract with frontend/src/api.js submitDuel: the ids and next_pair_token
+        from GET /api/movies/pair, posted back as the SPA does, must be accepted."""
+        pair = []
+        for _ in range(2):
+            um = MagicMock()
+            um.movie_id = um.movie.id = str(uuid.uuid4())
+            um.movie.trakt_id = 1
+            um.movie.tmdb_id = um.movie.imdb_id = None
+            um.movie.title = "Film"
+            um.movie.year = 2000
+            um.movie.poster_url = um.movie.overview = um.movie.genres = None
+            um.movie.media_type = "movie"
+            um.seen = True
+            um.elo = None
+            um.battles = 0
+            pair.append(um)
+
+        fake_result = ProcessDuelResult(
+            api_result=DuelResult(
+                outcome=DuelOutcome.neither,
+                movie_a_elo_delta=0,
+                movie_b_elo_delta=0,
+            ),
+            new_elo_a=None,
+            new_elo_b=None,
+        )
+        client = TestClient(app, headers=SPA_HEADERS)
+        with patch(
+            "backend.routers.movies.select_pair", new_callable=AsyncMock
+        ) as mock_sp, patch(
+            "backend.routers.duels.process_duel", new_callable=AsyncMock
+        ) as mock_pd:
+            mock_sp.return_value = tuple(pair)
+            mock_pd.return_value = fake_result
+            served = client.get("/api/movies/pair").json()
+            response = client.post(
+                "/api/duels",
+                json={
+                    "movie_a_id": served["movie_a"]["id"],
+                    "movie_b_id": served["movie_b"]["id"],
+                    "outcome": "neither",
+                    "mode": "discovery",
+                    "pair_token": served["next_pair_token"],
+                },
+            )
+
+        assert response.status_code == 200, response.text
+        mock_pd.assert_awaited_once()
+
+    def test_replayed_pair_token_is_rejected_not_applied_twice(self):
+        """A retry re-sends the token; the second submission must hit the unique
+        digest and return 409 instead of being recorded again."""
+        mid_a = str(uuid.uuid4())
+        mid_b = str(uuid.uuid4())
+        token = encode_pair_token(mid_a, mid_b, user_id=str(FAKE_USER.id))
+        fake_result = ProcessDuelResult(
+            api_result=DuelResult(
+                outcome=DuelOutcome.neither,
+                movie_a_elo_delta=0,
+                movie_b_elo_delta=0,
+            ),
+            new_elo_a=None,
+            new_elo_b=None,
+        )
+        body = {
+            "movie_a_id": mid_a,
+            "movie_b_id": mid_b,
+            "outcome": "neither",
+            "mode": "discovery",
+            "pair_token": token,
+        }
+        with patch(
+            "backend.routers.duels.process_duel", new_callable=AsyncMock
+        ) as mock_pd:
+            mock_pd.side_effect = [
+                fake_result,
+                IntegrityError("INSERT", {}, Exception("uq_duels_pair_token_digest")),
+            ]
+            client = TestClient(app, headers=SPA_HEADERS)
+            first = client.post("/api/duels", json=body)
+            replay = client.post("/api/duels", json=body)
+
+        assert first.status_code == 200
+        assert replay.status_code == 409
+        assert replay.json()["detail"] == "Duel already recorded"
+        digests = [c.kwargs["pair_token_digest"] for c in mock_pd.await_args_list]
+        assert digests[0] and digests[0] == digests[1]
 
 
 # ---------------------------------------------------------------------------
