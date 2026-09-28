@@ -37,7 +37,7 @@ def sanitize_llm_input(text: str, max_len: int = 200) -> str:
     return sanitized
 
 
-def elo_tier(elo: int) -> str:
+def elo_tier(elo: float) -> str:
     """Convert raw ELO to a preference tier for privacy-preserving LLM prompts."""
     if elo >= 1300:
         return "highly preferred"

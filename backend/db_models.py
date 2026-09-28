@@ -9,6 +9,7 @@ from typing import Optional
 from sqlalchemy import (
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -193,7 +194,7 @@ class UserMovie(Base):
         UUID(as_uuid=True), ForeignKey("movies.id", ondelete="CASCADE"), nullable=False
     )
     seen: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
-    elo: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    elo: Mapped[Optional[float]] = mapped_column(Float, nullable=True, default=None)
     seeded_elo: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     battles: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     trakt_rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -310,10 +311,10 @@ class Duel(Base):
     loser_movie_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("movies.id"), nullable=True
     )
-    winner_elo_before: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    loser_elo_before: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    winner_elo_after: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    loser_elo_after: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    winner_elo_before: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    loser_elo_before: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    winner_elo_after: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    loser_elo_after: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     mode: Mapped[str] = mapped_column(Text, nullable=False, server_default="discovery")
     pair_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Set only for a_only/b_only/neither; NULL for decided duels (winner/loser

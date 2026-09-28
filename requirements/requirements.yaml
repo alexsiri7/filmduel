@@ -258,15 +258,15 @@ requirements:
   # ── ELO ─────────────────────────────────────────────────────────────────
 
   - id: FD-021
-    title: ELO update formula with provisional K-factor
-    statement: "When a duel produces a winner, the system shall update both films' ratings using the standard ELO expected-score formula (divisor 400), applying K=64 independently to any film with fewer than 5 battles and K=32 otherwise, rounding to integers."
+    title: ELO update formula with uncertainty-aware K-factor
+    statement: "When a duel produces a winner, the system shall update both films' ratings using the standard ELO expected-score formula (divisor 400), applying K = 300/sqrt(battles+1) independently to each film based on its battles before the duel, storing ratings unrounded; ratings are rounded to integers only for display in the API."
     category: functional
     priority: must
     status: active
     source: back-ported
     acceptance:
-      - "k_factor(4)==64 and k_factor(5)==32"
-      - "Equal-rated films with established K exchange 16 points"
+      - "k_factor(0)==300, k_factor(3)==150 and k_factor(8)==100"
+      - "Equal-rated films with 3 battles each exchange 75 points"
       - "Winner and loser K-factors are determined independently from their own battle counts"
 
   - id: FD-022

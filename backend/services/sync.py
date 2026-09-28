@@ -46,8 +46,8 @@ async def _rate_with_retry(
 
 async def sync_post_duel(
     access_token: str,
-    movie_ratings: list[tuple[int, int]],
-    sorted_elos: Sequence[int],
+    movie_ratings: list[tuple[int, float]],
+    sorted_elos: Sequence[float],
     media_type: str = "movie",
 ) -> None:
     """Fire-and-forget: sync two specific movie/show ratings to Trakt after a duel.
@@ -69,9 +69,9 @@ async def sync_post_duel(
 async def sync_ratings_background(
     user_id: uuid.UUID,
     movie_a_id: uuid.UUID,
-    new_elo_a: int,
+    new_elo_a: float,
     movie_b_id: uuid.UUID,
-    new_elo_b: int,
+    new_elo_b: float,
 ) -> None:
     """Fire-and-forget Trakt rating sync after a duel with a winner."""
     try:

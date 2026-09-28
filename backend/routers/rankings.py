@@ -33,12 +33,12 @@ router = APIRouter(prefix="/api/rankings", tags=["rankings"])
 
 
 def _build_ranked_movie(
-    um: UserMovie, rank: int, sorted_elos: Sequence[int]
+    um: UserMovie, rank: int, sorted_elos: Sequence[float]
 ) -> RankedMovie:
     return RankedMovie(
         rank=rank,
         movie=MovieSchema.from_model(um.movie),
-        elo=um.elo,
+        elo=round(um.elo),
         battles=um.battles,
         trakt_rating=elo_to_rating(um.elo, sorted_elos),
     )

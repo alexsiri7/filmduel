@@ -24,7 +24,7 @@ from backend.services.duel import (
 def _make_user_movie(
     user_id: uuid.UUID,
     movie_id: uuid.UUID,
-    elo: int | None = None,
+    elo: float | None = None,
     seeded_elo: int | None = None,
     battles: int = 0,
     seen: bool | None = None,
@@ -163,14 +163,35 @@ async def test_process_duel_a_wins_elo():
 
     result = await process_duel(db, uid, mid_a, mid_b, "a_wins", "discovery")
 
-    assert result.api_result.movie_a_elo_delta > 0, "Winner A should gain ELO"
-    assert result.api_result.movie_b_elo_delta < 0, "Loser B should lose ELO"
-    # Equal-ELO K=32 matchup: expected delta ~16, bounded by [10, 32]
-    assert 10 <= result.api_result.movie_a_elo_delta <= 32
+    # Equal ratings, K = 300/sqrt(6) each: +-61.24, shown rounded.
+    assert result.api_result.movie_a_elo_delta == 61
+    assert result.api_result.movie_b_elo_delta == -61
     assert um_a.battles == 6
     assert um_b.battles == 6
     assert um_a.seen is True
     assert um_b.seen is True
+
+
+@pytest.mark.asyncio
+async def test_process_duel_delta_matches_the_displayed_ratings():
+    """Ratings stay fractional; the delta is the change in the rounded ratings."""
+    uid = uuid.uuid4()
+    mid_a = uuid.uuid4()
+    mid_b = uuid.uuid4()
+
+    um_a = _make_user_movie(uid, mid_a, elo=1000.4, battles=10)
+    um_b = _make_user_movie(uid, mid_b, elo=1000.4, battles=10)
+
+    db = AsyncMock()
+    db.execute = _make_fake_execute(um_a, um_b)
+
+    result = await process_duel(db, uid, mid_a, mid_b, "a_wins", "discovery")
+
+    assert um_a.elo == pytest.approx(1045.63, abs=0.01)
+    assert um_b.elo == pytest.approx(955.17, abs=0.01)
+    assert result.new_elo_a == um_a.elo
+    assert result.api_result.movie_a_elo_delta == 1046 - 1000
+    assert result.api_result.movie_b_elo_delta == 955 - 1000
 
 
 @pytest.mark.asyncio

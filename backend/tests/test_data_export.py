@@ -362,3 +362,28 @@ async def test_truncation_is_reported_not_silent(monkeypatch):
     payload = await export_user_data(db, _user())
     assert len(payload["library"]) == 2
     assert payload["truncated_sections"] == []
+
+
+def test_elo_values_are_rounded_like_the_rest_of_the_api():
+    """Ratings are stored unrounded; the export shows the same integers the app does."""
+    um = SimpleNamespace(
+        movie=_movie(), seen=True, elo=1016.6, seeded_elo=None, battles=4,
+        trakt_rating=None, last_dueled_at=None, updated_at=NOW,
+    )
+    unrated = SimpleNamespace(
+        movie=_movie(), seen=None, elo=None, seeded_elo=None, battles=0,
+        trakt_rating=None, last_dueled_at=None, updated_at=NOW,
+    )
+    duel = SimpleNamespace(
+        id=uuid.uuid4(), created_at=NOW, mode="discovery", pair_type="close",
+        outcome=None, winner_movie=_movie(), loser_movie=_movie(),
+        winner_elo_before=1000.4, winner_elo_after=1045.2267,
+        loser_elo_before=999.5, loser_elo_after=954.77,
+    )
+    payload = _build(user_movies=[um, unrated], duels=[duel])
+    assert [e["elo"] for e in payload["library"]] == [1017, None]
+    exported = payload["duels"][0]
+    assert (
+        exported["winner_elo_before"], exported["winner_elo_after"],
+        exported["loser_elo_before"], exported["loser_elo_after"],
+    ) == (1000, 1045, 1000, 955)

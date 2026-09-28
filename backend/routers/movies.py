@@ -39,7 +39,7 @@ def _user_movie_to_schema(um: UserMovie) -> MovieWithStateSchema:
         genres=movie.genres,
         media_type=movie.media_type,
         seen=um.seen,
-        elo=um.elo,
+        elo=round(um.elo) if um.elo is not None else None,
         battles=um.battles,
     )
 

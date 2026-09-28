@@ -1,43 +1,42 @@
 """ELO rating calculation.
 
-Uses the standard ELO formula with per-player K factors based on battle
-count (provisional K=64 for fewer than 5 battles, otherwise K=32).
-Default starting rating is 1000.
+Uses the standard ELO formula with an uncertainty-aware, per-player K factor
+K = K0/sqrt(battles+1), so a film's rating settles as it plays more duels.
+Ratings are kept as unrounded floats. Default starting rating is 1000.
 """
 
+import math
 from bisect import bisect_left, bisect_right
 from collections.abc import Sequence
 
-PROVISIONAL_THRESHOLD = 5
-K_PROVISIONAL = 64
-K_ESTABLISHED = 32
+# Replaying real duels scored K0=200/300/400 within 0.008 log-loss; 300 was best (#649).
+K0 = 300
 DEFAULT_ELO = 1000
 
 
-def k_factor(battles: int) -> int:
-    """Return K factor based on number of battles played.
+def k_factor(battles: int) -> float:
+    """Return the K factor for a film that has played ``battles`` duels.
 
-    Provisional players (< 5 battles) get K=64 for faster convergence.
-    Established players get K=32.
+    The fewer battles, the less certain its rating, so the more it moves.
     """
-    return K_PROVISIONAL if battles < PROVISIONAL_THRESHOLD else K_ESTABLISHED
+    return K0 / math.sqrt(battles + 1)
 
 
-def expected_score(rating_a: int, rating_b: int) -> float:
+def expected_score(rating_a: float, rating_b: float) -> float:
     """Calculate the expected score for player A given both ratings."""
     return 1.0 / (1.0 + 10 ** ((rating_b - rating_a) / 400))
 
 
 def update_elo(
-    winner_elo: int,
-    loser_elo: int,
+    winner_elo: float,
+    loser_elo: float,
     winner_battles: int,
     loser_battles: int,
-) -> tuple[int, int]:
+) -> tuple[float, float]:
     """Compute new ELO ratings after a match.
 
     Each player's K factor is determined independently by their battle count,
-    so a provisional player's rating moves more than an established player's.
+    so a film with few battles moves more than a well-established one.
 
     Args:
         winner_elo: Current ELO rating of the winner.
@@ -46,7 +45,7 @@ def update_elo(
         loser_battles: Number of battles the loser has played (before this one).
 
     Returns:
-        Tuple of (new_winner_elo, new_loser_elo).
+        Tuple of (new_winner_elo, new_loser_elo), unrounded.
     """
     e_winner = expected_score(winner_elo, loser_elo)
     e_loser = 1.0 - e_winner
@@ -54,8 +53,8 @@ def update_elo(
     k_winner = k_factor(winner_battles)
     k_loser = k_factor(loser_battles)
 
-    new_winner = round(winner_elo + k_winner * (1.0 - e_winner))
-    new_loser = round(loser_elo + k_loser * (0.0 - e_loser))
+    new_winner = winner_elo + k_winner * (1.0 - e_winner)
+    new_loser = loser_elo + k_loser * (0.0 - e_loser)
 
     return new_winner, new_loser
 
@@ -68,7 +67,7 @@ def trakt_rating_to_seeded_elo(rating: int) -> int:
     return round(600 + (rating - 1) * (800 / 9))
 
 
-def elo_to_rating(elo: int, sorted_elos: Sequence[int]) -> int:
+def elo_to_rating(elo: float, sorted_elos: Sequence[float]) -> int:
     """Map an ELO to the 1-10 scale by its percentile among the user's ranked ELOs.
 
     ``sorted_elos`` must be ascending. Uses the mid-rank percentile, so N

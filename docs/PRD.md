@@ -183,7 +183,7 @@ create table user_movies (
   user_id uuid references users(id) on delete cascade,
   movie_id uuid references movies(id) on delete cascade,
   seen boolean,              -- null=unknown, true=seen, false=not seen
-  elo integer,               -- NULL until first real duel (seen=true, battles>=1)
+  elo real,                  -- NULL until first real duel (seen=true, battles>=1); unrounded
   seeded_elo integer,        -- from imported Trakt rating, used as first-duel starting point
   battles integer not null default 0,
   trakt_rating integer,      -- last value synced to Trakt (1-10)
@@ -198,10 +198,10 @@ create table duels (
   user_id uuid references users(id) on delete cascade,
   winner_movie_id uuid references movies(id),
   loser_movie_id uuid references movies(id),
-  winner_elo_before integer,
-  loser_elo_before integer,
-  winner_elo_after integer,
-  loser_elo_after integer,
+  winner_elo_before real,
+  loser_elo_before real,
+  winner_elo_after real,
+  loser_elo_after real,
   pair_type text not null,   -- 'ranked_vs_ranked' | 'ranked_vs_unranked' | 'ranked_vs_unknown'
   created_at timestamptz default now()
 );
@@ -327,24 +327,24 @@ The swipe interstitial is triggered by `next_action: "swipe"` in the duel result
 
 - `elo` is `NULL` for Unknown, Unseen, and Seen — unranked films.
 - On a film's first duel: use `seeded_elo` if available, otherwise 1000 as bootstrap value for that calculation only.
-- After first duel: `elo` is always a real integer updated on every subsequent duel.
+- After first duel: `elo` is always a real number, updated unrounded on every subsequent duel. The API rounds it to an integer for display.
 
 ### K-factor
 
-K=64 for first 5 battles (provisional), K=32 thereafter.
+Uncertainty-aware: K = 300/sqrt(battles+1), so a film's rating moves less as it plays more duels. Ratings are not rounded.
 
 ```python
-def k_factor(battles: int) -> int:
-    return 64 if battles < 5 else 32
+def k_factor(battles: int) -> float:
+    return 300 / math.sqrt(battles + 1)
 
-def expected_score(rating_a: int, rating_b: int) -> float:
+def expected_score(rating_a: float, rating_b: float) -> float:
     return 1 / (1 + 10 ** ((rating_b - rating_a) / 400))
 
-def update_elo(winner_elo: int, loser_elo: int,
-               winner_battles: int, loser_battles: int) -> tuple[int, int]:
+def update_elo(winner_elo: float, loser_elo: float,
+               winner_battles: int, loser_battles: int) -> tuple[float, float]:
     exp = expected_score(winner_elo, loser_elo)
-    new_winner = round(winner_elo + k_factor(winner_battles) * (1 - exp))
-    new_loser  = round(loser_elo  + k_factor(loser_battles)  * (0 - (1 - exp)))
+    new_winner = winner_elo + k_factor(winner_battles) * (1 - exp)
+    new_loser  = loser_elo  + k_factor(loser_battles)  * (0 - (1 - exp))
     return new_winner, new_loser
 ```
 

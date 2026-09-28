@@ -76,7 +76,7 @@ Alembic migrations run automatically on container start.
 3. Toggle between **Movies** and **TV Shows** using the nav bar
 4. Content is pulled from Trakt popular/trending lists + your watch history
 5. You're shown two titles at a time — pick the one you rate higher
-6. ELO ratings update after each duel (K=32, default 1000)
+6. ELO ratings update after each duel (K=300/√(battles+1), default 1000)
 7. View your ranked list and export as Letterboxd-compatible CSV
 8. Ratings sync back to Trakt on a 1-10 scale
 9. Toggle AI Suggestions on/off from the nav settings panel (on by default) — disabling it hides the suggestions page and AI-curated tournament options

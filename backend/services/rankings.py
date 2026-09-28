@@ -79,7 +79,7 @@ async def get_user_rankings(
 
 async def get_ranked_elos(
     db: AsyncSession, user_id: uuid.UUID, media_type: str = "movie"
-) -> list[int]:
+) -> list[float]:
     """Return the ELOs of the user's ranked films of this media_type, ascending.
 
     This is the population elo_to_rating() ranks against; genre/decade filters

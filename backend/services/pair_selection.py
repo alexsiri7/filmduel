@@ -14,7 +14,7 @@ from backend.services.elo import get_initial_elo
 CLOSEST_CANDIDATES = 5
 
 
-def _effective_elo(um: UserMovie) -> int:
+def _effective_elo(um: UserMovie) -> float:
     """ELO the duel will be scored with: current ELO, else the seeded/default start."""
     return um.elo if um.elo is not None else get_initial_elo(um.seeded_elo)
 
