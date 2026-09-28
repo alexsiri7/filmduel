@@ -302,6 +302,32 @@ describe("App", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("offers a retry on load when the library import failed", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              privacy_policy_accepted: true,
+              privacy_policy_version: "2.1",
+              pool_import_status: "failed",
+            }),
+        })
+      )
+    );
+    render(
+      <MemoryRouter initialEntries={["/rankings"]}>
+        <App />
+      </MemoryRouter>
+    );
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /retry import/i })).toBeInTheDocument();
+    });
+  });
+
   it("routes to /rankings correctly", async () => {
     vi.stubGlobal(
       "fetch",

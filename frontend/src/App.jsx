@@ -16,7 +16,7 @@ import TournamentBracket from "./pages/TournamentBracket";
 function ProtectedRoute({ children }) {
   const [status, setStatus] = useState("loading");
   const [showConsent, setShowConsent] = useState(false);
-  const [importing, setImporting] = useState(false);
+  const [importStatus, setImportStatus] = useState(null);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -33,7 +33,7 @@ function ProtectedRoute({ children }) {
         ) {
           setShowConsent(true);
         }
-        setImporting(data.pool_import_status === "importing");
+        setImportStatus(data.pool_import_status);
         setStatus("authenticated");
       } catch (err) {
         console.error("Auth check failed:", err);
@@ -60,13 +60,13 @@ function ProtectedRoute({ children }) {
       <ConsentModal
         onAccepted={(user) => {
           setShowConsent(false);
-          setImporting(user?.pool_import_status === "importing");
+          setImportStatus(user?.pool_import_status);
         }}
       />
     );
   }
-  if (importing) {
-    return <PoolImportScreen initialStatus="importing" onDone={() => setImporting(false)} />;
+  if (importStatus === "importing" || importStatus === "failed") {
+    return <PoolImportScreen initialStatus={importStatus} onDone={() => setImportStatus(null)} />;
   }
   return children;
 }
