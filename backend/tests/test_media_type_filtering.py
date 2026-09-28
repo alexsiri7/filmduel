@@ -137,6 +137,9 @@ async def testsync_ratings_background_refreshes_expired_token():
         patch(
             "backend.services.sync.sync_post_duel", new_callable=AsyncMock
         ) as mock_sync,
+        patch(
+            "backend.services.sync.trakt_token_needs_refresh", return_value=True
+        ),
     ):
         mock_session = AsyncMock()
         mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
@@ -148,12 +151,15 @@ async def testsync_ratings_background_refreshes_expired_token():
 
         mock_user_result = MagicMock()
         mock_user_result.scalar_one_or_none.return_value = mock_user
+        mock_locked_user_result = MagicMock()
+        mock_locked_user_result.scalar_one.return_value = mock_user
         mock_movies_result = MagicMock()
         mock_movies_result.all.return_value = mock_rows
         mock_elos_result = MagicMock()
         mock_elos_result.scalars.return_value.all.return_value = [900, 1100]
         mock_session.execute.side_effect = [
             mock_user_result,
+            mock_locked_user_result,
             mock_movies_result,
             mock_elos_result,
         ]
@@ -343,6 +349,9 @@ async def testsync_ratings_background_syncs_when_opt_in():
         patch(
             "backend.services.sync.sync_post_duel", new_callable=AsyncMock
         ) as mock_sync,
+        patch(
+            "backend.services.sync.trakt_token_needs_refresh", return_value=False
+        ),
     ):
         mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
@@ -355,8 +364,15 @@ async def testsync_ratings_background_syncs_when_opt_in():
 
 
 @pytest.mark.asyncio
-async def testsync_ratings_background_uses_select_for_update():
-    """sync_ratings_background must lock the user row to prevent concurrent token refresh."""
+@pytest.mark.parametrize("needs_refresh", [True, False])
+async def testsync_ratings_background_locks_user_only_for_refresh(needs_refresh):
+    """The user row is locked (FOR UPDATE) only to serialize a token refresh.
+
+    An unconditional lock queued every post-duel sync behind a long pool sync,
+    holding pooled connections until statement_timeout (#662-#665).
+    """
+    from sqlalchemy.dialects import postgresql
+
     from backend.services.sync import sync_ratings_background
 
     uid = uuid.uuid4()
@@ -380,6 +396,10 @@ async def testsync_ratings_background_uses_select_for_update():
             "backend.services.sync.ensure_fresh_token", new_callable=AsyncMock
         ) as mock_refresh,
         patch("backend.services.sync.sync_post_duel", new_callable=AsyncMock),
+        patch(
+            "backend.services.sync.trakt_token_needs_refresh",
+            return_value=needs_refresh,
+        ),
     ):
         mock_session = AsyncMock()
         mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
@@ -389,12 +409,13 @@ async def testsync_ratings_background_uses_select_for_update():
 
         mock_user_result = MagicMock()
         mock_user_result.scalar_one_or_none.return_value = mock_user
+        mock_user_result.scalar_one.return_value = mock_user
         mock_movies_result = MagicMock()
         mock_movies_result.all.return_value = mock_rows
 
         async def capture_execute(stmt, *args, **kwargs):
             captured_stmts.append(stmt)
-            if len(captured_stmts) == 1:
+            if "users" in str(stmt):
                 return mock_user_result
             return mock_movies_result
 
@@ -402,11 +423,15 @@ async def testsync_ratings_background_uses_select_for_update():
 
         await sync_ratings_background(uid, mid_a, 1100, mid_b, 900)
 
-        # Verify the user query uses with_for_update
-        from sqlalchemy.dialects import postgresql
+        def compiled(stmt):
+            return str(stmt.compile(dialect=postgresql.dialect())).upper()
 
-        user_stmt = captured_stmts[0]
-        compiled = user_stmt.compile(dialect=postgresql.dialect())
-        assert "FOR UPDATE" in str(compiled).upper(), (
-            "User query must use .with_for_update() to prevent concurrent token refresh"
-        )
+        assert "FOR UPDATE" not in compiled(captured_stmts[0])
+        locked = [st for st in captured_stmts if "FOR UPDATE" in compiled(st)]
+        if needs_refresh:
+            assert len(locked) == 1
+            mock_refresh.assert_awaited_once_with(mock_user, mock_session)
+        else:
+            assert locked == []
+            mock_refresh.assert_not_awaited()
+        mock_session.commit.assert_awaited_once()

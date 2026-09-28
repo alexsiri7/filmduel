@@ -109,11 +109,7 @@ async def _force_pool_sync(user: User, db: AsyncSession) -> tuple[User, bool]:
     if user.simkl_access_token_enc:
         user = await ensure_fresh_simkl_token(user, db)
 
-    # Force sync (bypass cooldown by resetting last_seen_at)
-    user.last_seen_at = datetime.now(timezone.utc) - timedelta(hours=2)
-    await db.flush()
-
-    complete = await populate_movie_pool(user, db)
+    complete = await populate_movie_pool(user, db, force=True)
     return user, complete
 
 

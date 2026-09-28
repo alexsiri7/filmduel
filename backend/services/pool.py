@@ -235,18 +235,22 @@ async def _fetch_simkl_pool(
     return pool, seen_ids, ratings_by_id
 
 
-async def populate_movie_pool(user: User, db: AsyncSession) -> bool:
+async def populate_movie_pool(user: User, db: AsyncSession, *, force: bool = False) -> bool:
     """Fetch movies and shows from Trakt/SIMKL and populate the user's pool.
 
-    Called on login/session start. Throttled to once per hour.
+    Called on login/session start. Throttled to once per hour unless *force*.
     Returns False when any provider fetch still failed after retries (the
     data that did arrive is kept), True otherwise, including a throttled skip.
+
+    Commits *db* before each provider fetch and after each batch of upserts, so
+    no row lock or pooled connection is held across provider HTTP calls; any
+    pending work on *db* (e.g. a token refresh) is committed with it.
     """
     now = datetime.now(timezone.utc)
     last_seen = user.last_seen_at
     if last_seen and last_seen.tzinfo is None:
         last_seen = last_seen.replace(tzinfo=timezone.utc)
-    if last_seen and (now - last_seen) < SYNC_COOLDOWN:
+    if not force and last_seen and (now - last_seen) < SYNC_COOLDOWN:
         logger.info("Skipping pool sync user_id=%s — synced recently", user.id)
         return True
 
@@ -257,6 +261,7 @@ async def populate_movie_pool(user: User, db: AsyncSession) -> bool:
 
     for media_type in ("movie", "show"):
         if has_trakt:
+            await db.commit()
             pool, seen_trakt_ids, ratings_by_trakt_id = await _fetch_trakt_pool(
                 user, settings, media_type, failures
             )
@@ -265,6 +270,7 @@ async def populate_movie_pool(user: User, db: AsyncSession) -> bool:
             )
 
         if has_simkl:
+            await db.commit()
             pool, seen_ids, ratings_by_id = await _fetch_simkl_pool(
                 user, settings, media_type, failures
             )
@@ -272,6 +278,9 @@ async def populate_movie_pool(user: User, db: AsyncSession) -> bool:
                 db, user, pool, seen_ids, ratings_by_id, media_type, now
             )
 
+    await db.commit()
+    # Written last and committed by the caller right away, so the users row is
+    # locked only briefly (post-duel rating syncs lock it for token refresh).
     user.last_seen_at = now
     await db.flush()
 
@@ -416,10 +425,7 @@ async def sync_pool_background(user_id, force: bool = False) -> None:
         async with async_session_factory() as session:
             user = await session.get(User, user_id)
             if user:
-                if force:
-                    user.last_seen_at = datetime.now(timezone.utc) - timedelta(hours=2)
-                    await session.flush()
-                await populate_movie_pool(user, session)
+                await populate_movie_pool(user, session, force=force)
                 await session.commit()
     except Exception:
         logger.exception("Background pool sync failed for user %s", user_id)
