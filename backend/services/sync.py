@@ -14,7 +14,10 @@ from backend.db import async_session_factory
 from backend.db_models import Movie, User
 from backend.services.elo import elo_to_rating
 from backend.services.rankings import get_ranked_elos
-from backend.services.token_refresh import ensure_fresh_token
+from backend.services.token_refresh import (
+    ensure_fresh_token,
+    trakt_token_needs_refresh,
+)
 from backend.services.trakt import TraktClient
 
 logger = logging.getLogger(__name__)
@@ -76,7 +79,7 @@ async def sync_ratings_background(
     """Fire-and-forget Trakt rating sync after a duel with a winner."""
     try:
         async with async_session_factory() as session:
-            user_stmt = select(User).where(User.id == user_id).with_for_update()
+            user_stmt = select(User).where(User.id == user_id)
             result = await session.execute(user_stmt)
             user = result.scalar_one_or_none()
             if (
@@ -85,7 +88,16 @@ async def sync_ratings_background(
                 or not user.sync_ratings_to_trakt
             ):
                 return
-            user = await ensure_fresh_token(user, session)
+            if trakt_token_needs_refresh(user):
+                # Lock the user row only to serialize the (rare) token refresh:
+                # an unconditional FOR UPDATE made every post-duel sync queue on
+                # the row and hold a pooled connection while it waited.
+                result = await session.execute(
+                    user_stmt.with_for_update().execution_options(populate_existing=True)
+                )
+                user = result.scalar_one()
+                user = await ensure_fresh_token(user, session)
+            # End the read transaction so no connection is held idle in it.
             await session.commit()
             access_token = user.trakt_access_token
             movies_stmt = select(Movie.id, Movie.trakt_id, Movie.media_type).where(

@@ -18,23 +18,27 @@ logger = logging.getLogger(__name__)
 TRAKT_TOKEN_DEFAULT_TTL_SECONDS = 7776000
 
 
+def trakt_token_needs_refresh(user: User) -> bool:
+    """True when the user has a Trakt token that expires within 1 hour."""
+    if not user.trakt_token_expires_at or not user.trakt_access_token_enc:
+        return False  # no Trakt token to refresh
+
+    expires_at = user.trakt_token_expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    return expires_at - datetime.now(timezone.utc) <= timedelta(hours=1)
+
+
 async def ensure_fresh_token(user: User, db: AsyncSession) -> User:
     """Refresh the Trakt access token if it expires within 1 hour.
 
     Call this before any Trakt API request that needs a valid token.
     Returns the user with up-to-date tokens (already flushed to the session).
     """
-    if not user.trakt_token_expires_at or not user.trakt_access_token_enc:
-        return user  # no Trakt token to refresh
-
-    now = datetime.now(timezone.utc)
-    expires_at = user.trakt_token_expires_at
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-
-    if expires_at - now > timedelta(hours=1):
+    if not trakt_token_needs_refresh(user):
         return user
 
+    now = datetime.now(timezone.utc)
     settings = get_settings()
     client = TraktClient(client_id=settings.TRAKT_CLIENT_ID)
     tokens = await client.refresh_token(

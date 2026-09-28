@@ -111,6 +111,45 @@ class TestPopulateMoviePool:
         db.execute.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_force_bypasses_cooldown_and_commits_before_fetches(self):
+        """force=True syncs inside the cooldown without writing last_seen_at first,
+        and no transaction (row locks, pooled connection) spans a provider fetch
+        (#662-#665)."""
+        recent_time = datetime.now(timezone.utc) - timedelta(minutes=30)
+        user = _make_user(last_seen_at=recent_time)
+        user.simkl_access_token_enc = None
+        db = AsyncMock()
+        events: list[str] = []
+        db.commit.side_effect = lambda: events.append("commit")
+
+        trakt_mock = AsyncMock()
+        for method in (
+            trakt_mock.get_trending,
+            trakt_mock.get_recommendations,
+            trakt_mock.get_user_watched,
+            trakt_mock.get_user_ratings,
+        ):
+            method.return_value = []
+
+        async def get_popular(*args, **kwargs):
+            events.append("fetch")
+            # The cooldown stamp must not be rewritten (and row-locked) up front.
+            assert user.last_seen_at == recent_time
+            return []
+
+        trakt_mock.get_popular.side_effect = get_popular
+
+        with (
+            patch("backend.services.pool.TraktClient", return_value=trakt_mock),
+            patch("backend.services.pool.get_settings") as mock_settings,
+        ):
+            mock_settings.return_value = MagicMock(TRAKT_CLIENT_ID="fake")
+            assert await populate_movie_pool(user, db, force=True) is True
+
+        assert events == ["commit", "fetch", "commit", "fetch", "commit"]
+        assert user.last_seen_at > recent_time
+
+    @pytest.mark.asyncio
     async def test_returns_true_when_every_fetch_succeeds(self):
         user = _make_user(last_seen_at=None)
         user.simkl_access_token_enc = None
