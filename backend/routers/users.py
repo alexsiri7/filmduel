@@ -122,7 +122,16 @@ def _start_pool_import(user: User) -> None:
     user.pool_import_started_at = datetime.now(timezone.utc)
 
 
-async def _run_pool_import(user_id: uuid.UUID) -> None:
+def _record_pool_import_outcome(user_id: uuid.UUID, started_at: datetime, status: str):
+    # A retry restamps started_at, so a superseded run's outcome matches no row.
+    return (
+        update(User)
+        .where(User.id == user_id, User.pool_import_started_at == started_at)
+        .values(pool_import_status=status)
+    )
+
+
+async def _run_pool_import(user_id: uuid.UUID, started_at: datetime) -> None:
     """Background provider import that records its outcome in pool_import_status."""
     try:
         async with async_session_factory() as session:
@@ -130,7 +139,11 @@ async def _run_pool_import(user_id: uuid.UUID) -> None:
             if user is None:
                 return
             user, complete = await _force_pool_sync(user, session)
-            user.pool_import_status = "complete" if complete else "failed"
+            await session.execute(
+                _record_pool_import_outcome(
+                    user_id, started_at, "complete" if complete else "failed"
+                )
+            )
             await session.commit()
             return
     except Exception:
@@ -138,11 +151,7 @@ async def _run_pool_import(user_id: uuid.UUID) -> None:
 
     try:
         async with async_session_factory() as session:
-            await session.execute(
-                update(User)
-                .where(User.id == user_id)
-                .values(pool_import_status="failed")
-            )
+            await session.execute(_record_pool_import_outcome(user_id, started_at, "failed"))
             await session.commit()
     except Exception:
         logger.exception("Could not mark pool import failed for user %s", user_id)
@@ -178,7 +187,9 @@ async def accept_consent(
     if first_consent:
         # Initial library import is deferred from the OAuth callback to here so no
         # provider data is ingested before consent is recorded (#571).
-        background_tasks.add_task(_run_pool_import, current_user.id)
+        background_tasks.add_task(
+            _run_pool_import, current_user.id, current_user.pool_import_started_at
+        )
         background_tasks.add_task(backfill_posters_background)
 
     return _build_user_response(current_user)
@@ -201,7 +212,9 @@ async def retry_pool_import(
 
     _start_pool_import(current_user)
     await db.commit()
-    background_tasks.add_task(_run_pool_import, current_user.id)
+    background_tasks.add_task(
+        _run_pool_import, current_user.id, current_user.pool_import_started_at
+    )
     background_tasks.add_task(backfill_posters_background)
     return _build_user_response(current_user)
 

@@ -123,7 +123,7 @@ def test_accept_consent_idempotent():
 
     assert resp1.status_code == 200
     assert resp2.status_code == 200
-    mock_job.assert_awaited_once_with(fake_user.id)
+    mock_job.assert_awaited_once_with(fake_user.id, fake_user.pool_import_started_at)
 
 
 # ---------------------------------------------------------------------------

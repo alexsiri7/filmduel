@@ -897,7 +897,7 @@ class TestAcceptConsent:
         assert result.privacy_policy_accepted is True
         assert result.pool_import_status == "importing"
         assert [t.func for t in bg.tasks] == [_run_pool_import, backfill_posters_background]
-        assert bg.tasks[0].args == (user.id,)
+        assert bg.tasks[0].args == (user.id, user.pool_import_started_at)
 
     @pytest.mark.asyncio
     async def test_reconsent_does_not_resync(self, monkeypatch):

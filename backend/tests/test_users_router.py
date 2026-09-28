@@ -13,14 +13,20 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
 
 import httpx
 import pytest
+import sqlalchemy as sa
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 from backend.main import app
 from backend.tests import SPA_HEADERS
 from backend.db import get_db
 from backend.db_models import User
 from backend.routers.auth import get_current_user
-from backend.routers.users import _effective_pool_import_status, _run_pool_import
+from backend.routers.users import (
+    _effective_pool_import_status,
+    _record_pool_import_outcome,
+    _run_pool_import,
+)
 
 
 def _make_user(
@@ -330,11 +336,17 @@ def _session_factory(session):
 
 
 class TestRunPoolImport:
+    STARTED_AT = datetime(2026, 9, 28, 12, 0, tzinfo=timezone.utc)
+
+    @staticmethod
+    def _recorded(session):
+        (stmt,) = [c.args[0] for c in session.execute.await_args_list]
+        return stmt.compile().params
+
     @pytest.mark.asyncio
     @pytest.mark.parametrize("complete, status", [(True, "complete"), (False, "failed")])
     async def test_records_outcome_of_the_sync(self, complete, status):
         user = _make_user()
-        user.pool_import_status = "importing"
         session = AsyncMock()
         session.get.return_value = user
 
@@ -345,15 +357,16 @@ class TestRunPoolImport:
                 new=AsyncMock(return_value=(user, complete)),
             ),
         ):
-            await _run_pool_import(user.id)
+            await _run_pool_import(user.id, self.STARTED_AT)
 
-        assert user.pool_import_status == status
+        params = self._recorded(session)
+        assert params["pool_import_status"] == status
+        assert params["pool_import_started_at_1"] == self.STARTED_AT
         session.commit.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_marks_failed_when_the_sync_raises(self):
         user = _make_user()
-        user.pool_import_status = "importing"
         session = AsyncMock()
         session.get.return_value = user
 
@@ -364,12 +377,40 @@ class TestRunPoolImport:
                 new=AsyncMock(side_effect=httpx.ReadTimeout("slow")),
             ),
         ):
-            await _run_pool_import(user.id)
+            await _run_pool_import(user.id, self.STARTED_AT)
 
-        session.execute.assert_awaited_once()
-        stmt = session.execute.await_args.args[0]
-        assert stmt.compile().params["pool_import_status"] == "failed"
+        params = self._recorded(session)
+        assert params["pool_import_status"] == "failed"
+        assert params["pool_import_started_at_1"] == self.STARTED_AT
         session.commit.assert_awaited_once()
+
+
+class TestRecordPoolImportOutcome:
+    @pytest.fixture
+    def users_session(self):
+        engine = sa.create_engine("sqlite://")
+        User.__table__.create(engine)
+        with Session(engine) as session:
+            yield session
+
+    def test_superseded_run_does_not_overwrite_the_current_one(self, users_session):
+        first_started = datetime(2026, 9, 28, 12, 0, tzinfo=timezone.utc)
+        retry_started = first_started + timedelta(minutes=21)
+        user = User(
+            trakt_username="u",
+            pool_import_status="importing",
+            pool_import_started_at=retry_started,
+        )
+        users_session.add(user)
+        users_session.commit()
+
+        users_session.execute(_record_pool_import_outcome(user.id, first_started, "failed"))
+        users_session.refresh(user)
+        assert user.pool_import_status == "importing"
+
+        users_session.execute(_record_pool_import_outcome(user.id, retry_started, "complete"))
+        users_session.refresh(user)
+        assert user.pool_import_status == "complete"
 
 
 class TestEffectivePoolImportStatus:
@@ -422,7 +463,7 @@ class TestRetryPoolImport:
         assert resp.status_code == 200
         assert resp.json()["pool_import_status"] == "importing"
         db.commit.assert_awaited_once()
-        mock_job.assert_awaited_once_with(user.id)
+        mock_job.assert_awaited_once_with(user.id, user.pool_import_started_at)
 
     def test_running_import_is_not_restarted(self):
         user = _make_user()
