@@ -1,8 +1,8 @@
 ---
 created: '2026-09-28'
-github_issue: null
+github_issue: 666
 id: '013'
-status: draft
+status: idea
 title: Adopt an OpenSpec specification as the statement of what FilmDuel should be
 updated: '2026-09-28'
 ---
@@ -17,4 +17,4 @@ The repository holds FilmDuel's specification in OpenSpec format under openspec/
 
 ## Issues
 
-_None yet._
+- #666 — Add FilmDuel's OpenSpec specification and validate it in CI
