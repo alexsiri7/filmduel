@@ -109,7 +109,7 @@ describe("api", () => {
   describe("submitDuel", () => {
     it("sends correct body", async () => {
       mockFetchOk({ success: true });
-      await submitDuel(1, 2, "a_wins", "discovery");
+      await submitDuel(1, 2, "a_wins", "tok", "discovery");
       expect(fetch).toHaveBeenCalledWith(
         "/api/duels",
         expect.objectContaining({
@@ -119,6 +119,7 @@ describe("api", () => {
             movie_b_id: 2,
             outcome: "a_wins",
             mode: "discovery",
+            pair_token: "tok",
           }),
         })
       );

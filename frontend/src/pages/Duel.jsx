@@ -22,6 +22,7 @@ export default function Duel({ mediaType = "movie" }) {
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
   const [stats, setStats] = useState(null);
 
   const [animateKey, setAnimateKey] = useState(0);
@@ -49,6 +50,7 @@ export default function Duel({ mediaType = "movie" }) {
       setLoading(true);
       setResult(null);
       setError(null);
+      setSubmitError(null);
       try {
         let data;
         if (usePrefetch && prefetchRef.current) {
@@ -88,30 +90,41 @@ export default function Duel({ mediaType = "movie" }) {
   const handleSubmit = (outcome) => {
     if (!pair || submitting) return;
     setSubmitting(true);
+    setSubmitError(null);
     setResult({ outcome });
 
-    // Fire-and-forget: submit duel in background, don't block the UI
-    const submitted = submitDuel(pair.movie_a.id, pair.movie_b.id, outcome, MODE);
+    const submitted = submitDuel(
+      pair.movie_a.id,
+      pair.movie_b.id,
+      outcome,
+      pair.next_pair_token,
+      MODE
+    );
     // The next pair must be chosen from ratings and battle counts that include this duel
     prefetchRef.current = submitted
       .then(() => fetchPair(MODE, pair.next_pair_token ?? null, mediaType))
       .catch(() => null);
-    submitted
-      .then((res) => {
-        // Check if we need to swipe — handle asynchronously
-        if (res.next_action === "swipe") {
-          setShowSwipePrompt(true);
-        }
-        // Stats update in background
-        loadStats();
-      })
-      .catch((err) => console.error("Failed to submit duel:", err));
+    const winnerFlash = new Promise((resolve) => setTimeout(resolve, 600));
 
-    // Immediately show winner flash for 600ms, then load the pair fetched after submit
-    setTimeout(() => {
-      setSubmitting(false);
-      loadPair(true);
-    }, 600);
+    submitted
+      .then(
+        (res) => {
+          if (res?.next_action === "swipe") {
+            setShowSwipePrompt(true);
+          }
+          loadStats();
+          return winnerFlash.then(() => loadPair(true));
+        },
+        (err) => {
+          console.error("Failed to submit duel:", err);
+          // Stay on this pair so the pick can be retried rather than silently lost
+          return winnerFlash.then(() => {
+            setResult(null);
+            setSubmitError(outcome);
+          });
+        }
+      )
+      .finally(() => setSubmitting(false));
   };
 
   // Pool empty / error state
@@ -261,6 +274,22 @@ export default function Duel({ mediaType = "movie" }) {
                 />
               </div>
             </div>
+
+            {submitError && (
+              <div
+                role="alert"
+                className="flex flex-col md:flex-row items-center gap-3 text-[#ffb59d] font-body text-sm"
+              >
+                <span>Couldn't save your pick.</span>
+                <button
+                  onClick={() => handleSubmit(submitError)}
+                  disabled={submitting}
+                  className="border border-[#ffb59d]/40 hover:bg-[#1d1b1a] font-headline font-bold uppercase tracking-widest text-xs py-2 px-4 transition-all disabled:opacity-40"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
 
             {/* Not-seen outcomes: recorded without touching ratings */}
             <div className="w-full max-w-2xl flex flex-col md:flex-row gap-3">

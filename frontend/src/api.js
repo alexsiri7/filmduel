@@ -32,10 +32,16 @@ export function fetchPair(mode = "discovery", lastPairToken = null, mediaType = 
   return request(`/api/movies/pair?${params}`);
 }
 
-export function submitDuel(movieAId, movieBId, outcome, mode = "discovery") {
+export function submitDuel(movieAId, movieBId, outcome, pairToken, mode = "discovery") {
   return request("/api/duels", {
     method: "POST",
-    body: JSON.stringify({ movie_a_id: movieAId, movie_b_id: movieBId, outcome, mode }),
+    body: JSON.stringify({
+      movie_a_id: movieAId,
+      movie_b_id: movieBId,
+      outcome,
+      mode,
+      pair_token: pairToken,
+    }),
   });
 }
 

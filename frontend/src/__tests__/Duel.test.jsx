@@ -425,4 +425,73 @@ describe("Duel", () => {
     });
     expect(pairUrls()[1]).toContain("last_pair_token=tok");
   });
+
+  it("sends back the pair token it was served when submitting", async () => {
+    const mockFetch = setupFetch({ pair: { ...fakePair, next_pair_token: "tok" } });
+    vi.stubGlobal("fetch", mockFetch);
+
+    render(
+      <MemoryRouter>
+        <Duel />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Haven't seen either" }));
+
+    await waitFor(() => {
+      const duelCall = mockFetch.mock.calls.find(
+        ([url, opts]) => url === "/api/duels" && opts?.method === "POST"
+      );
+      expect(duelCall).toBeDefined();
+      expect(JSON.parse(duelCall[1].body).pair_token).toBe("tok");
+    });
+  });
+
+  it("keeps the pair and offers a retry when the submit fails", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const baseFetch = setupFetch({ pair: { ...fakePair, next_pair_token: "tok" } });
+    let failSubmit = true;
+    const mockFetch = vi.fn((url, opts) => {
+      if (url === "/api/duels" && opts?.method === "POST" && failSubmit) {
+        return Promise.resolve({
+          ok: false,
+          status: 400,
+          json: () => Promise.resolve({ detail: "Invalid pair token" }),
+        });
+      }
+      return baseFetch(url, opts);
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    render(
+      <MemoryRouter>
+        <Duel />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Only seen Alien" }));
+    await vi.advanceTimersByTimeAsync(700);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Couldn't save your pick.");
+    expect(screen.getByText("Alien")).toBeInTheDocument();
+    const pairUrls = () =>
+      mockFetch.mock.calls.filter(([url]) => url.includes("/api/movies/pair"));
+    expect(pairUrls()).toHaveLength(1);
+
+    failSubmit = false;
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await vi.advanceTimersByTimeAsync(700);
+
+    await waitFor(() => {
+      expect(pairUrls()).toHaveLength(2);
+    });
+    const duelBodies = mockFetch.mock.calls
+      .filter(([url, opts]) => url === "/api/duels" && opts?.method === "POST")
+      .map(([, opts]) => JSON.parse(opts.body));
+    expect(duelBodies).toHaveLength(2);
+    expect(duelBodies[1]).toMatchObject({ outcome: "a_only", pair_token: "tok" });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
 });
