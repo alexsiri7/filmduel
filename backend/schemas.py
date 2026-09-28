@@ -20,6 +20,7 @@ class UserResponse(BaseModel):
     use_ai_features: bool = True
     privacy_policy_accepted: bool
     privacy_policy_version: Optional[str] = None
+    pool_import_status: Optional[Literal["importing", "complete", "failed"]] = None
 
 
 class UserSettingsUpdate(BaseModel):

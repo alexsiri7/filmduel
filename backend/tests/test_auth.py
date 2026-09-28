@@ -48,6 +48,7 @@ from backend.services.token_refresh import (
 )
 from backend.routers.users import (
     CURRENT_PRIVACY_POLICY_VERSION,
+    _run_pool_import,
     accept_consent,
     update_settings,
 )
@@ -681,6 +682,8 @@ class TestUpdateSettings:
         user.sync_ratings_to_simkl = False
         user.privacy_policy_accepted = True
         user.privacy_policy_version = "2.0"
+        user.pool_import_status = None
+        user.pool_import_started_at = None
         return user
 
     @pytest.mark.asyncio
@@ -800,6 +803,8 @@ class TestAcceptConsent:
         user.sync_ratings_to_simkl = False
         user.privacy_policy_accepted = privacy_policy_accepted
         user.privacy_policy_version = privacy_policy_version
+        user.pool_import_status = None
+        user.pool_import_started_at = None
         return user
 
     @pytest.mark.asyncio
@@ -867,21 +872,15 @@ class TestAcceptConsent:
         db.commit.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_first_consent_runs_forced_sync_and_schedules_backfill(self, monkeypatch):
-        """The False->True consent transition runs the initial provider import inline (#571)."""
+    async def test_first_consent_queues_background_import_and_backfill(self, monkeypatch):
+        """The False->True consent transition queues the initial provider import (#571, #653)."""
         monkeypatch.setattr(limiter, "enabled", False)
         user = self._make_user(privacy_policy_accepted=False)
         db = AsyncMock()
         bg = BG()
-        commits_before_sync = []
-
-        async def record_commits(*_):
-            commits_before_sync.append(db.commit.await_count)
 
         with patch(
-            "backend.routers.users._force_pool_sync",
-            new_callable=AsyncMock,
-            side_effect=record_commits,
+            "backend.routers.users._force_pool_sync", new_callable=AsyncMock
         ) as mock_sync:
             result = await accept_consent(
                 body=ConsentAccept(version=CURRENT_PRIVACY_POLICY_VERSION),
@@ -891,11 +890,14 @@ class TestAcceptConsent:
                 db=db,
             )
 
-        mock_sync.assert_awaited_once_with(user, db)
-        assert commits_before_sync == [1], "consent must be committed before the provider import starts"
-        assert db.commit.await_count == 2
+        mock_sync.assert_not_awaited()
+        db.commit.assert_awaited_once()
+        assert user.pool_import_status == "importing"
+        assert user.pool_import_started_at is not None
         assert result.privacy_policy_accepted is True
-        assert [t.func for t in bg.tasks] == [backfill_posters_background]
+        assert result.pool_import_status == "importing"
+        assert [t.func for t in bg.tasks] == [_run_pool_import, backfill_posters_background]
+        assert bg.tasks[0].args == (user.id, user.pool_import_started_at)
 
     @pytest.mark.asyncio
     async def test_reconsent_does_not_resync(self, monkeypatch):
@@ -920,30 +922,6 @@ class TestAcceptConsent:
         db.commit.assert_awaited_once()
         assert result.privacy_policy_version == CURRENT_PRIVACY_POLICY_VERSION
         assert bg.tasks == []
-
-    @pytest.mark.asyncio
-    async def test_sync_failure_does_not_unrecord_consent(self, monkeypatch):
-        """A failing initial import is logged and rolled back; consent stays committed."""
-        monkeypatch.setattr(limiter, "enabled", False)
-        user = self._make_user(privacy_policy_accepted=False)
-        db = AsyncMock()
-
-        with patch(
-            "backend.routers.users._force_pool_sync",
-            new_callable=AsyncMock,
-            side_effect=RuntimeError("trakt down"),
-        ):
-            result = await accept_consent(
-                body=ConsentAccept(version=CURRENT_PRIVACY_POLICY_VERSION),
-                request=_make_starlette_request(),
-                background_tasks=BG(),
-                current_user=user,
-                db=db,
-            )
-
-        assert result.privacy_policy_accepted is True
-        db.commit.assert_awaited_once()
-        db.rollback.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------
@@ -1078,6 +1056,8 @@ class TestUpdateSettingsSimkl:
         user.sync_ratings_to_simkl = False
         user.privacy_policy_accepted = True
         user.privacy_policy_version = "2.0"
+        user.pool_import_status = None
+        user.pool_import_started_at = None
         return user
 
     @pytest.mark.asyncio

@@ -33,6 +33,8 @@ PROFILE_KEYS = {
     "privacy_policy_accepted",
     "privacy_policy_accepted_at",
     "privacy_policy_version",
+    "pool_import_started_at",
+    "pool_import_status",
 }
 
 MOVIE_REF_KEYS = {"id", "trakt_id", "imdb_id", "tmdb_id", "title", "year", "media_type"}
@@ -54,6 +56,8 @@ def _user(**overrides):
         privacy_policy_accepted=True,
         privacy_policy_accepted_at=NOW,
         privacy_policy_version="2.1",
+        pool_import_status=None,
+        pool_import_started_at=None,
         trakt_access_token_enc="SECRET-trakt-access-enc",
         trakt_refresh_token_enc="SECRET-trakt-refresh-enc",
         simkl_access_token_enc="SECRET-simkl-access-enc",

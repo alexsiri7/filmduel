@@ -44,14 +44,16 @@ describe("ConsentModal", () => {
     ).toBeInTheDocument();
   });
 
-  it("calls acceptConsent('2.1') and onAccepted when button is clicked", async () => {
-    acceptConsent.mockResolvedValueOnce({});
+  it("calls acceptConsent('2.1') and passes the updated user to onAccepted", async () => {
+    const user = { pool_import_status: "importing" };
+    acceptConsent.mockResolvedValueOnce(user);
     const onAccepted = vi.fn();
     render(<ConsentModal onAccepted={onAccepted} />);
     fireEvent.click(screen.getByRole("button", { name: /i accept/i }));
     await waitFor(() => {
       expect(acceptConsent).toHaveBeenCalledWith("2.1");
       expect(onAccepted).toHaveBeenCalledOnce();
+      expect(onAccepted).toHaveBeenCalledWith(user);
     });
   });
 

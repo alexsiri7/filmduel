@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
+import httpx
 from sqlalchemy import select, update as sa_update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +22,8 @@ from backend.services.simkl import SimklClient
 logger = logging.getLogger(__name__)
 
 SYNC_COOLDOWN = timedelta(hours=1)
+# Sleep between attempts; a fetch is tried len(_FETCH_RETRY_DELAYS) + 1 times.
+_FETCH_RETRY_DELAYS = (1.0, 2.0)
 
 
 def build_movie_upsert(
@@ -106,17 +110,43 @@ async def _upsert_user_movie(
     await db.execute(stmt)
 
 
-async def _safe_fetch(coro_func, *args, **kwargs) -> list:
-    """Call an async function, returning [] on failure."""
-    try:
-        return await coro_func(*args, **kwargs)
-    except Exception:
-        logger.exception("Failed to fetch: %s", coro_func.__name__)
-        return []
+def _is_transient(exc: Exception) -> bool:
+    if isinstance(exc, httpx.TransportError):
+        return True
+    if isinstance(exc, httpx.HTTPStatusError):
+        status = exc.response.status_code
+        return status >= 500 or status == 429
+    return False
+
+
+async def _safe_fetch(
+    coro_func, *args, failures: list[str] | None = None, **kwargs
+) -> list:
+    """Call an async function, retrying transient errors, returning [] on failure.
+
+    The name of a fetch that still fails is appended to *failures*.
+    """
+    for delay in (*_FETCH_RETRY_DELAYS, None):
+        try:
+            return await coro_func(*args, **kwargs)
+        except Exception as exc:
+            if delay is not None and _is_transient(exc):
+                logger.warning(
+                    "Transient error fetching %s (%r), retrying in %ss",
+                    coro_func.__name__,
+                    exc,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+                continue
+            logger.exception("Failed to fetch: %s", coro_func.__name__)
+            if failures is not None:
+                failures.append(coro_func.__name__)
+            return []
 
 
 async def _fetch_trakt_pool(
-    user: User, settings, media_type: str
+    user: User, settings, media_type: str, failures: list[str] | None = None
 ) -> tuple[dict[int, dict], set[int], dict[int, int]]:
     """Fetch pool data from Trakt for a given media type."""
     client = TraktClient(
@@ -125,19 +155,19 @@ async def _fetch_trakt_pool(
     )
 
     popular = await _safe_fetch(
-        client.get_popular, limit=100, media_type=media_type
+        client.get_popular, limit=100, media_type=media_type, failures=failures
     )
     trending = await _safe_fetch(
-        client.get_trending, limit=100, media_type=media_type
+        client.get_trending, limit=100, media_type=media_type, failures=failures
     )
     recommended = await _safe_fetch(
-        client.get_recommendations, limit=100, media_type=media_type
+        client.get_recommendations, limit=100, media_type=media_type, failures=failures
     )
     watched = await _safe_fetch(
-        client.get_user_watched, user.trakt_user_id, media_type=media_type
+        client.get_user_watched, user.trakt_user_id, media_type=media_type, failures=failures
     )
     ratings_list = await _safe_fetch(
-        client.get_user_ratings, user.trakt_user_id, media_type=media_type
+        client.get_user_ratings, user.trakt_user_id, media_type=media_type, failures=failures
     )
 
     ratings_by_trakt_id: dict[int, int] = {
@@ -162,7 +192,7 @@ async def _fetch_trakt_pool(
 
 
 async def _fetch_simkl_pool(
-    user: User, settings, media_type: str
+    user: User, settings, media_type: str, failures: list[str] | None = None
 ) -> tuple[dict[int, dict], set[int], dict[int, int]]:
     """Fetch pool data from SIMKL for a given media type."""
     client = SimklClient(
@@ -171,16 +201,16 @@ async def _fetch_simkl_pool(
     )
 
     popular = await _safe_fetch(
-        client.get_popular, limit=100, media_type=media_type
+        client.get_popular, limit=100, media_type=media_type, failures=failures
     )
     trending = await _safe_fetch(
-        client.get_trending, limit=100, media_type=media_type
+        client.get_trending, limit=100, media_type=media_type, failures=failures
     )
     watched = await _safe_fetch(
-        client.get_user_watched, media_type=media_type
+        client.get_user_watched, media_type=media_type, failures=failures
     )
     ratings_list = await _safe_fetch(
-        client.get_user_ratings, media_type=media_type
+        client.get_user_ratings, media_type=media_type, failures=failures
     )
 
     ratings_by_id: dict[int, int] = {
@@ -205,10 +235,12 @@ async def _fetch_simkl_pool(
     return pool, seen_ids, ratings_by_id
 
 
-async def populate_movie_pool(user: User, db: AsyncSession) -> None:
+async def populate_movie_pool(user: User, db: AsyncSession) -> bool:
     """Fetch movies and shows from Trakt/SIMKL and populate the user's pool.
 
     Called on login/session start. Throttled to once per hour.
+    Returns False when any provider fetch still failed after retries (the
+    data that did arrive is kept), True otherwise, including a throttled skip.
     """
     now = datetime.now(timezone.utc)
     last_seen = user.last_seen_at
@@ -216,16 +248,17 @@ async def populate_movie_pool(user: User, db: AsyncSession) -> None:
         last_seen = last_seen.replace(tzinfo=timezone.utc)
     if last_seen and (now - last_seen) < SYNC_COOLDOWN:
         logger.info("Skipping pool sync user_id=%s — synced recently", user.id)
-        return
+        return True
 
     settings = get_settings()
     has_trakt = bool(user.trakt_user_id and user.trakt_access_token_enc)
     has_simkl = bool(user.simkl_user_id and user.simkl_access_token_enc)
+    failures: list[str] = []
 
     for media_type in ("movie", "show"):
         if has_trakt:
             pool, seen_trakt_ids, ratings_by_trakt_id = await _fetch_trakt_pool(
-                user, settings, media_type
+                user, settings, media_type, failures
             )
             await _upsert_pool(
                 db, user, pool, seen_trakt_ids, ratings_by_trakt_id, media_type, now
@@ -233,7 +266,7 @@ async def populate_movie_pool(user: User, db: AsyncSession) -> None:
 
         if has_simkl:
             pool, seen_ids, ratings_by_id = await _fetch_simkl_pool(
-                user, settings, media_type
+                user, settings, media_type, failures
             )
             await _upsert_simkl_pool(
                 db, user, pool, seen_ids, ratings_by_id, media_type, now
@@ -246,6 +279,11 @@ async def populate_movie_pool(user: User, db: AsyncSession) -> None:
         "Pool sync complete user_id=%s",
         user.id,
     )
+    if failures:
+        logger.warning(
+            "Pool sync incomplete user_id=%s failed=%s", user.id, failures
+        )
+    return not failures
 
 
 async def _upsert_pool(

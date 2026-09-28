@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 from sqlalchemy.sql import Select
 from sqlalchemy.sql.dml import Insert, Update
@@ -104,10 +105,32 @@ class TestPopulateMoviePool:
         user = _make_user(last_seen_at=recent_time)
         db = AsyncMock()
 
-        await populate_movie_pool(user, db)
+        assert await populate_movie_pool(user, db) is True
 
         # No DB execute calls since we skipped
         db.execute.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_returns_true_when_every_fetch_succeeds(self):
+        user = _make_user(last_seen_at=None)
+        user.simkl_access_token_enc = None
+        db = AsyncMock()
+        trakt_mock = AsyncMock()
+        for method in (
+            trakt_mock.get_popular,
+            trakt_mock.get_trending,
+            trakt_mock.get_recommendations,
+            trakt_mock.get_user_watched,
+            trakt_mock.get_user_ratings,
+        ):
+            method.return_value = []
+
+        with (
+            patch("backend.services.pool.TraktClient", return_value=trakt_mock),
+            patch("backend.services.pool.get_settings") as mock_settings,
+        ):
+            mock_settings.return_value = MagicMock(TRAKT_CLIENT_ID="fake")
+            assert await populate_movie_pool(user, db) is True
 
 
 class TestBuildMovieUpsertSimkl:
@@ -190,6 +213,77 @@ class TestSafeFetch:
         result = await _safe_fetch(succeeding_coro)
         assert result == [{"id": 1}, {"id": 2}]
 
+    @pytest.fixture
+    def no_retry_delay(self, monkeypatch):
+        monkeypatch.setattr("backend.services.pool._FETCH_RETRY_DELAYS", (0, 0))
+
+    @staticmethod
+    def _status_error(status: int) -> httpx.HTTPStatusError:
+        request = httpx.Request("GET", "https://api.trakt.tv/x")
+        return httpx.HTTPStatusError(
+            "error", request=request, response=httpx.Response(status, request=request)
+        )
+
+    @pytest.mark.asyncio
+    async def test_read_timeout_is_retried_until_success(self, no_retry_delay):
+        from backend.services.pool import _safe_fetch
+
+        fetch = AsyncMock(
+            side_effect=[httpx.ReadTimeout("slow"), httpx.ReadTimeout("slow"), [{"id": 1}]]
+        )
+        fetch.__name__ = "get_user_watched"
+        failures: list[str] = []
+
+        assert await _safe_fetch(fetch, failures=failures) == [{"id": 1}]
+        assert fetch.await_count == 3
+        assert failures == []
+
+    @pytest.mark.asyncio
+    async def test_read_timeout_on_every_attempt_is_recorded(self, no_retry_delay):
+        from backend.services.pool import _safe_fetch
+
+        fetch = AsyncMock(side_effect=httpx.ReadTimeout("slow"))
+        fetch.__name__ = "get_user_watched"
+        failures: list[str] = []
+
+        assert await _safe_fetch(fetch, failures=failures) == []
+        assert fetch.await_count == 3
+        assert failures == ["get_user_watched"]
+
+    @pytest.mark.asyncio
+    async def test_client_error_is_not_retried(self, no_retry_delay):
+        from backend.services.pool import _safe_fetch
+
+        fetch = AsyncMock(side_effect=self._status_error(404))
+        fetch.__name__ = "get_user_ratings"
+        failures: list[str] = []
+
+        assert await _safe_fetch(fetch, failures=failures) == []
+        assert fetch.await_count == 1
+        assert failures == ["get_user_ratings"]
+
+    @pytest.mark.asyncio
+    async def test_server_error_is_retried(self, no_retry_delay):
+        from backend.services.pool import _safe_fetch
+
+        fetch = AsyncMock(side_effect=[self._status_error(503), [{"id": 1}]])
+        fetch.__name__ = "get_recommendations"
+
+        assert await _safe_fetch(fetch) == [{"id": 1}]
+        assert fetch.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_unexpected_error_is_not_retried(self, no_retry_delay):
+        from backend.services.pool import _safe_fetch
+
+        fetch = AsyncMock(side_effect=RuntimeError("bad payload"))
+        fetch.__name__ = "get_popular"
+        failures: list[str] = []
+
+        assert await _safe_fetch(fetch, failures=failures) == []
+        assert fetch.await_count == 1
+        assert failures == ["get_popular"]
+
     @pytest.mark.asyncio
     async def test_partial_provider_failure_continues_other(self):
         """When Trakt fails, SIMKL data should still be populated."""
@@ -226,10 +320,11 @@ class TestSafeFetch:
         ):
             mock_settings.return_value = MagicMock(TRAKT_CLIENT_ID="fake")
             # Should not raise — _safe_fetch swallows the errors
-            await populate_movie_pool(user, db)
+            complete = await populate_movie_pool(user, db)
 
         # last_seen_at should still be updated (sync completed)
         assert user.last_seen_at is not None
+        assert complete is False
 
 
 # ---------------------------------------------------------------------------

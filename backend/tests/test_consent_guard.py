@@ -628,6 +628,19 @@ class TestDataCollectionConsentGuard:
         assert "consent" in resp.json()["detail"].lower()
         mock_sync.assert_not_awaited()
 
+    def test_pool_import_retry_requires_consent(self):
+        user = _make_user(privacy_policy_accepted=False)
+        self._install(user)
+
+        with patch(
+            "backend.routers.users._run_pool_import", new_callable=AsyncMock
+        ) as mock_job:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.post("/api/me/pool-import")
+
+        assert resp.status_code == 403
+        mock_job.assert_not_awaited()
+
     def test_submit_duel_requires_consent(self):
         user = _make_user(privacy_policy_accepted=False)
         self._install(user)
@@ -694,7 +707,7 @@ class TestDataCollectionConsentGuard:
         with patch(
             "backend.routers.users._force_pool_sync",
             new_callable=AsyncMock,
-            return_value=user,
+            return_value=(user, True),
         ) as mock_sync:
             with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post("/api/sync")

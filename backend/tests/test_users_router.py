@@ -4,19 +4,29 @@ from __future__ import annotations
 
 import os
 import uuid
-from datetime import datetime, timezone
+from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 os.environ.setdefault("TOKEN_ENC_KEY", "test-secret-key-for-unit-tests-32b")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
 
+import httpx
+import pytest
+import sqlalchemy as sa
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 from backend.main import app
 from backend.tests import SPA_HEADERS
 from backend.db import get_db
 from backend.db_models import User
 from backend.routers.auth import get_current_user
+from backend.routers.users import (
+    _effective_pool_import_status,
+    _record_pool_import_outcome,
+    _run_pool_import,
+)
 
 
 def _make_user(
@@ -36,6 +46,8 @@ def _make_user(
     user.simkl_access_token = simkl_access_token
     user.privacy_policy_accepted = privacy_policy_accepted
     user.privacy_policy_version = privacy_policy_version
+    user.pool_import_status = None
+    user.pool_import_started_at = None
     user.trakt_username = "testuser"
     user.simkl_username = "testuser"
     user.created_at = datetime.now(timezone.utc)
@@ -166,6 +178,7 @@ PROFILE_FIELDS = {
     "use_ai_features",
     "privacy_policy_accepted",
     "privacy_policy_version",
+    "pool_import_status",
 }
 
 TOKEN_SENTINELS = (
@@ -307,3 +320,161 @@ class TestExportMyData:
 
         assert resp.status_code == 200
         mock_export.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# Background pool import (#653)
+# ---------------------------------------------------------------------------
+
+
+def _session_factory(session):
+    @asynccontextmanager
+    async def factory():
+        yield session
+
+    return factory
+
+
+class TestRunPoolImport:
+    STARTED_AT = datetime(2026, 9, 28, 12, 0, tzinfo=timezone.utc)
+
+    @staticmethod
+    def _recorded(session):
+        (stmt,) = [c.args[0] for c in session.execute.await_args_list]
+        return stmt.compile().params
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("complete, status", [(True, "complete"), (False, "failed")])
+    async def test_records_outcome_of_the_sync(self, complete, status):
+        user = _make_user()
+        session = AsyncMock()
+        session.get.return_value = user
+
+        with (
+            patch("backend.routers.users.async_session_factory", _session_factory(session)),
+            patch(
+                "backend.routers.users._force_pool_sync",
+                new=AsyncMock(return_value=(user, complete)),
+            ),
+        ):
+            await _run_pool_import(user.id, self.STARTED_AT)
+
+        params = self._recorded(session)
+        assert params["pool_import_status"] == status
+        assert params["pool_import_started_at_1"] == self.STARTED_AT
+        session.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_marks_failed_when_the_sync_raises(self):
+        user = _make_user()
+        session = AsyncMock()
+        session.get.return_value = user
+
+        with (
+            patch("backend.routers.users.async_session_factory", _session_factory(session)),
+            patch(
+                "backend.routers.users._force_pool_sync",
+                new=AsyncMock(side_effect=httpx.ReadTimeout("slow")),
+            ),
+        ):
+            await _run_pool_import(user.id, self.STARTED_AT)
+
+        params = self._recorded(session)
+        assert params["pool_import_status"] == "failed"
+        assert params["pool_import_started_at_1"] == self.STARTED_AT
+        session.commit.assert_awaited_once()
+
+
+class TestRecordPoolImportOutcome:
+    @pytest.fixture
+    def users_session(self):
+        engine = sa.create_engine("sqlite://")
+        User.__table__.create(engine)
+        with Session(engine) as session:
+            yield session
+
+    def test_superseded_run_does_not_overwrite_the_current_one(self, users_session):
+        first_started = datetime(2026, 9, 28, 12, 0, tzinfo=timezone.utc)
+        retry_started = first_started + timedelta(minutes=21)
+        user = User(
+            trakt_username="u",
+            pool_import_status="importing",
+            pool_import_started_at=retry_started,
+        )
+        users_session.add(user)
+        users_session.commit()
+
+        users_session.execute(_record_pool_import_outcome(user.id, first_started, "failed"))
+        users_session.refresh(user)
+        assert user.pool_import_status == "importing"
+
+        users_session.execute(_record_pool_import_outcome(user.id, retry_started, "complete"))
+        users_session.refresh(user)
+        assert user.pool_import_status == "complete"
+
+
+class TestEffectivePoolImportStatus:
+    def _user(self, status, started_ago):
+        user = _make_user()
+        user.pool_import_status = status
+        user.pool_import_started_at = datetime.now(timezone.utc) - started_ago
+        return user
+
+    def test_fresh_import_is_importing(self):
+        user = self._user("importing", timedelta(minutes=1))
+        assert _effective_pool_import_status(user) == "importing"
+
+    def test_stale_import_is_failed(self):
+        user = self._user("importing", timedelta(minutes=21))
+        assert _effective_pool_import_status(user) == "failed"
+
+    def test_final_states_pass_through(self):
+        for status in ("complete", "failed", None):
+            user = self._user(status, timedelta(days=1))
+            assert _effective_pool_import_status(user) == status
+
+
+class TestRetryPoolImport:
+    def setup_method(self):
+        app.dependency_overrides.clear()
+
+    def teardown_method(self):
+        app.dependency_overrides.clear()
+
+    def _post(self, user, db):
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: db
+        with patch(
+            "backend.routers.users._run_pool_import", new_callable=AsyncMock
+        ) as mock_job, patch("backend.routers.users.backfill_posters_background"):
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.post("/api/me/pool-import")
+        return resp, mock_job
+
+    def test_failed_import_is_restarted(self):
+        user = _make_user()
+        user.use_ai_features = True
+        user.pool_import_status = "failed"
+        user.pool_import_started_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        db = AsyncMock()
+
+        resp, mock_job = self._post(user, db)
+
+        assert resp.status_code == 200
+        assert resp.json()["pool_import_status"] == "importing"
+        db.commit.assert_awaited_once()
+        mock_job.assert_awaited_once_with(user.id, user.pool_import_started_at)
+
+    def test_running_import_is_not_restarted(self):
+        user = _make_user()
+        user.use_ai_features = True
+        user.pool_import_status = "importing"
+        user.pool_import_started_at = datetime.now(timezone.utc)
+        db = AsyncMock()
+
+        resp, mock_job = self._post(user, db)
+
+        assert resp.status_code == 200
+        assert resp.json()["pool_import_status"] == "importing"
+        db.commit.assert_not_awaited()
+        mock_job.assert_not_awaited()

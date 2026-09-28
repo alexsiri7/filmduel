@@ -42,6 +42,8 @@ def _make_user():
     user.use_ai_features = False
     user.privacy_policy_accepted = False
     user.privacy_policy_version = None
+    user.pool_import_status = None
+    user.pool_import_started_at = None
     user.privacy_policy_accepted_at = None
     return user
 
@@ -59,7 +61,7 @@ def test_accept_consent_correct_version():
     app.dependency_overrides[get_current_user] = lambda: fake_user
     app.dependency_overrides[get_db] = lambda: mock_db
 
-    with patch("backend.routers.users._force_pool_sync", new_callable=AsyncMock):
+    with patch("backend.routers.users._run_pool_import", new_callable=AsyncMock):
         with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.post(
                 "/api/me/consent",
@@ -99,7 +101,7 @@ def test_accept_consent_wrong_version_400():
 
 
 def test_accept_consent_idempotent():
-    """Accepting consent twice returns 200 both times; only the first run imports the library."""
+    """Accepting consent twice returns 200 both times; only the first queues the library import."""
     fake_user = _make_user()
     mock_db = AsyncMock()
 
@@ -107,8 +109,8 @@ def test_accept_consent_idempotent():
     app.dependency_overrides[get_db] = lambda: mock_db
 
     with patch(
-        "backend.routers.users._force_pool_sync", new_callable=AsyncMock
-    ) as mock_sync:
+        "backend.routers.users._run_pool_import", new_callable=AsyncMock
+    ) as mock_job:
         with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp1 = client.post(
                 "/api/me/consent",
@@ -121,7 +123,7 @@ def test_accept_consent_idempotent():
 
     assert resp1.status_code == 200
     assert resp2.status_code == 200
-    mock_sync.assert_awaited_once()
+    mock_job.assert_awaited_once_with(fake_user.id, fake_user.pool_import_started_at)
 
 
 # ---------------------------------------------------------------------------

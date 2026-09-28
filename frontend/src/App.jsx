@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { CURRENT_PRIVACY_POLICY_VERSION } from "./constants";
 import Nav from "./components/Nav";
 import ConsentModal from "./components/ConsentModal";
+import PoolImportScreen from "./components/PoolImportScreen";
 import Login from "./pages/Login";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import Duel from "./pages/Duel";
@@ -15,6 +16,7 @@ import TournamentBracket from "./pages/TournamentBracket";
 function ProtectedRoute({ children }) {
   const [status, setStatus] = useState("loading");
   const [showConsent, setShowConsent] = useState(false);
+  const [importStatus, setImportStatus] = useState(null);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -31,6 +33,7 @@ function ProtectedRoute({ children }) {
         ) {
           setShowConsent(true);
         }
+        setImportStatus(data.pool_import_status);
         setStatus("authenticated");
       } catch (err) {
         console.error("Auth check failed:", err);
@@ -52,11 +55,20 @@ function ProtectedRoute({ children }) {
   if (status === "unauthenticated") {
     return <Navigate to="/login" replace />;
   }
-  return showConsent ? (
-    <ConsentModal onAccepted={() => setShowConsent(false)} />
-  ) : (
-    children
-  );
+  if (showConsent) {
+    return (
+      <ConsentModal
+        onAccepted={(user) => {
+          setShowConsent(false);
+          setImportStatus(user?.pool_import_status);
+        }}
+      />
+    );
+  }
+  if (importStatus === "importing" || importStatus === "failed") {
+    return <PoolImportScreen initialStatus={importStatus} onDone={() => setImportStatus(null)} />;
+  }
+  return children;
 }
 
 export default function App() {

@@ -103,6 +103,8 @@ def build_export_payload(
             "privacy_policy_accepted": user.privacy_policy_accepted,
             "privacy_policy_accepted_at": _iso(user.privacy_policy_accepted_at),
             "privacy_policy_version": user.privacy_policy_version,
+            "pool_import_status": user.pool_import_status,
+            "pool_import_started_at": _iso(user.pool_import_started_at),
         },
         "library": [
             {
