@@ -9,7 +9,7 @@ RUN npm run build && test -f dist/index.html
 
 # Stage 2: Python backend + built frontend
 # Python major.minor must match python-version in .github/workflows/ci.yml and --python-version in backend/requirements*.txt (guarded by backend/tests/test_runtime_versions.py).
-FROM python:3.14-slim@sha256:caaf356f40667c496d405780745b9ac25771c189a51dfcc42430d531ea09f8a2
+FROM python:3.14-slim@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343719cb97305b3d
 WORKDIR /app
 
 COPY backend/requirements.txt ./
