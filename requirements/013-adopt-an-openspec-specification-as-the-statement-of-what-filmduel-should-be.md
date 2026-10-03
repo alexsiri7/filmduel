@@ -2,9 +2,9 @@
 created: '2026-09-28'
 github_issue: 666
 id: '013'
-status: in-progress
+status: done
 title: Adopt an OpenSpec specification as the statement of what FilmDuel should be
-updated: '2026-09-29'
+updated: '2026-10-03'
 ---
 
 ## Why
