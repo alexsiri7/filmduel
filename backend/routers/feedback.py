@@ -7,7 +7,17 @@ import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+)
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,7 +25,11 @@ from backend.db import acquire_quota_lock, get_db
 from backend.db_models import FeedbackReport, User
 from backend.rate_limit import limiter
 from backend.routers.auth import get_admin_user, get_current_user
-from backend.schemas import FeedbackAdminResponse, FeedbackReportResponse
+from backend.schemas import (
+    FeedbackAdminResponse,
+    FeedbackReportResponse,
+    FeedbackScreenshotResponse,
+)
 from backend.services.token_crypto import decrypt_token, encrypt_token
 from backend.services.retention import purge_expired_screenshots as _purge_expired_screenshots
 
@@ -27,7 +41,7 @@ router = APIRouter(prefix="/api/feedback", tags=["feedback"])
 def _safe_decrypt(report_id: str, ciphertext: str | None) -> str | None:
     """Decrypt screenshot ciphertext, returning None and logging on failure.
 
-    Prevents one corrupted or key-mismatched record from crashing the full admin listing.
+    A corrupted or key-mismatched record is reported as missing rather than as a 500.
     """
     if not ciphertext:
         return None
@@ -164,25 +178,74 @@ async def submit_feedback(
 @limiter.limit("10/minute")
 async def list_feedback(
     request: Request,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """List report metadata, newest first.
+
+    Screenshot ciphertext is never selected here: a page of 5 MB screenshots
+    would be decrypted and serialised in one response (AUD-09, #691). Admins
+    fetch screenshots one at a time from view_screenshot.
+    """
     result = await db.execute(
-        select(FeedbackReport).order_by(FeedbackReport.created_at.desc()).limit(100)
+        select(
+            FeedbackReport.id,
+            FeedbackReport.user_id,
+            FeedbackReport.title,
+            FeedbackReport.description,
+            FeedbackReport.created_at,
+            FeedbackReport.purge_after,
+            FeedbackReport.screenshot_data_enc.isnot(None).label("has_screenshot"),
+        )
+        .order_by(FeedbackReport.created_at.desc(), FeedbackReport.id.desc())
+        .limit(limit)
+        .offset(offset)
     )
-    reports = result.scalars().all()
     return [
         FeedbackAdminResponse(
             id=str(r.id),
             user_id=str(r.user_id),
             title=r.title,
             description=r.description,
-            screenshot_data=_safe_decrypt(str(r.id), r.screenshot_data_enc),
+            has_screenshot=bool(r.has_screenshot),
             created_at=r.created_at,
             purge_after=r.purge_after,
         )
-        for r in reports
+        for r in result.all()
     ]
+
+
+@router.get(
+    "/admin/{report_id}/screenshot", response_model=FeedbackScreenshotResponse
+)
+@limiter.limit("10/minute")
+async def view_screenshot(
+    request: Request,
+    response: Response,
+    report_id: uuid.UUID,
+    current_user: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(FeedbackReport.screenshot_data_enc).where(
+            FeedbackReport.id == report_id
+        )
+    )
+    row = result.one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Report not found")
+    plain = _safe_decrypt(str(report_id), row.screenshot_data_enc)
+    if plain is None:
+        raise HTTPException(status_code=404, detail="Screenshot not found")
+    response.headers["Cache-Control"] = "no-store"
+    logger.info(
+        "screenshot_viewed report_id=%s by user_id=%s",
+        report_id,
+        current_user.id,
+    )
+    return FeedbackScreenshotResponse(id=str(report_id), screenshot_data=plain)
 
 
 @router.delete("/admin/{report_id}/screenshot", status_code=204)

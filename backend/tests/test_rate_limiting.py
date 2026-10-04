@@ -760,7 +760,7 @@ def test_list_feedback_endpoint_reachable():
     fake_user.is_admin = True
     mock_db = AsyncMock()
     mock_result = MagicMock()
-    mock_result.scalars.return_value.all.return_value = []
+    mock_result.all.return_value = []
     mock_db.execute.return_value = mock_result
 
     app.dependency_overrides[get_current_user] = lambda: fake_user
@@ -771,6 +771,25 @@ def test_list_feedback_endpoint_reachable():
         resp = client.get("/api/feedback/admin")
 
     assert resp.status_code == 200
+
+
+def test_view_screenshot_endpoint_reachable():
+    """view_screenshot responds (not 500) with its request:Request param."""
+    fake_user = _make_user()
+    fake_user.is_admin = True
+    mock_db = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.one_or_none.return_value = None
+    mock_db.execute.return_value = mock_result
+
+    app.dependency_overrides[get_current_user] = lambda: fake_user
+    app.dependency_overrides[get_admin_user] = lambda: fake_user
+    app.dependency_overrides[get_db] = lambda: mock_db
+
+    with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+        resp = client.get(f"/api/feedback/admin/{uuid.uuid4()}/screenshot")
+
+    assert resp.status_code == 404
 
 
 def test_scrub_screenshot_endpoint_reachable():

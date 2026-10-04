@@ -254,6 +254,11 @@ class FeedbackAdminResponse(BaseModel):
     user_id: str
     title: str
     description: str
-    screenshot_data: Optional[str] = None  # decrypted, only for admin view
+    has_screenshot: bool
     created_at: datetime
     purge_after: Optional[datetime] = None
+
+
+class FeedbackScreenshotResponse(BaseModel):
+    id: str
+    screenshot_data: str

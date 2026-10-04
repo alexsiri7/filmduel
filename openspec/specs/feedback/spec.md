@@ -37,9 +37,23 @@ Before submitting, the user SHALL be able to edit the screenshot with redact, hi
 
 ### Requirement: Admin tools are restricted
 
-Listing feedback, scrubbing screenshots and purging feedback, duels or swipes SHALL be available only to admin users; anyone else SHALL be refused with "Admin access required". Each admin tool SHALL be rate limited.
+Listing feedback, viewing screenshots, scrubbing screenshots and purging feedback, duels or swipes SHALL be available only to admin users; anyone else SHALL be refused with "Admin access required". Each admin tool SHALL be rate limited.
 
 #### Scenario: Non-admin
 - GIVEN a signed-in user who is not an admin
 - WHEN they list feedback reports
 - THEN the request is refused with "Admin access required"
+
+### Requirement: Admins review reports without bulk-loading screenshots
+
+Listing feedback SHALL return report metadata only — whether a screenshot exists, but never its content — newest first, in pages of at most 100. An admin SHALL view a screenshot one report at a time, and each view SHALL be logged with the report and the admin who viewed it.
+
+#### Scenario: Listing does not include screenshots
+- GIVEN a report with a stored screenshot
+- WHEN an admin lists feedback reports
+- THEN the report is listed as having a screenshot and its image is not included
+
+#### Scenario: Viewing a screenshot is recorded
+- GIVEN a report with a stored screenshot
+- WHEN an admin views that report's screenshot
+- THEN the image is returned and the view is logged with the report and the admin
