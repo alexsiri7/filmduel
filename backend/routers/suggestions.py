@@ -166,12 +166,12 @@ async def get_suggestions(
         return SuggestionsResponse(suggestions=[], status="not_enough_films")
 
     cutoff = datetime.now(timezone.utc) - timedelta(hours=STALE_HOURS)
-    active = await _get_active_suggestions(uid, db, media_type)
     latest = await _latest_generated_at(uid, db, media_type)
 
     if latest is None or latest <= cutoff:
         # One generation per user at a time (AUD-08, #690).
         if not await try_acquire_xact_lock(db, "suggestions_regen", uid):
+            active = await _get_active_suggestions(uid, db, media_type)
             if active:
                 return _ready_response(active)
             raise HTTPException(
@@ -180,10 +180,10 @@ async def get_suggestions(
             )
         # A concurrent request may have committed a batch before we got the lock.
         latest = await _latest_generated_at(uid, db, media_type)
-        if latest is not None and latest > cutoff:
-            active = await _get_active_suggestions(uid, db, media_type)
 
     if latest is not None and latest > cutoff:
+        # Read after `latest` so a batch that made it fresh is visible here too.
+        active = await _get_active_suggestions(uid, db, media_type)
         if active:
             return _ready_response(active)
         return SuggestionsResponse(suggestions=[], status="all_dismissed")

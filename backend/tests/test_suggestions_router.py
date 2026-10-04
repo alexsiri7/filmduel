@@ -220,6 +220,66 @@ class TestGetSuggestionsGeneration:
         assert resp.json()["status"] == "all_dismissed"
         mock_create.assert_not_awaited()
 
+    def test_batch_committed_between_reads_is_not_reported_all_dismissed(self):
+        """A concurrent first batch landing after GET's first read must not make
+        an undismissed batch look all-dismissed (read active only after latest)."""
+        fresh = datetime.now(timezone.utc) - timedelta(minutes=1)
+        reads = 0
+
+        def committed_after_first_read(before, after):
+            async def read(*args, **kwargs):
+                nonlocal reads
+                reads += 1
+                return before if reads == 1 else after
+
+            return read
+
+        with patch(
+            "backend.routers.suggestions.has_enough_ranked",
+            new_callable=AsyncMock,
+            return_value=True,
+        ), patch(
+            "backend.routers.suggestions._get_active_suggestions",
+            side_effect=committed_after_first_read([], [MagicMock()]),
+        ), patch(
+            "backend.routers.suggestions._latest_generated_at",
+            side_effect=committed_after_first_read(None, fresh),
+        ), patch(
+            "backend.routers.suggestions.try_acquire_xact_lock",
+            new_callable=AsyncMock,
+            return_value=True,
+        ), patch(
+            "backend.routers.suggestions._create_suggestions",
+            new_callable=AsyncMock,
+        ) as mock_create, patch(
+            "backend.routers.suggestions._build_suggestion_schema",
+            return_value=_fake_suggestion_schema(),
+        ):
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.get("/api/suggestions")
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "ready"
+        mock_create.assert_not_awaited()
+
+
+class TestLatestGeneratedAt:
+    @pytest.mark.asyncio
+    async def test_freshness_includes_dismissed_rows(self):
+        """Filtering dismissed rows out of freshness would reopen AUD-08 (#690)."""
+        from sqlalchemy.dialects import postgresql
+
+        from backend.routers.suggestions import _latest_generated_at
+
+        db = AsyncMock()
+        db.execute.return_value = MagicMock()
+
+        await _latest_generated_at(uuid.uuid4(), db, "movie")
+
+        sql = str(db.execute.call_args.args[0].compile(dialect=postgresql.dialect()))
+        assert "max(suggestions.generated_at)" in sql
+        assert "dismissed_at" not in sql
+
 
 # ---------------------------------------------------------------------------
 # Item 6: regenerate daily limit & 503
