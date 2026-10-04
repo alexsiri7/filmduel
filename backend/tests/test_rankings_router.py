@@ -73,6 +73,34 @@ class TestRankingsRouter:
         assert resp.status_code == 400
         assert "decade" in resp.json()["detail"].lower()
 
+    def test_get_rankings_out_of_range_decade_returns_400(self):
+        """An integer-parsable but unbounded decade is rejected before the DB."""
+        user = _make_user()
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.get("/api/rankings?decade=99999999999s")
+
+        assert resp.status_code == 400
+
+    def test_get_rankings_non_positive_limit_returns_422(self):
+        """limit below 1 is rejected by validation instead of reaching SQL LIMIT."""
+        user = _make_user()
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+
+        with patch(
+            "backend.routers.rankings.get_user_rankings", new_callable=AsyncMock
+        ) as mock_rankings:
+            with TestClient(app, raise_server_exceptions=False) as client:
+                negative = client.get("/api/rankings?limit=-1")
+                zero = client.get("/api/rankings?limit=0")
+
+        assert negative.status_code == 422
+        assert zero.status_code == 422
+        mock_rankings.assert_not_awaited()
+
     def test_export_csv_headers(self):
         """GET /api/rankings/export/csv returns correct Content-Type and filename."""
         user = _make_user()

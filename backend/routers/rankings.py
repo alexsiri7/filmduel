@@ -50,7 +50,7 @@ async def get_rankings(
     request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    limit: int = Query(default=50, le=200),
+    limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     genre: Optional[str] = Query(default=None),
     decade: Optional[str] = Query(default=None),
