@@ -25,14 +25,20 @@ _fernet.cache_clear()
 from backend.main import app  # noqa: E402
 from backend.tests import SPA_HEADERS  # noqa: E402
 from backend.db import get_db  # noqa: E402
-from backend.routers.auth import get_current_user  # noqa: E402
+from backend.routers.auth import CURRENT_PRIVACY_POLICY_VERSION, get_current_user  # noqa: E402
 from backend.utils.tokens import encode_pair_token  # noqa: E402
 
 
-def _make_user(*, privacy_policy_accepted: bool = False, use_ai_features: bool = True):
+def _make_user(
+    *,
+    privacy_policy_accepted: bool = False,
+    privacy_policy_version: str | None = CURRENT_PRIVACY_POLICY_VERSION,
+    use_ai_features: bool = True,
+):
     user = MagicMock()
     user.id = uuid.uuid4()
     user.privacy_policy_accepted = privacy_policy_accepted
+    user.privacy_policy_version = privacy_policy_version
     user.use_ai_features = use_ai_features
     return user
 
@@ -72,6 +78,18 @@ class TestSuggestionsConsentGuard:
 
         assert resp.status_code == 403
         assert "consent" in resp.json()["detail"].lower()
+
+    def test_get_suggestions_requires_consent_to_current_policy_version(self):
+        """GET /api/suggestions returns 403 when the user accepted an older policy version."""
+        user = _make_user(privacy_policy_accepted=True, privacy_policy_version="2.0")
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+            resp = client.get("/api/suggestions")
+
+        assert resp.status_code == 403
+        assert resp.json()["detail"] == "Privacy policy consent required"
 
     def test_get_suggestions_allowed_with_consent(self):
         """GET /api/suggestions proceeds past consent check when policy accepted."""

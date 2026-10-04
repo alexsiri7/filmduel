@@ -16,10 +16,12 @@ from backend.db import async_session_factory, get_db
 from backend.rate_limit import limiter
 from backend.db_models import User, UserMovie
 from backend.routers.auth import (
+    CURRENT_PRIVACY_POLICY_VERSION,
     delete_session_cookie,
     ensure_fresh_token,
     ensure_fresh_simkl_token,
     get_current_user,
+    has_current_consent,
     require_consent,
 )
 from backend.schemas import ConsentAccept, UserResponse, UserSettingsUpdate
@@ -32,13 +34,6 @@ from backend.services.simkl import SimklClient
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["users"])
-
-# When updating the privacy policy:
-# 1. Update this constant to the new version string
-# 2. Update CURRENT_PRIVACY_POLICY_VERSION in frontend/src/constants.js to match
-# 3. Update the privacy policy text in frontend/src/pages/PrivacyPolicy.jsx
-# Mismatch between this constant and the stored user value triggers re-consent for existing users.
-CURRENT_PRIVACY_POLICY_VERSION = "2.1"
 
 # An import still "importing" after this long is reported as failed: its process
 # died (e.g. a deploy restart). Must exceed the worst case of every provider
@@ -68,7 +63,7 @@ def _build_user_response(user: User) -> UserResponse:
         sync_ratings_to_trakt=user.sync_ratings_to_trakt,
         sync_ratings_to_simkl=user.sync_ratings_to_simkl,
         use_ai_features=user.use_ai_features,
-        privacy_policy_accepted=user.privacy_policy_accepted,
+        privacy_policy_accepted=has_current_consent(user),
         privacy_policy_version=user.privacy_policy_version,
         pool_import_status=_effective_pool_import_status(user),
     )

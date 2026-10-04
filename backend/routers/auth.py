@@ -227,9 +227,25 @@ async def get_admin_user(
     return current_user
 
 
+# When updating the privacy policy:
+# 1. Update this constant to the new version string
+# 2. Update CURRENT_PRIVACY_POLICY_VERSION in frontend/src/constants.js to match
+# 3. Update the policy text and its date in frontend/src/pages/PrivacyPolicy.jsx
+#    (the version shown there is read from constants.js)
+# Users whose stored version differs lose consent until they accept the new version.
+CURRENT_PRIVACY_POLICY_VERSION = "2.1"
+
+
+def has_current_consent(user: User) -> bool:
+    return (
+        user.privacy_policy_accepted
+        and user.privacy_policy_version == CURRENT_PRIVACY_POLICY_VERSION
+    )
+
+
 def require_consent(user: User = Depends(get_current_user)) -> User:
-    """FastAPI dependency: reject if user hasn't accepted privacy policy."""
-    if not user.privacy_policy_accepted:
+    """FastAPI dependency: reject if user hasn't accepted the current privacy policy."""
+    if not has_current_consent(user):
         raise HTTPException(
             status_code=403,
             detail="Privacy policy consent required",

@@ -10,7 +10,7 @@ from sqlalchemy.dialects import postgresql
 from backend.db import get_db
 from backend.main import app
 from backend.tests import SPA_HEADERS
-from backend.routers.auth import get_current_user
+from backend.routers.auth import CURRENT_PRIVACY_POLICY_VERSION, get_current_user
 from backend.routers.swipe import (
     BANDS,
     MAX_SWIPES_PER_DAY,
@@ -324,6 +324,7 @@ class TestSubmitSwipeResults:
         user = _make_user()
         user.is_admin = False
         user.privacy_policy_accepted = True
+        user.privacy_policy_version = CURRENT_PRIVACY_POLICY_VERSION
         db = _make_db()
         db.add = MagicMock()
         statements: list = []

@@ -21,7 +21,7 @@ from backend.main import app
 from backend.tests import SPA_HEADERS
 from backend.db import get_db
 from backend.db_models import User
-from backend.routers.auth import get_current_user
+from backend.routers.auth import CURRENT_PRIVACY_POLICY_VERSION, get_current_user
 from backend.routers.users import (
     _effective_pool_import_status,
     _record_pool_import_outcome,
@@ -36,7 +36,7 @@ def _make_user(
     trakt_access_token: str | None = "trakt-token",
     simkl_access_token: str | None = "simkl-token",
     privacy_policy_accepted: bool = True,
-    privacy_policy_version: str | None = "2.0",
+    privacy_policy_version: str | None = CURRENT_PRIVACY_POLICY_VERSION,
 ):
     user = MagicMock()
     user.id = uuid.uuid4()
@@ -150,7 +150,7 @@ class TestPrivacyPolicyVersion:
     def test_privacy_policy_version_mismatch_flags_reconsent(self):
         """GET /api/me with outdated policy version returns privacy_policy_accepted=False."""
         user = _make_user(
-            privacy_policy_accepted=False,
+            privacy_policy_accepted=True,
             privacy_policy_version="1.0",
         )
         app.dependency_overrides[get_current_user] = lambda: user
