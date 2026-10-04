@@ -1354,10 +1354,10 @@ class TestPKCE:
             "refresh_token": "ref",
             "expires_in": 7776000,
         })
-        mock_profile = AsyncMock(return_value={
+        mock_profile = AsyncMock(return_value={"user": {
             "username": "alice",
             "ids": {"slug": "alice", "uuid": "uuid-alice"},
-        })
+        }})
         mock_client = AsyncMock()
         mock_client.exchange_code = mock_exchange
         mock_client.get_profile = mock_profile
@@ -1448,10 +1448,10 @@ class TestPKCE:
             "refresh_token": "ref",
             "expires_in": 7776000,
         })
-        mock_client.get_profile = AsyncMock(return_value=profile or {
+        mock_client.get_profile = AsyncMock(return_value=profile or {"user": {
             "username": "alice",
             "ids": {"slug": "alice", "uuid": "uuid-alice"},
-        })
+        }})
         monkeypatch.setattr("backend.routers.auth.TraktClient", lambda **kw: mock_client)
 
         state = "test-state"
@@ -1542,7 +1542,9 @@ class TestPKCE:
         token = header.split(";", 1)[0].split("=", 1)[1]
         return pyjwt.decode(token, options={"verify_signature": False})["sub"]
 
-    _RENAMED_PROFILE = {"username": "alice2", "ids": {"slug": "alice2", "uuid": "uuid-alice"}}
+    _RENAMED_PROFILE = {
+        "user": {"username": "alice2", "ids": {"slug": "alice2", "uuid": "uuid-alice"}}
+    }
 
     @pytest.mark.asyncio
     async def test_returning_user_matched_by_uuid_gets_new_slug(self, monkeypatch):
@@ -1561,6 +1563,7 @@ class TestPKCE:
         assert len(statements) == 2  # uuid lookup, then slug release; no legacy lookup
         assert "users.trakt_uuid = " in statements[0]
         assert statements[1].startswith("UPDATE users")
+        assert "users.trakt_user_id = " in statements[1]
         assert "users.id != " in statements[1]
         assert user.trakt_user_id == "alice2"
         assert user.trakt_uuid == "uuid-alice"
@@ -1582,6 +1585,8 @@ class TestPKCE:
         assert "users.trakt_uuid IS NULL" in statements[1]
         assert legacy.trakt_uuid == "uuid-alice"
         assert self._session_user_id(response) == legacy.id
+        assert statements[2].startswith("UPDATE users")
+        assert "users.trakt_user_id = " in statements[2]
         db.add.assert_not_called()
 
     @pytest.mark.asyncio
@@ -1594,7 +1599,7 @@ class TestPKCE:
         """
         monkeypatch.setattr("backend.services.token_crypto.encrypt_token", lambda v: v)
         db = self._lookup_db(None, None)
-        newcomer = {"username": "alice", "ids": {"slug": "alice", "uuid": "uuid-mallory"}}
+        newcomer = {"user": {"username": "alice", "ids": {"slug": "alice", "uuid": "uuid-mallory"}}}
 
         response, _ = await self._run_trakt_callback(monkeypatch, None, profile=newcomer, db=db)
 
@@ -1603,6 +1608,7 @@ class TestPKCE:
         assert created.trakt_user_id == "alice"
         statements = self._statements(db)
         assert statements[2].startswith("UPDATE users SET trakt_user_id=")
+        assert "WHERE users.trakt_user_id = " in statements[2]
         assert "users.id != " not in statements[2]
         assert self._session_user_id(response) == str(created.id)
 
@@ -1612,14 +1618,26 @@ class TestPKCE:
         import logging
 
         db = self._lookup_db()
-        profile = {"username": "PII_NAME", "ids": {"slug": "PII_SLUG"}}
+        profile = {"user": {"username": "PII_NAME", "ids": {"slug": "PII_SLUG"}}}
         with caplog.at_level(logging.ERROR, logger="backend.routers.auth"):
             with pytest.raises(HTTPException) as exc_info:
                 await self._run_trakt_callback(monkeypatch, None, profile=profile, db=db)
 
         assert exc_info.value.status_code == 502
         assert "PII_" not in caplog.text
-        assert "username" in caplog.text
+        assert "user" in caplog.text
+        db.execute.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_settings_without_user_object_raises_502(self, monkeypatch):
+        """A /users/settings payload missing its `user` object fails closed, not with a 500."""
+        db = self._lookup_db()
+        with pytest.raises(HTTPException) as exc_info:
+            await self._run_trakt_callback(
+                monkeypatch, None, profile={"account": {"timezone": "UTC"}}, db=db
+            )
+
+        assert exc_info.value.status_code == 502
         db.execute.assert_not_called()
 
     @pytest.mark.asyncio

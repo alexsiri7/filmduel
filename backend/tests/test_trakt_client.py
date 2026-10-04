@@ -139,10 +139,11 @@ class TestTraktClientPopular:
 
 class TestTraktClientProfile:
     @pytest.mark.asyncio
-    async def test_get_profile_returns_settings_user_with_uuid(self):
+    async def test_get_profile_returns_settings_payload(self):
         """get_profile reads /users/settings, the endpoint that carries ids.uuid (#684)."""
         user = {"username": "alice", "ids": {"slug": "alice", "uuid": "uuid-alice"}}
-        mock_resp = _mock_response({"user": user, "account": {"timezone": "UTC"}})
+        settings = {"user": user, "account": {"timezone": "UTC"}}
+        mock_resp = _mock_response(settings)
 
         mock_client = AsyncMock()
         mock_client.get.return_value = mock_resp
@@ -153,7 +154,7 @@ class TestTraktClientProfile:
         with patch.object(client, "_client", return_value=mock_client):
             result = await client.get_profile()
 
-        assert result == user
+        assert result == settings
         assert mock_client.get.call_args[0][0] == "/users/settings"
 
 

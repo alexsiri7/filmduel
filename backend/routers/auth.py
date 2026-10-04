@@ -335,11 +335,8 @@ class _OAuthProvider(NamedTuple):
 
 def _trakt_extract(tokens: dict, profile: dict) -> tuple[str, str, str]:
     try:
-        return (
-            str(profile["ids"]["uuid"]),
-            profile["username"],
-            str(profile["ids"]["slug"]),
-        )
+        user = profile["user"]
+        return str(user["ids"]["uuid"]), user["username"], str(user["ids"]["slug"])
     except (KeyError, TypeError) as exc:
         logger.error(
             "Unexpected Trakt profile response (type=%s, keys=%s)",
