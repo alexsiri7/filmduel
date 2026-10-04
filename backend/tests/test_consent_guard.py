@@ -406,6 +406,7 @@ class TestTournamentConsentGuard:
         mock_tournament.id = tournament_id
         mock_tournament.user_id = user.id
         mock_tournament.is_ai_curated = True
+        mock_tournament.status = "active"
         mock_tournament.matches = []
         mock_tournament.llm_response = {"_regen_count": 0, "_theme_hint": ""}
         mock_tournament.bracket_size = 8
@@ -437,12 +438,12 @@ class TestTournamentConsentGuard:
         assert resp.json()["detail"] == "AI curation failed. Please try again."
         # Guard against regressions where execution continues past the ValueError
         # and db writes (delete matches, flush, update metadata) are silently triggered.
-        # The only statement allowed to reach the session is the regen advisory lock.
+        # The only statement allowed to reach the session is the tournament advisory lock.
         executed = [
             str(c.args[0].compile(dialect=postgresql.dialect()))
             for c in mock_db.execute.await_args_list
         ]
-        assert executed, "expected the regeneration advisory lock to be acquired"
+        assert executed, "expected the tournament advisory lock to be acquired"
         assert all("pg_advisory_xact_lock" in sql for sql in executed), executed
         mock_db.flush.assert_not_called()
 
