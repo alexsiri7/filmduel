@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 import uuid
 from typing import Optional
 
@@ -14,9 +15,13 @@ from sqlalchemy.orm import joinedload
 from backend.db_models import Movie, UserMovie
 from backend.services.elo import elo_to_rating
 
+_DECADE_RE = re.compile(r"[0-9]{4}s?")
+
 
 def parse_decade(decade: str) -> tuple[int, int]:
     """Parse a decade string like '1990s' into (start, end) years inclusive."""
+    if not _DECADE_RE.fullmatch(decade):
+        raise ValueError(f"Invalid decade: {decade!r}")
     start = int(decade.rstrip("s"))
     return start, start + 9
 

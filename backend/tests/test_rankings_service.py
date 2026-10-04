@@ -146,6 +146,15 @@ def test_parse_decade_partial_numeric_raises_value_error():
         parse_decade("19x0s")
 
 
+@pytest.mark.parametrize(
+    "decade", ["99999999999s", "-5s", "-1990s", "+1990s", " 1990s", "1_990s", "١٩٩٠s"]
+)
+def test_parse_decade_rejects_non_four_digit_years(decade):
+    """Anything int() would accept beyond a plain four-digit year is rejected."""
+    with pytest.raises(ValueError):
+        parse_decade(decade)
+
+
 # --- export_rankings_csv (integration with mock DB) ---
 
 
