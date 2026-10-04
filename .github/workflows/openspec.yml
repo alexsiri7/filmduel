@@ -22,4 +22,10 @@ jobs:
           node-version: "26"
 
       - name: Validate specs
-        run: npx -y @fission-ai/openspec@latest validate --specs --strict
+        run: |
+          for attempt in 1 2 3; do
+            npx -y @fission-ai/openspec@latest validate --specs --strict && exit 0
+            echo "Attempt $attempt failed, retrying in 10s..."
+            sleep 10
+          done
+          exit 1
