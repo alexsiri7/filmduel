@@ -270,6 +270,16 @@ class TestCurateTournamentOutputValidation:
         assert "_regen_count" in caplog.text
 
     @pytest.mark.asyncio
+    async def test_rejected_value_not_logged(self, caplog):
+        reply = {**self.VALID_REPLY, "_regen_count": "INJECTED_SENTINEL_VALUE"}
+
+        with caplog.at_level(logging.ERROR, logger="backend.services.curator"):
+            with pytest.raises(CurationError):
+                await self._curate(reply)
+
+        assert "INJECTED_SENTINEL_VALUE" not in caplog.text
+
+    @pytest.mark.asyncio
     async def test_non_string_film_ids_rejected(self):
         reply = {**self.VALID_REPLY, "film_ids": [{"id": "x"}] * 8}
 
