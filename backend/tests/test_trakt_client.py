@@ -137,6 +137,26 @@ class TestTraktClientPopular:
         assert call_args[0][0] == "/shows/popular"
 
 
+class TestTraktClientProfile:
+    @pytest.mark.asyncio
+    async def test_get_profile_returns_settings_user_with_uuid(self):
+        """get_profile reads /users/settings, the endpoint that carries ids.uuid (#684)."""
+        user = {"username": "alice", "ids": {"slug": "alice", "uuid": "uuid-alice"}}
+        mock_resp = _mock_response({"user": user, "account": {"timezone": "UTC"}})
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_resp
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        client = TraktClient(client_id="test-id", access_token="tok")
+        with patch.object(client, "_client", return_value=mock_client):
+            result = await client.get_profile()
+
+        assert result == user
+        assert mock_client.get.call_args[0][0] == "/users/settings"
+
+
 class TestTraktClientAuthHeader:
     def test_auth_header_present_when_token_provided(self):
         """Constructor should add Bearer token when access_token is provided."""

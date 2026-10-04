@@ -73,11 +73,15 @@ class TraktClient:
             return resp.json()
 
     async def get_profile(self) -> dict:
-        """Fetch the authenticated user's profile."""
+        """Fetch the authenticated user's profile.
+
+        Returns the ``user`` object from ``/users/settings``, which unlike
+        ``/users/me`` carries the immutable ``ids.uuid``.
+        """
         async with self._client() as client:
-            resp = await client.get("/users/me")
+            resp = await client.get("/users/settings")
             resp.raise_for_status()
-            return resp.json()
+            return resp.json()["user"]
 
     async def get_popular(
         self, limit: int = 100, media_type: str = "movie"

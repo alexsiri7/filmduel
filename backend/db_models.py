@@ -54,6 +54,10 @@ class User(Base):
     trakt_user_id: Mapped[Optional[str]] = mapped_column(
         Text, unique=True, nullable=True
     )
+    # Trakt's immutable account id and the login key (#684). trakt_user_id holds
+    # the current slug, which changes on rename; it is refreshed every login and
+    # used only as the {id} in Trakt API paths.
+    trakt_uuid: Mapped[Optional[str]] = mapped_column(Text, unique=True, nullable=True)
     trakt_username: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Stored encrypted at rest. Access via the trakt_access_token /
     # trakt_refresh_token properties which transparently decrypt/encrypt.
