@@ -706,8 +706,8 @@ class TestRecordMatchWinnerLockOrder:
             played_at=None,
             duel_id=None,
         )
-        um_w = types.SimpleNamespace(elo=1000, battles=5, seeded_elo=None)
-        um_l = types.SimpleNamespace(elo=1000, battles=5, seeded_elo=None)
+        um_w = types.SimpleNamespace(elo=1200, battles=5, seeded_elo=None)
+        um_l = types.SimpleNamespace(elo=1100, battles=5, seeded_elo=None)
         user_movies = {winner_id: um_w, loser_id: um_l}
         lookups = [match_obj, MagicMock()]
         locked = []
