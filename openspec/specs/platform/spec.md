@@ -47,6 +47,11 @@ Rate limits SHALL be counted per signed-in user, falling back to the real client
 - WHEN they send two create requests at the same instant
 - THEN exactly one tournament is created
 
+#### Scenario: Forged forwarding header
+- GIVEN an anonymous client that has reached a rate limit
+- WHEN it retries with a forged X-Forwarded-For header
+- THEN the request is still counted against its real address and rejected
+
 ### Requirement: Provider requests cannot be redirected
 
 Values taken from users or providers, such as usernames, SHALL be encoded before being placed in a provider API path, so that no value, including one containing "/" or "..", can change which endpoint is requested.

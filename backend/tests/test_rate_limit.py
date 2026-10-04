@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import time
 from types import SimpleNamespace
@@ -17,16 +18,18 @@ from limits.storage import MemoryStorage, RedisStorage
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.requests import Request
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from backend.rate_limit import _build_limiter, _rate_limit_key
 from backend.utils.cookies import COOKIE_NAME, cookie_name
 
 
-def _make_request(cookie_value=None, client_ip="1.2.3.4", secure=False):
+def _make_request(cookie_value=None, client_ip="1.2.3.4", secure=False, headers=None):
     request = MagicMock()
     request.cookies = (
         {cookie_name(COOKIE_NAME, secure): cookie_value} if cookie_value else {}
     )
+    request.headers = headers or {}
     request.client.host = client_ip
     return request
 
@@ -113,6 +116,36 @@ def test_rate_limit_key_expired_jwt_falls_back_to_ip():
     assert key == "ip:7.7.7.7"
 
 
+
+def test_rate_limit_key_on_railway_uses_x_real_ip(monkeypatch):
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+    request = _make_request(client_ip="6.6.6.6", headers={"x-real-ip": "203.0.113.9"})
+    assert _rate_limit_key(request) == "ip:203.0.113.9"
+
+
+def test_rate_limit_key_on_railway_without_x_real_ip_falls_back_to_client(monkeypatch, caplog):
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+    request = _make_request(client_ip="6.6.6.6")
+    with caplog.at_level(logging.WARNING, logger="backend.rate_limit"):
+        assert _rate_limit_key(request) == "ip:6.6.6.6"
+    assert "X-Real-IP" in caplog.text
+
+
+def test_rate_limit_key_on_railway_ignores_malformed_x_real_ip(monkeypatch, caplog):
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+    request = _make_request(client_ip="6.6.6.6", headers={"x-real-ip": "not-an-ip"})
+    with caplog.at_level(logging.WARNING, logger="backend.rate_limit"):
+        assert _rate_limit_key(request) == "ip:6.6.6.6"
+    assert "X-Real-IP" in caplog.text
+
+
+def test_rate_limit_key_off_railway_ignores_x_real_ip(monkeypatch, caplog):
+    monkeypatch.delenv("RAILWAY_ENVIRONMENT", raising=False)
+    request = _make_request(client_ip="6.6.6.6", headers={"x-real-ip": "203.0.113.9"})
+    with caplog.at_level(logging.WARNING, logger="backend.rate_limit"):
+        assert _rate_limit_key(request) == "ip:6.6.6.6"
+    assert "X-Real-IP" not in caplog.text
+
 # Port 1 has nothing listening, so connection refused is immediate and no Redis
 # container is needed; RedisStorage construction itself does no network I/O.
 _DEAD_REDIS_URI = "redis://127.0.0.1:1/0"
@@ -148,3 +181,33 @@ def test_build_limiter_falls_back_to_memory_when_redis_unreachable():
 
     assert statuses == [200, 200, 429]
     assert lim._storage_dead is True
+
+
+def test_spoofed_x_forwarded_for_does_not_reset_anonymous_limit_on_railway(monkeypatch):
+    """Under uvicorn's trust-all proxy mode a forged X-Forwarded-For must not mint fresh buckets."""
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+    lim = _build_limiter(SimpleNamespace(RATE_LIMIT_STORAGE_URI=""))
+    app = FastAPI()
+    app.state.limiter = lim
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+    @app.get("/limited")
+    @lim.limit("2/minute")
+    async def limited(request: Request):
+        return {"ok": True}
+
+    client = TestClient(ProxyHeadersMiddleware(app, trusted_hosts="*"))
+    statuses = [
+        client.get(
+            "/limited",
+            headers={
+                "X-Forwarded-For": f"198.51.100.{i}, 10.0.0.1",
+                "X-Real-IP": "203.0.113.9",
+            },
+        ).status_code
+        for i in range(3)
+    ]
+    assert statuses == [200, 200, 429]
+
+    other = client.get("/limited", headers={"X-Real-IP": "203.0.113.10"})
+    assert other.status_code == 200
