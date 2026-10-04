@@ -207,11 +207,12 @@ class TournamentSchema(BaseModel):
 
 
 class TournamentPreview(BaseModel):
+    model_config = {"extra": "forbid"}
+
     name: str
     tagline: str
     theme_description: str
     film_ids: list[str]
-    films: list[MovieSchema] = []
 
 
 class TournamentListItem(BaseModel):
