@@ -77,12 +77,14 @@ class TestRankingsRouter:
         """An integer-parsable but unbounded decade is rejected before the DB."""
         user = _make_user()
         app.dependency_overrides[get_current_user] = lambda: user
-        app.dependency_overrides[get_db] = lambda: AsyncMock()
+        db = AsyncMock()
+        app.dependency_overrides[get_db] = lambda: db
 
         with TestClient(app, raise_server_exceptions=False) as client:
             resp = client.get("/api/rankings?decade=99999999999s")
 
         assert resp.status_code == 400
+        db.execute.assert_not_awaited()
 
     def test_get_rankings_non_positive_limit_returns_422(self):
         """limit below 1 is rejected by validation instead of reaching SQL LIMIT."""
