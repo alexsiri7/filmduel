@@ -446,6 +446,15 @@ class TestTournamentSchemaFields:
 # ---------------------------------------------------------------------------
 
 
+def _locked_movie_id(stmt):
+    """The movie_id a UserMovie row-lock select targets, or None for other queries."""
+    from backend.db_models import UserMovie
+
+    if stmt.column_descriptions[0]["entity"] is not UserMovie:
+        return None
+    return stmt.compile().params["movie_id_1"]
+
+
 class TestRecordMatchWinner:
     @pytest.mark.asyncio
     async def test_propagates_winner_to_next_round(self):
@@ -479,6 +488,7 @@ class TestRecordMatchWinner:
         um_l.elo = 1000
         um_l.seeded_elo = None
         um_l.battles = 5
+        user_movies = {winner_id: um_w, loser_id: um_l}
 
         call_count = 0
 
@@ -496,12 +506,9 @@ class TestRecordMatchWinner:
                 # Second call: next round match lookup
                 result.scalar_one.return_value = next_match
                 return result
-            # UserMovie lookups for ELO
-            if "user_movie" in stmt_str.lower() or call_count in (3, 4):
-                if call_count == 3:
-                    result.scalar_one.return_value = um_w
-                else:
-                    result.scalar_one.return_value = um_l
+            movie_id = _locked_movie_id(stmt)
+            if movie_id is not None:
+                result.scalar_one.return_value = user_movies[movie_id]
                 return result
             result.scalar_one.return_value = MagicMock()
             return result
@@ -554,6 +561,7 @@ class TestRecordMatchWinner:
         um_l.elo = 1000
         um_l.seeded_elo = None
         um_l.battles = 5
+        user_movies = {winner_id: um_w, loser_id: um_l}
 
         call_count = 0
 
@@ -569,11 +577,9 @@ class TestRecordMatchWinner:
                 # Tournament lookup (for completion)
                 result.scalar_one.return_value = tournament_obj
                 return result
-            if call_count == 3:
-                result.scalar_one.return_value = um_w
-                return result
-            if call_count == 4:
-                result.scalar_one.return_value = um_l
+            movie_id = _locked_movie_id(stmt)
+            if movie_id is not None:
+                result.scalar_one.return_value = user_movies[movie_id]
                 return result
             result.scalar_one.return_value = MagicMock()
             return result
@@ -632,11 +638,15 @@ class TestRecordMatchWinnerEloParity:
 
         # bracket_size=2 → round 1 is the final, so the second lookup is the
         # tournament row rather than a next-round match.
-        lookups = [match_obj, MagicMock(), um_w, um_l]
+        lookups = [match_obj, MagicMock()]
+        user_movies = {winner_id: um_w, loser_id: um_l}
 
         async def fake_execute(stmt):
             result = MagicMock()
-            result.scalar_one.return_value = lookups.pop(0)
+            movie_id = _locked_movie_id(stmt)
+            result.scalar_one.return_value = (
+                user_movies[movie_id] if movie_id is not None else lookups.pop(0)
+            )
             return result
 
         async def assign_ids_like_a_real_flush():
@@ -668,3 +678,63 @@ class TestRecordMatchWinnerEloParity:
 
         assert duel.id is not None
         assert match_obj.duel_id == duel.id
+
+
+class TestRecordMatchWinnerLockOrder:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("winner_is_lower_id", [True, False])
+    async def test_locks_user_movies_in_movie_id_order_regardless_of_outcome(
+        self, winner_is_lower_id
+    ):
+        """Matches over the same pair with opposite outcomes must lock the
+        UserMovie rows in the same order, or concurrent calls can deadlock."""
+        import types
+
+        from backend.services.tournament import record_match_winner
+
+        low_id, high_id = sorted([uuid.uuid4(), uuid.uuid4()])
+        winner_id, loser_id = (
+            (low_id, high_id) if winner_is_lower_id else (high_id, low_id)
+        )
+        user_id = uuid.uuid4()
+
+        match_obj = types.SimpleNamespace(
+            id=uuid.uuid4(),
+            round=1,
+            position=0,
+            winner_movie_id=None,
+            played_at=None,
+            duel_id=None,
+        )
+        um_w = types.SimpleNamespace(elo=1200, battles=5, seeded_elo=None)
+        um_l = types.SimpleNamespace(elo=1100, battles=5, seeded_elo=None)
+        user_movies = {winner_id: um_w, loser_id: um_l}
+        lookups = [match_obj, MagicMock()]
+        locked = []
+
+        async def fake_execute(stmt):
+            result = MagicMock()
+            movie_id = _locked_movie_id(stmt)
+            if movie_id is None:
+                result.scalar_one.return_value = lookups.pop(0)
+            else:
+                locked.append(movie_id)
+                result.scalar_one.return_value = user_movies[movie_id]
+            return result
+
+        db = AsyncMock()
+        db.execute = fake_execute
+
+        with patch(
+            "backend.services.tournament.apply_elo_result",
+            new_callable=AsyncMock,
+        ) as mock_elo:
+            mock_elo.return_value = MagicMock(id=uuid.uuid4())
+            await record_match_winner(
+                db, uuid.uuid4(), 2, match_obj.id, winner_id, loser_id, user_id
+            )
+
+        assert locked == [low_id, high_id]
+        mock_elo.assert_awaited_once_with(
+            db, user_id, winner_id, loser_id, um_w, um_l, "tournament"
+        )
