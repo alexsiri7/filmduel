@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import jwt as pyjwt
 import pytest
+from sqlalchemy import Select
 from fastapi import HTTPException, Response
 from fastapi.testclient import TestClient
 
@@ -1353,10 +1354,10 @@ class TestPKCE:
             "refresh_token": "ref",
             "expires_in": 7776000,
         })
-        mock_profile = AsyncMock(return_value={
+        mock_profile = AsyncMock(return_value={"user": {
             "username": "alice",
-            "ids": {"slug": "alice"},
-        })
+            "ids": {"slug": "alice", "uuid": "uuid-alice"},
+        }})
         mock_client = AsyncMock()
         mock_client.exchange_code = mock_exchange
         mock_client.get_profile = mock_profile
@@ -1428,12 +1429,16 @@ class TestPKCE:
         existing_user,
         settings: Settings | None = None,
         secure_cookies: bool = False,
+        profile: dict | None = None,
+        db: AsyncMock | None = None,
     ) -> tuple[Response, BG]:
         """Drive a Trakt callback for `existing_user` (None = new signup);
         return the response and its background task list.
 
         secure_cookies: present the state/PKCE cookies under their Secure
         (__Host-) names rather than the bare ones.
+        db: overrides the default session, which answers every query with
+        `existing_user`.
         """
         monkeypatch.setattr(limiter, "enabled", False)
 
@@ -1443,10 +1448,10 @@ class TestPKCE:
             "refresh_token": "ref",
             "expires_in": 7776000,
         })
-        mock_client.get_profile = AsyncMock(return_value={
+        mock_client.get_profile = AsyncMock(return_value=profile or {"user": {
             "username": "alice",
-            "ids": {"slug": "alice"},
-        })
+            "ids": {"slug": "alice", "uuid": "uuid-alice"},
+        }})
         monkeypatch.setattr("backend.routers.auth.TraktClient", lambda **kw: mock_client)
 
         state = "test-state"
@@ -1454,10 +1459,11 @@ class TestPKCE:
             cookie_name(OAUTH_STATE_COOKIE, secure_cookies): state,
             cookie_name(OAUTH_PKCE_COOKIE, secure_cookies): "verifier123",
         })
-        db = AsyncMock()
-        db_result = MagicMock()
-        db_result.scalar_one_or_none.return_value = existing_user
-        db.execute.return_value = db_result
+        if db is None:
+            db = AsyncMock()
+            db_result = MagicMock()
+            db_result.scalar_one_or_none.return_value = existing_user
+            db.execute.return_value = db_result
 
         bg = BG()
         response = await callback(
@@ -1506,6 +1512,133 @@ class TestPKCE:
         _, bg = await self._run_trakt_callback(monkeypatch, existing_user=None)
 
         assert sync_pool_background not in [t.func for t in bg.tasks]
+
+    @staticmethod
+    def _lookup_db(*select_rows) -> AsyncMock:
+        """Session whose SELECTs return `select_rows` in order; UPDATEs return nothing."""
+        rows = list(select_rows)
+
+        async def execute(stmt):
+            result = MagicMock()
+            if isinstance(stmt, Select):
+                result.scalar_one_or_none.return_value = rows.pop(0)
+            return result
+
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.side_effect = execute
+        return db
+
+    @staticmethod
+    def _statements(db: AsyncMock) -> list[str]:
+        return [str(c.args[0]) for c in db.execute.call_args_list]
+
+    @staticmethod
+    def _session_user_id(response: Response) -> str:
+        header = next(
+            h for h in response.headers.getlist("set-cookie")
+            if h.startswith(f"{COOKIE_NAME}=")
+        )
+        token = header.split(";", 1)[0].split("=", 1)[1]
+        return pyjwt.decode(token, options={"verify_signature": False})["sub"]
+
+    _RENAMED_PROFILE = {
+        "user": {"username": "alice2", "ids": {"slug": "alice2", "uuid": "uuid-alice"}}
+    }
+
+    @pytest.mark.asyncio
+    async def test_returning_user_matched_by_uuid_gets_new_slug(self, monkeypatch):
+        """A renamed user reaches their account by uuid and their stored slug is refreshed (#684)."""
+        user = MagicMock()
+        user.id = "00000000-0000-0000-0000-000000000001"
+        user.trakt_uuid = "uuid-alice"
+        user.trakt_user_id = "alice"
+        db = self._lookup_db(user)
+
+        response, _ = await self._run_trakt_callback(
+            monkeypatch, None, profile=self._RENAMED_PROFILE, db=db
+        )
+
+        statements = self._statements(db)
+        assert len(statements) == 2  # uuid lookup, then slug release; no legacy lookup
+        assert "users.trakt_uuid = " in statements[0]
+        assert statements[1].startswith("UPDATE users")
+        assert "users.trakt_user_id = " in statements[1]
+        assert "users.id != " in statements[1]
+        assert user.trakt_user_id == "alice2"
+        assert user.trakt_uuid == "uuid-alice"
+        assert self._session_user_id(response) == user.id
+
+    @pytest.mark.asyncio
+    async def test_legacy_row_without_uuid_is_adopted_once(self, monkeypatch):
+        """A pre-#684 row keyed only by slug is bound to the account's uuid at its next login."""
+        legacy = MagicMock()
+        legacy.id = "00000000-0000-0000-0000-000000000002"
+        legacy.trakt_uuid = None
+        legacy.trakt_user_id = "alice"
+        db = self._lookup_db(None, legacy)
+
+        response, _ = await self._run_trakt_callback(monkeypatch, None, db=db)
+
+        statements = self._statements(db)
+        assert "users.trakt_user_id = " in statements[1]
+        assert "users.trakt_uuid IS NULL" in statements[1]
+        assert legacy.trakt_uuid == "uuid-alice"
+        assert self._session_user_id(response) == legacy.id
+        assert statements[2].startswith("UPDATE users")
+        assert "users.trakt_user_id = " in statements[2]
+        db.add.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_new_holder_of_freed_slug_gets_a_new_account(self, monkeypatch):
+        """Someone who takes a renamed user's old username does not get that user's account (#684).
+
+        The renamed user's row is bound to their uuid, so the legacy lookup
+        (restricted to uuid-less rows) misses it; a fresh account is created and
+        the old row's stale slug is released.
+        """
+        monkeypatch.setattr("backend.services.token_crypto.encrypt_token", lambda v: v)
+        db = self._lookup_db(None, None)
+        newcomer = {"user": {"username": "alice", "ids": {"slug": "alice", "uuid": "uuid-mallory"}}}
+
+        response, _ = await self._run_trakt_callback(monkeypatch, None, profile=newcomer, db=db)
+
+        created = db.add.call_args.args[0]
+        assert created.trakt_uuid == "uuid-mallory"
+        assert created.trakt_user_id == "alice"
+        statements = self._statements(db)
+        assert statements[2].startswith("UPDATE users SET trakt_user_id=")
+        assert "WHERE users.trakt_user_id = " in statements[2]
+        assert "users.id != " not in statements[2]
+        assert self._session_user_id(response) == str(created.id)
+
+    @pytest.mark.asyncio
+    async def test_profile_without_uuid_raises_502_and_redacts_pii(self, monkeypatch, caplog):
+        """Without Trakt's immutable id there is no safe account key, so login fails closed."""
+        import logging
+
+        db = self._lookup_db()
+        profile = {"user": {"username": "PII_NAME", "ids": {"slug": "PII_SLUG"}}}
+        with caplog.at_level(logging.ERROR, logger="backend.routers.auth"):
+            with pytest.raises(HTTPException) as exc_info:
+                await self._run_trakt_callback(monkeypatch, None, profile=profile, db=db)
+
+        assert exc_info.value.status_code == 502
+        assert "PII_" not in caplog.text
+        assert "user" in caplog.text
+        db.execute.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_settings_without_user_object_raises_502(self, monkeypatch):
+        """A /users/settings payload missing its `user` object fails closed, not with a 500."""
+        db = self._lookup_db()
+        with pytest.raises(HTTPException) as exc_info:
+            await self._run_trakt_callback(
+                monkeypatch, None, profile={"account": {"timezone": "UTC"}}, db=db
+            )
+
+        assert exc_info.value.status_code == 502
+        db.execute.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_simkl_callback_deletes_pkce_cookie_on_success(self, monkeypatch):

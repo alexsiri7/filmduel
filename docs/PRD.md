@@ -462,7 +462,7 @@ On `a_wins` or `b_wins`: sync both films to Trakt asynchronously.
 
 **Callback:** `GET /auth/callback?code=...`
 - Exchange code for tokens
-- Fetch `/users/me`
+- Fetch `/users/settings` (its `user` object carries the immutable `ids.uuid` the login is keyed on; `/users/me` does not)
 - Upsert user row, issue JWT, set httpOnly `session` cookie, redirect to `/`
 
 **Middleware:** `get_current_user` dependency reads `session` cookie, validates JWT, returns user. Returns 401 if invalid.

@@ -21,6 +21,7 @@ NOW = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
 PROFILE_KEYS = {
     "id",
     "trakt_user_id",
+    "trakt_uuid",
     "trakt_username",
     "simkl_user_id",
     "simkl_username",
@@ -44,6 +45,7 @@ def _user(**overrides):
     fields = dict(
         id=uuid.uuid4(),
         trakt_user_id="trakt-123",
+        trakt_uuid="trakt-uuid-789",
         trakt_username="alice",
         simkl_user_id="simkl-456",
         simkl_username="alice_s",

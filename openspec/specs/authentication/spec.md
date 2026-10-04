@@ -8,7 +8,7 @@ FilmDuel builds on the watch history and ratings a user already keeps with a tra
 
 ### Requirement: Sign in with Trakt
 
-A user SHALL sign in with their Trakt account through the OAuth2 Authorization Code flow with PKCE and a random state value. A callback whose state does not match the one issued SHALL be rejected. A successful callback SHALL create or update the user and start a session, then return the user to the app.
+A user SHALL sign in with their Trakt account through the OAuth2 Authorization Code flow with PKCE and a random state value. A callback whose state does not match the one issued SHALL be rejected. A successful callback SHALL create or update the user and start a session, then return the user to the app. The user SHALL be identified by Trakt's immutable account id, never by the username or slug, which can change.
 
 #### Scenario: First sign-in
 - GIVEN a visitor with a Trakt account and no FilmDuel user
@@ -20,6 +20,12 @@ A user SHALL sign in with their Trakt account through the OAuth2 Authorization C
 - GIVEN a sign-in was started with state S
 - WHEN the callback arrives carrying a different state
 - THEN the sign-in is refused and no session is created
+
+#### Scenario: Renamed Trakt account
+- GIVEN a FilmDuel user whose Trakt username was later changed, and a different person who has since taken the old username
+- WHEN each signs in with Trakt
+- THEN the original owner reaches their existing account
+- AND the other person does not
 
 ### Requirement: Sign in with SIMKL as an optional provider
 

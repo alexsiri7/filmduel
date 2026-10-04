@@ -324,16 +324,32 @@ class _OAuthProvider(NamedTuple):
     default_ttl: int
     make_client: Callable[..., TraktClient | SimklClient]
     exchange_kwargs: Callable[[Settings], dict]
-    extract_user_info: Callable[[dict, dict], tuple[str, str]]
-    user_id_column: str  # User model attribute to look up by (e.g. "trakt_user_id")
-    user_fields: Callable[[str, str, str, str, datetime], dict]
+    # Returns (immutable account id, display name, mutable slug or None).
+    extract_user_info: Callable[[dict, dict], tuple[str, str, str | None]]
+    user_id_column: str  # User model attribute to look up by (e.g. "trakt_uuid")
+    # Attribute holding a renamable handle needed for API calls. Never a lookup
+    # key, except to adopt a row created before user_id_column existed (#684).
+    slug_column: str | None
+    user_fields: Callable[[str, str, str | None, str, str, datetime], dict]
 
 
-def _trakt_extract(tokens: dict, profile: dict) -> tuple[str, str]:
-    return str(profile["ids"]["slug"]), profile["username"]
+def _trakt_extract(tokens: dict, profile: dict) -> tuple[str, str, str]:
+    try:
+        user = profile["user"]
+        return str(user["ids"]["uuid"]), user["username"], str(user["ids"]["slug"])
+    except (KeyError, TypeError) as exc:
+        logger.error(
+            "Unexpected Trakt profile response (type=%s, keys=%s)",
+            type(profile).__name__,
+            list(profile.keys()) if isinstance(profile, dict) else "N/A",
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="Unexpected response from Trakt profile API",
+        ) from exc
 
 
-def _simkl_extract(tokens: dict, profile: dict) -> tuple[str, str]:
+def _simkl_extract(tokens: dict, profile: dict) -> tuple[str, str, None]:
     try:
         user_id = str(profile["user"]["ids"]["simkl"])
         username = profile["user"].get("name", user_id)
@@ -347,7 +363,7 @@ def _simkl_extract(tokens: dict, profile: dict) -> tuple[str, str]:
             status_code=502,
             detail="Unexpected response from SIMKL profile API",
         ) from exc
-    return user_id, username
+    return user_id, username, None
 
 
 def _make_trakt_client(settings: Settings, **kw) -> TraktClient:
@@ -369,9 +385,11 @@ _TRAKT_PROVIDER = _OAuthProvider(
         "redirect_uri": s.TRAKT_REDIRECT_URI,
     },
     extract_user_info=_trakt_extract,
-    user_id_column="trakt_user_id",
-    user_fields=lambda uid, uname, access, refresh, exp: {
-        "trakt_user_id": uid,
+    user_id_column="trakt_uuid",
+    slug_column="trakt_user_id",
+    user_fields=lambda uid, uname, slug, access, refresh, exp: {
+        "trakt_uuid": uid,
+        "trakt_user_id": slug,
         "trakt_username": uname,
         "trakt_access_token": access,
         "trakt_refresh_token": refresh,
@@ -391,7 +409,8 @@ _SIMKL_PROVIDER = _OAuthProvider(
     },
     extract_user_info=_simkl_extract,
     user_id_column="simkl_user_id",
-    user_fields=lambda uid, uname, access, refresh, exp: {
+    slug_column=None,
+    user_fields=lambda uid, uname, _slug, access, refresh, exp: {
         "simkl_user_id": uid,
         "simkl_username": uname,
         "simkl_access_token": access,
@@ -446,7 +465,7 @@ async def _handle_oauth_callback(
     profile = await authed_client.get_profile()
 
     # Extract provider-specific user info
-    provider_user_id, username = provider.extract_user_info(tokens, profile)
+    provider_user_id, username, slug = provider.extract_user_info(tokens, profile)
 
     ttl = tokens.get("expires_in")
     if ttl is None:
@@ -463,13 +482,31 @@ async def _handle_oauth_callback(
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
 
+    if provider.slug_column:
+        slug_col = getattr(User, provider.slug_column)
+        if user is None:
+            # One-time adoption of a row keyed only by slug (#684). A row already
+            # bound to an account id can never be claimed through its slug.
+            result = await db.execute(
+                select(User).where(slug_col == slug, column.is_(None))
+            )
+            user = result.scalar_one_or_none()
+        # A renamed account's row may still hold this slug, now someone else's.
+        # Release it so the unique constraint holds and that row stops syncing
+        # the new owner's history; it heals at its owner's next login.
+        others = [User.id != user.id] if user else []
+        await db.execute(
+            update(User)
+            .where(slug_col == slug, *others)
+            .values({provider.slug_column: None})
+        )
+
     fields = provider.user_fields(
-        provider_user_id, username, access_token, refresh_token, expires_at
+        provider_user_id, username, slug, access_token, refresh_token, expires_at
     )
     if user:
         for k, v in fields.items():
-            if k != provider.user_id_column:
-                setattr(user, k, v)
+            setattr(user, k, v)
     else:
         user = User(**fields)
         db.add(user)

@@ -73,9 +73,13 @@ class TraktClient:
             return resp.json()
 
     async def get_profile(self) -> dict:
-        """Fetch the authenticated user's profile."""
+        """Fetch the authenticated user's settings.
+
+        Uses ``/users/settings`` because, unlike ``/users/me``, its ``user``
+        object carries the immutable ``ids.uuid``.
+        """
         async with self._client() as client:
-            resp = await client.get("/users/me")
+            resp = await client.get("/users/settings")
             resp.raise_for_status()
             return resp.json()
 

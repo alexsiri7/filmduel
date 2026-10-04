@@ -91,6 +91,7 @@ def build_export_payload(
         "profile": {
             "id": str(user.id),
             "trakt_user_id": user.trakt_user_id,
+            "trakt_uuid": user.trakt_uuid,
             "trakt_username": user.trakt_username,
             "simkl_user_id": user.simkl_user_id,
             "simkl_username": user.simkl_username,
