@@ -450,7 +450,9 @@ async def _handle_oauth_callback(
 
     # Validate state
     expected_state = request.cookies.get(cookie_name(provider.state_cookie, secure))
-    if not expected_state or not state or not hmac.compare_digest(state, expected_state):
+    if not expected_state or not state or not hmac.compare_digest(
+        state.encode(), expected_state.encode()
+    ):
         raise HTTPException(status_code=400, detail="Invalid OAuth state")
 
     code_verifier = request.cookies.get(cookie_name(provider.pkce_cookie, secure))
