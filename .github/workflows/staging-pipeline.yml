@@ -123,12 +123,35 @@ jobs:
           }
           echo "PASS: /api/rankings returned $STATUS"
 
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ needs.deploy-staging.outputs.deploy_sha }}
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli@5.8.0  # pinned 2026-06-10, latest stable — update when upgrading Railway CLI
+
+      - name: Duel round-trip (fetch pair + submit duel as smoke user)
+        timeout-minutes: 5
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_STAGING_TOKEN }}
+          SMOKE_BASE_URL: ${{ secrets.STAGING_URL }}
+          SMOKE_USER_ID: ${{ secrets.SMOKE_USER_ID_STAGING }}
+        run: |
+          if [ -z "$SMOKE_USER_ID" ]; then
+            echo "::warning title=Duel smoke test skipped::SMOKE_USER_ID_STAGING is not set — provision a smoke user (see #648)"
+            exit 0
+          fi
+          # railway run injects the service's SECRET_KEY so the script can mint a
+          # short-lived session for the smoke user; RAILWAY_STAGING_TOKEN can already
+          # read that variable, so this grants CI nothing new.
+          railway run --service web --environment staging -- python3 -m backend.duel_smoke
+
   deploy-production:
     name: Deploy to production
     runs-on: ubuntu-latest
     needs: [deploy-staging, smoke-tests]
     environment: production
-    timeout-minutes: 20  # guard: ≤7 min railway-up retries + ~4 min health/smoke polling + checkout/CLI install + buffer
+    timeout-minutes: 25  # guard: ≤7 min railway-up retries + ~4 min health/smoke polling + ≤5 min duel smoke + checkout/CLI install + buffer
     permissions:
       contents: read
       deployments: write
@@ -209,6 +232,20 @@ jobs:
             echo "FAIL: /api/rankings returned unexpected $STATUS"; exit 1;
           }
           echo "PASS: /api/rankings returned $STATUS"
+
+      - name: Duel round-trip on production
+        timeout-minutes: 5
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_PRODUCTION_TOKEN }}
+          SMOKE_BASE_URL: ${{ secrets.PRODUCTION_URL }}
+          SMOKE_USER_ID: ${{ secrets.SMOKE_USER_ID_PRODUCTION }}
+        run: |
+          if [ -z "$SMOKE_USER_ID" ]; then
+            echo "::warning title=Duel smoke test skipped::SMOKE_USER_ID_PRODUCTION is not set — provision a smoke user (see #648)"
+            exit 0
+          fi
+          # See the staging duel round-trip step for why railway run is used.
+          railway run --service web --environment production -- python3 -m backend.duel_smoke
 
       - name: Record production deployment on GitHub
         if: always()
