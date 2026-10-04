@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import ipaddress
+import os
+
 import jwt
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -11,8 +14,26 @@ from backend.config import Settings, get_settings
 from backend.utils.cookies import COOKIE_NAME, cookie_name
 
 
+def _client_ip(request: Request) -> str:
+    """Client address for anonymous rate-limit buckets.
+
+    On Railway, uvicorn runs with ``--forwarded-allow-ips='*'``, which makes
+    ``request.client`` the leftmost, client-controlled X-Forwarded-For entry.
+    Railway's edge overwrites X-Real-IP with the connecting address, so that
+    header is used there instead. Off Railway, X-Real-IP is client-controlled
+    and ignored.
+    """
+    if os.environ.get("RAILWAY_ENVIRONMENT"):
+        real_ip = request.headers.get("x-real-ip", "").strip()
+        try:
+            return str(ipaddress.ip_address(real_ip))
+        except ValueError:
+            pass
+    return get_remote_address(request)
+
+
 def _rate_limit_key(request: Request) -> str:
-    """Per-user key when authenticated, falling back to client IP.
+    """Per-user key when authenticated, falling back to ``_client_ip``.
 
     The cookie carries an HS256 JWT; we decode it without re-validating
     issuer/audience (those are checked by get_current_user_id on the
@@ -36,7 +57,7 @@ def _rate_limit_key(request: Request) -> str:
                 return f"user:{sub}"
         except jwt.PyJWTError:
             pass
-    return f"ip:{get_remote_address(request)}"
+    return f"ip:{_client_ip(request)}"
 
 
 # Bounded socket timeouts are load-bearing: without them an unreachable Redis
