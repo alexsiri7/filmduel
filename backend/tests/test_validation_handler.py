@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 
 from backend.main import _scrub_validation_errors, app
 from backend.tests import SPA_HEADERS
-from backend.routers.auth import get_current_user
+from backend.routers.auth import CURRENT_PRIVACY_POLICY_VERSION, get_current_user
 
 client = TestClient(app, headers=SPA_HEADERS)
 
@@ -22,6 +22,8 @@ def _make_fake_user() -> MagicMock:
     """Return a minimal fake User object sufficient for dependency override."""
     fake = MagicMock()
     fake.id = uuid.UUID("00000000-0000-0000-0000-000000000001")
+    fake.privacy_policy_accepted = True
+    fake.privacy_policy_version = CURRENT_PRIVACY_POLICY_VERSION
     return fake
 
 

@@ -19,7 +19,7 @@ from backend.main import app
 from backend.tests import SPA_HEADERS
 from backend.db import get_db
 from backend.rate_limit import limiter
-from backend.routers.auth import get_admin_user, get_current_user
+from backend.routers.auth import CURRENT_PRIVACY_POLICY_VERSION, get_admin_user, get_current_user
 from slowapi.errors import RateLimitExceeded
 
 
@@ -32,6 +32,8 @@ def _clear_dependency_overrides():
 def _make_user():
     user = MagicMock()
     user.id = uuid.uuid4()
+    user.privacy_policy_accepted = True
+    user.privacy_policy_version = CURRENT_PRIVACY_POLICY_VERSION
     return user
 
 

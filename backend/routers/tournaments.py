@@ -193,7 +193,7 @@ async def get_pool_count(
 async def create_tournament(
     request: Request,
     body: TournamentCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_consent),
     db: AsyncSession = Depends(get_db),
 ):
     """Create and seed a new tournament bracket."""
@@ -526,7 +526,7 @@ async def submit_match_result_endpoint(
 async def abandon_tournament(
     request: Request,
     tournament_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_consent),
     db: AsyncSession = Depends(get_db),
 ):
     """Abandon a tournament (soft delete)."""

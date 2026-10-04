@@ -185,9 +185,9 @@ class TestTournamentConsentGuard:
         assert "consent" in resp.json()["detail"].lower()
         mock_db_query.assert_not_called()
 
-    def test_create_non_ai_tournament_no_consent_required(self):
-        """POST /api/tournaments with ai_curated=false does not require consent."""
-        user = _make_user(privacy_policy_accepted=False)
+    def test_create_non_ai_tournament_allowed_with_consent(self):
+        """POST /api/tournaments with ai_curated=false succeeds once consent is given."""
+        user = _make_user(privacy_policy_accepted=True)
         mock_db = AsyncMock()
         mock_db.commit = AsyncMock()
         mock_db.refresh = AsyncMock()
@@ -238,7 +238,7 @@ class TestTournamentConsentGuard:
                     },
                 )
 
-        # Non-AI tournaments must not be blocked by consent guard
+        # Non-AI creation needs consent but not the AI features toggle
         assert resp.status_code == 200
 
     def test_create_ai_tournament_allowed_with_consent(self):
@@ -619,7 +619,7 @@ def _duel_payload(user) -> dict:
 
 
 class TestDataCollectionConsentGuard:
-    """Sync, duels, swipes and tournament matches must not run before consent."""
+    """Routes that record user data must not run before consent."""
 
     def setup_method(self):
         app.dependency_overrides.clear()
@@ -714,6 +714,65 @@ class TestDataCollectionConsentGuard:
         assert resp.status_code == 403
         assert "consent" in resp.json()["detail"].lower()
         mock_load.assert_not_awaited()
+
+    def test_submit_feedback_requires_consent(self):
+        user = _make_user(privacy_policy_accepted=False)
+        self._install(user)
+
+        with patch(
+            "backend.routers.feedback.acquire_quota_lock", new_callable=AsyncMock
+        ) as mock_lock:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.post("/api/feedback", data={"title": "t", "description": "d"})
+
+        assert resp.status_code == 403
+        assert "consent" in resp.json()["detail"].lower()
+        mock_lock.assert_not_awaited()
+
+    @pytest.mark.parametrize("action", ["dismiss", "watchlist", "seen"])
+    def test_suggestion_actions_require_consent(self, action):
+        user = _make_user(privacy_policy_accepted=False)
+        self._install(user)
+
+        with patch(
+            "backend.routers.suggestions._get_user_suggestion", new_callable=AsyncMock
+        ) as mock_get:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.post(f"/api/suggestions/{uuid.uuid4()}/{action}")
+
+        assert resp.status_code == 403
+        assert "consent" in resp.json()["detail"].lower()
+        mock_get.assert_not_awaited()
+
+    def test_create_non_ai_tournament_requires_consent(self):
+        user = _make_user(privacy_policy_accepted=False)
+        self._install(user)
+
+        with patch(
+            "backend.routers.tournaments.acquire_quota_lock", new_callable=AsyncMock
+        ) as mock_lock:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.post(
+                    "/api/tournaments", json={"ai_curated": False, "bracket_size": 8}
+                )
+
+        assert resp.status_code == 403
+        assert "consent" in resp.json()["detail"].lower()
+        mock_lock.assert_not_awaited()
+
+    def test_abandon_tournament_requires_consent(self):
+        user = _make_user(privacy_policy_accepted=False)
+        self._install(user)
+
+        with patch(
+            "backend.routers.tournaments.acquire_quota_lock", new_callable=AsyncMock
+        ) as mock_lock:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.delete(f"/api/tournaments/{uuid.uuid4()}")
+
+        assert resp.status_code == 403
+        assert "consent" in resp.json()["detail"].lower()
+        mock_lock.assert_not_awaited()
 
     # -- pass-through with consent --------------------------------------------
 
