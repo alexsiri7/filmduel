@@ -19,7 +19,12 @@ get_settings.cache_clear()
 
 from backend import duel_smoke  # noqa: E402
 from backend.duel_smoke import SmokeFailure, mint_session_jwt, run  # noqa: E402
-from backend.routers.auth import JWT_ALGORITHM, JWT_EXPIRY_HOURS  # noqa: E402
+from backend.routers.auth import (  # noqa: E402
+    JWT_ALGORITHM,
+    JWT_AUDIENCE,
+    JWT_EXPIRY_HOURS,
+    JWT_ISSUER,
+)
 from backend.utils.cookies import COOKIE_NAME, cookie_name  # noqa: E402
 
 PAIR = {
@@ -46,8 +51,8 @@ def test_minted_session_is_accepted_by_backend_decoder():
         mint_session_jwt(user_id, settings.SECRET_KEY),
         settings.SECRET_KEY,
         algorithms=[JWT_ALGORITHM],
-        issuer="filmduel",
-        audience="filmduel",
+        issuer=JWT_ISSUER,
+        audience=JWT_AUDIENCE,
     )
     assert payload["sub"] == user_id
     assert isinstance(payload["orig_iat"], float)
@@ -98,6 +103,27 @@ def test_main_reports_missing_env_by_name(monkeypatch, capsys):
     monkeypatch.setenv("SMOKE_BASE_URL", "https://env.example")
     assert duel_smoke.main() == 2
     assert "SMOKE_USER_ID, SECRET_KEY" in capsys.readouterr().err
+
+
+@pytest.fixture
+def smoke_env(monkeypatch):
+    monkeypatch.setenv("SMOKE_BASE_URL", "https://env.example")
+    monkeypatch.setenv("SMOKE_USER_ID", "u")
+    monkeypatch.setenv("SECRET_KEY", "k")
+
+
+def test_main_exits_nonzero_when_run_fails(smoke_env, monkeypatch, capsys):
+    def failing_run(*args):
+        raise SmokeFailure("boom")
+
+    monkeypatch.setattr(duel_smoke, "run", failing_run)
+    assert duel_smoke.main() == 1
+    assert "FAIL: boom" in capsys.readouterr().err
+
+
+def test_main_exits_zero_when_run_succeeds(smoke_env, monkeypatch):
+    monkeypatch.setattr(duel_smoke, "run", lambda *args: {"outcome": "a_wins"})
+    assert duel_smoke.main() == 0
 
 
 def test_script_imports_only_the_standard_library():
