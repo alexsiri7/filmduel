@@ -7,7 +7,7 @@ export default function PrivacyPolicy() {
         <h1 className="font-headline font-black text-4xl tracking-tighter text-[#E8A020] mb-2">
           PRIVACY POLICY
         </h1>
-        <p className="text-[#6B6760] text-sm font-body mb-12">Version 2.0 · June 2026</p>
+        <p className="text-[#6B6760] text-sm font-body mb-12">Version 2.1 · September 2026</p>
 
         <section className="mb-10">
           <h2 className="font-headline font-bold text-lg text-[#F5F0E8] uppercase tracking-wider mb-4">

@@ -27,7 +27,7 @@ _fernet.cache_clear()
 from backend.main import app  # noqa: E402
 from backend.tests import SPA_HEADERS  # noqa: E402
 from backend.db import get_db  # noqa: E402
-from backend.routers.auth import get_current_user  # noqa: E402
+from backend.routers.auth import CURRENT_PRIVACY_POLICY_VERSION, get_current_user  # noqa: E402
 from backend.schemas import DuelOutcome, DuelResult  # noqa: E402
 from backend.services.duel import ProcessDuelResult  # noqa: E402
 from backend.utils.tokens import PAIR_TOKEN_TTL_SECONDS, encode_pair_token  # noqa: E402
@@ -37,6 +37,8 @@ def _make_user():
     user = MagicMock()
     user.id = uuid.uuid4()
     user.trakt_username = "testuser"
+    user.privacy_policy_accepted = True
+    user.privacy_policy_version = CURRENT_PRIVACY_POLICY_VERSION
     return user
 
 

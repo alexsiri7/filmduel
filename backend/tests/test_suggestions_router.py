@@ -15,13 +15,14 @@ from fastapi.testclient import TestClient
 from backend.main import app
 from backend.tests import SPA_HEADERS
 from backend.db import get_db
-from backend.routers.auth import get_current_user
+from backend.routers.auth import CURRENT_PRIVACY_POLICY_VERSION, get_current_user
 
 
 def _make_user(*, privacy_policy_accepted: bool = True):
     user = MagicMock()
     user.id = uuid.uuid4()
     user.privacy_policy_accepted = privacy_policy_accepted
+    user.privacy_policy_version = CURRENT_PRIVACY_POLICY_VERSION
     return user
 
 
@@ -304,6 +305,7 @@ class TestSyncTraktWatchlistForUpdate:
         mock_user = MagicMock()
         mock_user.id = user_id
         mock_user.privacy_policy_accepted = True
+        mock_user.privacy_policy_version = CURRENT_PRIVACY_POLICY_VERSION
         mock_user.trakt_access_token = "valid-token"
 
         # Mock the suggestion returned by the route's db query
