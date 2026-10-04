@@ -12,7 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from backend.config import get_settings
-from backend.db import acquire_quota_lock, async_session_factory, get_db
+from backend.db import (
+    acquire_quota_lock,
+    async_session_factory,
+    get_db,
+    try_acquire_xact_lock,
+)
 from backend.rate_limit import limiter
 from backend.db_models import Movie, Suggestion, User, UserMovie
 from backend.routers.auth import ensure_fresh_token, get_current_user, require_ai_consent
@@ -66,6 +71,13 @@ def _build_suggestion_schema(s: Suggestion) -> SuggestionSchema:
     )
 
 
+def _ready_response(suggestions: list[Suggestion]) -> SuggestionsResponse:
+    return SuggestionsResponse(
+        suggestions=[_build_suggestion_schema(s) for s in suggestions],
+        status="ready",
+    )
+
+
 async def _get_active_suggestions(
     user_id: uuid.UUID, db: AsyncSession, media_type: str = "movie"
 ) -> list[Suggestion]:
@@ -84,6 +96,22 @@ async def _get_active_suggestions(
     )
     result = await db.execute(stmt)
     return list(result.unique().scalars().all())
+
+
+async def _latest_generated_at(
+    user_id: uuid.UUID, db: AsyncSession, media_type: str = "movie"
+) -> datetime | None:
+    """Newest batch timestamp for this user/media_type, dismissed rows included.
+
+    Freshness must not depend on dismissal state, or dismissing cards would
+    let GET force new LLM generations (AUD-08, #690).
+    """
+    stmt = (
+        select(func.max(Suggestion.generated_at))
+        .join(Suggestion.movie)
+        .where(Suggestion.user_id == user_id, Movie.media_type == media_type)
+    )
+    return (await db.execute(stmt)).scalar()
 
 
 async def _create_suggestions(
@@ -127,7 +155,8 @@ async def get_suggestions(
     db: AsyncSession = Depends(get_db),
     media_type: MediaType = Query(default="movie"),
 ):
-    """Return current suggestions. Generate if stale (>24h) or missing."""
+    """Return current suggestions. Generate only if none exist or the newest batch
+    (dismissed included) is >24h old."""
     uid = current_user.id
 
     require_ai_consent(current_user)
@@ -136,28 +165,35 @@ async def get_suggestions(
     if not await has_enough_ranked(uid, db, media_type=media_type):
         return SuggestionsResponse(suggestions=[], status="not_enough_films")
 
-    # Check existing non-dismissed suggestions
-    active = await _get_active_suggestions(uid, db, media_type)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=STALE_HOURS)
+    latest = await _latest_generated_at(uid, db, media_type)
 
-    if active:
-        # Check freshness
-        newest = max(s.generated_at for s in active)
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=STALE_HOURS)
-        if newest > cutoff:
-            return SuggestionsResponse(
-                suggestions=[_build_suggestion_schema(s) for s in active],
-                status="ready",
+    if latest is None or latest <= cutoff:
+        # One generation per user at a time (AUD-08, #690).
+        if not await try_acquire_xact_lock(db, "suggestions_regen", uid):
+            active = await _get_active_suggestions(uid, db, media_type)
+            if active:
+                return _ready_response(active)
+            raise HTTPException(
+                status_code=429,
+                detail="Suggestions are already being generated. Please try again in a moment.",
             )
+        # A concurrent request may have committed a batch before we got the lock.
+        latest = await _latest_generated_at(uid, db, media_type)
+
+    if latest is not None and latest > cutoff:
+        # Read after `latest` so a batch that made it fresh is visible here too.
+        active = await _get_active_suggestions(uid, db, media_type)
+        if active:
+            return _ready_response(active)
+        return SuggestionsResponse(suggestions=[], status="all_dismissed")
 
     # Stale or none — generate new
     try:
         new_suggestions = await _create_suggestions(uid, db, media_type)
         if not new_suggestions:
             return SuggestionsResponse(suggestions=[], status="no_candidates")
-        return SuggestionsResponse(
-            suggestions=[_build_suggestion_schema(s) for s in new_suggestions],
-            status="ready",
-        )
+        return _ready_response(new_suggestions)
     except ValueError:
         # LLM_API_KEY not configured
         logger.warning("AI features unavailable (LLM_API_KEY not configured) for user %s", uid)

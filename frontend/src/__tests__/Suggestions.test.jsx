@@ -169,33 +169,29 @@ describe("Suggestions", () => {
     expect(screen.queryByText("Watchlist")).not.toBeInTheDocument();
   });
 
-  it("shows the all-caught-up screen once every active suggestion is cleared", async () => {
-    // `allDismissed` (Suggestions.jsx:93) requires suggestions.length > 0 with zero
-    // active (non-dismissed) entries. In the real app this branch is unreachable:
-    // GET /api/suggestions only ever returns rows with dismissed_at == null
-    // (backend/routers/suggestions.py's _get_active_suggestions filters
-    // Suggestion.dismissed_at.is_(None) at the SQL level), and handleDismiss/
-    // handleMarkSeen remove items from local state entirely rather than setting
-    // dismissed_at. This test exercises the computation directly via a synthetic
-    // already-dismissed suggestion the API can never actually send — pinning
-    // dead code, not a real user-reachable path.
-    const active = makeSuggestion({ id: "active" });
-    const alreadyDismissed = makeSuggestion({
-      id: "stale",
-      dismissed_at: "2026-01-01T00:00:00Z",
-      movie: { ...makeSuggestion().movie, title: "Stale Suggestion" },
+  it("shows the all-caught-up screen when the backend reports all_dismissed", async () => {
+    getSuggestions.mockResolvedValue({ status: "all_dismissed", suggestions: [] });
+
+    renderSuggestions();
+
+    await waitFor(() => {
+      expect(screen.getByText("All caught up!")).toBeInTheDocument();
     });
-    getSuggestions.mockResolvedValue({
-      status: "ready",
-      suggestions: [active, alreadyDismissed],
-    });
+    expect(screen.getByText("Regenerate Suggestions")).toBeInTheDocument();
+  });
+
+  it.each([
+    { action: "dismissing", clickTarget: () => screen.getByTitle("Dismiss") },
+    { action: "marking seen", clickTarget: () => screen.getByText("Seen it") },
+  ])("shows the all-caught-up screen after $action the last suggestion", async ({ clickTarget }) => {
+    getSuggestions.mockResolvedValue({ status: "ready", suggestions: [makeSuggestion()] });
+    dismissSuggestion.mockResolvedValue({});
     markSuggestionSeen.mockResolvedValue({});
 
     renderSuggestions();
     await waitFor(() => expect(screen.getByText("The Thing")).toBeInTheDocument());
-    expect(screen.queryByText("Stale Suggestion")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByText("Seen it"));
+    fireEvent.click(clickTarget());
 
     await waitFor(() => {
       expect(screen.getByText("All caught up!")).toBeInTheDocument();

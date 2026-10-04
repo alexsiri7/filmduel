@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 os.environ.setdefault("TOKEN_ENC_KEY", "test-secret-key-for-unit-tests-32b")
@@ -16,6 +17,7 @@ from backend.main import app
 from backend.tests import SPA_HEADERS
 from backend.db import get_db
 from backend.routers.auth import CURRENT_PRIVACY_POLICY_VERSION, get_current_user
+from backend.schemas import MovieSchema, SuggestionSchema
 
 
 def _make_user(*, privacy_policy_accepted: bool = True):
@@ -84,6 +86,14 @@ class TestGetSuggestions:
             new_callable=AsyncMock,
             return_value=[],
         ), patch(
+            "backend.routers.suggestions._latest_generated_at",
+            new_callable=AsyncMock,
+            return_value=None,
+        ), patch(
+            "backend.routers.suggestions.try_acquire_xact_lock",
+            new_callable=AsyncMock,
+            return_value=True,
+        ), patch(
             "backend.routers.suggestions._create_suggestions",
             new_callable=AsyncMock,
             side_effect=ValueError("LLM_API_KEY not configured"),
@@ -93,6 +103,182 @@ class TestGetSuggestions:
 
         assert resp.status_code == 503
         assert resp.json()["detail"] == "AI features are not available"
+
+
+def _fake_suggestion_schema() -> SuggestionSchema:
+    return SuggestionSchema(
+        id=str(uuid.uuid4()),
+        movie=MovieSchema(
+            id=str(uuid.uuid4()), trakt_id=42, title="Test Film", media_type="movie"
+        ),
+        reason="test reason",
+        generated_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+
+
+class TestGetSuggestionsGeneration:
+    """GET may only generate on first use or when the newest batch is stale,
+    regardless of dismissal state (AUD-08, #690)."""
+
+    def setup_method(self):
+        app.dependency_overrides.clear()
+        self.user = _make_user(privacy_policy_accepted=True)
+        app.dependency_overrides[get_current_user] = lambda: self.user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+
+    def teardown_method(self):
+        app.dependency_overrides.clear()
+
+    def _get(self, *, active, latest, lock=True, created=None):
+        """Call GET with the router's data helpers stubbed; return (resp, create mock)."""
+        latest_kwargs = (
+            {"side_effect": latest} if isinstance(latest, list) else {"return_value": latest}
+        )
+        with patch(
+            "backend.routers.suggestions.has_enough_ranked",
+            new_callable=AsyncMock,
+            return_value=True,
+        ), patch(
+            "backend.routers.suggestions._get_active_suggestions",
+            new_callable=AsyncMock,
+            return_value=active,
+        ), patch(
+            "backend.routers.suggestions._latest_generated_at",
+            new_callable=AsyncMock,
+            **latest_kwargs,
+        ), patch(
+            "backend.routers.suggestions.try_acquire_xact_lock",
+            new_callable=AsyncMock,
+            return_value=lock,
+        ), patch(
+            "backend.routers.suggestions._create_suggestions",
+            new_callable=AsyncMock,
+            return_value=created if created is not None else [MagicMock()],
+        ) as mock_create, patch(
+            "backend.routers.suggestions._build_suggestion_schema",
+            return_value=_fake_suggestion_schema(),
+        ):
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.get("/api/suggestions")
+        return resp, mock_create
+
+    def test_all_dismissed_fresh_batch_does_not_generate(self):
+        now = datetime.now(timezone.utc)
+        resp, mock_create = self._get(active=[], latest=now - timedelta(hours=1))
+
+        assert resp.status_code == 200
+        assert resp.json() == {"suggestions": [], "status": "all_dismissed"}
+        mock_create.assert_not_awaited()
+
+    def test_stale_active_card_with_fresh_dismissed_batch_does_not_generate(self):
+        now = datetime.now(timezone.utc)
+        resp, mock_create = self._get(active=[MagicMock()], latest=now - timedelta(hours=1))
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "ready"
+        assert len(resp.json()["suggestions"]) == 1
+        mock_create.assert_not_awaited()
+
+    def test_first_use_generates(self):
+        resp, mock_create = self._get(active=[], latest=None)
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "ready"
+        mock_create.assert_awaited_once()
+
+    def test_stale_batch_regenerates(self):
+        now = datetime.now(timezone.utc)
+        resp, mock_create = self._get(active=[MagicMock()], latest=now - timedelta(hours=25))
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "ready"
+        mock_create.assert_awaited_once()
+
+    def test_generation_in_flight_returns_429_without_generating(self):
+        resp, mock_create = self._get(active=[], latest=None, lock=False)
+
+        assert resp.status_code == 429
+        mock_create.assert_not_awaited()
+
+    def test_generation_in_flight_returns_existing_active(self):
+        now = datetime.now(timezone.utc)
+        resp, mock_create = self._get(
+            active=[MagicMock()], latest=now - timedelta(hours=25), lock=False
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "ready"
+        mock_create.assert_not_awaited()
+
+    def test_rechecks_freshness_under_lock(self):
+        now = datetime.now(timezone.utc)
+        resp, mock_create = self._get(
+            active=[], latest=[None, now - timedelta(minutes=1)]
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "all_dismissed"
+        mock_create.assert_not_awaited()
+
+    def test_batch_committed_between_reads_is_not_reported_all_dismissed(self):
+        """A concurrent first batch landing after GET's first read must not make
+        an undismissed batch look all-dismissed (read active only after latest)."""
+        fresh = datetime.now(timezone.utc) - timedelta(minutes=1)
+        reads = 0
+
+        def committed_after_first_read(before, after):
+            async def read(*args, **kwargs):
+                nonlocal reads
+                reads += 1
+                return before if reads == 1 else after
+
+            return read
+
+        with patch(
+            "backend.routers.suggestions.has_enough_ranked",
+            new_callable=AsyncMock,
+            return_value=True,
+        ), patch(
+            "backend.routers.suggestions._get_active_suggestions",
+            side_effect=committed_after_first_read([], [MagicMock()]),
+        ), patch(
+            "backend.routers.suggestions._latest_generated_at",
+            side_effect=committed_after_first_read(None, fresh),
+        ), patch(
+            "backend.routers.suggestions.try_acquire_xact_lock",
+            new_callable=AsyncMock,
+            return_value=True,
+        ), patch(
+            "backend.routers.suggestions._create_suggestions",
+            new_callable=AsyncMock,
+        ) as mock_create, patch(
+            "backend.routers.suggestions._build_suggestion_schema",
+            return_value=_fake_suggestion_schema(),
+        ):
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.get("/api/suggestions")
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "ready"
+        mock_create.assert_not_awaited()
+
+
+class TestLatestGeneratedAt:
+    @pytest.mark.asyncio
+    async def test_freshness_includes_dismissed_rows(self):
+        """Filtering dismissed rows out of freshness would reopen AUD-08 (#690)."""
+        from sqlalchemy.dialects import postgresql
+
+        from backend.routers.suggestions import _latest_generated_at
+
+        db = AsyncMock()
+        db.execute.return_value = MagicMock()
+
+        await _latest_generated_at(uuid.uuid4(), db, "movie")
+
+        sql = str(db.execute.call_args.args[0].compile(dialect=postgresql.dialect()))
+        assert "max(suggestions.generated_at)" in sql
+        assert "dismissed_at" not in sql
 
 
 # ---------------------------------------------------------------------------

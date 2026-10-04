@@ -122,9 +122,12 @@ No need to cache the full LLM response — just persist the individual picks wit
 GET  /api/suggestions
      Prerequisites: privacy policy accepted AND use_ai_features=true
      Returns current suggestions (up to 6). 
-     If none exist or stale (> 24h): triggers generation, 
-     returns 202 with { status: "generating" } if async,
-     or waits synchronously (< 5s expected).
+     If none exist or the newest batch, dismissed included, is stale (> 24h):
+     triggers generation, returns 202 with { status: "generating" } if async,
+     or waits synchronously (< 5s expected). 429 if a generation is already
+     in flight for this user.
+     If every suggestion in a fresh batch is dismissed: { status: "all_dismissed" }
+     (no generation; the client offers the capped regenerate endpoint).
      403 { detail: "Privacy policy consent required" } — policy not accepted
      403 { detail: "AI features are disabled. Enable them in settings to use this feature." } — toggle off
 
