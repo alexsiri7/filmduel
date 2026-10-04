@@ -966,6 +966,23 @@ class TestSimklCallback:
         assert exc.value.status_code == 400
 
     @pytest.mark.asyncio
+    async def test_rejects_non_ascii_state(self, monkeypatch):
+        """Returns 400, not a TypeError, when the state param is non-ASCII (#696)."""
+        monkeypatch.setattr(limiter, "enabled", False)
+        request = _make_starlette_request(cookies={OAUTH_SIMKL_STATE_COOKIE: "abc"})
+        db = AsyncMock()
+        with pytest.raises(HTTPException) as exc:
+            await simkl_callback(
+                code="code123",
+                state="h\u00e9llo",
+                request=request,
+                background_tasks=MagicMock(),
+                settings=SETTINGS,
+                db=db,
+            )
+        assert exc.value.status_code == 400
+
+    @pytest.mark.asyncio
     async def test_malformed_profile_dict_raises_502_and_redacts_pii(
         self, monkeypatch, caplog
     ):
@@ -1805,10 +1822,10 @@ class TestPKCE:
 
         monkeypatch.setattr(limiter, "enabled", False)
 
-        compare_digest_calls: list[tuple[str, str]] = []
+        compare_digest_calls: list[tuple[bytes, bytes]] = []
         original = _hmac.compare_digest
 
-        def _spy(a: str, b: str) -> bool:
+        def _spy(a: bytes, b: bytes) -> bool:
             compare_digest_calls.append((a, b))
             return original(a, b)
 
@@ -1829,7 +1846,7 @@ class TestPKCE:
         assert len(compare_digest_calls) == 1, (
             "hmac.compare_digest was not called — state comparison may have reverted to !="
         )
-        assert compare_digest_calls[0] == (state, state)
+        assert compare_digest_calls[0] == (state.encode(), state.encode())
 
     @pytest.mark.asyncio
     async def test_simkl_callback_uses_compare_digest_for_state(self, monkeypatch):
@@ -1838,10 +1855,10 @@ class TestPKCE:
 
         monkeypatch.setattr(limiter, "enabled", False)
 
-        compare_digest_calls: list[tuple[str, str]] = []
+        compare_digest_calls: list[tuple[bytes, bytes]] = []
         original = _hmac.compare_digest
 
-        def _spy(a: str, b: str) -> bool:
+        def _spy(a: bytes, b: bytes) -> bool:
             compare_digest_calls.append((a, b))
             return original(a, b)
 
@@ -1862,4 +1879,4 @@ class TestPKCE:
         assert len(compare_digest_calls) == 1, (
             "hmac.compare_digest was not called — SIMKL state comparison may have reverted to !="
         )
-        assert compare_digest_calls[0] == (state, state)
+        assert compare_digest_calls[0] == (state.encode(), state.encode())
