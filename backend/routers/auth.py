@@ -462,7 +462,18 @@ async def _handle_oauth_callback(
     access_token = tokens["access_token"]
     refresh_token = tokens.get("refresh_token", "")
     authed_client = provider.make_client(settings, access_token=access_token)
-    profile = await authed_client.get_profile()
+    try:
+        profile = await authed_client.get_profile()
+    except httpx.HTTPStatusError as exc:
+        logger.error(
+            "%s profile fetch failed (status=%s)",
+            provider.name,
+            exc.response.status_code,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail=f"Profile fetch from {provider.name} failed",
+        ) from exc
 
     # Extract provider-specific user info
     provider_user_id, username, slug = provider.extract_user_info(tokens, profile)
