@@ -207,6 +207,8 @@ class TournamentSchema(BaseModel):
 
 
 class TournamentPreview(BaseModel):
+    model_config = {"extra": "forbid"}
+
     name: str
     tagline: str
     theme_description: str

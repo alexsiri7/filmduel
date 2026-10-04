@@ -230,3 +230,48 @@ class TestCurateTournamentLogging:
 
         assert canary not in caplog.text  # result values must NOT appear
         assert "film_ids" in caplog.text  # the missing key name is acceptable
+
+
+class TestCurateTournamentOutputValidation:
+    """Regression tests: LLM output must not smuggle server bookkeeping keys (AUD-07)."""
+
+    VALID_REPLY = {
+        "name": "Bracket",
+        "tagline": "Tagline",
+        "theme_description": "Description",
+        "film_ids": [f"id{i}" for i in range(8)],
+    }
+
+    async def _curate(self, reply: dict) -> dict:
+        from unittest.mock import AsyncMock, patch
+
+        from backend.services.curator import curate_tournament
+
+        with patch(
+            "backend.services.curator.chat_completion",
+            AsyncMock(return_value=json.dumps(reply)),
+        ):
+            return await curate_tournament(candidates=[], bracket_size=8)
+
+    @pytest.mark.asyncio
+    async def test_valid_reply_returns_declared_fields_only(self):
+        result = await self._curate(self.VALID_REPLY)
+
+        assert result == self.VALID_REPLY
+
+    @pytest.mark.asyncio
+    async def test_injected_regen_count_rejected(self, caplog):
+        reply = {**self.VALID_REPLY, "_regen_count": -5}
+
+        with caplog.at_level(logging.ERROR, logger="backend.services.curator"):
+            with pytest.raises(CurationError):
+                await self._curate(reply)
+
+        assert "_regen_count" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_non_string_film_ids_rejected(self):
+        reply = {**self.VALID_REPLY, "film_ids": [{"id": "x"}] * 8}
+
+        with pytest.raises(CurationError):
+            await self._curate(reply)

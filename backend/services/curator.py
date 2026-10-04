@@ -6,6 +6,9 @@ import json
 import logging
 import re
 
+from pydantic import ValidationError
+
+from backend.schemas import TournamentPreview
 from backend.services.llm import chat_completion, parse_json_response
 
 logger = logging.getLogger(__name__)
@@ -169,4 +172,15 @@ async def curate_tournament(
         )
         result["film_ids"] = film_ids[:bracket_size]
 
-    return result
+    # The reply is persisted as tournament.llm_response alongside server
+    # bookkeeping (e.g. _regen_count), so it must not carry undeclared keys.
+    try:
+        preview = TournamentPreview.model_validate(result)
+    except ValidationError as exc:
+        logger.error(
+            "LLM response failed schema validation: %s",
+            [(err["type"], err["loc"]) for err in exc.errors()],
+        )
+        raise CurationError("AI curation returned an unexpected response. Please try again.")
+
+    return preview.model_dump(exclude={"films"})
