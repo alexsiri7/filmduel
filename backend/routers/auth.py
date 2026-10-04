@@ -230,7 +230,8 @@ async def get_admin_user(
 # When updating the privacy policy:
 # 1. Update this constant to the new version string
 # 2. Update CURRENT_PRIVACY_POLICY_VERSION in frontend/src/constants.js to match
-# 3. Update the privacy policy text in frontend/src/pages/PrivacyPolicy.jsx
+# 3. Update the policy text and its date in frontend/src/pages/PrivacyPolicy.jsx
+#    (the version shown there is read from constants.js)
 # Users whose stored version differs lose consent until they accept the new version.
 CURRENT_PRIVACY_POLICY_VERSION = "2.1"
 

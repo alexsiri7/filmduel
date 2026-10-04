@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import PrivacyPolicy from "../pages/PrivacyPolicy";
+import { CURRENT_PRIVACY_POLICY_VERSION } from "../constants";
 
 describe("PrivacyPolicy", () => {
   it("renders AI data sharing section with Watch Suggestions and AI-Curated Tournaments headings", () => {
@@ -37,5 +38,16 @@ describe("PrivacyPolicy", () => {
     expect(duelRetention).toHaveTextContent(
       /duel history is kept until you delete your account/
     );
+  });
+
+  it("shows the policy version users are asked to consent to", () => {
+    render(
+      <MemoryRouter>
+        <PrivacyPolicy />
+      </MemoryRouter>
+    );
+    expect(
+      screen.getByText(`Version ${CURRENT_PRIVACY_POLICY_VERSION}`, { exact: false })
+    ).toBeInTheDocument();
   });
 });
