@@ -679,6 +679,11 @@ def test_scrub_screenshot_is_registered_with_rate_limiter():
     assert "backend.routers.feedback.scrub_screenshot" in limiter._Limiter__marked_for_limiting
 
 
+def test_view_screenshot_is_registered_with_rate_limiter():
+    """view_screenshot must be registered in the slowapi limiter."""
+    assert "backend.routers.feedback.view_screenshot" in limiter._Limiter__marked_for_limiting
+
+
 def test_purge_expired_screenshots_is_registered_with_rate_limiter():
     """purge_expired_screenshots must be registered in the slowapi limiter."""
     assert "backend.routers.feedback.purge_expired_screenshots" in limiter._Limiter__marked_for_limiting
@@ -714,6 +719,15 @@ def test_scrub_screenshot_rate_limit_is_10_per_minute():
     limit_strings = [str(lim.limit) for lim in limits]
     assert any("10 per 1 minute" in s for s in limit_strings), (
         f"Expected '10/minute' limit on scrub_screenshot, got: {limit_strings}"
+    )
+
+
+def test_view_screenshot_rate_limit_is_10_per_minute():
+    """view_screenshot rate limit must be exactly 10/minute."""
+    limits = limiter._route_limits.get("backend.routers.feedback.view_screenshot", [])
+    limit_strings = [str(lim.limit) for lim in limits]
+    assert any("10 per 1 minute" in s for s in limit_strings), (
+        f"Expected '10/minute' limit on view_screenshot, got: {limit_strings}"
     )
 
 
