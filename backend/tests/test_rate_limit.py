@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import time
 from types import SimpleNamespace
@@ -122,22 +123,28 @@ def test_rate_limit_key_on_railway_uses_x_real_ip(monkeypatch):
     assert _rate_limit_key(request) == "ip:203.0.113.9"
 
 
-def test_rate_limit_key_on_railway_without_x_real_ip_falls_back_to_client(monkeypatch):
+def test_rate_limit_key_on_railway_without_x_real_ip_falls_back_to_client(monkeypatch, caplog):
     monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
     request = _make_request(client_ip="6.6.6.6")
-    assert _rate_limit_key(request) == "ip:6.6.6.6"
+    with caplog.at_level(logging.WARNING, logger="backend.rate_limit"):
+        assert _rate_limit_key(request) == "ip:6.6.6.6"
+    assert "X-Real-IP" in caplog.text
 
 
-def test_rate_limit_key_on_railway_ignores_malformed_x_real_ip(monkeypatch):
+def test_rate_limit_key_on_railway_ignores_malformed_x_real_ip(monkeypatch, caplog):
     monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
     request = _make_request(client_ip="6.6.6.6", headers={"x-real-ip": "not-an-ip"})
-    assert _rate_limit_key(request) == "ip:6.6.6.6"
+    with caplog.at_level(logging.WARNING, logger="backend.rate_limit"):
+        assert _rate_limit_key(request) == "ip:6.6.6.6"
+    assert "X-Real-IP" in caplog.text
 
 
-def test_rate_limit_key_off_railway_ignores_x_real_ip(monkeypatch):
+def test_rate_limit_key_off_railway_ignores_x_real_ip(monkeypatch, caplog):
     monkeypatch.delenv("RAILWAY_ENVIRONMENT", raising=False)
     request = _make_request(client_ip="6.6.6.6", headers={"x-real-ip": "203.0.113.9"})
-    assert _rate_limit_key(request) == "ip:6.6.6.6"
+    with caplog.at_level(logging.WARNING, logger="backend.rate_limit"):
+        assert _rate_limit_key(request) == "ip:6.6.6.6"
+    assert "X-Real-IP" not in caplog.text
 
 # Port 1 has nothing listening, so connection refused is immediate and no Redis
 # container is needed; RedisStorage construction itself does no network I/O.

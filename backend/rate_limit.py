@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ipaddress
+import logging
 import os
 
 import jwt
@@ -12,6 +13,8 @@ from starlette.requests import Request
 
 from backend.config import Settings, get_settings
 from backend.utils.cookies import COOKIE_NAME, cookie_name
+
+logger = logging.getLogger(__name__)
 
 
 def _client_ip(request: Request) -> str:
@@ -28,7 +31,10 @@ def _client_ip(request: Request) -> str:
         try:
             return str(ipaddress.ip_address(real_ip))
         except ValueError:
-            pass
+            logger.warning(
+                "Missing or invalid X-Real-IP on Railway; rate limiting falls back "
+                "to the spoofable request.client address"
+            )
     return get_remote_address(request)
 
 
