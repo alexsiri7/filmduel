@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import uuid
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
@@ -12,6 +14,16 @@ import pytest
 from sqlalchemy.dialects import postgresql
 
 from backend.db import acquire_quota_lock, try_acquire_xact_lock
+
+_BACKEND = Path(__file__).resolve().parents[1]
+
+
+def _exec_fresh(path: Path):
+    """Execute a module from source without replacing its sys.modules entry."""
+    spec = importlib.util.spec_from_file_location(f"_fresh_{path.stem}", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 @pytest.mark.asyncio
@@ -50,3 +62,39 @@ async def test_try_acquire_xact_lock_uses_try_variant_and_returns_bool(held):
     assert "hashtext(" in sql
     assert "pg_advisory_lock(" not in sql
     assert set(compiled.params.values()) == {"some_scope", str(key)}
+
+
+class _EngineBuilt(Exception):
+    pass
+
+
+def test_app_engine_uses_shared_connect_args(monkeypatch):
+    """The app engine must take connect_args from database_connect_args(), which
+    carries the verified-TLS context on hosted platforms (AUD-04, #686)."""
+    sentinel = {"sentinel": True}
+    monkeypatch.setattr("backend.config.database_connect_args", lambda: sentinel)
+    create = MagicMock()
+    monkeypatch.setattr("sqlalchemy.ext.asyncio.create_async_engine", create)
+
+    _exec_fresh(_BACKEND / "db.py")
+
+    assert create.call_args.kwargs["connect_args"] is sentinel
+
+
+@pytest.mark.asyncio
+async def test_migration_engine_uses_shared_connect_args(monkeypatch):
+    """Alembic's engine must take the same connect_args as the app engine (#686)."""
+    sentinel = {"sentinel": True}
+    monkeypatch.setattr("backend.config.database_connect_args", lambda: sentinel)
+    alembic_context = MagicMock()
+    alembic_context.config.config_file_name = None
+    alembic_context.is_offline_mode.return_value = True
+    monkeypatch.setattr("alembic.context", alembic_context)
+    create = MagicMock(side_effect=_EngineBuilt)
+    monkeypatch.setattr("sqlalchemy.ext.asyncio.async_engine_from_config", create)
+
+    env = _exec_fresh(_BACKEND / "migrations" / "env.py")
+    with pytest.raises(_EngineBuilt):
+        await env.run_async_migrations()
+
+    assert create.call_args.kwargs["connect_args"] is sentinel

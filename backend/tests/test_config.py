@@ -1,14 +1,17 @@
 """Unit tests for Settings validators."""
 
+import hashlib
 import logging
 import os
+import ssl
 from unittest.mock import patch
 
 import pytest
 from fastapi import FastAPI
 from pydantic import ValidationError
 
-from backend.config import Settings
+import backend.config
+from backend.config import Settings, database_connect_args
 from backend.config import _PROXY_PLATFORM_ENV_VARS as _PROXY_PLATFORM_ENV_VARS_PROD
 
 
@@ -286,6 +289,48 @@ class TestDatabaseUrlValidation:
         monkeypatch.delenv("DATABASE_URL", raising=False)
         with pytest.raises(ValidationError, match="DATABASE_URL"):
             Settings(SECRET_KEY="test-secret-key-for-unit-tests!!")
+
+
+class TestDatabaseConnectArgs:
+    """On a hosted platform the DB connection requires TLS verified against
+    Supabase's pinned root CA; off-platform asyncpg's default is kept (AUD-04, #686)."""
+
+    _NO_PREPARED_STATEMENTS = {"statement_cache_size": 0, "prepared_statement_cache_size": 0}
+
+    def _only_platform(self, monkeypatch, var: str | None):
+        for other in _PROXY_PLATFORM_ENV_VARS_PROD:
+            monkeypatch.delenv(other, raising=False)
+        if var is not None:
+            monkeypatch.setenv(var, "set")
+
+    def test_no_tls_override_off_platform(self, monkeypatch):
+        self._only_platform(monkeypatch, None)
+        assert database_connect_args() == self._NO_PREPARED_STATEMENTS
+
+    @pytest.mark.parametrize("var", _PROXY_PLATFORM_ENV_VARS_PROD)
+    def test_verified_tls_on_each_known_platform(self, monkeypatch, var):
+        self._only_platform(monkeypatch, var)
+        args = database_connect_args()
+        ctx = args.pop("ssl")
+        assert args == self._NO_PREPARED_STATEMENTS
+        assert isinstance(ctx, ssl.SSLContext)
+        assert ctx.verify_mode == ssl.CERT_REQUIRED
+        assert ctx.check_hostname is True
+        (ca,) = ctx.get_ca_certs()
+        assert (("commonName", "Supabase Root 2021 CA"),) in ca["subject"]
+
+    def test_strict_x509_disabled_for_supabase_chain(self, monkeypatch):
+        """Supabase's intermediate CA lacks keyUsage, so strict mode would reject the chain."""
+        self._only_platform(monkeypatch, "RAILWAY_ENVIRONMENT")
+        ctx = database_connect_args()["ssl"]
+        assert not (ctx.verify_flags & ssl.VERIFY_X509_STRICT)
+
+    def test_pinned_ca_fingerprint(self):
+        der = ssl.PEM_cert_to_DER_cert(backend.config._SUPABASE_ROOT_CA.read_text())
+        assert (
+            hashlib.sha256(der).hexdigest()
+            == "807025ad50d4ed219d2c9c7d299c004f824eb00cf7f65afef607d07b72e6cafa"
+        )
 
 
 class TestRateLimitStorageUriValidation:

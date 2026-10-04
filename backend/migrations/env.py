@@ -7,7 +7,7 @@ from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from backend.config import get_settings
+from backend.config import database_connect_args, get_settings
 
 # Import all models so Alembic can detect them
 from backend.db_models import Base  # noqa: F401
@@ -50,7 +50,7 @@ async def run_async_migrations() -> None:
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
-        connect_args={"statement_cache_size": 0, "prepared_statement_cache_size": 0},
+        connect_args=database_connect_args(),
     )
 
     async with connectable.connect() as connection:
