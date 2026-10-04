@@ -24,6 +24,15 @@ Session and sign-in cookies SHALL be httpOnly and SameSite=Lax. When cookies are
 - WHEN the service starts
 - THEN it refuses to start
 
+### Requirement: Database traffic is encrypted and verified
+
+On a known hosted platform, connections to the database SHALL use TLS and SHALL verify the server's certificate and hostname against the database provider's pinned root certificate, so the connection can neither fall back to cleartext nor be answered by an impostor.
+
+#### Scenario: Downgraded or impersonated database
+- GIVEN a deploy on Railway
+- WHEN something between the service and the database refuses TLS or presents a certificate not issued under the pinned root
+- THEN the connection fails instead of proceeding
+
 ### Requirement: Responses carry security headers
 
 Every response, API or page, SHALL carry nosniff, frame denial, a referrer policy, a permissions policy and a content security policy allowing scripts and styles only from the app, images only from the app, TMDB and data URLs, and connections only to the app and error tracking; HSTS SHALL be sent whenever cookies are secure. Fonts SHALL be self-hosted.

@@ -1,7 +1,9 @@
 """Application configuration via environment variables."""
 
 import os
+import ssl
 from functools import lru_cache
+from pathlib import Path
 from typing import Annotated
 
 from pydantic import Field, field_validator, model_validator
@@ -44,6 +46,8 @@ _PROXY_PLATFORM_ENV_VARS = (
     "K_SERVICE",             # Google Cloud Run
 )
 
+_SUPABASE_ROOT_CA = Path(__file__).resolve().parent / "certs" / "supabase-root-2021-ca.crt"
+
 _WEAK_KEY_PLACEHOLDERS = frozenset(
     {
         "secret",
@@ -78,6 +82,25 @@ def _validate_key_strength(name: str, v: str) -> str:
 def detected_proxy_platform() -> str | None:
     """Name of the first known TLS-terminating-proxy platform env var that is set, else None."""
     return next((v for v in _PROXY_PLATFORM_ENV_VARS if os.environ.get(v)), None)
+
+
+def database_connect_args() -> dict[str, object]:
+    """asyncpg connect_args shared by the app engine and Alembic.
+
+    On a detected hosted platform the connection must use TLS and verify the
+    server against Supabase's root CA, which closes both the silent cleartext
+    fallback and impersonation (AUD-04, #686). Off-platform it keeps asyncpg's
+    default so a local Postgres without TLS still works.
+    """
+    # Supabase pooler (PgBouncer transaction mode) doesn't support prepared statements
+    args: dict[str, object] = {"statement_cache_size": 0, "prepared_statement_cache_size": 0}
+    if detected_proxy_platform():
+        ctx = ssl.create_default_context(cafile=_SUPABASE_ROOT_CA)
+        # Supabase's intermediate CA has no keyUsage extension, which the
+        # VERIFY_X509_STRICT default (Python 3.13+) rejects.
+        ctx.verify_flags &= ~ssl.VERIFY_X509_STRICT
+        args["ssl"] = ctx
+    return args
 
 
 class Settings(BaseSettings):

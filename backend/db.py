@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from backend.config import get_settings
+from backend.config import database_connect_args, get_settings
 
 settings = get_settings()
 
@@ -24,8 +24,7 @@ engine = create_async_engine(
     # (filmduel, extensions) resolves every unqualified table name.
     pool_size=3,
     max_overflow=2,
-    # Supabase pooler (PgBouncer transaction mode) doesn't support prepared statements
-    connect_args={"statement_cache_size": 0, "prepared_statement_cache_size": 0},
+    connect_args=database_connect_args(),
 )
 
 async_session_factory = async_sessionmaker(
