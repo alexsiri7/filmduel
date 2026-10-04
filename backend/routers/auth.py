@@ -57,6 +57,7 @@ router = APIRouter(tags=["auth"])
 
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_HOURS = 72  # 3-day absolute lifetime per issued token
+JWT_ISSUER = JWT_AUDIENCE = "filmduel"
 REFRESH_INTERVAL = timedelta(hours=12)  # re-issue cookie at most once per 12h
 SESSION_MAX_LIFETIME = timedelta(days=30)  # absolute hard cap on total session lifetime
 
@@ -76,8 +77,8 @@ def create_jwt(
     payload = {
         "sub": user_id,
         "jti": secrets.token_hex(16),
-        "iss": "filmduel",
-        "aud": "filmduel",
+        "iss": JWT_ISSUER,
+        "aud": JWT_AUDIENCE,
         "exp": now + timedelta(hours=JWT_EXPIRY_HOURS),
         "iat": now,
         "orig_iat": (orig_iat or now).timestamp(),
@@ -163,8 +164,8 @@ async def get_current_user_id(
             token,
             settings.SECRET_KEY,
             algorithms=[JWT_ALGORITHM],
-            issuer="filmduel",
-            audience="filmduel",
+            issuer=JWT_ISSUER,
+            audience=JWT_AUDIENCE,
         )
         user_id = payload.get("sub")
         iat = datetime.fromtimestamp(payload["iat"], tz=timezone.utc)

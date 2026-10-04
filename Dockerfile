@@ -5,6 +5,8 @@ WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm ci
 COPY frontend/ ./
+# Railway passes the service variable of the same name at build time; empty disables frontend Sentry (#648).
+ARG VITE_SENTRY_DSN=
 RUN npm run build && test -f dist/index.html
 
 # Stage 2: Python backend + built frontend

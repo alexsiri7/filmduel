@@ -22,6 +22,7 @@ from slowapi.errors import RateLimitExceeded
 from backend.config import detected_proxy_platform, get_settings
 from backend.rate_limit import limiter
 from backend.scheduler import build_scheduler
+from backend.services.duel_rejections import record_duel_rejection
 from backend.services.tmdb import is_read_access_token
 from backend.routers import (
     auth,
@@ -158,6 +159,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             content={"detail": "A movie cannot duel against itself"},
         )
     if any(e.get("loc", ())[-1:] == ("pair_token",) for e in exc.errors()):
+        record_duel_rejection("missing_pair_token")
         return JSONResponse(
             status_code=400,
             content={"detail": "Invalid pair token"},
