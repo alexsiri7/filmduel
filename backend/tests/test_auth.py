@@ -1344,6 +1344,23 @@ class TestPKCE:
         assert "PKCE" in exc_info.value.detail
 
     @pytest.mark.asyncio
+    async def test_callback_rejects_non_ascii_state(self, monkeypatch):
+        """callback() returns 400, not a TypeError, when the state param is non-ASCII (#696)."""
+        monkeypatch.setattr(limiter, "enabled", False)
+        request = _make_request(cookies={OAUTH_STATE_COOKIE: "abc"})
+        with pytest.raises(HTTPException) as exc_info:
+            await callback(
+                code="auth-code",
+                request=request,
+                background_tasks=MagicMock(),
+                state="héllo",
+                settings=_make_settings(),
+                db=AsyncMock(),
+            )
+        assert exc_info.value.status_code == 400
+        assert exc_info.value.detail == "Invalid OAuth state"
+
+    @pytest.mark.asyncio
     async def test_simkl_callback_rejects_missing_pkce_cookie(self, monkeypatch):
         """simkl_callback() returns 400 when PKCE verifier cookie is absent."""
         monkeypatch.setattr(limiter, "enabled", False)
