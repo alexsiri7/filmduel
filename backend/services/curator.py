@@ -183,4 +183,4 @@ async def curate_tournament(
         )
         raise CurationError("AI curation returned an unexpected response. Please try again.")
 
-    return preview.model_dump(exclude={"films"})
+    return preview.model_dump()

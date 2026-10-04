@@ -213,7 +213,6 @@ class TournamentPreview(BaseModel):
     tagline: str
     theme_description: str
     film_ids: list[str]
-    films: list[MovieSchema] = []
 
 
 class TournamentListItem(BaseModel):
