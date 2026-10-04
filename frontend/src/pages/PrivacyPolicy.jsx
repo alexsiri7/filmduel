@@ -46,7 +46,7 @@ export default function PrivacyPolicy() {
             <li>• <strong className="text-[#F5F0E8]">Trakt</strong> — OAuth authentication and watch history import</li>
             <li>• <strong className="text-[#F5F0E8]">TMDB</strong> — Movie poster images and metadata</li>
             <li>• <strong className="text-[#F5F0E8]">Requesty.ai (LLM gateway)</strong> — Routes AI requests to underlying models (e.g. Google Gemini). Prompts are not stored by Requesty.ai. EU-hosted (Frankfurt). GDPR DPA available on request.</li>
-            <li>• <strong className="text-[#F5F0E8]">Sentry</strong> — Error tracking and application monitoring (no PII sent)</li>
+            <li>• <strong className="text-[#F5F0E8]">Sentry</strong> — Error tracking and application monitoring. Error reports and performance traces are scrubbed before sending: they exclude request bodies (such as feedback text), sign-in codes and other query strings, cookies, and account names, but may include the API path requested and your browser's user agent.</li>
           </ul>
         </section>
 

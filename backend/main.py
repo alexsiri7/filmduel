@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlparse
 
 import sentry_sdk
+from sentry_sdk.consts import SPANDATA
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -38,49 +40,57 @@ logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
-_SCRUB_KEYS = frozenset(
-    {
-        "trakt_access_token",
-        "trakt_refresh_token",
-        "trakt_access_token_enc",
-        "trakt_refresh_token_enc",
-        "access_token",
-        "refresh_token",
-        "SECRET_KEY",
-        "Authorization",
-        "authorization",  # httpx normalizes response headers to lowercase
-        "_headers",
-    }
-)
+_PROVIDER_USER_PATH = re.compile(r"/users/[^/?#\s]+")
 
 
-def _scrub_sensitive(event: dict, hint: dict) -> dict:
-    """Strip OAuth tokens and secret keys from Sentry stack frame locals.
+def _redact_url(url: str) -> str:
+    """Drop the query string and fragment, and mask the account in ``/users/<id>``."""
+    without_query = re.split(r"[?#]", url, maxsplit=1)[0]
+    return _PROVIDER_USER_PATH.sub("/users/[Filtered]", without_query)
 
-    Scrubs using two strategies:
-    - Exact match against _SCRUB_KEYS (denylist of known sensitive fields)
-    - Substring match: any local variable whose name contains "token", "secret", or "code"
-      (case-insensitive) is also filtered, covering future fields automatically.
 
-    Filtered values are replaced with "[Filtered]".
+def _scrub_http_data(data: dict) -> None:
+    """Scrub the URL fields the httpx integration attaches to breadcrumbs and spans.
+
+    The integration records outgoing URLs unsanitized, so TMDB ``api_key`` query
+    params and Trakt usernames would otherwise reach Sentry.
     """
-    for exc_val in (event.get("exception") or {}).get("values") or []:
-        for frame in (exc_val.get("stacktrace") or {}).get("frames") or []:
-            vars_ = frame.get("vars") or {}
-            for key in list(vars_):
-                lower = key.lower()
-                if key in _SCRUB_KEYS or "token" in lower or "secret" in lower or "code" in lower:
-                    vars_[key] = "[Filtered]"
+    data.pop(SPANDATA.HTTP_QUERY, None)
+    data.pop(SPANDATA.HTTP_FRAGMENT, None)
+    if isinstance(data.get("url"), str):
+        data["url"] = _redact_url(data["url"])
+
+
+def _scrub_breadcrumb(crumb: dict, hint: dict) -> dict:
+    _scrub_http_data(crumb.get("data") or {})
+    return crumb
+
+
+def _scrub_event(event: dict, hint: dict) -> dict:
+    """Strip incoming query strings (OAuth ``code``/``state``) and outgoing span URLs."""
+    request = event.get("request") or {}
+    request.pop("query_string", None)
+    if isinstance(request.get("url"), str):
+        request["url"] = _redact_url(request["url"])
+    for span in event.get("spans") or []:
+        _scrub_http_data(span.get("data") or {})
+        if isinstance(span.get("description"), str):
+            span["description"] = _redact_url(span["description"])
     return event
 
 
+SENTRY_OPTIONS = dict(
+    send_default_pii=False,
+    max_request_body_size="never",
+    include_local_variables=False,
+    traces_sample_rate=0.1,
+    before_send=_scrub_event,
+    before_send_transaction=_scrub_event,
+    before_breadcrumb=_scrub_breadcrumb,
+)
+
 if settings.SENTRY_DSN:
-    sentry_sdk.init(
-        dsn=settings.SENTRY_DSN,
-        send_default_pii=False,
-        traces_sample_rate=0.1,
-        before_send=_scrub_sensitive,
-    )
+    sentry_sdk.init(dsn=settings.SENTRY_DSN, **SENTRY_OPTIONS)
 
 _is_dev = settings.BASE_URL.startswith("http://localhost")
 

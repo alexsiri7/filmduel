@@ -1,179 +1,198 @@
-"""Tests for the Sentry before_send scrubbing hook."""
+"""Tests for the Sentry event, transaction, and breadcrumb scrubbing hooks."""
 
 from __future__ import annotations
 
 import os
+import uuid
 
 # Must set SECRET_KEY before importing backend.main — pydantic Settings validates it at import time.
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
 
-from backend.main import _scrub_sensitive  # noqa: E402
+import httpx  # noqa: E402
+import pytest  # noqa: E402
+import sentry_sdk  # noqa: E402
+from sentry_sdk.integrations.httpx import HttpxIntegration  # noqa: E402
+from sentry_sdk.transport import Transport  # noqa: E402
+
+from fastapi import FastAPI, Request  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+
+from backend.main import (  # noqa: E402
+    SENTRY_OPTIONS,
+    _redact_url,
+    _scrub_breadcrumb,
+    _scrub_event,
+)
 
 
-def _make_event_with_frame_vars(vars_: dict) -> dict:
-    return {
-        "exception": {
-            "values": [{"stacktrace": {"frames": [{"vars": vars_}]}}]
-        }
-    }
+class TestRedactUrl:
+    def test_query_string_is_dropped(self):
+        url = "https://api.themoviedb.org/3/movie/550?api_key=SECRET&language=en"
+        assert _redact_url(url) == "https://api.themoviedb.org/3/movie/550"
 
+    def test_fragment_is_dropped(self):
+        assert _redact_url("https://example.com/a#frag") == "https://example.com/a"
 
-def _get_frame_vars(event: dict) -> dict:
-    return event["exception"]["values"][0]["stacktrace"]["frames"][0]["vars"]
+    def test_users_path_segment_is_masked(self):
+        url = "https://api.trakt.tv/users/alice-smith/watched/movies"
+        assert _redact_url(url) == "https://api.trakt.tv/users/[Filtered]/watched/movies"
 
-
-class TestScrubSensitive:
-    def test_trakt_access_token_is_filtered(self):
-        event = _make_event_with_frame_vars({"trakt_access_token": "abc123secret"})
-        result = _scrub_sensitive(event, {})
-        assert _get_frame_vars(result)["trakt_access_token"] == "[Filtered]"
-
-    def test_trakt_refresh_token_is_filtered(self):
-        event = _make_event_with_frame_vars({"trakt_refresh_token": "refresh123"})
-        result = _scrub_sensitive(event, {})
-        assert _get_frame_vars(result)["trakt_refresh_token"] == "[Filtered]"
-
-    def test_authorization_header_is_filtered(self):
-        event = _make_event_with_frame_vars({"Authorization": "Bearer tok123"})
-        result = _scrub_sensitive(event, {})
-        assert _get_frame_vars(result)["Authorization"] == "[Filtered]"
-
-    def test_dynamic_token_key_is_filtered(self):
-        event = _make_event_with_frame_vars({"my_custom_token": "val"})
-        result = _scrub_sensitive(event, {})
-        assert _get_frame_vars(result)["my_custom_token"] == "[Filtered]"
-
-    def test_secret_key_word_triggers_filter(self):
-        event = _make_event_with_frame_vars({"db_secret": "hunter2"})
-        result = _scrub_sensitive(event, {})
-        assert _get_frame_vars(result)["db_secret"] == "[Filtered]"
-
-    def test_non_sensitive_keys_are_preserved(self):
-        event = _make_event_with_frame_vars(
-            {"user_id": "uuid-1234", "media_type": "movie"}
+    def test_span_description_is_redacted(self):
+        assert (
+            _redact_url("GET https://api.trakt.tv/users/alice/ratings/shows")
+            == "GET https://api.trakt.tv/users/[Filtered]/ratings/shows"
         )
-        result = _scrub_sensitive(event, {})
-        frame_vars = _get_frame_vars(result)
-        assert frame_vars["user_id"] == "uuid-1234"
-        assert frame_vars["media_type"] == "movie"
 
-    def test_event_without_exception_passes_through(self):
-        event = {"message": "hello", "level": "info"}
-        result = _scrub_sensitive(event, {})
-        assert result == {"message": "hello", "level": "info"}
+    def test_plain_url_is_unchanged(self):
+        assert _redact_url("https://api.trakt.tv/movies/popular") == (
+            "https://api.trakt.tv/movies/popular"
+        )
 
-    def test_multiple_frames_all_scrubbed(self):
+
+class TestScrubBreadcrumb:
+    def test_http_breadcrumb_url_and_query_are_scrubbed(self):
+        crumb = {
+            "type": "http",
+            "category": "httplib",
+            "data": {
+                "http.method": "GET",
+                "url": "https://api.trakt.tv/users/alice/watched/movies",
+                "http.query": "api_key=SECRET",
+                "http.fragment": "",
+            },
+        }
+        result = _scrub_breadcrumb(crumb, {})
+        assert result["data"] == {
+            "http.method": "GET",
+            "url": "https://api.trakt.tv/users/[Filtered]/watched/movies",
+        }
+
+    def test_breadcrumb_without_data_passes_through(self):
+        crumb = {"category": "query", "message": "SELECT 1"}
+        assert _scrub_breadcrumb(crumb, {}) == {"category": "query", "message": "SELECT 1"}
+
+
+class TestScrubEvent:
+    def test_oauth_callback_query_string_is_dropped(self):
         event = {
-            "exception": {
-                "values": [
-                    {
-                        "stacktrace": {
-                            "frames": [
-                                {"vars": {"trakt_access_token": "tok1", "x": 1}},
-                                {"vars": {"trakt_refresh_token": "ref1", "y": 2}},
-                            ]
-                        }
-                    }
-                ]
+            "request": {
+                "url": "https://filmduel.up.railway.app/auth/callback",
+                "query_string": "code=AUTHCODE&state=STATE",
+                "method": "GET",
             }
         }
-        result = _scrub_sensitive(event, {})
-        frames = result["exception"]["values"][0]["stacktrace"]["frames"]
-        assert frames[0]["vars"]["trakt_access_token"] == "[Filtered]"
-        assert frames[0]["vars"]["x"] == 1
-        assert frames[1]["vars"]["trakt_refresh_token"] == "[Filtered]"
-        assert frames[1]["vars"]["y"] == 2
+        result = _scrub_event(event, {})
+        assert "query_string" not in result["request"]
+        assert result["request"]["url"] == "https://filmduel.up.railway.app/auth/callback"
 
-    def test_headers_key_is_filtered(self):
-        """_headers has no 'token'/'secret' substring — only the static set covers it."""
-        event = _make_event_with_frame_vars(
-            {"_headers": {"Authorization": "Bearer tok123"}}
-        )
-        result = _scrub_sensitive(event, {})
-        assert _get_frame_vars(result)["_headers"] == "[Filtered]"
-
-    def test_lowercase_authorization_header_is_filtered(self):
-        """httpx normalizes response header keys to lowercase; both cases must be scrubbed."""
-        event = _make_event_with_frame_vars({"authorization": "Bearer tok123"})
-        result = _scrub_sensitive(event, {})
-        assert _get_frame_vars(result)["authorization"] == "[Filtered]"
-
-    def test_generic_access_token_is_filtered(self):
-        event = _make_event_with_frame_vars({"access_token": "generic-tok"})
-        result = _scrub_sensitive(event, {})
-        assert _get_frame_vars(result)["access_token"] == "[Filtered]"
-
-    def test_generic_refresh_token_is_filtered(self):
-        event = _make_event_with_frame_vars({"refresh_token": "generic-refresh"})
-        result = _scrub_sensitive(event, {})
-        assert _get_frame_vars(result)["refresh_token"] == "[Filtered]"
-
-    def test_chained_exceptions_all_scrubbed(self):
-        """Chained exceptions (raise X from Y) produce multiple exception.values entries."""
+    def test_outgoing_span_urls_are_scrubbed(self):
         event = {
-            "exception": {
-                "values": [
-                    {
-                        "stacktrace": {
-                            "frames": [{"vars": {"trakt_access_token": "tok1"}}]
-                        }
+            "type": "transaction",
+            "spans": [
+                {
+                    "op": "http.client",
+                    "description": "GET https://api.trakt.tv/users/alice/watched/movies",
+                    "data": {
+                        "url": "https://api.themoviedb.org/3/movie/550",
+                        "http.query": "api_key=SECRET",
+                        "http.fragment": "",
                     },
-                    {"stacktrace": {"frames": [{"vars": {"refresh_token": "ref1"}}]}},
-                ]
-            }
+                },
+                {"op": "db", "description": "SELECT 1"},
+            ],
         }
-        result = _scrub_sensitive(event, {})
-        values = result["exception"]["values"]
-        assert (
-            values[0]["stacktrace"]["frames"][0]["vars"]["trakt_access_token"]
-            == "[Filtered]"
+        result = _scrub_event(event, {})
+        http_span, db_span = result["spans"]
+        assert http_span["description"] == (
+            "GET https://api.trakt.tv/users/[Filtered]/watched/movies"
         )
-        assert (
-            values[1]["stacktrace"]["frames"][0]["vars"]["refresh_token"]
-            == "[Filtered]"
-        )
+        assert http_span["data"] == {"url": "https://api.themoviedb.org/3/movie/550"}
+        assert db_span == {"op": "db", "description": "SELECT 1"}
 
-    def test_oauth_code_is_filtered(self):
-        """OAuth authorization code must not leak to Sentry."""
-        event = _make_event_with_frame_vars({"code": "abc123authcode"})
-        result = _scrub_sensitive(event, {})
-        assert _get_frame_vars(result)["code"] == "[Filtered]"
+    def test_event_without_request_passes_through(self):
+        event = {"message": "hello", "level": "info"}
+        assert _scrub_event(event, {}) == {"message": "hello", "level": "info"}
 
-    def test_auth_code_substring_is_filtered(self):
-        event = _make_event_with_frame_vars({"auth_code": "xyz"})
-        result = _scrub_sensitive(event, {})
-        assert _get_frame_vars(result)["auth_code"] == "[Filtered]"
 
-    def test_broad_code_substring_over_scrubs_barcode(self):
-        """'barcode' contains 'code' — verify it IS filtered (expected by the broad rule)."""
-        # This documents the intentional trade-off: broad substring matching may over-scrub.
-        # If this is undesirable, use an exact-match or word-boundary approach instead.
-        event = _make_event_with_frame_vars({"barcode": "12345"})
-        result = _scrub_sensitive(event, {})
-        # Acceptable: over-scrubbing is safer than under-scrubbing for a security filter.
-        assert _get_frame_vars(result)["barcode"] == "[Filtered]"
+_TMDB_KEY = "tmdb-key-value"
+_TRAKT_USER = "alice-smith"
 
-    def test_code_key_is_filtered_case_insensitive(self):
-        """Key matching for 'code' is case-insensitive via key.lower()."""
-        for key in ("CODE", "Code", "OAuth_CODE"):
-            event = _make_event_with_frame_vars({key: "sensitive-value"})
-            result = _scrub_sensitive(event, {})
-            assert _get_frame_vars(result)[key] == "[Filtered]", f"Expected {key!r} to be filtered"
 
-    def test_code_verifier_pkce_is_filtered(self):
-        """PKCE code_verifier must not leak to Sentry (contains 'code' substring)."""
-        event = _make_event_with_frame_vars({"code_verifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"})
-        result = _scrub_sensitive(event, {})
-        assert _get_frame_vars(result)["code_verifier"] == "[Filtered]"
+class _CapturingTransport(Transport):
+    def __init__(self, options=None):
+        super().__init__(options)
+        self.envelopes = []
 
-    def test_frame_without_vars_is_safe(self):
-        """Frames without a 'vars' key (Sentry omits it when locals are unavailable) must not raise."""
-        event = {
-            "exception": {
-                "values": [{"stacktrace": {"frames": [{"type": "FrameWithNoVars"}]}}]
-            }
-        }
-        result = _scrub_sensitive(event, {})
-        assert result["exception"]["values"][0]["stacktrace"]["frames"][0] == {
-            "type": "FrameWithNoVars"
-        }
+    def capture_envelope(self, envelope):
+        self.envelopes.append(envelope)
+
+
+@pytest.fixture
+def sentry_events():
+    """Run a real Sentry client with the app's options and capture what it would send."""
+    transport = _CapturingTransport()
+    sentry_sdk.init(
+        dsn="https://public@sentry.invalid/1",
+        transport=transport,
+        integrations=[HttpxIntegration()],
+        **SENTRY_OPTIONS,
+    )
+    try:
+        yield transport
+    finally:
+        sentry_sdk.get_client().close()
+        sentry_sdk.init()
+
+
+def _sent_payload(transport: _CapturingTransport) -> bytes:
+    sentry_sdk.flush()
+    return b"".join(
+        item.payload.get_bytes() for env in transport.envelopes for item in env.items
+    )
+
+
+def test_real_sdk_event_carries_no_provider_secrets(sentry_events):
+    """The SDK's own httpx breadcrumbs must reach the transport already scrubbed."""
+    client = httpx.Client(transport=httpx.MockTransport(lambda req: httpx.Response(200)))
+    client.get(f"https://api.themoviedb.org/3/movie/550?api_key={_TMDB_KEY}")
+    client.get(f"https://api.trakt.tv/users/{_TRAKT_USER}/watched/movies")
+
+    def _fail(profile):
+        raise RuntimeError("boom")
+
+    try:
+        _fail({"user": {"username": _TRAKT_USER}})
+    except RuntimeError:
+        sentry_sdk.capture_exception()
+
+    payload = _sent_payload(sentry_events)
+    assert b"breadcrumbs" in payload
+    assert b"api.themoviedb.org/3/movie/550" in payload
+    assert _TMDB_KEY.encode() not in payload
+    assert _TRAKT_USER.encode() not in payload
+
+
+def test_real_sdk_event_carries_no_request_body(sentry_events):
+    """A request that crashes after reading its body must not ship the body to Sentry."""
+    app = FastAPI()
+
+    @app.post("/feedback")
+    async def _submit(request: Request):
+        await request.json()
+        raise RuntimeError("boom")
+
+    # Generated so the marker can't reach the payload via the frames' source context.
+    body_marker = f"private-feedback-{uuid.uuid4()}"
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.post("/feedback", json={"message": body_marker})
+    assert response.status_code == 500
+
+    assert body_marker.encode() not in _sent_payload(sentry_events)
+    (event,) = [
+        item.payload.json
+        for env in sentry_events.envelopes
+        for item in env.items
+        if item.type == "event"
+    ]
+    assert event["request"]["url"].endswith("/feedback")
+    assert not event["request"].get("data")

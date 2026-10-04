@@ -1761,6 +1761,44 @@ class TestPKCE:
         assert "Traceback" not in caplog.text
 
     @pytest.mark.asyncio
+    async def test_callback_raises_502_on_trakt_profile_error(self, monkeypatch, caplog):
+        """callback() raises 502 when Trakt rejects the profile fetch; no stack trace logged."""
+        import httpx as _httpx
+        import logging
+
+        monkeypatch.setattr(limiter, "enabled", False)
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 503
+        mock_client = AsyncMock()
+        mock_client.exchange_code = AsyncMock(return_value={"access_token": "tok"})
+        mock_client.get_profile.side_effect = _httpx.HTTPStatusError(
+            "Service Unavailable", request=MagicMock(), response=mock_resp
+        )
+        monkeypatch.setattr("backend.routers.auth.TraktClient", lambda **kw: mock_client)
+
+        state = "test-state"
+        request = _make_starlette_request(cookies={
+            OAUTH_STATE_COOKIE: state,
+            OAUTH_PKCE_COOKIE: "verifier123",
+        })
+
+        with caplog.at_level(logging.ERROR, logger="backend.routers.auth"):
+            with pytest.raises(HTTPException) as exc_info:
+                await callback(
+                    code="auth-code",
+                    request=request,
+                    background_tasks=MagicMock(),
+                    state=state,
+                    settings=_make_settings(),
+                    db=AsyncMock(),
+                )
+        assert exc_info.value.status_code == 502
+        assert "Trakt" in exc_info.value.detail
+        assert "status=503" in caplog.text
+        assert "Traceback" not in caplog.text
+
+    @pytest.mark.asyncio
     async def test_callback_uses_compare_digest_for_state(self, monkeypatch):
         """State validation must use hmac.compare_digest (constant-time), not == or !=."""
         import hmac as _hmac
