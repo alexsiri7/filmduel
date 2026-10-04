@@ -37,7 +37,7 @@ MediaType = Literal["movie", "show"]
 FilterType = Literal["genre", "decade"]
 SwipeNextAction = Literal["duel", "swipe"]
 TournamentStatus = Literal["active", "completed", "abandoned"]
-SuggestionsStatus = Literal["ready", "not_enough_films", "no_candidates"]
+SuggestionsStatus = Literal["ready", "not_enough_films", "no_candidates", "all_dismissed"]
 
 
 class MovieSchema(BaseModel):

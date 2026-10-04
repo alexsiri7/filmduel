@@ -90,7 +90,8 @@ export default function Suggestions({ mediaType = "movie" }) {
   }
 
   const activeSuggestions = suggestions.filter((s) => !s.dismissed_at);
-  const allDismissed = status === "ready" && suggestions.length > 0 && activeSuggestions.length === 0;
+  const allDismissed =
+    status === "all_dismissed" || (status === "ready" && activeSuggestions.length === 0);
 
   // Loading state
   if (status === "loading") {
