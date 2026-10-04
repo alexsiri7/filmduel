@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import uuid
 
 # Must set SECRET_KEY before importing backend.main — pydantic Settings validates it at import time.
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
@@ -13,7 +14,15 @@ import sentry_sdk  # noqa: E402
 from sentry_sdk.integrations.httpx import HttpxIntegration  # noqa: E402
 from sentry_sdk.transport import Transport  # noqa: E402
 
-from backend.main import _redact_url, _scrub_breadcrumb, _scrub_event  # noqa: E402
+from fastapi import FastAPI, Request  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+
+from backend.main import (  # noqa: E402
+    SENTRY_OPTIONS,
+    _redact_url,
+    _scrub_breadcrumb,
+    _scrub_event,
+)
 
 
 class TestRedactUrl:
@@ -120,23 +129,26 @@ class _CapturingTransport(Transport):
 
 @pytest.fixture
 def sentry_events():
-    """Run a real Sentry client wired to the app's hooks and capture what it would send."""
+    """Run a real Sentry client with the app's options and capture what it would send."""
     transport = _CapturingTransport()
     sentry_sdk.init(
         dsn="https://public@sentry.invalid/1",
         transport=transport,
         integrations=[HttpxIntegration()],
-        send_default_pii=False,
-        include_local_variables=False,
-        before_send=_scrub_event,
-        before_send_transaction=_scrub_event,
-        before_breadcrumb=_scrub_breadcrumb,
+        **SENTRY_OPTIONS,
     )
     try:
         yield transport
     finally:
         sentry_sdk.get_client().close()
         sentry_sdk.init()
+
+
+def _sent_payload(transport: _CapturingTransport) -> bytes:
+    sentry_sdk.flush()
+    return b"".join(
+        item.payload.get_bytes() for env in transport.envelopes for item in env.items
+    )
 
 
 def test_real_sdk_event_carries_no_provider_secrets(sentry_events):
@@ -152,12 +164,35 @@ def test_real_sdk_event_carries_no_provider_secrets(sentry_events):
         _fail({"user": {"username": _TRAKT_USER}})
     except RuntimeError:
         sentry_sdk.capture_exception()
-    sentry_sdk.flush()
 
-    payload = b"".join(
-        item.payload.get_bytes() for env in sentry_events.envelopes for item in env.items
-    )
+    payload = _sent_payload(sentry_events)
     assert b"breadcrumbs" in payload
     assert b"api.themoviedb.org/3/movie/550" in payload
     assert _TMDB_KEY.encode() not in payload
     assert _TRAKT_USER.encode() not in payload
+
+
+def test_real_sdk_event_carries_no_request_body(sentry_events):
+    """A request that crashes after reading its body must not ship the body to Sentry."""
+    app = FastAPI()
+
+    @app.post("/feedback")
+    async def _submit(request: Request):
+        await request.json()
+        raise RuntimeError("boom")
+
+    # Generated so the marker can't reach the payload via the frames' source context.
+    body_marker = f"private-feedback-{uuid.uuid4()}"
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.post("/feedback", json={"message": body_marker})
+    assert response.status_code == 500
+
+    assert body_marker.encode() not in _sent_payload(sentry_events)
+    (event,) = [
+        item.payload.json
+        for env in sentry_events.envelopes
+        for item in env.items
+        if item.type == "event"
+    ]
+    assert event["request"]["url"].endswith("/feedback")
+    assert not event["request"].get("data")

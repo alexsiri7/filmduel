@@ -79,17 +79,18 @@ def _scrub_event(event: dict, hint: dict) -> dict:
     return event
 
 
+SENTRY_OPTIONS = dict(
+    send_default_pii=False,
+    max_request_body_size="never",
+    include_local_variables=False,
+    traces_sample_rate=0.1,
+    before_send=_scrub_event,
+    before_send_transaction=_scrub_event,
+    before_breadcrumb=_scrub_breadcrumb,
+)
+
 if settings.SENTRY_DSN:
-    sentry_sdk.init(
-        dsn=settings.SENTRY_DSN,
-        send_default_pii=False,
-        max_request_body_size="never",
-        include_local_variables=False,
-        traces_sample_rate=0.1,
-        before_send=_scrub_event,
-        before_send_transaction=_scrub_event,
-        before_breadcrumb=_scrub_breadcrumb,
-    )
+    sentry_sdk.init(dsn=settings.SENTRY_DSN, **SENTRY_OPTIONS)
 
 _is_dev = settings.BASE_URL.startswith("http://localhost")
 
