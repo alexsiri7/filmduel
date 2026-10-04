@@ -679,6 +679,11 @@ def test_scrub_screenshot_is_registered_with_rate_limiter():
     assert "backend.routers.feedback.scrub_screenshot" in limiter._Limiter__marked_for_limiting
 
 
+def test_view_screenshot_is_registered_with_rate_limiter():
+    """view_screenshot must be registered in the slowapi limiter."""
+    assert "backend.routers.feedback.view_screenshot" in limiter._Limiter__marked_for_limiting
+
+
 def test_purge_expired_screenshots_is_registered_with_rate_limiter():
     """purge_expired_screenshots must be registered in the slowapi limiter."""
     assert "backend.routers.feedback.purge_expired_screenshots" in limiter._Limiter__marked_for_limiting
@@ -714,6 +719,15 @@ def test_scrub_screenshot_rate_limit_is_10_per_minute():
     limit_strings = [str(lim.limit) for lim in limits]
     assert any("10 per 1 minute" in s for s in limit_strings), (
         f"Expected '10/minute' limit on scrub_screenshot, got: {limit_strings}"
+    )
+
+
+def test_view_screenshot_rate_limit_is_10_per_minute():
+    """view_screenshot rate limit must be exactly 10/minute."""
+    limits = limiter._route_limits.get("backend.routers.feedback.view_screenshot", [])
+    limit_strings = [str(lim.limit) for lim in limits]
+    assert any("10 per 1 minute" in s for s in limit_strings), (
+        f"Expected '10/minute' limit on view_screenshot, got: {limit_strings}"
     )
 
 
@@ -760,7 +774,7 @@ def test_list_feedback_endpoint_reachable():
     fake_user.is_admin = True
     mock_db = AsyncMock()
     mock_result = MagicMock()
-    mock_result.scalars.return_value.all.return_value = []
+    mock_result.all.return_value = []
     mock_db.execute.return_value = mock_result
 
     app.dependency_overrides[get_current_user] = lambda: fake_user
@@ -771,6 +785,25 @@ def test_list_feedback_endpoint_reachable():
         resp = client.get("/api/feedback/admin")
 
     assert resp.status_code == 200
+
+
+def test_view_screenshot_endpoint_reachable():
+    """view_screenshot responds (not 500) with its request:Request param."""
+    fake_user = _make_user()
+    fake_user.is_admin = True
+    mock_db = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.one_or_none.return_value = None
+    mock_db.execute.return_value = mock_result
+
+    app.dependency_overrides[get_current_user] = lambda: fake_user
+    app.dependency_overrides[get_admin_user] = lambda: fake_user
+    app.dependency_overrides[get_db] = lambda: mock_db
+
+    with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+        resp = client.get(f"/api/feedback/admin/{uuid.uuid4()}/screenshot")
+
+    assert resp.status_code == 404
 
 
 def test_scrub_screenshot_endpoint_reachable():

@@ -60,6 +60,19 @@ def _make_feedback_report(**kwargs):
     return report
 
 
+def _make_feedback_row(**kwargs):
+    """Return a metadata row as selected by the admin feedback listing."""
+    row = MagicMock()
+    row.id = kwargs.get("id", uuid.uuid4())
+    row.user_id = kwargs.get("user_id", uuid.uuid4())
+    row.title = kwargs.get("title", "")
+    row.description = kwargs.get("description", "")
+    row.created_at = kwargs.get("created_at", datetime.now(timezone.utc))
+    row.purge_after = kwargs.get("purge_after", None)
+    row.has_screenshot = kwargs.get("has_screenshot", False)
+    return row
+
+
 @pytest.fixture(autouse=True)
 def _reset_limiter():
     """Reset slowapi in-memory counters between tests so the 5/hour cap doesn't leak."""
@@ -250,51 +263,122 @@ class TestSubmitFeedback:
 
 
 class TestAdminListFeedback:
-    def _get(self, client, reports=None):
+    def _get(self, client, rows=None, params=None):
         user = _make_user()
         db = _make_db()
-        reports = reports or []
         db.execute = AsyncMock(
-            return_value=MagicMock(
-                scalars=MagicMock(
-                    return_value=MagicMock(all=MagicMock(return_value=reports))
-                )
-            )
+            return_value=MagicMock(all=MagicMock(return_value=rows or []))
         )
         app.dependency_overrides[get_current_user] = lambda: user
         app.dependency_overrides[get_db] = lambda: db
         try:
-            return client.get("/api/feedback/admin")
+            return client.get("/api/feedback/admin", params=params), db
         finally:
             app.dependency_overrides.clear()
 
     def test_returns_200_empty_list(self, client):
-        response = self._get(client)
+        response, _ = self._get(client)
         assert response.status_code == 200
         assert response.json() == []
 
-    def test_decrypts_screenshot_in_response(self, client):
+    def test_list_is_metadata_only(self, client):
+        row = _make_feedback_row(title="Broken", has_screenshot=True)
+        response, _ = self._get(client, rows=[row])
+        data = response.json()
+        assert data[0]["id"] == str(row.id)
+        assert data[0]["title"] == "Broken"
+        assert data[0]["has_screenshot"] is True
+        assert "screenshot_data" not in data[0]
+
+    def test_list_never_selects_or_decrypts_ciphertext(self, client):
+        with patch("backend.routers.feedback.decrypt_token") as mock_decrypt:
+            _, db = self._get(client, rows=[_make_feedback_row(has_screenshot=True)])
+        mock_decrypt.assert_not_called()
+        stmt = db.execute.call_args.args[0]
+        names = [c.name for c in stmt.selected_columns]
+        assert "screenshot_data_enc" not in names
+        assert "has_screenshot" in names
+
+    def test_pagination_params_applied(self, client):
+        _, db = self._get(client, params={"limit": 10, "offset": 20})
+        stmt = db.execute.call_args.args[0]
+        compiled = str(stmt.compile(compile_kwargs={"literal_binds": True}))
+        assert "LIMIT 10 OFFSET 20" in compiled
+
+    def test_limit_above_max_rejected(self, client):
+        response, _ = self._get(client, params={"limit": 101})
+        assert response.status_code == 422
+
+
+class TestViewScreenshot:
+    def _view(self, client, report_id, row=None, user=None):
+        user = user or _make_user()
+        db = _make_db()
+        db.execute = AsyncMock(
+            return_value=MagicMock(one_or_none=MagicMock(return_value=row))
+        )
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: db
+        try:
+            return client.get(f"/api/feedback/admin/{report_id}/screenshot")
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_returns_decrypted_screenshot(self, client):
         from backend.services.token_crypto import encrypt_token
 
-        encrypted = encrypt_token("data:image/jpeg;base64,abc123")
-        report = _make_feedback_report(screenshot_data_enc=encrypted)
-        response = self._get(client, reports=[report])
-        data = response.json()
-        assert data[0]["screenshot_data"] == "data:image/jpeg;base64,abc123"
+        report = _make_feedback_report(
+            screenshot_data_enc=encrypt_token("data:image/jpeg;base64,abc123")
+        )
+        response = self._view(client, report.id, row=report)
+        assert response.status_code == 200
+        assert response.json() == {
+            "id": str(report.id),
+            "screenshot_data": "data:image/jpeg;base64,abc123",
+        }
+        assert response.headers["Cache-Control"] == "no-store"
 
-    def test_screenshot_data_null_when_none_stored(self, client):
+    def test_logs_screenshot_viewed_with_admin_id(self, client):
+        from backend.services.token_crypto import encrypt_token
+
+        admin = _make_user()
+        report = _make_feedback_report(
+            screenshot_data_enc=encrypt_token("data:image/jpeg;base64,abc123")
+        )
+        with patch("backend.routers.feedback.logger") as mock_logger:
+            self._view(client, report.id, row=report, user=admin)
+        logged = [c.args[0] % c.args[1:] for c in mock_logger.info.call_args_list]
+        assert any(
+            "screenshot_viewed" in m and str(report.id) in m and str(admin.id) in m
+            for m in logged
+        )
+
+    def test_404_when_report_missing(self, client):
+        response = self._view(client, uuid.uuid4(), row=None)
+        assert response.status_code == 404
+        assert response.json()["detail"].lower() == "report not found"
+
+    def test_404_when_no_screenshot(self, client):
         report = _make_feedback_report(screenshot_data_enc=None)
-        response = self._get(client, reports=[report])
-        assert response.json()[0]["screenshot_data"] is None
+        with patch("backend.routers.feedback.logger") as mock_logger:
+            response = self._view(client, report.id, row=report)
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Screenshot not found"
+        mock_logger.info.assert_not_called()
 
-    def test_corrupted_ciphertext_returns_null_not_500(self, client):
-        # A corrupted ciphertext should degrade gracefully (null screenshot) rather than crash all
+    def test_corrupted_ciphertext_returns_404_not_500(self, client):
         report = _make_feedback_report(
             screenshot_data_enc="not-valid-fernet-ciphertext"
         )
-        response = self._get(client, reports=[report])
-        assert response.status_code == 200
-        assert response.json()[0]["screenshot_data"] is None
+        response = self._view(client, report.id, row=report)
+        assert response.status_code == 404
+
+    def test_non_admin_refused(self, client):
+        user = _make_user()
+        user.is_admin = False
+        response = self._view(client, uuid.uuid4(), user=user)
+        assert response.status_code == 403
+        assert response.json()["detail"] == "Admin access required"
 
 
 class TestScrubScreenshot:
