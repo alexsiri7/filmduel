@@ -568,7 +568,7 @@ class TestRegenerateCandidatePool:
         assert lock_idx < first_load, "tournament must be locked before it is loaded"
 
         lock_params = set(events[lock_idx].compile(dialect=postgresql.dialect()).params.values())
-        assert "tournament_regen" in lock_params
+        assert "tournament_status" in lock_params
         assert str(tournament_id) in lock_params
 
     def test_create_persists_media_type_on_the_tournament_row(self):
@@ -700,6 +700,34 @@ class TestBracketSizeCap:
 
         assert resp.status_code == 400
         assert "Bracket too large" in resp.json()["detail"]
+        mock_curate.assert_not_awaited()
+
+    @pytest.mark.parametrize("status", ["abandoned", "completed"])
+    def test_regenerate_rejects_a_tournament_that_is_not_active(self, status):
+        """An abandoned or completed tournament must not get a fresh bracket (#692)."""
+        user = _make_user()
+        tournament_id = uuid.uuid4()
+        tournament = _make_tournament(
+            user.id, id=tournament_id, status=status, is_ai_curated=True, matches=[]
+        )
+        tournament.llm_response = {"_regen_count": 0, "_theme_hint": ""}
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+
+        with patch(
+            "backend.routers.tournaments._load_tournament",
+            new_callable=AsyncMock,
+            return_value=tournament,
+        ), patch(
+            "backend.routers.tournaments.curate_and_select_films",
+            new_callable=AsyncMock,
+        ) as mock_curate:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.post(f"/api/tournaments/{tournament_id}/regenerate")
+
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "Tournament is not active"
         mock_curate.assert_not_awaited()
 
     def test_pool_count_reports_the_largest_offerable_bracket(self):

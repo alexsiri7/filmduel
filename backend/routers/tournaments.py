@@ -299,13 +299,18 @@ async def regenerate_tournament(
     uid = current_user.id
 
     # Lock this tournament before reading _regen_count so a parallel regenerate
-    # cannot read the same count and both re-curate (SEC-02, #570).
-    await acquire_quota_lock(db, "tournament_regen", tournament_id)
+    # cannot read the same count and both re-curate (SEC-02, #570). The scope is
+    # shared with submit_match_result_endpoint and abandon_tournament so a match
+    # recorded during curation cannot be wiped by the match delete below (#692).
+    await acquire_quota_lock(db, "tournament_status", tournament_id)
 
     tournament = await _load_tournament(tournament_id, uid, db)
 
     # Enforce consent before revealing any business-logic details
     require_ai_consent(current_user)
+
+    if tournament.status != "active":
+        raise HTTPException(status_code=400, detail="Tournament is not active")
 
     if not tournament.is_ai_curated:
         raise HTTPException(
