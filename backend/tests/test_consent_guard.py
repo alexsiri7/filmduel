@@ -185,9 +185,11 @@ class TestTournamentConsentGuard:
         assert "consent" in resp.json()["detail"].lower()
         mock_db_query.assert_not_called()
 
-    def test_create_non_ai_tournament_allowed_with_consent(self):
-        """POST /api/tournaments with ai_curated=false succeeds once consent is given."""
-        user = _make_user(privacy_policy_accepted=True)
+    @pytest.mark.parametrize("use_ai_features", [True, False])
+    def test_create_non_ai_tournament_allowed_with_consent(self, use_ai_features):
+        """POST /api/tournaments with ai_curated=false succeeds once consent is given,
+        whatever the AI features toggle says."""
+        user = _make_user(privacy_policy_accepted=True, use_ai_features=use_ai_features)
         mock_db = AsyncMock()
         mock_db.commit = AsyncMock()
         mock_db.refresh = AsyncMock()
