@@ -15,6 +15,7 @@ from backend.db_models import User
 from backend.schemas import DuelSubmit, DuelResult
 from backend.routers.auth import get_admin_user, require_consent
 from backend.services.duel import process_duel
+from backend.services.duel_rejections import record_duel_rejection
 from backend.utils.tokens import decode_pair_token
 from backend.services.retention import purge_old_duels as _purge_old_duels
 from backend.services.sync import sync_ratings_background
@@ -53,6 +54,9 @@ async def submit_duel(
     token_ids = decode_pair_token(body.pair_token, user_id=str(uid))
     submitted_ids = {str(movie_a_id), str(movie_b_id)}
     if token_ids is None or token_ids != submitted_ids:
+        record_duel_rejection(
+            "invalid_pair_token" if token_ids is None else "pair_mismatch", uid
+        )
         raise HTTPException(status_code=400, detail="Invalid pair token")
 
     # Each served token is unique, so its digest identifies one submission: a
@@ -70,7 +74,7 @@ async def submit_duel(
         )
         await db.flush()
     except ValueError:
-        logger.warning("Invalid duel submission for user %s", uid)
+        record_duel_rejection("invalid_submission", uid)
         raise HTTPException(status_code=400, detail="Invalid duel submission")
     except IntegrityError:
         await db.rollback()

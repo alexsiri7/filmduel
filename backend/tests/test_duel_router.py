@@ -8,6 +8,7 @@ import time
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import IntegrityError
 
@@ -29,6 +30,7 @@ from backend.tests import SPA_HEADERS  # noqa: E402
 from backend.db import get_db  # noqa: E402
 from backend.routers.auth import CURRENT_PRIVACY_POLICY_VERSION, get_current_user  # noqa: E402
 from backend.schemas import DuelOutcome, DuelResult  # noqa: E402
+from backend.services import duel_rejections  # noqa: E402
 from backend.services.duel import ProcessDuelResult  # noqa: E402
 from backend.utils.tokens import PAIR_TOKEN_TTL_SECONDS, encode_pair_token  # noqa: E402
 
@@ -57,6 +59,20 @@ def _override_db():
     return _make_db()
 
 
+def _assert_rejection_logged(caplog, reason, *movie_ids):
+    """The rejection is warned about (#648) without leaking movie IDs (SEC-15)."""
+    assert any(
+        r.name == duel_rejections.__name__
+        and r.levelno == logging.WARNING
+        and f"reason={reason} " in r.getMessage()
+        for r in caplog.records
+    ), [r.getMessage() for r in caplog.records]
+    for record in caplog.records:
+        if record.levelno >= logging.INFO:
+            message = record.getMessage()
+            assert not any(m in message for m in movie_ids), message
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -69,6 +85,12 @@ class TestSubmitDuel:
 
     def teardown_method(self):
         app.dependency_overrides.clear()
+
+    @pytest.fixture(autouse=True)
+    def _fresh_spike_monitor(self, monkeypatch):
+        monkeypatch.setattr(
+            duel_rejections, "_monitor", duel_rejections.RejectionSpikeMonitor()
+        )
 
     def test_valid_submission_returns_200(self):
         """Valid duel submission returns 200 with ELO deltas."""
@@ -205,7 +227,7 @@ class TestSubmitDuel:
         # Without auth override, should fail with 401
         assert response.status_code == 401
 
-    def test_invalid_pair_token_returns_400(self):
+    def test_invalid_pair_token_returns_400(self, caplog):
         """A duel with an invalid/garbage pair token should return 400."""
         mid_a = str(uuid.uuid4())
         mid_b = str(uuid.uuid4())
@@ -222,8 +244,9 @@ class TestSubmitDuel:
         )
         assert response.status_code == 400
         assert "pair token" in response.json()["detail"].lower()
+        _assert_rejection_logged(caplog, "invalid_pair_token", mid_a, mid_b)
 
-    def test_mismatched_pair_token_returns_400(self):
+    def test_mismatched_pair_token_returns_400(self, caplog):
         """A valid token for different movies should be rejected."""
         mid_a = str(uuid.uuid4())
         mid_b = str(uuid.uuid4())
@@ -245,15 +268,18 @@ class TestSubmitDuel:
         )
         assert response.status_code == 400
         assert "pair token" in response.json()["detail"].lower()
+        _assert_rejection_logged(caplog, "pair_mismatch", mid_a, mid_b)
 
-    def test_missing_pair_token_returns_400(self):
+    def test_missing_pair_token_returns_400(self, caplog):
         """A duel with no pair_token at all should return 400, not a raw 422."""
+        mid_a = str(uuid.uuid4())
+        mid_b = str(uuid.uuid4())
         client = TestClient(app, headers=SPA_HEADERS)
         response = client.post(
             "/api/duels",
             json={
-                "movie_a_id": str(uuid.uuid4()),
-                "movie_b_id": str(uuid.uuid4()),
+                "movie_a_id": mid_a,
+                "movie_b_id": mid_b,
                 "outcome": "a_wins",
                 "mode": "discovery",
                 # no pair_token
@@ -261,6 +287,7 @@ class TestSubmitDuel:
         )
         assert response.status_code == 400
         assert response.json()["detail"] == "Invalid pair token"
+        _assert_rejection_logged(caplog, "missing_pair_token", mid_a, mid_b)
 
     def test_null_pair_token_returns_400(self):
         """A client sending pair_token: null is just as tokenless as one omitting it."""
@@ -328,7 +355,7 @@ class TestSubmitDuel:
         assert response.json()["detail"] == "Invalid pair token"
         mock_pd.assert_not_called()
 
-    def test_process_duel_value_error_returns_generic_400(self):
+    def test_process_duel_value_error_returns_generic_400(self, caplog):
         """ValueError from process_duel must return 400 with generic detail — not str(e)."""
         mid_a = str(uuid.uuid4())
         mid_b = str(uuid.uuid4())
@@ -351,6 +378,7 @@ class TestSubmitDuel:
         assert response.status_code == 400
         assert response.json()["detail"] == "Invalid duel submission"
         assert "pool" not in response.json()["detail"]
+        _assert_rejection_logged(caplog, "invalid_submission", mid_a, mid_b)
 
     def test_submitting_a_served_pair_is_accepted(self):
         """Contract with frontend/src/api.js submitDuel: the ids and next_pair_token
