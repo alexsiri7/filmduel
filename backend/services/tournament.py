@@ -392,20 +392,21 @@ async def record_match_winner(
         )
 
     # ELO update + duel record (same session, 2 extra queries)
-    um_w = (
-        await db.execute(
-            select(UserMovie)
-            .where(UserMovie.user_id == user_id, UserMovie.movie_id == winner_id)
-            .with_for_update()
-        )
-    ).scalar_one()
-    um_l = (
-        await db.execute(
-            select(UserMovie)
-            .where(UserMovie.user_id == user_id, UserMovie.movie_id == loser_id)
-            .with_for_update()
-        )
-    ).scalar_one()
+    # Acquire row locks in deterministic UUID order to prevent deadlocks
+    first_id, second_id = sorted([winner_id, loser_id])
+    um_first, um_second = [
+        (
+            await db.execute(
+                select(UserMovie)
+                .where(UserMovie.user_id == user_id, UserMovie.movie_id == movie_id)
+                .with_for_update()
+            )
+        ).scalar_one()
+        for movie_id in (first_id, second_id)
+    ]
+    um_w, um_l = (
+        (um_first, um_second) if first_id == winner_id else (um_second, um_first)
+    )
 
     duel = await apply_elo_result(
         db, user_id, winner_id, loser_id, um_w, um_l, "tournament"
