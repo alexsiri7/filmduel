@@ -95,7 +95,7 @@ class TestCreateTournamentDailyCap:
 
     def test_create_tournament_enforces_daily_cap_at_100(self):
         """POST /api/tournaments returns 429 when 100 tournaments created in 24h."""
-        user = _make_user(privacy_policy_accepted=False)
+        user = _make_user(privacy_policy_accepted=True)
         mock_db = AsyncMock()
 
         # Mock count query to return 100 (at daily cap)
@@ -119,7 +119,7 @@ class TestCreateTournamentDailyCap:
         """The cap count must run under a per-user advisory lock (SEC-02, #570)."""
         from sqlalchemy.dialects import postgresql
 
-        user = _make_user(privacy_policy_accepted=False)
+        user = _make_user(privacy_policy_accepted=True)
         mock_db = AsyncMock()
         statements: list = []
 

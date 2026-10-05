@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.db import acquire_quota_lock, get_db
 from backend.db_models import FeedbackReport, User
 from backend.rate_limit import limiter
-from backend.routers.auth import get_admin_user, get_current_user
+from backend.routers.auth import get_admin_user, require_consent
 from backend.schemas import (
     FeedbackAdminResponse,
     FeedbackReportResponse,
@@ -86,7 +86,7 @@ async def submit_feedback(
     title: str = Form(..., max_length=200),
     description: str = Form(..., max_length=5000),
     screenshot: UploadFile = File(None),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_consent),
     db: AsyncSession = Depends(get_db),
 ):
     """Submit a new feedback report.

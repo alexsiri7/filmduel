@@ -139,10 +139,12 @@ POST /api/suggestions/regenerate
 
 POST /api/suggestions/:id/dismiss
      Soft-delete — mark dismissed_at. Excluded from future responses.
+     403 { detail: "Privacy policy consent required" } — policy not accepted
 
 POST /api/suggestions/:id/watchlist
      Mark as added_to_watchlist. Optionally add to Trakt watchlist:
      POST https://api.trakt.tv/sync/watchlist with the movie's trakt_id.
+     403 { detail: "Privacy policy consent required" } — policy not accepted
 ```
 
 ### Frontend

@@ -196,7 +196,7 @@ POST /api/tournaments
      Response: full tournament object with bracket (all matches pre-generated, 
                byes already resolved, future match slots empty)
      403 { detail: "AI features are disabled. Enable them in settings to use this feature." } — when ai_curated=true and use_ai_features=false
-     403 { detail: "Privacy policy consent required" } — when ai_curated=true and policy not accepted
+     403 { detail: "Privacy policy consent required" } — when policy not accepted
 
 GET  /api/tournaments
      List user's tournaments (active first, then completed)
@@ -226,6 +226,7 @@ POST /api/tournaments/:id/confirm
 
 DELETE /api/tournaments/:id
      Abandon (soft delete — set status='abandoned')
+     403 { detail: "Privacy policy consent required" } — when policy not accepted
 ```
 
 ### Bracket generation (on POST /api/tournaments)

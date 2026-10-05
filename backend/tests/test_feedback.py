@@ -31,12 +31,14 @@ from backend.db import get_db  # noqa: E402
 from backend.main import app  # noqa: E402
 from backend.tests import SPA_HEADERS  # noqa: E402
 from backend.rate_limit import limiter  # noqa: E402
-from backend.routers.auth import get_current_user  # noqa: E402
+from backend.routers.auth import CURRENT_PRIVACY_POLICY_VERSION, get_current_user  # noqa: E402
 
 
 def _make_user():
     user = MagicMock()
     user.id = uuid.uuid4()
+    user.privacy_policy_accepted = True
+    user.privacy_policy_version = CURRENT_PRIVACY_POLICY_VERSION
     return user
 
 

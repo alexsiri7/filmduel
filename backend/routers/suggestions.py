@@ -20,7 +20,7 @@ from backend.db import (
 )
 from backend.rate_limit import limiter
 from backend.db_models import Movie, Suggestion, User, UserMovie
-from backend.routers.auth import ensure_fresh_token, get_current_user, require_ai_consent
+from backend.routers.auth import ensure_fresh_token, get_current_user, require_ai_consent, require_consent
 from backend.schemas import (
     MediaType,
     MovieSchema,
@@ -271,7 +271,7 @@ async def regenerate_suggestions(
 async def dismiss_suggestion(
     request: Request,
     suggestion_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_consent),
     db: AsyncSession = Depends(get_db),
 ):
     """Mark suggestion as dismissed."""
@@ -287,7 +287,7 @@ async def add_to_watchlist(
     request: Request,
     suggestion_id: str,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_consent),
     db: AsyncSession = Depends(get_db),
 ):
     """Mark suggestion as added to watchlist and sync to Trakt."""
@@ -328,7 +328,7 @@ async def add_to_watchlist(
 async def mark_seen(
     request: Request,
     suggestion_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_consent),
     db: AsyncSession = Depends(get_db),
 ):
     """Mark the suggested film as seen and dismiss the suggestion."""

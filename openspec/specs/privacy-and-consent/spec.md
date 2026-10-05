@@ -8,7 +8,7 @@ FilmDuel processes viewing preferences, which are personal data. It asks for inf
 
 ### Requirement: Consent to the current policy version gates data collection
 
-After sign-in, a user SHALL accept the current privacy policy version before any provider data is imported or any preference data (swipes, duels, tournament results, manual syncs) is recorded; such requests from a user without consent SHALL be refused with "Privacy policy consent required". Accepting SHALL record the version and time. Consent to an unknown version SHALL be refused. When the policy version changes, the user SHALL be asked to consent again.
+After sign-in, a user SHALL accept the current privacy policy version before any provider data is imported or any data about them is recorded — swipes, duels, tournaments (creating, playing, abandoning), suggestion responses (dismiss, watchlist, seen), manual syncs and feedback reports; such requests from a user without consent SHALL be refused with "Privacy policy consent required". Accepting SHALL record the version and time. Consent to an unknown version SHALL be refused. When the policy version changes, the user SHALL be asked to consent again.
 
 #### Scenario: First sign-in
 - GIVEN a newly signed-in user who has not consented
