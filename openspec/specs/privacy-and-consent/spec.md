@@ -67,6 +67,15 @@ A daily purge SHALL reduce duels older than their retention window (default 180 
 - WHEN the daily purge runs
 - THEN that swipe result no longer exists
 
+### Requirement: Abandoned sign-ups are deleted
+
+Signing in creates an account and stores provider tokens before the user accepts the privacy policy. The daily purge SHALL delete accounts that never accepted the privacy policy once they are older than a configurable window (default 7 days), after a best-effort revocation of their provider tokens upstream. Accounts that accepted any policy version SHALL NOT be deleted by this purge.
+
+#### Scenario: Abandoned sign-up purged
+- GIVEN a user who signed in 8 days ago and never accepted the privacy policy
+- WHEN the daily purge runs
+- THEN that account no longer exists and its provider token has been revoked
+
 ### Requirement: Preference data stays out of logs and error reports
 
 Log lines that pair a user with preference data (film ids, duel or swipe outcomes, ratings, taste profiles) SHALL be emitted only at debug level. Error reports SHALL carry no default personal data, and variables whose names suggest tokens, secrets or codes SHALL be filtered from them.

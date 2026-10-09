@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from sqlalchemy.dialects import postgresql
@@ -17,6 +17,7 @@ from backend.services.retention import (
     purge_old_suggestions,
     purge_old_swipe_results,
     purge_old_tournament_llm_responses,
+    purge_unconsented_users,
 )
 
 
@@ -193,3 +194,84 @@ class TestPurgeOldFeedbackReports:
         db = _make_db([])
         count = await purge_old_feedback_reports(db)
         assert count == 0
+
+
+class TestPurgeUnconsentedUsers:
+    @staticmethod
+    def _make_db(rows):
+        """rows: (trakt_access_token_enc, simkl_access_token_enc) per deleted user."""
+        db = AsyncMock()
+        db.execute = AsyncMock(
+            return_value=MagicMock(fetchall=MagicMock(return_value=list(rows)))
+        )
+        return db
+
+    @pytest.fixture
+    def clients(self):
+        with patch("backend.services.retention.TraktClient") as trakt_cls, \
+             patch("backend.services.retention.SimklClient") as simkl_cls, \
+             patch(
+                 "backend.services.retention.decrypt_token",
+                 side_effect=lambda enc: f"plain-{enc}",
+             ) as decrypt:
+            trakt = trakt_cls.return_value
+            simkl = simkl_cls.return_value
+            trakt.revoke_token = AsyncMock()
+            simkl.revoke_token = AsyncMock()
+            yield trakt, simkl, decrypt
+
+    @pytest.mark.asyncio
+    async def test_returns_count_of_deleted_rows(self, clients):
+        db = self._make_db([("t1", None), (None, "s1"), (None, None)])
+        assert await purge_unconsented_users(db) == 3
+
+    @pytest.mark.asyncio
+    async def test_nothing_to_delete_revokes_nothing(self, clients):
+        trakt, simkl, _ = clients
+        db = self._make_db([])
+        assert await purge_unconsented_users(db) == 0
+        trakt.revoke_token.assert_not_awaited()
+        simkl.revoke_token.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_deletes_only_old_never_consented_users(self, clients):
+        db = self._make_db([])
+        await purge_unconsented_users(db)
+        db.execute.assert_awaited_once()
+        compiled = str(db.execute.call_args[0][0].compile(dialect=postgresql.dialect()))
+        assert "DELETE FROM users" in compiled
+        assert "users.privacy_policy_accepted IS false" in compiled
+        assert "users.created_at <" in compiled
+
+    @pytest.mark.asyncio
+    async def test_revokes_trakt_token(self, clients):
+        trakt, simkl, _ = clients
+        db = self._make_db([("t1", None)])
+        await purge_unconsented_users(db)
+        trakt.revoke_token.assert_awaited_once()
+        assert trakt.revoke_token.call_args.args == ("plain-t1",)
+        simkl.revoke_token.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_revokes_simkl_token(self, clients):
+        trakt, simkl, _ = clients
+        db = self._make_db([(None, "s1")])
+        await purge_unconsented_users(db)
+        simkl.revoke_token.assert_awaited_once()
+        assert simkl.revoke_token.call_args.args == ("plain-s1",)
+        trakt.revoke_token.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_undecryptable_token_does_not_stop_purge(self, clients):
+        trakt, _, decrypt = clients
+
+        def _decrypt(enc):
+            if enc == "bad":
+                raise RuntimeError("Token decryption failed")
+            return f"plain-{enc}"
+
+        decrypt.side_effect = _decrypt
+        db = self._make_db([("bad", None), ("t2", None)])
+        assert await purge_unconsented_users(db) == 2
+        trakt.revoke_token.assert_awaited_once()
+        assert trakt.revoke_token.call_args.args == ("plain-t2",)
