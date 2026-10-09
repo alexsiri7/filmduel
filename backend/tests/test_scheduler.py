@@ -62,7 +62,8 @@ class TestRunRetentionPurge:
              patch("backend.scheduler.purge_expired_screenshots", return_value=0) as mock_ss, \
              patch("backend.scheduler.purge_old_tournament_llm_responses", return_value=0) as mock_tourn, \
              patch("backend.scheduler.purge_old_suggestions", return_value=0) as mock_sugg, \
-             patch("backend.scheduler.purge_old_feedback_reports", return_value=0) as mock_fb:
+             patch("backend.scheduler.purge_old_feedback_reports", return_value=0) as mock_fb, \
+             patch("backend.scheduler.purge_unconsented_users", return_value=0) as mock_unc:
             await _run_retention_purge()
 
         assert mock_duels.await_count == 1
@@ -71,13 +72,14 @@ class TestRunRetentionPurge:
         assert mock_tourn.await_count == 1
         assert mock_sugg.await_count == 1
         assert mock_fb.await_count == 1
+        assert mock_unc.await_count == 1
         for session in sessions:
             session.commit.assert_awaited_once()
             session.rollback.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_logs_all_six_metrics(self, caplog):
-        """Verify the summary log line includes counts for all six purge jobs."""
+    async def test_logs_all_seven_metrics(self, caplog):
+        """Verify the summary log line includes counts for all seven purge jobs."""
 
         def make_ctx():
             session, ctx = _make_mock_ctx()
@@ -90,12 +92,14 @@ class TestRunRetentionPurge:
                  patch("backend.scheduler.purge_expired_screenshots", return_value=3), \
                  patch("backend.scheduler.purge_old_tournament_llm_responses", return_value=4), \
                  patch("backend.scheduler.purge_old_suggestions", return_value=5), \
-                 patch("backend.scheduler.purge_old_feedback_reports", return_value=6):
+                 patch("backend.scheduler.purge_old_feedback_reports", return_value=6), \
+                 patch("backend.scheduler.purge_unconsented_users", return_value=7):
                 await _run_retention_purge()
 
         assert "tournament_llm=" in caplog.text
         assert "suggestions=" in caplog.text
         assert "feedback_reports=" in caplog.text
+        assert "unconsented_users=" in caplog.text
 
     @pytest.mark.asyncio
     async def test_rolls_back_on_exception_and_continues(self):
@@ -113,14 +117,15 @@ class TestRunRetentionPurge:
              patch("backend.scheduler.purge_expired_screenshots", return_value=0), \
              patch("backend.scheduler.purge_old_tournament_llm_responses", return_value=0), \
              patch("backend.scheduler.purge_old_suggestions", return_value=0), \
-             patch("backend.scheduler.purge_old_feedback_reports", return_value=0):
+             patch("backend.scheduler.purge_old_feedback_reports", return_value=0), \
+             patch("backend.scheduler.purge_unconsented_users", return_value=0):
             # Should NOT raise — per-session errors are logged and swallowed
             await _run_retention_purge()
 
         # First session (duels) rolled back, not committed
         sessions[0].rollback.assert_awaited_once()
         sessions[0].commit.assert_not_awaited()
-        # Remaining sessions (swipes, screenshots, tournament_llm, suggestions, feedback_reports) committed normally
+        # Remaining sessions (swipes, screenshots, tournament_llm, suggestions, feedback_reports, unconsented_users) committed normally
         for session in sessions[1:]:
             session.commit.assert_awaited_once()
             session.rollback.assert_not_awaited()
