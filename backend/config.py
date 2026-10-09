@@ -193,6 +193,9 @@ class Settings(BaseSettings):
     TOURNAMENT_LLM_RETENTION_DAYS: int = 180
     SUGGESTION_RETENTION_DAYS: int = 180
     FEEDBACK_RETENTION_DAYS: int = 365
+    # Accounts that signed in but never accepted the privacy policy (AUD-16).
+    # ge=1 so a misconfiguration cannot delete users mid-sign-up.
+    UNCONSENTED_USER_RETENTION_DAYS: Annotated[int, Field(ge=1)] = 7
     # Hour of day (UTC) at which the scheduled retention purge runs (0-23)
     PURGE_SCHEDULE_HOUR: Annotated[int, Field(ge=0, le=23)] = 2
 

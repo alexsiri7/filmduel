@@ -23,8 +23,12 @@ jobs:
 
       - name: Validate specs
         run: |
+          # Pinned: 1.14.1 escalated the "long requirement text" check from
+          # INFO to WARNING, which --strict now treats as a failure across
+          # specs this repo hasn't touched. Bump deliberately once those are
+          # addressed.
           for attempt in 1 2 3; do
-            npx -y @fission-ai/openspec@latest validate --specs --strict && exit 0
+            npx -y @fission-ai/openspec@1.14.0 validate --specs --strict && exit 0
             echo "Attempt $attempt failed, retrying in 10s..."
             sleep 10
           done

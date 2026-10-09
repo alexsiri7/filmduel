@@ -146,6 +146,15 @@ class TestRetentionDefaults:
         s = _make_settings(SWIPE_RETENTION_DAYS=365)
         assert s.SWIPE_RETENTION_DAYS == 365
 
+    def test_unconsented_user_retention_days_default(self):
+        s = _make_settings()
+        assert s.UNCONSENTED_USER_RETENTION_DAYS == 7
+
+    def test_unconsented_user_retention_days_rejects_zero(self):
+        """0 would delete users who are still on the consent screen."""
+        with pytest.raises(ValidationError):
+            _make_settings(UNCONSENTED_USER_RETENTION_DAYS=0)
+
     def test_purge_schedule_hour_default(self):
         """PURGE_SCHEDULE_HOUR defaults to 2 UTC (low-traffic window)."""
         s = _make_settings()
