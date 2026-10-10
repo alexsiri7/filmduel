@@ -1,0 +1,184 @@
+# unsafe-change: denylist for PRs that close an issue only the factory's
+# automated screening vetted (label archon:auto-approved without the owner's
+# archon:approved; see interstellarai.net ops/cron/README.md "Trust model").
+#
+# Such a PR FAILS only if it does one of the things below; everything else
+# (app code, tests, fixtures, docs, templates, CSS, ordinary migrations in the
+# app's own schema) passes. The rules are the same for every issue type.
+# Read from the base branch by .github/unsafe-change/check.py
+# (pull_request_target), so a PR cannot loosen the check that judges it.
+#
+# Globs: `*` matches across `/`; a glob without `/` also matches the file's
+# basename at any depth (like .gitignore).
+
+screened_label: archon:auto-approved
+approved_label: archon:approved
+
+# 1. CI, deploy, infra, build scripts and agent instructions. Any status
+#    (added, modified, removed, renamed from/to).
+deny_paths:
+  - ".github/*"
+  - "Dockerfile*"
+  - ".dockerignore"
+  - "docker-compose*"
+  - ".railway/*"
+  - "railway.*"
+  - "fly.toml"
+  - "vercel.json"
+  - "wrangler.toml"
+  - "Procfile"
+  - "ops/*"
+  - "scripts/deploy*"
+  - ".env*"
+  - "build.rs"
+  - ".cargo/*"
+  - "Makefile"
+  - "justfile"
+  - ".npmrc"
+  - ".husky/*"
+  - "*.gradle"
+  - "*.gradle.kts"
+  - "gradle.properties"
+  - "gradlew*"
+  - "CLAUDE.md"
+  - "AGENTS.md"
+  - ".claude/*"
+  - ".archon/*"
+
+# Per-repo additions to deny_paths.
+extra_deny_paths:
+  - "backend/config.py"    # settings: reads every key, DB URL, cookie/TLS flags from env
+  - "backend/db.py"        # DB engine/connection and TLS config
+  - "backend/certs/*"      # pinned DB CA certificate
+  - "backend/main.py"      # Sentry init, CORS, CSRF and CSP middleware
+  - "backend/rate_limit.py"  # abuse guard; reads env and session cookies
+  - "backend/utils/cookies.py"  # session/OAuth cookie names (__Host- rule)
+  - "backend/duel_smoke.py"  # post-deploy smoke test run with prod SECRET_KEY
+  - "backend/services/llm.py"   # LLM API key client
+  - "backend/services/tmdb.py"  # TMDB API key client
+  - "backend/services/trakt.py"  # Trakt OAuth client (client secret)
+  - "backend/services/simkl.py"  # Simkl OAuth client (client secret)
+  - "backend/migrations/env.py"  # Alembic DB URL wiring
+  - "alembic.ini"          # Alembic config
+  - "entrypoint.sh"        # container entrypoint: env checks, uvicorn, migrations
+  - ".railwayignore"       # Railway deploy upload filter
+  - "frontend/src/lib/sentry.js"  # Sentry DSN wiring
+  - "frontend/vite.config.js"     # frontend build config
+  - ".beads/*"             # agent tooling config and formulas
+  - "scripts/*"            # agent/factory tooling scripts
+
+# 2. Secrets, credential and auth handling: a path containing any of these
+#    words (case-insensitive substring) fails.
+sensitive_path_words:
+  - auth        # also oauth, middleware/auth
+  - token
+  - secret
+  - credential
+  - session
+  - security
+  - crypto
+  - permission
+
+# Paths the words above do not apply to (data, not code handling secrets).
+sensitive_path_exempt:
+  - "*fixtures/*"
+  - "*snapshots/*"
+  - "*.snap"
+  - "*.md"
+
+# 3. New dependencies. Cargo.toml, package.json, pyproject.toml,
+#    requirements*.txt, go.mod and pubspec.yaml are parsed at the base and
+#    head commits: a dependency name (or a git/path/URL source) that is not
+#    in the base fails; version bumps of existing ones and lockfile-only
+#    changes pass. So do edits to package.json "scripts" and Cargo.toml
+#    [patch]/[replace]/build, which fail. Built into the checker.
+
+# 4. Processes, environment variables and raw sockets: regexes matched
+#    against ADDED lines of files with these extensions.
+code_patterns:
+  rs:
+    - '\b(std|tokio|async_std)::process\b'
+    - '\bprocess::'
+    - 'Command::new'
+    - '\benv::(var|vars|var_os|vars_os|set_var|remove_var)\b'
+    - 'use\s+std::env\b'
+    - 'use\s+(std|tokio|async_std)::\{[^}]*\b(process|env)\b'
+    - '\b(option_)?env!\s*\(\s*"(?!CARGO_)'   # compile-time env; Cargo's own metadata is fine
+    - '\b(TcpStream|TcpListener|UdpSocket|UnixStream|UnixListener|UnixDatagram)\b'
+    - '\blibc::'
+  py:
+    - '\bsubprocess\b'
+    - '\bos\.(system|popen|exec\w*|spawn\w*|fork\w*|environ|getenv|putenv)\b'
+    - '\bfrom\s+os\s+import\b.*\b(system|popen|exec\w*|spawn\w*|environ|getenv)\b'
+    - '\bcreate_subprocess_\w+'
+    - '\b(import|from)\s+(socket|pty|pexpect)\b'
+    - '\bsocket\.socket\b'
+    - '\bload_dotenv\b'
+  js: &js
+    - '\bchild_process\b'
+    - '\bprocess\.env\b'
+    - '\bimport\.meta\.env\b'
+    - '\bBun\.(spawn|spawnSync|env)\b'
+    - '\bBun\.\$'
+    - 'import\s*\{[^}]*\$[^}]*\}\s*from\s*[''"]bun[''"]'
+    - '\bDeno\.(run|Command|env)\b'
+    - '(require\s*\(\s*|from\s+|import\s*\(\s*)[''"](node:)?(net|dgram|tls|cluster|worker_threads)[''"]'
+    - '\b(execa|shelljs)\b'
+  mjs: *js
+  cjs: *js
+  jsx: *js
+  ts: *js
+  mts: *js
+  cts: *js
+  tsx: *js
+  dart:
+    - '\bProcess\.(run|runSync|start|startSync)\b'
+    - '\bPlatform\.environment\b'
+    - '\b(String|bool|int)\.fromEnvironment\b'
+    - '\b(Raw)?(Secure)?(Server)?Socket\.(connect|bind|startConnect)\b'
+    - '\bRawDatagramSocket\b'
+  go:
+    - '"os/exec"'
+    - '"syscall"'
+    - '\bexec\.Command'
+    - '\bos\.(Getenv|LookupEnv|Environ|StartProcess|Setenv)\b'
+    - '\bnet\.(Dial|Listen)\w*'
+  kt: &jvm
+    - '\bProcessBuilder\b'
+    - '\.exec\s*\('
+    - '\bSystem\.getenv\b'
+    - '\bjava\.net\.(Socket|ServerSocket|DatagramSocket)\b'
+  java: *jvm
+  sh: &shell
+    - '.'   # any added line in a shell script runs processes
+  bash: *shell
+
+# 5. Migrations: ADDED lines of files matching `paths` must not do anything
+#    beyond ordinary schema/data changes in the app's own schema(s).
+migrations:
+  paths:
+    - "*.sql"
+    - "*/migrations/*"
+    - "migrations/*"
+    - "*/alembic/*"
+  # Schemas the app owns. A schema-qualified name after FROM/JOIN/INTO/
+  # UPDATE/TABLE/REFERENCES (a table, not a column) in any other schema
+  # fails; after ON, only a foreign schema below fails (ON is also a join
+  # condition). Empty app_schemas: only the foreign schemas are checked.
+  # Comments and string literals are ignored.
+  app_schemas: []
+  foreign_schemas: [public, auth, storage, extensions, pg_catalog, information_schema, vault, realtime, supabase_functions, cron, net, pgsodium, graphql, pg_temp]
+  deny_sql:
+    - '\bGRANT\b'
+    - '\bREVOKE\b'
+    - '\b(CREATE|ALTER|DROP)\s+(ROLE|USER|GROUP|EXTENSION|SCHEMA|DATABASE|SERVER|FOREIGN|PUBLICATION|SUBSCRIPTION|EVENT\s+TRIGGER|LANGUAGE|POLICY|DEFAULT\s+PRIVILEGES)\b'
+    - '\bOWNER\s+TO\b'
+    - '\b(DROP|REASSIGN)\s+OWNED\b'
+    - '\bROW\s+LEVEL\s+SECURITY\b'
+    - '\bSECURITY\s+DEFINER\b'
+    - '\bSET\s+(LOCAL\s+|SESSION\s+)?(ROLE|SESSION\s+AUTHORIZATION|search_path)\b'
+    - '\bsearch_path\b'
+    - '\bEXECUTE\b'
+    - '\bCOPY\b'
+    - '\b(pg_read_file|pg_read_binary_file|pg_ls_dir|lo_import|lo_export|dblink\w*|pg_execute_server_program)\b'
+    - '\bALTER\s+SYSTEM\b'
