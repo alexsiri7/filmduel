@@ -127,6 +127,29 @@ class TestCorsOriginsValidation:
         assert s.CORS_ORIGINS == ["https://example.com", "https://other.com"]
 
 
+class TestLlmConcurrencyBound:
+    """LLM_MAX_CONCURRENT must leave a DB connection free (AUD-01)."""
+
+    def test_default_below_pool_capacity(self):
+        s = _make_settings()
+        assert s.LLM_MAX_CONCURRENT < backend.config.DB_POOL_SIZE + backend.config.DB_MAX_OVERFLOW
+
+    def test_one_below_pool_capacity_accepted(self):
+        capacity = backend.config.DB_POOL_SIZE + backend.config.DB_MAX_OVERFLOW
+        s = _make_settings(LLM_MAX_CONCURRENT=capacity - 1)
+        assert s.LLM_MAX_CONCURRENT == capacity - 1
+
+    def test_equal_to_pool_capacity_rejected(self):
+        capacity = backend.config.DB_POOL_SIZE + backend.config.DB_MAX_OVERFLOW
+        with pytest.raises(ValidationError, match="below the DB pool capacity"):
+            _make_settings(LLM_MAX_CONCURRENT=capacity)
+
+    def test_shrinking_the_pool_tightens_the_bound(self, monkeypatch):
+        monkeypatch.setattr(backend.config, "DB_MAX_OVERFLOW", 0)
+        with pytest.raises(ValidationError, match="below the DB pool capacity"):
+            _make_settings(LLM_MAX_CONCURRENT=backend.config.DB_POOL_SIZE)
+
+
 class TestRetentionDefaults:
     def test_duel_retention_days_default(self):
         """DUEL_RETENTION_DAYS defaults to 180 (compliance window)."""

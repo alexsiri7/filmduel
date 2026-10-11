@@ -46,6 +46,12 @@ _PROXY_PLATFORM_ENV_VARS = (
     "K_SERVICE",             # Google Cloud Run
 )
 
+# Engine pool sizing for backend/db.py. Kept small: the database lives in
+# schema `filmduel` of a Supabase project shared with other apps, so its pooler
+# connection budget is shared too.
+DB_POOL_SIZE = 3
+DB_MAX_OVERFLOW = 2
+
 _SUPABASE_ROOT_CA = Path(__file__).resolve().parent / "certs" / "supabase-root-2021-ca.crt"
 
 _WEAK_KEY_PLACEHOLDERS = frozenset(
@@ -169,9 +175,19 @@ class Settings(BaseSettings):
     # connection in the calling request (AUD-01), so this must stay well below
     # the engine's pool_timeout (30 s) multiplied by the pool size.
     LLM_TIMEOUT_SECONDS: Annotated[float, Field(gt=0, le=120)] = 30.0
-    # Process-wide cap on concurrent LLM calls. Must be < pool_size + max_overflow
-    # (5 in backend/db.py) so LLM-backed requests can never pin the whole pool.
-    LLM_MAX_CONCURRENT: Annotated[int, Field(ge=1, le=4)] = 2
+    # Process-wide cap on concurrent LLM calls; see llm_slots_below_pool_capacity.
+    LLM_MAX_CONCURRENT: Annotated[int, Field(ge=1)] = 2
+
+    @model_validator(mode="after")
+    def llm_slots_below_pool_capacity(self) -> "Settings":
+        """Each in-flight LLM call pins a pooled DB connection (AUD-01), so the
+        cap must leave at least one connection free for everything else."""
+        pool_capacity = DB_POOL_SIZE + DB_MAX_OVERFLOW
+        if self.LLM_MAX_CONCURRENT >= pool_capacity:
+            raise ValueError(
+                f"LLM_MAX_CONCURRENT must be below the DB pool capacity ({pool_capacity})"
+            )
+        return self
 
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
