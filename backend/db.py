@@ -9,7 +9,12 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from backend.config import database_connect_args, get_settings
+from backend.config import (
+    DB_MAX_OVERFLOW,
+    DB_POOL_SIZE,
+    database_connect_args,
+    get_settings,
+)
 
 settings = get_settings()
 
@@ -17,13 +22,11 @@ engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,
     pool_pre_ping=True,
-    # Kept small: the database lives in schema `filmduel` of a Supabase project
-    # shared with other apps, so its pooler connection budget is shared too.
     # Worst case per replica is 5 app connections + 1 for alembic (NullPool) at
     # startup. Nothing here pins a schema: the `filmduel` role's search_path
     # (filmduel, extensions) resolves every unqualified table name.
-    pool_size=3,
-    max_overflow=2,
+    pool_size=DB_POOL_SIZE,
+    max_overflow=DB_MAX_OVERFLOW,
     connect_args=database_connect_args(),
 )
 
@@ -78,3 +81,20 @@ async def try_acquire_xact_lock(db: AsyncSession, scope: str, key: uuid.UUID) ->
         )
     )
     return bool(result.scalar_one())
+
+
+async def acquire_quota_lock_nowait(db: AsyncSession, scope: str, key: uuid.UUID) -> None:
+    """try_acquire_xact_lock, raising HTTP 429 instead of queueing (AUD-01).
+
+    Used by handlers that go on to await an LLM call while the transaction is
+    open: a queued waiter would hold a pooled connection for the duration of
+    the leader's call, so we refuse immediately instead.
+    """
+    from fastapi import HTTPException  # local import keeps db.py free of web deps at module load
+
+    if not await try_acquire_xact_lock(db, scope, key):
+        raise HTTPException(
+            status_code=429,
+            detail="Another request of this kind is already in progress. Please wait for it to finish.",
+            headers={"Retry-After": "5"},
+        )

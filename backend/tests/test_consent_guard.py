@@ -43,6 +43,23 @@ def _make_user(
     return user
 
 
+def _db_execute_side_effect(*, daily_count: int = 0):
+    """db.execute side_effect that answers the AUD-01 try-lock separately from
+    the daily-cap count query, so the lock always succeeds regardless of the
+    count a given test wants to simulate."""
+
+    async def _execute(stmt, *args, **kwargs):
+        result = MagicMock()
+        if "advisory_xact_lock" in str(stmt):
+            result.scalar_one.return_value = True
+        else:
+            result.scalar_one.return_value = daily_count
+            result.scalar.return_value = daily_count
+        return result
+
+    return _execute
+
+
 # ---------------------------------------------------------------------------
 # Suggestions endpoints — consent guard
 # ---------------------------------------------------------------------------
@@ -195,9 +212,7 @@ class TestTournamentConsentGuard:
         mock_db.refresh = AsyncMock()
         mock_db.add = MagicMock()
         mock_db.flush = AsyncMock()
-        mock_count_result = MagicMock()
-        mock_count_result.scalar_one.return_value = 0  # daily cap below limit
-        mock_db.execute.return_value = mock_count_result
+        mock_db.execute = AsyncMock(side_effect=_db_execute_side_effect(daily_count=0))
 
         mock_films = [MagicMock() for _ in range(8)]
 
@@ -248,9 +263,7 @@ class TestTournamentConsentGuard:
         user = _make_user(privacy_policy_accepted=True)
         mock_db = AsyncMock()
         mock_db.flush = AsyncMock()
-        mock_count_result = MagicMock()
-        mock_count_result.scalar_one.return_value = 0  # daily cap below limit
-        mock_db.execute.return_value = mock_count_result
+        mock_db.execute = AsyncMock(side_effect=_db_execute_side_effect(daily_count=0))
 
         mock_films = [MagicMock() for _ in range(8)]
         mock_llm_result = {
@@ -446,16 +459,14 @@ class TestTournamentConsentGuard:
             for c in mock_db.execute.await_args_list
         ]
         assert executed, "expected the tournament advisory lock to be acquired"
-        assert all("pg_advisory_xact_lock" in sql for sql in executed), executed
+        assert all("advisory_xact_lock" in sql for sql in executed), executed
         mock_db.flush.assert_not_called()
 
     def test_create_ai_tournament_curation_error_does_not_leak_details(self):
         """POST /api/tournaments must not expose internal ValueError details from AI curation."""
         user = _make_user(privacy_policy_accepted=True)
         mock_db = AsyncMock()
-        mock_count_result = MagicMock()
-        mock_count_result.scalar_one.return_value = 0  # daily cap below limit
-        mock_db.execute.return_value = mock_count_result
+        mock_db.execute = AsyncMock(side_effect=_db_execute_side_effect(daily_count=0))
 
         internal_uuid = str(uuid.uuid4())
 

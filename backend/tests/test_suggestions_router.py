@@ -104,6 +104,37 @@ class TestGetSuggestions:
         assert resp.status_code == 503
         assert resp.json()["detail"] == "AI features are not available"
 
+    def test_get_suggestions_503_when_llm_busy(self):
+        """A full LLM concurrency guard (AUD-01) maps to 503, not 500."""
+        from backend.services.llm import LLMBusyError
+
+        user = _make_user(privacy_policy_accepted=True)
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+
+        with patch(
+            "backend.routers.suggestions.has_enough_ranked",
+            new_callable=AsyncMock,
+            return_value=True,
+        ), patch(
+            "backend.routers.suggestions._latest_generated_at",
+            new_callable=AsyncMock,
+            return_value=None,
+        ), patch(
+            "backend.routers.suggestions.try_acquire_xact_lock",
+            new_callable=AsyncMock,
+            return_value=True,
+        ), patch(
+            "backend.routers.suggestions._create_suggestions",
+            new_callable=AsyncMock,
+            side_effect=LLMBusyError("busy"),
+        ):
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.get("/api/suggestions")
+
+        assert resp.status_code == 503
+        assert resp.headers.get("Retry-After") == "15"
+
 
 def _fake_suggestion_schema() -> SuggestionSchema:
     return SuggestionSchema(
@@ -351,7 +382,7 @@ class TestRegenerateSuggestions:
 
         compiled = [stmt.compile(dialect=postgresql.dialect()) for stmt in statements]
         lock_idx = next(
-            i for i, c in enumerate(compiled) if "pg_advisory_xact_lock" in str(c)
+            i for i, c in enumerate(compiled) if "advisory_xact_lock" in str(c)
         )
         count_idx = next(i for i, c in enumerate(compiled) if "count(" in str(c).lower())
         assert lock_idx < count_idx, "advisory lock must be taken before the regen count"
@@ -417,7 +448,7 @@ class TestRegenerateSuggestions:
         mock_create.assert_awaited_once()
         mock_db.commit.assert_not_called()
         assert any(
-            "pg_advisory_xact_lock" in str(stmt.compile(dialect=postgresql.dialect()))
+            "advisory_xact_lock" in str(stmt.compile(dialect=postgresql.dialect()))
             for stmt in statements
         )
 
@@ -455,6 +486,63 @@ class TestRegenerateSuggestions:
 
         assert resp.status_code == 503
         assert resp.json()["detail"] == "AI features are not available"
+
+    def test_regenerate_returns_503_when_llm_busy(self):
+        """A full LLM concurrency guard (AUD-01) maps to 503, not 500."""
+        from backend.services.llm import LLMBusyError
+
+        user = _make_user(privacy_policy_accepted=True)
+        mock_db = AsyncMock()
+        mock_count_result = MagicMock()
+        mock_count_result.scalar.return_value = 0
+        mock_db.execute.return_value = mock_count_result
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with patch(
+            "backend.routers.suggestions.has_enough_ranked",
+            new_callable=AsyncMock,
+            return_value=True,
+        ), patch(
+            "backend.routers.suggestions._get_active_suggestions",
+            new_callable=AsyncMock,
+            return_value=[],
+        ), patch(
+            "backend.routers.suggestions._create_suggestions",
+            new_callable=AsyncMock,
+            side_effect=LLMBusyError("busy"),
+        ):
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.post("/api/suggestions/regenerate")
+
+        assert resp.status_code == 503
+        assert resp.headers.get("Retry-After") == "15"
+
+    def test_regenerate_429_when_lock_held(self):
+        """A concurrent regenerate for the same user is rejected, not queued (AUD-01)."""
+        user = _make_user(privacy_policy_accepted=True)
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one.return_value = False  # lock not acquired
+        mock_db.execute.return_value = mock_result
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with patch(
+            "backend.routers.suggestions.has_enough_ranked",
+            new_callable=AsyncMock,
+            return_value=True,
+        ), patch(
+            "backend.routers.suggestions._create_suggestions",
+            new_callable=AsyncMock,
+        ) as mock_create:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.post("/api/suggestions/regenerate")
+
+        assert resp.status_code == 429
+        mock_create.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------

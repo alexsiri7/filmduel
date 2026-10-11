@@ -12,7 +12,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from backend.db import acquire_quota_lock, get_db
+from backend.db import acquire_quota_lock, acquire_quota_lock_nowait, get_db
 from backend.rate_limit import limiter
 from backend.db_models import Movie, Tournament, TournamentMatch, User
 from backend.routers.auth import get_current_user, require_ai_consent, require_consent
@@ -28,6 +28,7 @@ from backend.schemas import (
 )
 from backend.services.ranking import ranked_user_movies_stmt
 from backend.services.curator import CurationError
+from backend.services.llm import LLMBusyError
 from backend.services.tournament import (
     create_tournament_bracket,
     curate_and_select_films,
@@ -203,8 +204,10 @@ async def create_tournament(
         require_ai_consent(current_user)
 
     # Serialize the cap check per user (SEC-02, #570); held until get_db commits,
-    # so a concurrent request waits, re-counts, and 429s instead of also curating.
-    await acquire_quota_lock(db, "tournament_daily_cap", uid)
+    # so a concurrent request re-counts and 429s instead of also curating.
+    # Non-blocking (AUD-01): a queued waiter would hold a pooled connection
+    # through the LLM call.
+    await acquire_quota_lock_nowait(db, "tournament_daily_cap", uid)
 
     # Per-user daily cap: prevent database bloat DoS (SEC-03)
     window_start = datetime.now(timezone.utc) - timedelta(hours=24)
@@ -249,6 +252,12 @@ async def create_tournament(
                 filter_type=body.filter_type,
                 filter_value=body.filter_value,
                 theme_hint=body.name.strip() if body.name else "",
+            )
+        except LLMBusyError:
+            raise HTTPException(
+                status_code=503,
+                detail="AI features are busy. Please try again in a moment.",
+                headers={"Retry-After": "15"},
             )
         except (ValueError, CurationError) as e:
             logger.error("AI curation failed: %s", e)
@@ -302,7 +311,9 @@ async def regenerate_tournament(
     # cannot read the same count and both re-curate (SEC-02, #570). The scope is
     # shared with submit_match_result_endpoint and abandon_tournament so a match
     # recorded during curation cannot be wiped by the match delete below (#692).
-    await acquire_quota_lock(db, "tournament_status", tournament_id)
+    # Non-blocking (AUD-01): a queued waiter would hold a pooled connection
+    # through the LLM call.
+    await acquire_quota_lock_nowait(db, "tournament_status", tournament_id)
 
     tournament = await _load_tournament(tournament_id, uid, db)
 
@@ -353,6 +364,12 @@ async def regenerate_tournament(
             filter_type=tournament.filter_type,
             filter_value=tournament.filter_value,
             theme_hint=original_hint,
+        )
+    except LLMBusyError:
+        raise HTTPException(
+            status_code=503,
+            detail="AI features are busy. Please try again in a moment.",
+            headers={"Retry-After": "15"},
         )
     except (ValueError, CurationError) as e:
         logger.error("AI curation failed during regeneration: %s", e)
