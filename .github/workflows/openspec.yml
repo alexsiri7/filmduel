@@ -24,7 +24,7 @@ jobs:
       - name: Validate specs
         run: |
           for attempt in 1 2 3; do
-            npx -y @fission-ai/openspec@latest validate --specs --strict && exit 0
+            npx -y @fission-ai/openspec@1.14.0 validate --specs --strict && exit 0
             echo "Attempt $attempt failed, retrying in 10s..."
             sleep 10
           done
