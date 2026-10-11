@@ -13,7 +13,7 @@ from sqlalchemy.orm import joinedload
 
 from backend.config import get_settings
 from backend.db import (
-    acquire_quota_lock,
+    acquire_quota_lock_nowait,
     async_session_factory,
     get_db,
     try_acquire_xact_lock,
@@ -27,6 +27,7 @@ from backend.schemas import (
     SuggestionSchema,
     SuggestionsResponse,
 )
+from backend.services.llm import LLMBusyError
 from backend.services.suggest import generate_suggestions, has_enough_ranked
 from backend.services.trakt import TraktClient
 
@@ -194,6 +195,12 @@ async def get_suggestions(
         if not new_suggestions:
             return SuggestionsResponse(suggestions=[], status="no_candidates")
         return _ready_response(new_suggestions)
+    except LLMBusyError:
+        raise HTTPException(
+            status_code=503,
+            detail="AI features are busy. Please try again in a moment.",
+            headers={"Retry-After": "15"},
+        )
     except ValueError:
         # LLM_API_KEY not configured
         logger.warning("AI features unavailable (LLM_API_KEY not configured) for user %s", uid)
@@ -222,8 +229,9 @@ async def regenerate_suggestions(
     if not await has_enough_ranked(uid, db, media_type=media_type):
         return SuggestionsResponse(suggestions=[], status="not_enough_films")
 
-    # Serialize the cap check per user (SEC-02, #570).
-    await acquire_quota_lock(db, "suggestions_regen", uid)
+    # Serialize the cap check per user (SEC-02, #570). Non-blocking (AUD-01):
+    # a queued waiter would hold a pooled connection through the LLM call.
+    await acquire_quota_lock_nowait(db, "suggestions_regen", uid)
 
     # Count regenerations in last 24h (by counting distinct generated_at timestamps)
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
@@ -253,6 +261,12 @@ async def regenerate_suggestions(
         return SuggestionsResponse(
             suggestions=[_build_suggestion_schema(s) for s in new_suggestions],
             status="ready",
+        )
+    except LLMBusyError:
+        raise HTTPException(
+            status_code=503,
+            detail="AI features are busy. Please try again in a moment.",
+            headers={"Retry-After": "15"},
         )
     except ValueError:
         # LLM_API_KEY not configured

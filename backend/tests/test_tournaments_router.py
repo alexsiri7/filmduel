@@ -29,6 +29,23 @@ def _make_user(*, privacy_policy_accepted: bool = True):
     return user
 
 
+def _db_execute_side_effect(*, count: int = 0):
+    """db.execute side_effect that answers the AUD-01 try-lock separately from
+    a count query, so the lock always succeeds regardless of the count a given
+    test wants to simulate."""
+
+    async def _execute(stmt, *args, **kwargs):
+        result = MagicMock()
+        if "advisory_xact_lock" in str(stmt):
+            result.scalar_one.return_value = True
+        else:
+            result.scalar_one.return_value = count
+            result.scalar.return_value = count
+        return result
+
+    return _execute
+
+
 def _make_tournament(user_id, **overrides):
     """Build a mock Tournament with sensible defaults."""
     t = MagicMock()
@@ -146,7 +163,7 @@ class TestCreateTournamentDailyCap:
 
         compiled = [stmt.compile(dialect=postgresql.dialect()) for stmt in statements]
         lock_idx = next(
-            i for i, c in enumerate(compiled) if "pg_advisory_xact_lock" in str(c)
+            i for i, c in enumerate(compiled) if "advisory_xact_lock" in str(c)
         )
         count_idx = next(i for i, c in enumerate(compiled) if "count(" in str(c).lower())
         assert lock_idx < count_idx, "advisory lock must be taken before the daily count"
@@ -163,13 +180,11 @@ class TestCreateTournamentDailyCap:
         mock_db = AsyncMock()
         mock_db.add = MagicMock()
         statements: list = []
-
-        mock_count_result = MagicMock()
-        mock_count_result.scalar_one.return_value = 0
+        count_side_effect = _db_execute_side_effect(count=0)
 
         async def record_execute(stmt, *args, **kwargs):
             statements.append(stmt)
-            return mock_count_result
+            return await count_side_effect(stmt, *args, **kwargs)
 
         mock_db.execute = AsyncMock(side_effect=record_execute)
 
@@ -205,9 +220,71 @@ class TestCreateTournamentDailyCap:
         mock_curate.assert_awaited_once()
         mock_db.commit.assert_not_called()
         assert any(
-            "pg_advisory_xact_lock" in str(stmt.compile(dialect=postgresql.dialect()))
+            "advisory_xact_lock" in str(stmt.compile(dialect=postgresql.dialect()))
             for stmt in statements
         )
+
+    def test_create_tournament_returns_503_when_llm_busy(self):
+        """A full LLM concurrency guard (AUD-01) maps to 503, not 500."""
+        from backend.services.llm import LLMBusyError
+
+        user = _make_user()
+        mock_db = AsyncMock()
+        mock_db.add = MagicMock()
+        mock_db.execute = AsyncMock(side_effect=_db_execute_side_effect(count=0))
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with patch(
+            "backend.routers.tournaments.get_filtered_ranked_films",
+            new_callable=AsyncMock,
+            return_value=[MagicMock() for _ in range(8)],
+        ), patch(
+            "backend.routers.tournaments.curate_and_select_films",
+            new_callable=AsyncMock,
+            side_effect=LLMBusyError("busy"),
+        ):
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.post(
+                    "/api/tournaments",
+                    json={"bracket_size": 8, "ai_curated": True},
+                )
+
+        assert resp.status_code == 503
+        assert resp.headers.get("Retry-After") == "15"
+
+    def test_create_tournament_429_when_lock_held(self):
+        """A concurrent same-user create is rejected instead of queueing on the lock (AUD-01)."""
+        user = _make_user()
+        mock_db = AsyncMock()
+        mock_db.add = MagicMock()
+
+        async def record_execute(stmt, *args, **kwargs):
+            result = MagicMock()
+            if "advisory_xact_lock" in str(stmt):
+                result.scalar_one.return_value = False
+            else:
+                result.scalar_one.return_value = 0
+            return result
+
+        mock_db.execute = AsyncMock(side_effect=record_execute)
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with patch(
+            "backend.routers.tournaments.curate_and_select_films",
+            new_callable=AsyncMock,
+        ) as mock_curate:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.post(
+                    "/api/tournaments",
+                    json={"bracket_size": 8, "ai_curated": False},
+                )
+
+        assert resp.status_code == 429
+        mock_curate.assert_not_awaited()
 
     def test_create_tournament_ai_curated_requires_consent(self):
         """POST /api/tournaments with ai_curated=True returns 403 without consent."""
@@ -563,7 +640,7 @@ class TestRegenerateCandidatePool:
             i
             for i, e in enumerate(events)
             if e != "load_tournament"
-            and "pg_advisory_xact_lock" in str(e.compile(dialect=postgresql.dialect()))
+            and "advisory_xact_lock" in str(e.compile(dialect=postgresql.dialect()))
         )
         assert lock_idx < first_load, "tournament must be locked before it is loaded"
 
@@ -571,14 +648,38 @@ class TestRegenerateCandidatePool:
         assert "tournament_status" in lock_params
         assert str(tournament_id) in lock_params
 
+    def test_regenerate_429_when_lock_held(self):
+        """A concurrent regenerate for the same tournament is rejected, not queued (AUD-01)."""
+        user = _make_user()
+        tournament_id = uuid.uuid4()
+        mock_db = AsyncMock()
+
+        async def record_execute(stmt, *args, **kwargs):
+            result = MagicMock()
+            result.scalar_one.return_value = False  # lock not acquired
+            return result
+
+        mock_db.execute = AsyncMock(side_effect=record_execute)
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with patch(
+            "backend.routers.tournaments._load_tournament",
+            new_callable=AsyncMock,
+        ) as mock_load:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.post(f"/api/tournaments/{tournament_id}/regenerate")
+
+        assert resp.status_code == 429
+        mock_load.assert_not_awaited()
+
     def test_create_persists_media_type_on_the_tournament_row(self):
         """The media_type a tournament was created over is stored for regeneration."""
         user = _make_user()
         mock_db = AsyncMock()
         mock_db.add = MagicMock()
-        mock_count_result = MagicMock()
-        mock_count_result.scalar_one.return_value = 0
-        mock_db.execute.return_value = mock_count_result
+        mock_db.execute = AsyncMock(side_effect=_db_execute_side_effect(count=0))
 
         app.dependency_overrides[get_current_user] = lambda: user
         app.dependency_overrides[get_db] = lambda: mock_db
@@ -625,9 +726,7 @@ class TestBracketSizeCap:
     def _override(self, user, film_count):
         mock_db = AsyncMock()
         mock_db.add = MagicMock()
-        mock_count_result = MagicMock()
-        mock_count_result.scalar_one.return_value = 0
-        mock_db.execute.return_value = mock_count_result
+        mock_db.execute = AsyncMock(side_effect=_db_execute_side_effect(count=0))
 
         app.dependency_overrides[get_current_user] = lambda: user
         app.dependency_overrides[get_db] = lambda: mock_db

@@ -78,3 +78,20 @@ async def try_acquire_xact_lock(db: AsyncSession, scope: str, key: uuid.UUID) ->
         )
     )
     return bool(result.scalar_one())
+
+
+async def acquire_quota_lock_nowait(db: AsyncSession, scope: str, key: uuid.UUID) -> None:
+    """try_acquire_xact_lock, raising HTTP 429 instead of queueing (AUD-01).
+
+    Used by handlers that go on to await an LLM call while the transaction is
+    open: a queued waiter would hold a pooled connection for the duration of
+    the leader's call, so we refuse immediately instead.
+    """
+    from fastapi import HTTPException  # local import keeps db.py free of web deps at module load
+
+    if not await try_acquire_xact_lock(db, scope, key):
+        raise HTTPException(
+            status_code=429,
+            detail="Another request of this kind is already in progress. Please wait for it to finish.",
+            headers={"Retry-After": "5"},
+        )
