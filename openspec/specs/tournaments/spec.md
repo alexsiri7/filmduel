@@ -8,23 +8,27 @@ A tournament is a celebration of taste the user already has: a fixed bracket of 
 
 ### Requirement: A bracket is built from ranked titles
 
-A user SHALL be able to create a tournament of 8, 16, 32 or 64 titles from their ranked titles of the selected media type, optionally filtered by genre or decade. Creation SHALL require at least 4 matching titles and a bracket no larger than twice the matching pool, and the create form SHALL offer only the sizes that would be accepted. Titles SHALL be seeded by rating, seed 1 against the lowest seed; when the pool is smaller than the bracket, top seeds SHALL receive round-one byes that are already resolved. Every round SHALL exist from the start, and a user SHALL create at most 100 tournaments in 24 hours.
+A user SHALL be able to create a tournament of 8, 16, 32 or 64 titles from their ranked titles of the selected media type, optionally filtered by genre or decade. Creation SHALL require at least 4 matching titles and a bracket no larger than twice the matching pool, and the create form SHALL offer only the sizes that would be accepted. A user SHALL create at most 100 tournaments in 24 hours.
 
 #### Scenario: Too few films
 - GIVEN a user with 3 ranked horror films
 - WHEN they try to create a horror tournament
 - THEN creation is refused with a message to keep dueling
 
+#### Scenario: Bracket too large
+- GIVEN 20 ranked sci-fi films
+- WHEN the user opens the create form with a sci-fi filter
+- THEN 32 is the largest size offered and 64 is refused
+
+### Requirement: Brackets are seeded by rating with byes for top seeds
+
+Tournament titles SHALL be seeded by rating, seed 1 against the lowest seed; when the pool is smaller than the bracket, top seeds SHALL receive round-one byes that are already resolved. Every round SHALL exist from the start.
+
 #### Scenario: Byes for top seeds
 - GIVEN 13 ranked horror films
 - WHEN a 16-title horror tournament is created
 - THEN seeds 1 to 3 advance to round two by bye
 - AND round one has 5 playable matches
-
-#### Scenario: Bracket too large
-- GIVEN 20 ranked sci-fi films
-- WHEN the user opens the create form with a sci-fi filter
-- THEN 32 is the largest size offered and 64 is refused
 
 ### Requirement: Matches are real duels
 
@@ -47,13 +51,17 @@ A user SHALL see their own tournaments, newest first, each with its progress: "C
 
 ### Requirement: AI can curate a themed tournament
 
-A user with AI features available SHALL be able to ask for an AI-curated tournament. The AI SHALL receive the top three times the bracket size of the filtered pool by rating and SHALL select exactly the bracket size from that list, with a name, tagline and theme description shown before play. Selected titles SHALL be seeded by rating; the AI SHALL never set matchups. An AI failure SHALL create nothing and report that curation failed. Before any match has been played, the user SHALL be able to regenerate at most 3 times with the same theme hint and pool.
+A user with AI features available SHALL be able to ask for an AI-curated tournament. The AI SHALL receive the top three times the bracket size of the filtered pool by rating and SHALL select exactly the bracket size from that list, with a name, tagline and theme description shown before play. Selected titles SHALL be seeded by rating; the AI SHALL never set matchups. An AI failure SHALL create nothing and report that curation failed.
 
 #### Scenario: Curated bracket
 - GIVEN a user with 60 ranked films and AI features on
 - WHEN they request an AI-curated 16-title tournament
 - THEN the AI chooses 16 of their top 48 films and names the theme
 - AND the bracket is seeded by rating
+
+### Requirement: An AI-curated tournament can be regenerated before play
+
+Before any match of an AI-curated tournament has been played, the user SHALL be able to regenerate it at most 3 times with the same theme hint and pool.
 
 #### Scenario: Fourth regeneration
 - GIVEN an AI-curated tournament regenerated 3 times

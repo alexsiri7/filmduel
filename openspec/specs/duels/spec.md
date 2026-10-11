@@ -8,23 +8,27 @@ The duel is the heart of FilmDuel: two titles the user has seen, one tap to say 
 
 ### Requirement: Pairs anchor on the least-dueled title and match the closest rating
 
-A pair SHALL be drawn only from titles the user has marked seen, of the selected media type. The anchor SHALL be chosen at random among those with the fewest battles, across all of the user's seen titles. The challenger SHALL be chosen at random among the 5 other seen titles whose effective rating (current rating, else starting rating, else 1000) is closest to the anchor's. If the anchor was in the previous pair, its previous partner SHALL be skipped unless it is the only other title. With fewer than two seen titles, the user SHALL be sent to swipe.
+A pair SHALL be drawn only from titles the user has marked seen, of the selected media type. The anchor SHALL be chosen at random among those with the fewest battles, across all of the user's seen titles. The challenger SHALL be chosen at random among the 5 other seen titles whose effective rating (current rating, else starting rating, else 1000) is closest to the anchor's. With fewer than two seen titles, the user SHALL be sent to swipe.
 
 #### Scenario: Unranked films are drawn in first
 - GIVEN 300 seen films, 40 of them with no battles
 - WHEN a pair is requested
 - THEN the anchor is one of the 40 with no battles
 
+#### Scenario: Too few seen films
+- GIVEN a user with one seen film
+- WHEN a pair is requested
+- THEN they are sent to swipe
+
+### Requirement: The anchor's previous partner is not drawn again
+
+If the anchor of a new pair was in the previous pair, its previous partner SHALL be skipped as challenger unless it is the only other title.
+
 #### Scenario: No immediate rematch
 - GIVEN the previous pair was A vs B and A is chosen as anchor again
 - AND other seen films exist
 - WHEN a pair is requested
 - THEN B is not the challenger
-
-#### Scenario: Too few seen films
-- GIVEN a user with one seen film
-- WHEN a pair is requested
-- THEN they are sent to swipe
 
 ### Requirement: Only offered pairs can be dueled
 
@@ -65,12 +69,21 @@ Every duel and swipe submission SHALL return a next action: swipe when the user 
 
 ### Requirement: The duel screen is one tap
 
-The duel screen SHALL show two posters side by side with a "vs" badge, each with title, year and genres, and rating and battle count once ranked. Tapping a poster SHALL pick it as the winner. Three secondary buttons, "Only seen {A}", "Only seen {B}" and "Haven't seen either", SHALL record the pair without changing ratings. The next pair SHALL be requested as soon as the submission is accepted, so it reflects this duel's result. A failed submission SHALL keep the pair on screen with a retry. A stats bar SHALL show duels played, titles ranked and titles left to discover.
+The duel screen SHALL show two posters side by side with a "vs" badge, each with title, year and genres, and rating and battle count once ranked. Tapping a poster SHALL pick it as the winner. Three secondary buttons, "Only seen {A}", "Only seen {B}" and "Haven't seen either", SHALL record the pair without changing ratings. A stats bar SHALL show duels played, titles ranked and titles left to discover.
 
 #### Scenario: Pick a winner
 - GIVEN a pair on screen
 - WHEN the user taps the left poster
 - THEN the left title is recorded as the winner and the next pair appears
+
+### Requirement: Duel submissions advance or retry
+
+On the duel screen, the next pair SHALL be requested as soon as the submission is accepted, so it reflects this duel's result. A failed submission SHALL keep the pair on screen with a retry.
+
+#### Scenario: Next pair reflects the result
+- GIVEN a pair on screen
+- WHEN the user's pick is accepted
+- THEN the next pair is requested after the result is recorded
 
 #### Scenario: Submission fails
 - GIVEN a pair on screen

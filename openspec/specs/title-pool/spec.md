@@ -8,7 +8,7 @@ There must always be something to swipe or duel. The title pool combines broad l
 
 ### Requirement: The library is imported from the user's provider
 
-After a user first consents, the system SHALL import in the background, for both movies and shows, the provider's popular, trending and recommended lists and the user's watch history and ratings. The user's profile SHALL report the import as importing, complete or failed; an import that has not finished within 20 minutes SHALL be reported as failed; and the user SHALL be able to retry an import that is not running, at most 3 times per hour. A failure in one source SHALL NOT prevent the others from being imported, and SHALL mark the import as failed.
+After a user first consents, the system SHALL import in the background, for both movies and shows, the provider's popular, trending and recommended lists and the user's watch history and ratings. The user's profile SHALL report the import as importing, complete or failed; an import that has not finished within 20 minutes SHALL be reported as failed; and the user SHALL be able to retry an import that is not running, at most 3 times per hour.
 
 #### Scenario: First import
 - GIVEN a user who has just consented
@@ -20,6 +20,16 @@ After a user first consents, the system SHALL import in the background, for both
 - GIVEN an import that started 25 minutes ago and never finished
 - WHEN the user reads their profile
 - THEN the import is reported as "failed" and the user can retry it
+
+### Requirement: One failing import source does not block the others
+
+During a library import, a failure in one source SHALL NOT prevent the others from being imported, and SHALL mark the import as failed.
+
+#### Scenario: One source fails
+- GIVEN a library import in which the provider's trending list cannot be fetched
+- WHEN the import runs
+- THEN the other sources are still imported
+- AND the import is reported as "failed"
 
 ### Requirement: History and ratings seed the user's state
 
@@ -69,13 +79,27 @@ Posters SHALL be fetched from TMDB in the background, never delaying a request, 
 
 ### Requirement: The pool expands when the unknown pile runs low
 
-When a swipe submission leaves fewer than 50 unclassified titles of that media type, the system SHALL expand the pool in the background, in priority order: provider recommendations, TMDB titles similar to the user's top-ranked, provider anticipated titles, then deeper popular pages; it SHALL stop at about 100 new titles, SHALL NOT repeat a source for the same key within 7 days, SHALL run at most one expansion per user and media type at a time, and SHALL NOT change the state of titles already in the library.
+When a swipe submission leaves fewer than 50 unclassified titles of that media type, the system SHALL expand the pool in the background, in priority order: provider recommendations, TMDB titles similar to the user's top-ranked, provider anticipated titles, then deeper popular pages; it SHALL stop at about 100 new titles.
 
 #### Scenario: Running low
 - GIVEN a user with 45 unclassified movies
 - WHEN they submit a swipe session
 - THEN an expansion starts without delaying the response
 - AND new movies arrive unclassified
+
+### Requirement: Pool expansion is throttled and leaves the library alone
+
+Pool expansion SHALL NOT repeat a source for the same key within 7 days, SHALL run at most one expansion per user and media type at a time, and SHALL NOT change the state of titles already in the library.
+
+#### Scenario: Expansion already running
+- GIVEN an expansion of a user's movies is in progress
+- WHEN another swipe submission leaves fewer than 50 unclassified movies
+- THEN no second movie expansion starts
+
+#### Scenario: Existing titles keep their state
+- GIVEN a movie the user marked seen
+- WHEN an expansion fetches that movie again
+- THEN it stays marked seen
 
 ### Requirement: Movies and shows are separate worlds
 

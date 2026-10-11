@@ -8,7 +8,7 @@ FilmDuel processes viewing preferences, which are personal data. It asks for inf
 
 ### Requirement: Consent to the current policy version gates data collection
 
-After sign-in, a user SHALL accept the current privacy policy version before any provider data is imported or any data about them is recorded — swipes, duels, tournaments (creating, playing, abandoning), suggestion responses (dismiss, watchlist, seen), manual syncs and feedback reports; such requests from a user without consent SHALL be refused with "Privacy policy consent required". Accepting SHALL record the version and time. Consent to an unknown version SHALL be refused. When the policy version changes, the user SHALL be asked to consent again.
+After sign-in, a user SHALL accept the current privacy policy version before any provider data is imported or any data about them is recorded — swipes, duels, tournaments (creating, playing, abandoning), suggestion responses (dismiss, watchlist, seen), manual syncs and feedback reports; such requests from a user without consent SHALL be refused with "Privacy policy consent required".
 
 #### Scenario: First sign-in
 - GIVEN a newly signed-in user who has not consented
@@ -16,15 +16,24 @@ After sign-in, a user SHALL accept the current privacy policy version before any
 - THEN they are asked to accept the privacy policy before anything else
 - AND no library import has started
 
+#### Scenario: Duel without consent
+- GIVEN a user who has not accepted the current policy
+- WHEN they submit a duel
+- THEN the request is refused with "Privacy policy consent required"
+
+### Requirement: Consent is recorded per policy version
+
+Accepting the privacy policy SHALL record the version and time. Consent to an unknown version SHALL be refused. When the policy version changes, the user SHALL be asked to consent again.
+
 #### Scenario: Policy updated
 - GIVEN a user who accepted version 2.0
 - WHEN the current version becomes 2.1
 - THEN the user is asked to consent again before continuing
 
-#### Scenario: Duel without consent
-- GIVEN a user who has not accepted the current policy
-- WHEN they submit a duel
-- THEN the request is refused with "Privacy policy consent required"
+#### Scenario: Unknown version
+- GIVEN a consent request naming a policy version that does not exist
+- WHEN it is submitted
+- THEN it is refused
 
 ### Requirement: The policy is public and complete
 

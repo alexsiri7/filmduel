@@ -18,17 +18,26 @@ AI features (suggestions and AI-curated tournaments) SHALL be on by default and 
 
 ### Requirement: Suggestions come from the user's own candidates
 
-A user with at least 20 ranked titles of the selected media type SHALL receive up to 6 suggestions chosen by the AI from at most 50 unseen candidates, each with a one-line reason. Suggestions generated in the last 24 hours SHALL be reused. A user with fewer than 20 ranked titles SHALL be told there are not enough; a user with no candidates SHALL be told there are none. Picks outside the candidate list SHALL be dropped. With no AI service configured, the feature SHALL report that it is unavailable.
+A user with at least 20 ranked titles of the selected media type SHALL receive up to 6 suggestions chosen by the AI from at most 50 unseen candidates, each with a one-line reason. Suggestions generated in the last 24 hours SHALL be reused. Picks outside the candidate list SHALL be dropped.
+
+#### Scenario: AI invents a film
+- GIVEN the AI returns an id not in the candidate list
+- WHEN suggestions are stored
+- THEN that pick is dropped
+
+### Requirement: Suggestions explain why there are none
+
+A user with fewer than 20 ranked titles SHALL be told there are not enough; a user with no candidates SHALL be told there are none. With no AI service configured, the suggestions feature SHALL report that it is unavailable.
 
 #### Scenario: Not enough ranked films
 - GIVEN a user with 12 ranked films
 - WHEN they open suggestions
 - THEN no suggestions are shown and they are told they need more ranked films
 
-#### Scenario: AI invents a film
-- GIVEN the AI returns an id not in the candidate list
-- WHEN suggestions are stored
-- THEN that pick is dropped
+#### Scenario: No AI service configured
+- GIVEN no AI service is configured
+- WHEN a user requests suggestions
+- THEN they are told the feature is unavailable
 
 ### Requirement: Suggestions can be dismissed, saved or marked seen
 
