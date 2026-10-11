@@ -8,12 +8,16 @@ Users report problems from inside the app, with a screenshot when it helps. Scre
 
 ### Requirement: Users can report an issue
 
-A signed-in user SHALL be able to submit a report with a title of at most 200 characters, a description of at most 5000 characters and an optional screenshot of at most 5 MB whose content is a JPEG, PNG, GIF or WebP image. An oversized screenshot SHALL be refused as too large and any other file type as unsupported. Screenshots SHALL be encrypted at rest; if encryption fails the report SHALL be refused rather than stored in the clear. A user SHALL submit at most 5 reports per hour and 20 per 24 hours.
+A signed-in user SHALL be able to submit a report with a title of at most 200 characters, a description of at most 5000 characters and an optional screenshot of at most 5 MB whose content is a JPEG, PNG, GIF or WebP image. An oversized screenshot SHALL be refused as too large and any other file type as unsupported. Screenshots SHALL be encrypted at rest; if encryption fails the report SHALL be refused rather than stored in the clear.
 
 #### Scenario: Disguised file
 - GIVEN a PDF renamed to screenshot.png
 - WHEN it is attached to a report
 - THEN the report is refused as an unsupported type
+
+### Requirement: Report submissions are rate limited
+
+A user SHALL submit at most 5 reports per hour and 20 per 24 hours.
 
 #### Scenario: Daily cap
 - GIVEN a user who submitted 20 reports in the last 24 hours
