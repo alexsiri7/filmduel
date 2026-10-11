@@ -232,6 +232,23 @@ class TestCurateTournamentLogging:
         assert "film_ids" in caplog.text  # the missing key name is acceptable
 
 
+class TestCurateTournamentLlmBusy:
+    @pytest.mark.asyncio
+    async def test_llm_busy_error_propagates_unwrapped(self):
+        """Routers answer 503 only for an unwrapped LLMBusyError (AUD-01)."""
+        from unittest.mock import AsyncMock, patch
+
+        from backend.services.curator import curate_tournament
+        from backend.services.llm import LLMBusyError
+
+        with patch(
+            "backend.services.curator.chat_completion",
+            AsyncMock(side_effect=LLMBusyError("busy")),
+        ):
+            with pytest.raises(LLMBusyError):
+                await curate_tournament(candidates=[], bracket_size=8)
+
+
 class TestCurateTournamentOutputValidation:
     """Regression tests: LLM output must not smuggle server bookkeeping keys (AUD-07)."""
 
