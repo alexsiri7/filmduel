@@ -1,0 +1,44 @@
+# unsafe-change: denylist check for PRs built from issues that only the
+# factory's automated screening vetted (see .github/unsafe-change/check.py and
+# the policy .github/unsafe-change.yml). The factory's pr-maintenance merges
+# such a PR only when this check is green; anything else passes at once.
+#
+# pull_request_target on purpose: the checker and the policy come from the
+# base branch, so a PR cannot edit the check that judges it. The PR's code is
+# never checked out or run; the checker reads the file list, patches and
+# manifest contents from the API as data. Read-only token.
+name: unsafe-change
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
+concurrency:
+  group: unsafe-change-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  unsafe-change:
+    name: unsafe-change
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # The base branch's CURRENT head (github.sha under pull_request_target),
+      # not pull_request.base.sha: that is the base as of the PR's last push
+      # and can predate this checker or run an older policy.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2, base branch
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Self-test the checker
+        run: python3 -m unittest discover -s .github/unsafe-change
+      - name: Check the PR against the denylist
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: python3 .github/unsafe-change/check.py

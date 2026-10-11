@@ -86,3 +86,13 @@ jobs:
       - name: Audit npm dependencies
         working-directory: frontend
         run: npm audit --audit-level=moderate
+
+  unsafe-change-tests:
+    # The unsafe-change check itself runs from the base branch
+    # (pull_request_target), so a PR changing it is only tested here.
+    name: unsafe-change checker tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit tests (system python3 + PyYAML, as the check uses)
+        run: python3 -m unittest discover -s .github/unsafe-change
