@@ -9,7 +9,7 @@ import re
 from pydantic import ValidationError
 
 from backend.schemas import TournamentPreview
-from backend.services.llm import chat_completion, parse_json_response
+from backend.services.llm import LLMBusyError, chat_completion, parse_json_response
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +127,8 @@ async def curate_tournament(
         text_content = await chat_completion(
             system_prompt, user_prompt, max_tokens=2000
         )
+    except LLMBusyError:
+        raise  # let the router answer 503
     except ValueError as exc:
         # LLM_API_KEY not configured
         raise CurationError(f"AI curation is not configured ({exc})")

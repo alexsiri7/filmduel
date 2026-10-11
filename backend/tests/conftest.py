@@ -27,6 +27,7 @@ for _var in _PROXY_PLATFORM_ENV_VARS:
 import pytest
 
 from backend.rate_limit import limiter
+from backend.services.llm import reset_llm_slots
 
 
 @pytest.fixture(autouse=True)
@@ -35,3 +36,12 @@ def _reset_limiter():
     limiter.reset()
     yield
     limiter.reset()
+
+
+@pytest.fixture(autouse=True)
+def _reset_llm_concurrency_guard():
+    """Rebuild the LLM concurrency semaphore between tests (AUD-01) so a slot
+    held by one test's mocked call can't starve the next test."""
+    reset_llm_slots()
+    yield
+    reset_llm_slots()

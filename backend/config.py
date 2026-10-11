@@ -165,6 +165,13 @@ class Settings(BaseSettings):
     LLM_API_KEY: str = ""
     LLM_BASE_URL: str = "https://router.requesty.ai/v1"
     LLM_MODEL: str = "google/gemini-3.1-flash-lite-preview"
+    # Hard ceiling on one chat completion. Each in-flight call pins a pooled DB
+    # connection in the calling request (AUD-01), so this must stay well below
+    # the engine's pool_timeout (30 s) multiplied by the pool size.
+    LLM_TIMEOUT_SECONDS: Annotated[float, Field(gt=0, le=120)] = 30.0
+    # Process-wide cap on concurrent LLM calls. Must be < pool_size + max_overflow
+    # (5 in backend/db.py) so LLM-backed requests can never pin the whole pool.
+    LLM_MAX_CONCURRENT: Annotated[int, Field(ge=1, le=4)] = 2
 
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
