@@ -44,10 +44,30 @@ settings = get_settings()
 _PROVIDER_USER_PATH = re.compile(r"/users/[^/?#\s]+")
 
 
+def _strip_query(url: str) -> str:
+    return re.split(r"[?#]", url, maxsplit=1)[0]
+
+
 def _redact_url(url: str) -> str:
     """Drop the query string and fragment, and mask the account in ``/users/<id>``."""
-    without_query = re.split(r"[?#]", url, maxsplit=1)[0]
-    return _PROVIDER_USER_PATH.sub("/users/[Filtered]", without_query)
+    return _PROVIDER_USER_PATH.sub("/users/[Filtered]", _strip_query(url))
+
+
+class _AccessLogQueryFilter(logging.Filter):
+    """Drop query strings (OAuth ``code``/``state``) from uvicorn access log lines.
+
+    uvicorn logs ``'%s - "%s %s HTTP/%s" %d'`` with the path-and-query as the
+    third argument.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if isinstance(args, tuple) and len(args) == 5 and isinstance(args[2], str):
+            record.args = (*args[:2], _strip_query(args[2]), *args[3:])
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(_AccessLogQueryFilter())
 
 
 def _scrub_http_data(data: dict) -> None:
