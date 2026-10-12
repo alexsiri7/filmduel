@@ -147,14 +147,15 @@ requirements:
 
   - id: FD-012
     title: Sensitive-data scrubbing in error tracking
-    statement: "When an exception is reported to Sentry, the system shall send no default PII and shall replace stack-frame locals whose names match known token/secret/code patterns with '[Filtered]'."
+    statement: "When an event, transaction or breadcrumb is reported to Sentry, the system shall send no default PII, stack-frame local variables or request bodies, and shall strip query strings and fragments from request, span and HTTP breadcrumb URLs and mask the account segment of /users/<id> paths as '/users/[Filtered]'."
     category: non-functional
     priority: must
     status: active
     source: back-ported
     acceptance:
-      - "sentry_sdk is initialised with send_default_pii=False and a before_send scrubber"
-      - "Frame vars named in the denylist, or containing 'token', 'secret' or 'code' (case-insensitive), are filtered"
+      - "sentry_sdk is initialised with send_default_pii=False, include_local_variables=False and max_request_body_size='never'"
+      - "before_send and before_send_transaction drop request.query_string and redact request and span URLs; before_breadcrumb drops http.query/http.fragment and redacts the breadcrumb URL"
+      - "Redaction removes the query string and fragment and masks /users/<id> as /users/[Filtered]"
       - "Pydantic validation-error 'input' values are stripped before logging"
     notes: "Sentry is enabled only when SENTRY_DSN is set; traces_sample_rate=0.1."
 
