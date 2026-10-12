@@ -16,7 +16,11 @@ from backend.db_models import (
     Suggestion,
     SwipeResult,
     Tournament,
+    User,
 )
+from backend.services.simkl import SimklClient
+from backend.services.token_crypto import decrypt_token
+from backend.services.trakt import TraktClient
 
 logger = logging.getLogger(__name__)
 
@@ -163,3 +167,50 @@ async def purge_old_feedback_reports(db: AsyncSession) -> int:
     return await _purge_by_age(
         db, FeedbackReport, get_settings().FEEDBACK_RETENTION_DAYS, "feedback_reports"
     )
+
+
+async def purge_unconsented_users(db: AsyncSession) -> int:
+    """Delete users who never accepted the privacy policy and signed in more
+    than UNCONSENTED_USER_RETENTION_DAYS ago, then best-effort revoke their
+    provider access tokens upstream.
+
+    Only tokens of rows the DELETE actually removed are revoked, so a user who
+    consents while the purge runs keeps a working token.
+    Does not commit; caller must commit.
+
+    Returns:
+        Number of rows deleted.
+    """
+    settings = get_settings()
+    cutoff = datetime.now(timezone.utc) - timedelta(
+        days=settings.UNCONSENTED_USER_RETENTION_DAYS
+    )
+    result = await db.execute(
+        delete(User)
+        .where(User.privacy_policy_accepted.is_(False))
+        .where(User.created_at < cutoff)
+        .returning(User.trakt_access_token_enc, User.simkl_access_token_enc)
+    )
+    rows = result.fetchall()
+    trakt = TraktClient(client_id=settings.TRAKT_CLIENT_ID)
+    simkl = SimklClient(client_id=settings.SIMKL_CLIENT_ID)
+    for trakt_enc, simkl_enc in rows:
+        for client, token_enc, client_secret in (
+            (trakt, trakt_enc, settings.TRAKT_CLIENT_SECRET),
+            (simkl, simkl_enc, settings.SIMKL_CLIENT_SECRET),
+        ):
+            if not token_enc:
+                continue
+            try:
+                await client.revoke_token(
+                    decrypt_token(token_enc), client_secret=client_secret
+                )
+            except Exception:
+                logger.warning("unconsented_user_token_revoke failed", exc_info=True)
+    count = len(rows)
+    logger.info(
+        "purged_unconsented_users count=%d retention_days=%d",
+        count,
+        settings.UNCONSENTED_USER_RETENTION_DAYS,
+    )
+    return count

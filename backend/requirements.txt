@@ -1419,6 +1419,7 @@ multidict==6.9.1 \
     --hash=sha256:fc0dcb22fa9aeabfe3fa4e0430099acff985ec5d77a851382f76cc6146e780e5 \
     --hash=sha256:fd882aa29bf402b62bf1fd7c19fd5df4b6528cf468a908864b39368572b662a9
     # via
+    #   -r backend/requirements.in
     #   aiohttp
     #   yarl
 openai==2.54.0 \
