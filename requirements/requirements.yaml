@@ -579,7 +579,7 @@ requirements:
 
   - id: FD-046
     title: Per-user rate limiting
-    statement: "When applying rate limits, the system shall key on the authenticated user id decoded from the session JWT, falling back to client IP for anonymous requests, so users cannot bypass limits by rotating IPs; behind Railway the entrypoint auto-trusts proxy X-Forwarded-For so IP keys are real client IPs."
+    statement: "When applying rate limits, the system shall key on the authenticated user id decoded from the session JWT, falling back to client IP for anonymous requests, so users cannot bypass limits by rotating IPs; behind Railway, where the entrypoint trusts all proxies and X-Forwarded-For is therefore client-controlled, anonymous keys shall come from the edge-set X-Real-IP header instead."
     category: non-functional
     priority: must
     status: active
@@ -587,6 +587,7 @@ requirements:
     acceptance:
       - "Two sessions of the same user share one rate-limit bucket"
       - "429 responses use the standard slowapi handler"
+      - "On Railway, anonymous keys use a valid X-Real-IP, so a spoofed X-Forwarded-For cannot reset the limit; off Railway, X-Real-IP is ignored"
       - "With RAILWAY_ENVIRONMENT set and FORWARDED_ALLOW_IPS unset, uvicorn runs with --forwarded-allow-ips='*'; elsewhere it defaults to loopback with a warning"
 
   - id: FD-047
