@@ -22,6 +22,9 @@ def _make_settings(**overrides) -> Settings:
         "TRAKT_CLIENT_ID": "",
         "TRAKT_CLIENT_SECRET": "",
         "DATABASE_URL": "postgresql+asyncpg://localhost/test",
+        # A public origin, so tests that set a platform env var are not tripped
+        # by the AUD-23 loopback-origin check (TestCorsLoopbackFailClosed covers it).
+        "CORS_ORIGINS": ["https://filmduel.example.com"],
     }
     defaults.update(overrides)
     return Settings(**defaults)
@@ -618,3 +621,78 @@ class TestTmdbAuthStartupWarning:
         await _run_lifespan(_make_settings(), caplog)
 
         assert "tmdb_v3_api_key" not in caplog.text
+
+
+class TestCorsLoopbackFailClosed:
+    """AUD-23 (#705): on a hosted platform a loopback CORS origin refuses to start."""
+
+    _PROXY_PLATFORM_ENV_VARS = _PROXY_PLATFORM_ENV_VARS_PROD
+
+    def _only_platform(self, monkeypatch, var: str | None, value: str = "set"):
+        for other in self._PROXY_PLATFORM_ENV_VARS:
+            monkeypatch.delenv(other, raising=False)
+        if var is not None:
+            monkeypatch.setenv(var, value)
+
+    @pytest.mark.parametrize("var", _PROXY_PLATFORM_ENV_VARS_PROD)
+    def test_unset_default_raises_on_each_platform(self, monkeypatch, var):
+        """The localhost default (CORS_ORIGINS never configured) fails closed."""
+        self._only_platform(monkeypatch, var)
+        monkeypatch.delenv("CORS_ORIGINS", raising=False)
+
+        with pytest.raises(ValidationError, match="cors_origins_loopback") as exc:
+            Settings(
+                SECRET_KEY="test-secret-key-for-unit-tests!!",
+                DATABASE_URL="postgresql+asyncpg://localhost/test",
+                BASE_URL="https://example.com",
+                _env_file=None,
+            )
+
+        assert var in str(exc.value)
+
+    @pytest.mark.parametrize(
+        "origin",
+        [
+            "http://localhost:5173",
+            "https://LOCALHOST",
+            "http://app.localhost:8080",
+            "http://127.0.0.1:8000",
+            "http://127.1.2.3",
+            "http://[::1]:3000",
+            "http://0.0.0.0:8000",
+        ],
+    )
+    def test_explicit_loopback_origin_raises(self, monkeypatch, origin):
+        self._only_platform(monkeypatch, "RAILWAY_ENVIRONMENT", "production")
+
+        with pytest.raises(ValidationError, match="cors_origins_loopback"):
+            _make_settings(
+                BASE_URL="https://example.com",
+                CORS_ORIGINS=["https://filmduel.example.com", origin],
+            )
+
+    def test_public_origins_boot_on_platform(self, monkeypatch):
+        self._only_platform(monkeypatch, "RAILWAY_ENVIRONMENT", "production")
+
+        s = _make_settings(
+            BASE_URL="https://example.com",
+            CORS_ORIGINS="https://filmduel.example.com,https://localhost-fans.example.org",
+        )
+
+        assert s.CORS_ORIGINS == [
+            "https://filmduel.example.com",
+            "https://localhost-fans.example.org",
+        ]
+
+    def test_localhost_default_allowed_off_platform(self, monkeypatch):
+        """Local dev keeps the localhost default."""
+        self._only_platform(monkeypatch, None)
+        monkeypatch.delenv("CORS_ORIGINS", raising=False)
+
+        s = Settings(
+            SECRET_KEY="test-secret-key-for-unit-tests!!",
+            DATABASE_URL="postgresql+asyncpg://localhost/test",
+            _env_file=None,
+        )
+
+        assert "http://localhost:5173" in s.CORS_ORIGINS

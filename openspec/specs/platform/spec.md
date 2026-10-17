@@ -72,12 +72,17 @@ Values taken from users or providers, such as usernames, SHALL be encoded before
 
 ### Requirement: Misconfiguration stops the service at startup
 
-The service SHALL refuse to start when the database URL is missing or a placeholder, the session secret or token-encryption key is shorter than 32 characters, a known placeholder or built from fewer than 10 distinct characters, or a sign-in provider is configured without a valid token-encryption key. Startup checks SHALL report what is wrong without printing secret values.
+The service SHALL refuse to start when the database URL is missing or a placeholder, a secret key is under 32 characters, a placeholder or has under 10 distinct characters, a sign-in provider lacks a valid token-encryption key, or, on a hosted platform, the allowed origins include a loopback origin (as the unset default does). Startup checks SHALL NOT print secret values.
 
 #### Scenario: Placeholder secret
 - GIVEN the session secret is the example placeholder
 - WHEN the service starts
 - THEN it refuses to start and names the problem
+
+#### Scenario: Allowed origins left at the development default
+- GIVEN a hosted deployment where the allowed cross-origin list was never configured
+- WHEN the service starts
+- THEN it refuses to start and names the loopback origins
 
 ### Requirement: One service serves the app and the API
 

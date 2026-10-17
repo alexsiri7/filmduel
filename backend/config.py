@@ -1,10 +1,12 @@
 """Application configuration via environment variables."""
 
+import ipaddress
 import os
 import ssl
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
+from urllib.parse import urlparse
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, EnvSettingsSource
@@ -96,6 +98,18 @@ def _validate_key_strength(name: str, v: str) -> str:
             "python -c 'import secrets; print(secrets.token_hex(32))'"
         )
     return v
+
+
+def _is_loopback_origin(origin: str) -> bool:
+    """True when the origin's host is localhost, *.localhost or a loopback/unspecified IP."""
+    host = (urlparse(origin).hostname or "").lower()
+    if host == "localhost" or host.endswith(".localhost"):
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return ip.is_loopback or ip.is_unspecified
 
 
 def detected_proxy_platform() -> str | None:
@@ -222,6 +236,30 @@ class Settings(BaseSettings):
                 "CORS_ORIGINS must not contain '*' when allow_credentials=True"
             )
         return entries
+
+    @model_validator(mode="after")
+    def reject_loopback_cors_origins_on_proxy_platform(self) -> "Settings":
+        """Refuse to start on a hosted platform while CORS_ORIGINS names a loopback origin.
+
+        CORS_ORIGINS defaults to the localhost dev servers, and the CSRF origin
+        check trusts every entry. A deployment that never set CORS_ORIGINS would
+        therefore accept state-changing requests from any page served on the
+        visitor's own localhost. No hosted deployment has a legitimate loopback
+        origin, so fail closed instead (AUD-23, #705).
+        """
+        detected = detected_proxy_platform()
+        if not detected:
+            return self
+        loopback = [o for o in self.CORS_ORIGINS if _is_loopback_origin(o)]
+        if loopback:
+            raise ValueError(
+                f"cors_origins_loopback: detected platform env var {detected!r} but "
+                f"CORS_ORIGINS contains loopback origin(s) {loopback!r} (the localhost "
+                "default applies when CORS_ORIGINS is unset). Refusing to start: the "
+                "CSRF origin check would trust them. Set CORS_ORIGINS to the public "
+                "origin(s) of this deployment, e.g. https://filmduel.example.com."
+            )
+        return self
 
     # Data retention (days)
     DUEL_RETENTION_DAYS: int = 180
