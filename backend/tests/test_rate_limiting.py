@@ -901,3 +901,62 @@ def test_slowapi_private_api_shape():
     assert hasattr(limiter, "_route_limits"), (
         "slowapi private API changed — update test_rate_limiting.py"
     )
+
+
+# ---------------------------------------------------------------------------
+# GET /api/me (AUD-26, #708) and the every-authenticated-route invariant
+# ---------------------------------------------------------------------------
+
+
+def test_me_is_registered_with_rate_limiter():
+    """GET /api/me must be registered in the slowapi limiter."""
+    assert "backend.routers.users.me" in limiter._Limiter__marked_for_limiting
+
+
+def test_me_rate_limit_is_60_per_minute():
+    """GET /api/me allows 60/minute — headroom for the 3 s pool-import poll in two tabs."""
+    limits = limiter._route_limits.get("backend.routers.users.me", [])
+    limit_strings = [str(lim.limit) for lim in limits]
+    assert any("60 per 1 minute" in s for s in limit_strings), (
+        f"Expected '60/minute' limit on GET /api/me, got: {limit_strings}"
+    )
+
+
+def _dependency_calls(dependant):
+    for sub in dependant.dependencies:
+        yield sub.call
+        yield from _dependency_calls(sub)
+
+
+def test_every_authenticated_route_is_rate_limited():
+    """Every route that resolves get_current_user (directly or via another
+    dependency) must carry a @limiter.limit decorator."""
+    from fastapi.routing import APIRoute
+
+    from backend.routers import (
+        auth,
+        duels,
+        feedback,
+        movies,
+        rankings,
+        suggestions,
+        swipe,
+        tournaments,
+        users,
+    )
+
+    marked = limiter._Limiter__marked_for_limiting
+    authenticated = []
+    unlimited = []
+    for module in (auth, movies, duels, rankings, suggestions, swipe, tournaments, feedback, users):
+        for route in module.router.routes:
+            if not isinstance(route, APIRoute):
+                continue
+            if get_current_user not in set(_dependency_calls(route.dependant)):
+                continue
+            authenticated.append(route.path)
+            name = f"{route.endpoint.__module__}.{route.endpoint.__name__}"
+            if name not in marked:
+                unlimited.append(f"{sorted(route.methods)} {route.path}")
+    assert authenticated, "route discovery found no authenticated routes"
+    assert not unlimited, f"authenticated routes without a rate limit: {unlimited}"
