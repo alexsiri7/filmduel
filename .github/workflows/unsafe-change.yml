@@ -31,7 +31,7 @@ jobs:
       # The base branch's CURRENT head (github.sha under pull_request_target),
       # not pull_request.base.sha: that is the base as of the PR's last push
       # and can predate this checker or run an older policy.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2, base branch
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1, base branch
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
