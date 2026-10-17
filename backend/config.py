@@ -77,10 +77,11 @@ _WEAK_KEY_PLACEHOLDERS = frozenset(
 )
 
 
-# A random hex secret uses all 16 hex digits and a URL-safe base64 one far
-# more; hand-typed filler such as "a" * 32 or "abab…" uses one or two. The
-# floor sits well below 16 so every generated secret passes (AUD-28, #710).
-_MIN_DISTINCT_KEY_CHARS = 10
+# Hand-typed filler such as "a" * 32 or "abab…" uses one or two distinct
+# characters. A random secret's count varies: 32 hex chars (token_hex(16))
+# show fewer than 10 distinct digits about once in 10,000 draws, but fewer
+# than 6 only about once in 3 trillion, so the floor is 6 (AUD-28, #710).
+_MIN_DISTINCT_KEY_CHARS = 6
 
 
 def _validate_key_strength(name: str, v: str) -> str:
