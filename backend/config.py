@@ -77,6 +77,12 @@ _WEAK_KEY_PLACEHOLDERS = frozenset(
 )
 
 
+# A random hex secret uses all 16 hex digits and a URL-safe base64 one far
+# more; hand-typed filler such as "a" * 32 or "abab…" uses one or two. The
+# floor sits well below 16 so every generated secret passes (AUD-28, #710).
+_MIN_DISTINCT_KEY_CHARS = 10
+
+
 def _validate_key_strength(name: str, v: str) -> str:
     if v.lower() in _WEAK_KEY_PLACEHOLDERS:
         raise ValueError(
@@ -84,6 +90,13 @@ def _validate_key_strength(name: str, v: str) -> str:
         )
     if len(v) < 32:
         raise ValueError(f"{name} must be at least 32 characters; got {len(v)}")
+    distinct = len(set(v))
+    if distinct < _MIN_DISTINCT_KEY_CHARS:
+        raise ValueError(
+            f"{name} uses only {distinct} distinct characters (minimum "
+            f"{_MIN_DISTINCT_KEY_CHARS}); set a strong random secret, e.g. "
+            "python -c 'import secrets; print(secrets.token_hex(32))'"
+        )
     return v
 
 
@@ -302,7 +315,13 @@ class Settings(BaseSettings):
             )
         return self
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    # hide_input_in_errors: a rejected SECRET_KEY / TOKEN_ENC_KEY / DATABASE_URL
+    # must not be echoed into startup logs via ValidationError's input_value.
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        "hide_input_in_errors": True,
+    }
 
     @classmethod
     def settings_customise_sources(
