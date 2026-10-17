@@ -592,14 +592,16 @@ requirements:
 
   - id: FD-047
     title: Startup configuration validation
-    statement: "When the application starts, the system shall refuse to boot if DATABASE_URL is missing or the localhost placeholder, if SECRET_KEY is under 32 chars or a known placeholder, or if an OAuth client id is configured without a valid TOKEN_ENC_KEY; CORS_ORIGINS shall never contain '*'."
+    statement: "When the application starts, the system shall refuse to boot if DATABASE_URL is missing or the localhost placeholder, if SECRET_KEY (or a set TOKEN_ENC_KEY) is under 32 chars, a known placeholder or built from fewer than 10 distinct characters, or if an OAuth client id is configured without a valid TOKEN_ENC_KEY; CORS_ORIGINS shall never contain '*'."
     category: constraint
     priority: must
     status: active
     source: back-ported
     acceptance:
       - "Settings() raises for each invalid combination above (see test_config.py)"
-      - "entrypoint.sh fail-fasts on the same conditions before Python starts, printing lengths but never values"
+      - "entrypoint.sh fail-fasts on missing values and SECRET_KEY length before Python starts, printing lengths but never values"
+      - "A key such as 'a' * 32 or 'ab' * 20 is rejected (distinct characters < 10, AUD-28 #710); secrets.token_hex(32)/token_urlsafe(32) output is accepted"
+      - "Settings validation errors never echo the rejected value (hide_input_in_errors)"
 
   - id: FD-048
     title: Cookie Secure flag control

@@ -3,6 +3,7 @@
 import hashlib
 import logging
 import os
+import secrets
 import ssl
 from unittest.mock import patch
 
@@ -26,13 +27,66 @@ def _make_settings(**overrides) -> Settings:
     return Settings(**defaults)
 
 
+# Fixed, generated-looking keys (token_hex output shape: 16 distinct digits).
+_KEY_32 = "3f9a0c7d1e5b8264a9f0c3d7e1b5a826"
+_KEY_64 = _KEY_32 + "c41e8f2a7d0b9c536e1f4a8d2b7c0e95"
+
+
+class TestKeyCharacterVariety:
+    """AUD-28 (#710): a long key must also vary, not just be long."""
+
+    @pytest.mark.parametrize("field", ["SECRET_KEY", "TOKEN_ENC_KEY"])
+    @pytest.mark.parametrize(
+        "key",
+        ["a" * 32, "x" * 64, "ab" * 20],
+    )
+    def test_low_variety_key_rejected(self, field, key):
+        with pytest.raises(ValidationError, match="distinct characters"):
+            _make_settings(**{field: key})
+
+    @pytest.mark.parametrize("field", ["SECRET_KEY", "TOKEN_ENC_KEY"])
+    def test_nine_distinct_rejected_ten_accepted(self, field):
+        with pytest.raises(ValidationError, match="only 9 distinct"):
+            _make_settings(**{field: "123456789" * 4})
+        s = _make_settings(**{field: "0123456789" * 4})
+        assert getattr(s, field) == "0123456789" * 4
+
+    @pytest.mark.parametrize("field", ["SECRET_KEY", "TOKEN_ENC_KEY"])
+    @pytest.mark.parametrize(
+        "make",
+        [
+            lambda: secrets.token_hex(32),
+            lambda: secrets.token_hex(16),
+            lambda: secrets.token_urlsafe(32),
+        ],
+    )
+    def test_generated_secrets_accepted(self, field, make):
+        for _ in range(50):
+            key = make()
+            assert getattr(_make_settings(**{field: key}), field) == key
+
+    def test_ci_and_test_suite_secrets_accepted(self):
+        for key in (
+            "ci-test-secret-key-not-for-production",
+            "test-secret-key-for-unit-tests!!",
+            "test-secret-key-for-unit-tests-32b",
+        ):
+            _make_settings(SECRET_KEY=key, TOKEN_ENC_KEY=key)
+
+    def test_error_does_not_echo_the_key(self):
+        key = "ab" * 20
+        with pytest.raises(ValidationError) as exc:
+            _make_settings(SECRET_KEY=key)
+        assert key not in str(exc.value)
+
+
 class TestSecretKeyValidation:
     def test_valid_32_char_key_accepted(self):
-        s = _make_settings(SECRET_KEY="a" * 32)
-        assert s.SECRET_KEY == "a" * 32
+        s = _make_settings(SECRET_KEY=_KEY_32)
+        assert s.SECRET_KEY == _KEY_32
 
     def test_valid_long_key_accepted(self):
-        s = _make_settings(SECRET_KEY="x" * 64)
+        s = _make_settings(SECRET_KEY=_KEY_64)
         assert len(s.SECRET_KEY) == 64
 
     def test_31_char_key_rejected(self):
@@ -202,8 +256,8 @@ class TestTokenEncKeyValidation:
         assert s.TOKEN_ENC_KEY == ""
 
     def test_valid_32_char_key_accepted(self):
-        s = _make_settings(TOKEN_ENC_KEY="a" * 32)
-        assert s.TOKEN_ENC_KEY == "a" * 32
+        s = _make_settings(TOKEN_ENC_KEY=_KEY_32)
+        assert s.TOKEN_ENC_KEY == _KEY_32
 
     def test_31_char_key_rejected(self):
         with pytest.raises(ValidationError, match="at least 32 characters"):
@@ -226,7 +280,7 @@ class TestTokenEncKeyValidation:
             _make_settings(TOKEN_ENC_KEY="SECRET")
 
     def test_valid_long_key_accepted(self):
-        s = _make_settings(TOKEN_ENC_KEY="x" * 64)
+        s = _make_settings(TOKEN_ENC_KEY=_KEY_64)
         assert len(s.TOKEN_ENC_KEY) == 64
 
     def test_empty_key_rejected_when_trakt_client_id_set(self):
@@ -246,26 +300,26 @@ class TestTokenEncKeyValidation:
 
     def test_valid_key_accepted_when_trakt_client_id_set(self):
         s = _make_settings(
-            TOKEN_ENC_KEY="a" * 32,
+            TOKEN_ENC_KEY=_KEY_32,
             TRAKT_CLIENT_ID="some-trakt-client-id",
         )
-        assert s.TOKEN_ENC_KEY == "a" * 32
+        assert s.TOKEN_ENC_KEY == _KEY_32
 
     def test_valid_key_accepted_when_simkl_client_id_set(self):
         s = _make_settings(
-            TOKEN_ENC_KEY="a" * 32,
+            TOKEN_ENC_KEY=_KEY_32,
             SIMKL_CLIENT_ID="some-simkl-client-id",
             TRAKT_CLIENT_ID="",
         )
-        assert s.TOKEN_ENC_KEY == "a" * 32
+        assert s.TOKEN_ENC_KEY == _KEY_32
 
     def test_valid_key_accepted_when_both_oauth_providers_set(self):
         s = _make_settings(
-            TOKEN_ENC_KEY="a" * 32,
+            TOKEN_ENC_KEY=_KEY_32,
             TRAKT_CLIENT_ID="some-trakt-client-id",
             SIMKL_CLIENT_ID="some-simkl-client-id",
         )
-        assert s.TOKEN_ENC_KEY == "a" * 32
+        assert s.TOKEN_ENC_KEY == _KEY_32
 
 
 class TestCookieSecure:
