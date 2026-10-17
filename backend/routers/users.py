@@ -70,7 +70,8 @@ def _build_user_response(user: User) -> UserResponse:
 
 
 @router.get("/api/me", response_model=UserResponse)
-async def me(user: User = Depends(get_current_user)):
+@limiter.limit("60/minute")
+async def me(request: Request, user: User = Depends(get_current_user)):
     """Return the current authenticated user's profile."""
     return _build_user_response(user)
 
