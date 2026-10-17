@@ -49,6 +49,20 @@ The privacy policy SHALL be readable at /privacy without a session and without c
 - WHEN a user reads the privacy policy
 - THEN it states that duel history is kept for 180 days
 
+### Requirement: The policy names every recipient and write-back
+
+The privacy policy SHALL name every service that receives personal data — the sign-in providers, hosting, error tracking and the AI gateway — and SHALL describe every change the system makes to a user's provider account.
+
+#### Scenario: Hosting disclosed
+- GIVEN the application and database run on third-party hosting
+- WHEN a user reads the privacy policy
+- THEN it names those hosting providers
+
+#### Scenario: Rating write-back disclosed
+- GIVEN a user who turns on rating sync
+- WHEN they read the privacy policy
+- THEN it states that ratings derived from their rankings are written to their provider account
+
 ### Requirement: Users can export all their data
 
 A signed-in user SHALL be able to download, as a JSON file, every record held about them: profile, library, duels, tournaments, suggestions, swipe results, feedback reports and pool expansions. The export SHALL be built from explicit field lists that exclude provider tokens, SHALL name any section truncated by its size cap, SHALL be available whether or not the user has consented, and SHALL be limited to 10 exports per hour.

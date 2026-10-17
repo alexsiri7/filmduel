@@ -50,4 +50,19 @@ describe("PrivacyPolicy", () => {
       screen.getByText(`Version ${CURRENT_PRIVACY_POLICY_VERSION}`, { exact: false })
     ).toBeInTheDocument();
   });
+
+  it("discloses SIMKL, the hosting processors, IP processing and Trakt write-back (AUD-17)", () => {
+    render(
+      <MemoryRouter>
+        <PrivacyPolicy />
+      </MemoryRouter>
+    );
+    expect(screen.getAllByText(/SIMKL/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Railway")).toBeInTheDocument();
+    expect(screen.getByText("Supabase")).toBeInTheDocument();
+    expect(screen.getByText("IP address")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Changes We Make to Your Trakt Account/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Who Can See Your Data/ })).toBeInTheDocument();
+    expect(screen.getByText(/if you attach one, a screenshot/)).toBeInTheDocument();
+  });
 });
