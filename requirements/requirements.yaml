@@ -589,6 +589,7 @@ requirements:
       - "429 responses use the standard slowapi handler"
       - "On Railway, anonymous keys use a valid X-Real-IP, so a spoofed X-Forwarded-For cannot reset the limit; off Railway, X-Real-IP is ignored"
       - "With RAILWAY_ENVIRONMENT set and FORWARDED_ALLOW_IPS unset, uvicorn runs with --forwarded-allow-ips='*'; elsewhere it defaults to loopback with a warning"
+      - "Every route that resolves get_current_user carries a @limiter.limit decorator, GET /api/me included at 60/minute (AUD-26, #708; pinned by test_rate_limiting.py::test_every_authenticated_route_is_rate_limited)"
 
   - id: FD-047
     title: Startup configuration validation
