@@ -72,7 +72,7 @@ Values taken from users or providers, such as usernames, SHALL be encoded before
 
 ### Requirement: Misconfiguration stops the service at startup
 
-The service SHALL refuse to start when the database URL is missing or a placeholder, a secret key is under 32 characters, a placeholder or has under 10 distinct characters, a sign-in provider lacks a valid token-encryption key, or, on a hosted platform, the allowed origins include a loopback origin (as the unset default does). Startup checks SHALL NOT print secret values.
+The service SHALL refuse to start when the database URL is missing or a placeholder, a secret key is under 32 characters, a placeholder or has under 6 distinct characters, a sign-in provider lacks a valid token-encryption key, or, on a hosted platform, the allowed origins include a loopback origin (as the unset default does). Startup checks SHALL NOT print secret values.
 
 #### Scenario: Placeholder secret
 - GIVEN the session secret is the example placeholder

@@ -48,11 +48,11 @@ class TestKeyCharacterVariety:
             _make_settings(**{field: key})
 
     @pytest.mark.parametrize("field", ["SECRET_KEY", "TOKEN_ENC_KEY"])
-    def test_nine_distinct_rejected_ten_accepted(self, field):
-        with pytest.raises(ValidationError, match="only 9 distinct"):
-            _make_settings(**{field: "123456789" * 4})
-        s = _make_settings(**{field: "0123456789" * 4})
-        assert getattr(s, field) == "0123456789" * 4
+    def test_five_distinct_rejected_six_accepted(self, field):
+        with pytest.raises(ValidationError, match="only 5 distinct"):
+            _make_settings(**{field: "12345" * 7})
+        s = _make_settings(**{field: "123456" * 6})
+        assert getattr(s, field) == "123456" * 6
 
     @pytest.mark.parametrize("field", ["SECRET_KEY", "TOKEN_ENC_KEY"])
     @pytest.mark.parametrize(
@@ -64,7 +64,7 @@ class TestKeyCharacterVariety:
         ],
     )
     def test_generated_secrets_accepted(self, field, make):
-        for _ in range(50):
+        for _ in range(200):
             key = make()
             assert getattr(_make_settings(**{field: key}), field) == key
 
