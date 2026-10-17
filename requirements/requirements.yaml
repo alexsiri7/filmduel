@@ -593,13 +593,14 @@ requirements:
 
   - id: FD-047
     title: Startup configuration validation
-    statement: "When the application starts, the system shall refuse to boot if DATABASE_URL is missing or the localhost placeholder, if SECRET_KEY is under 32 chars or a known placeholder, or if an OAuth client id is configured without a valid TOKEN_ENC_KEY; CORS_ORIGINS shall never contain '*'."
+    statement: "When the application starts, the system shall refuse to boot if DATABASE_URL is missing or the localhost placeholder, if SECRET_KEY is under 32 chars or a known placeholder, or if an OAuth client id is configured without a valid TOKEN_ENC_KEY; CORS_ORIGINS shall never contain '*', and on a detected hosting platform shall contain no localhost or loopback origin (AUD-23, #705)."
     category: constraint
     priority: must
     status: active
     source: back-ported
     acceptance:
       - "Settings() raises for each invalid combination above (see test_config.py)"
+      - "Platform env var detected + CORS_ORIGINS unset (localhost default) or naming localhost/*.localhost/127.0.0.0/8/::1/0.0.0.0 → Settings() raises cors_origins_loopback; public origins boot; off-platform the localhost default still boots"
       - "entrypoint.sh fail-fasts on the same conditions before Python starts, printing lengths but never values"
 
   - id: FD-048
