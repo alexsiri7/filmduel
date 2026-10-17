@@ -12,6 +12,7 @@ from sqlalchemy.sql import Select
 from sqlalchemy.sql.dml import Insert, Update
 
 from sqlalchemy import Column
+from sqlalchemy.sql.elements import BindParameter
 
 from backend.services.pool import (
     populate_movie_pool,
@@ -477,8 +478,15 @@ class TestUpsertUserMovie:
         return db, captured
 
     def _conflict_set_map(self, stmt):
-        """The ON CONFLICT DO UPDATE SET clause as {column_name: value_or_column}."""
-        return dict(stmt._post_values_clause.update_values_to_set)
+        """The ON CONFLICT DO UPDATE SET clause as {column_name: value_or_column}.
+
+        SQLAlchemy 2.1 coerces literal SET values to BindParameter at construction
+        time (2.0 kept the raw Python value), so unwrap those to compare values.
+        """
+        return {
+            key: value.value if isinstance(value, BindParameter) else value
+            for key, value in dict(stmt._post_values_clause.update_values_to_set).items()
+        }
 
     @pytest.mark.asyncio
     async def test_none_seen_and_rating_preserve_existing_row_on_conflict(self):
