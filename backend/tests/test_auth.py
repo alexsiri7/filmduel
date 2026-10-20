@@ -1612,7 +1612,12 @@ class TestPKCE:
         legacy.trakt_user_id = "alice"
         db = self._lookup_db(None, legacy)
 
-        response, _ = await self._run_trakt_callback(monkeypatch, None, db=db)
+        with patch(
+            "backend.routers.auth._legacy_row_belongs_to",
+            new_callable=AsyncMock,
+            return_value=True,
+        ):
+            response, _ = await self._run_trakt_callback(monkeypatch, None, db=db)
 
         statements = self._statements(db)
         assert "users.trakt_user_id = " in statements[1]
@@ -1622,6 +1627,55 @@ class TestPKCE:
         assert statements[2].startswith("UPDATE users")
         assert "users.trakt_user_id = " in statements[2]
         db.add.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_legacy_row_is_not_adopted_when_uuid_does_not_match(self, monkeypatch):
+        """A newcomer holding a dormant user's freed slug gets a fresh account (SEC-01)."""
+        monkeypatch.setattr("backend.services.token_crypto.encrypt_token", lambda v: v)
+        legacy = MagicMock()
+        legacy.id = "00000000-0000-0000-0000-000000000002"
+        legacy.trakt_uuid = None
+        legacy.trakt_user_id = "alice"
+        legacy.is_admin = False
+        db = self._lookup_db(None, legacy)
+
+        with patch(
+            "backend.routers.auth._legacy_row_belongs_to",
+            new_callable=AsyncMock,
+            return_value=False,
+        ):
+            response, _ = await self._run_trakt_callback(monkeypatch, None, db=db)
+
+        created = db.add.call_args.args[0]
+        assert created.trakt_uuid == "uuid-alice"
+        assert legacy.trakt_uuid is None  # untouched
+        assert self._session_user_id(response) == str(created.id)
+        statements = self._statements(db)
+        assert statements[2].startswith("UPDATE users SET trakt_user_id=")  # stale slug released
+
+    @pytest.mark.asyncio
+    async def test_legacy_admin_row_is_never_adopted(self, monkeypatch):
+        legacy = MagicMock()
+        legacy.is_admin = True
+        legacy.trakt_access_token_enc = "enc"
+        settings = MagicMock()
+        from backend.routers.auth import _legacy_row_belongs_to
+        assert await _legacy_row_belongs_to(legacy, "uuid-alice", settings) is False
+
+    @pytest.mark.asyncio
+    async def test_legacy_row_belongs_to_compares_profile_uuid(self, monkeypatch):
+        legacy = MagicMock()
+        legacy.is_admin = False
+        legacy.trakt_access_token_enc = "enc"
+        legacy.trakt_access_token = "tok"
+        legacy.trakt_refresh_token_enc = None
+        settings = MagicMock(TRAKT_CLIENT_ID="cid")
+        profile = {"user": {"ids": {"uuid": "uuid-alice"}}}
+        with patch("backend.routers.auth.TraktClient") as client_cls:
+            client_cls.return_value.get_profile = AsyncMock(return_value=profile)
+            from backend.routers.auth import _legacy_row_belongs_to
+            assert await _legacy_row_belongs_to(legacy, "uuid-alice", settings) is True
+            assert await _legacy_row_belongs_to(legacy, "uuid-mallory", settings) is False
 
     @pytest.mark.asyncio
     async def test_new_holder_of_freed_slug_gets_a_new_account(self, monkeypatch):

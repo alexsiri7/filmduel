@@ -20,6 +20,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from backend.config import detected_proxy_platform, get_settings
+from backend.middleware.body_limit import BodyLimitMiddleware
 from backend.rate_limit import limiter
 from backend.scheduler import build_scheduler
 from backend.services.duel_rejections import record_duel_rejection
@@ -197,6 +198,15 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 # Rate limiting
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Request-body ceiling (SEC-03). Must be the innermost middleware (added
+# first, so it ends up closest to the router) — csrf_origin_check and
+# add_security_headers are BaseHTTPMiddleware-based and wrap any downstream
+# receive() in an anyio TaskGroup; an HTTPException raised from inside that
+# wrapped receive surfaces as an ExceptionGroup instead of a clean 413. With
+# no BaseHTTPMiddleware between this and the router, FastAPI's body-read
+# re-raises the HTTPException unchanged.
+app.add_middleware(BodyLimitMiddleware)
 
 # CORS — origins configurable via CORS_ORIGINS env var
 app.add_middleware(

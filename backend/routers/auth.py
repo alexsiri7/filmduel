@@ -437,6 +437,71 @@ _SIMKL_PROVIDER = _OAuthProvider(
 )
 
 
+async def _legacy_row_belongs_to(
+    legacy: User, provider_user_id: str, settings: Settings
+) -> bool:
+    """Prove a pre-#684 row (trakt_uuid IS NULL) belongs to the account logging in.
+
+    Slugs are reusable, so a slug match alone must not transfer the row
+    (SEC-01). The row's own stored access token is used to read
+    /users/settings; the row is adoptable only if that call returns the same
+    immutable uuid as the account now authenticating. One refresh is attempted
+    if the stored access token is rejected. Admin rows are never adoptable.
+    """
+    if legacy.is_admin:
+        logger.warning(
+            "legacy_adoption_refused_admin legacy_user_id=%s", legacy.id
+        )
+        return False
+    if not legacy.trakt_access_token_enc:
+        return False
+
+    async def _uuid_for(access_token: str) -> str | None:
+        client = TraktClient(client_id=settings.TRAKT_CLIENT_ID, access_token=access_token)
+        try:
+            profile = await client.get_profile()
+        except httpx.HTTPError as exc:
+            logger.info(
+                "legacy_adoption_profile_failed legacy_user_id=%s error=%s",
+                legacy.id,
+                type(exc).__name__,
+            )
+            return None
+        try:
+            return str(profile["user"]["ids"]["uuid"])
+        except (KeyError, TypeError):
+            return None
+
+    try:
+        found = await _uuid_for(legacy.trakt_access_token)
+    except RuntimeError:  # TOKEN_ENC_KEY rotated; stored token undecryptable
+        return False
+
+    if found is None and legacy.trakt_refresh_token_enc:
+        client = TraktClient(client_id=settings.TRAKT_CLIENT_ID)
+        try:
+            tokens = await client.refresh_token(
+                legacy.trakt_refresh_token,
+                client_secret=settings.TRAKT_CLIENT_SECRET,
+                redirect_uri=settings.TRAKT_REDIRECT_URI,
+            )
+            found = await _uuid_for(tokens["access_token"])
+        except (httpx.HTTPError, KeyError, RuntimeError) as exc:
+            logger.info(
+                "legacy_adoption_refresh_failed legacy_user_id=%s error=%s",
+                legacy.id,
+                type(exc).__name__,
+            )
+            found = None
+
+    ok = found is not None and hmac.compare_digest(found, provider_user_id)
+    if not ok:
+        logger.warning(
+            "legacy_adoption_refused_uuid_mismatch legacy_user_id=%s", legacy.id
+        )
+    return ok
+
+
 async def _handle_oauth_callback(
     provider: _OAuthProvider,
     code: str,
@@ -516,11 +581,17 @@ async def _handle_oauth_callback(
         slug_col = getattr(User, provider.slug_column)
         if user is None:
             # One-time adoption of a row keyed only by slug (#684). A row already
-            # bound to an account id can never be claimed through its slug.
+            # bound to an account id can never be claimed through its slug, and a
+            # uuid-less row is adopted only after its own stored token proves it
+            # belongs to this account (SEC-01): slugs are reusable.
             result = await db.execute(
                 select(User).where(slug_col == slug, column.is_(None))
             )
-            user = result.scalar_one_or_none()
+            candidate = result.scalar_one_or_none()
+            if candidate is not None and await _legacy_row_belongs_to(
+                candidate, provider_user_id, settings
+            ):
+                user = candidate
         # A renamed account's row may still hold this slug, now someone else's.
         # Release it so the unique constraint holds and that row stops syncing
         # the new owner's history; it heals at its owner's next login.

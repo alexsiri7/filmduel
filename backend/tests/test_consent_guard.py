@@ -762,7 +762,7 @@ class TestDataCollectionConsentGuard:
         self._install(user)
 
         with patch(
-            "backend.routers.tournaments.acquire_quota_lock", new_callable=AsyncMock
+            "backend.routers.tournaments.acquire_quota_lock_nowait", new_callable=AsyncMock
         ) as mock_lock:
             with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post(
@@ -778,7 +778,7 @@ class TestDataCollectionConsentGuard:
         self._install(user)
 
         with patch(
-            "backend.routers.tournaments.acquire_quota_lock", new_callable=AsyncMock
+            "backend.routers.tournaments.acquire_quota_lock_nowait", new_callable=AsyncMock
         ) as mock_lock:
             with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.delete(f"/api/tournaments/{uuid.uuid4()}")
