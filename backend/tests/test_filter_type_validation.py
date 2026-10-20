@@ -115,3 +115,24 @@ class TestGetPoolCountDecadeValueValidation:
             )
         assert resp.status_code == 200
         assert resp.json() == {"count": 0, "max_bracket_size": None}
+
+
+class TestGetPoolCountFilterValueLength:
+    def setup_method(self):
+        app.dependency_overrides[get_current_user] = lambda: _fake_user()
+        app.dependency_overrides[get_db] = _fake_db
+
+    def teardown_method(self):
+        app.dependency_overrides.clear()
+
+    def test_over_length_filter_value_returns_422(self):
+        with patch(
+            "backend.routers.tournaments.count_filtered_ranked_films",
+            new_callable=AsyncMock,
+        ) as mock_count:
+            resp = client.get(
+                f"/api/tournaments/pool-count?filter_type=genre&filter_value={'x' * 201}"
+            )
+        assert resp.status_code == 422
+        assert resp.json()["detail"][0]["type"] == "string_too_long"
+        mock_count.assert_not_awaited()

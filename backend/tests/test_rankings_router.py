@@ -103,6 +103,22 @@ class TestRankingsRouter:
         assert zero.status_code == 422
         mock_rankings.assert_not_awaited()
 
+    def test_get_rankings_over_length_genre_returns_422(self):
+        """An over-length genre is rejected by validation before the DB."""
+        user = _make_user()
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+
+        with patch(
+            "backend.routers.rankings.get_user_rankings", new_callable=AsyncMock
+        ) as mock_rankings:
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.get(f"/api/rankings?genre={'x' * 201}")
+
+        assert resp.status_code == 422
+        assert resp.json()["detail"][0]["type"] == "string_too_long"
+        mock_rankings.assert_not_awaited()
+
     def test_export_csv_headers(self):
         """GET /api/rankings/export/csv returns correct Content-Type and filename."""
         user = _make_user()
