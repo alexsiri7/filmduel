@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 MIN_RANKED = 20
 NUM_PICKS = 6
 CANDIDATE_LIMIT = 50
+DEFAULT_REASON = "Recommended for you."
 
 
 async def _build_taste_profile(
@@ -233,8 +234,14 @@ async def generate_suggestions(
     # Validate and map picks
     results = []
     for pick in picks:
-        trakt_id = pick.get("trakt_id")
-        reason = pick.get("reason", "Recommended for you.")[:500]
+        if not isinstance(pick, dict) or not isinstance(pick.get("trakt_id"), int):
+            logger.warning("suggest_malformed_pick user_id=%s type=%s", user_id, type(pick).__name__)
+            continue
+        trakt_id = pick["trakt_id"]
+        reason = pick.get("reason")
+        if not isinstance(reason, str):
+            reason = DEFAULT_REASON
+        reason = reason[:500]
         if trakt_id in trakt_to_movie:
             results.append(
                 {

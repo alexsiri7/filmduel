@@ -209,9 +209,9 @@ class TournamentSchema(BaseModel):
 class TournamentPreview(BaseModel):
     model_config = {"extra": "forbid"}
 
-    name: str
-    tagline: str
-    theme_description: str
+    name: str = Field(max_length=100)
+    tagline: str = Field(max_length=200)
+    theme_description: str = Field(max_length=1000)
     film_ids: list[str]
 
 

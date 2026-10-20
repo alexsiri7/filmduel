@@ -302,3 +302,14 @@ class TestCurateTournamentOutputValidation:
 
         with pytest.raises(CurationError):
             await self._curate(reply)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "field,limit",
+        [("name", 100), ("tagline", 200), ("theme_description", 1000)],
+    )
+    async def test_overlong_text_rejected(self, field, limit):
+        reply = {**self.VALID_REPLY, field: "x" * (limit + 1)}
+
+        with pytest.raises(CurationError):
+            await self._curate(reply)
