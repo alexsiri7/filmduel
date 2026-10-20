@@ -1572,7 +1572,7 @@ class TestPKCE:
     async def test_callback_skips_pool_sync_for_new_user(self, monkeypatch):
         """A brand-new signup (privacy_policy_accepted defaults False) gets no sync at login."""
         # The real User row encrypts tokens on construction; keep this test independent of TOKEN_ENC_KEY.
-        monkeypatch.setattr("backend.services.token_crypto.encrypt_token", lambda v: v)
+        monkeypatch.setattr("backend.services.token_crypto.encrypt_token", lambda v, **_: v)
 
         _, bg = await self._run_trakt_callback(monkeypatch, existing_user=None)
 
@@ -1662,7 +1662,7 @@ class TestPKCE:
     @pytest.mark.asyncio
     async def test_legacy_row_is_not_adopted_when_uuid_does_not_match(self, monkeypatch):
         """A newcomer holding a dormant user's freed slug gets a fresh account (SEC-01)."""
-        monkeypatch.setattr("backend.services.token_crypto.encrypt_token", lambda v: v)
+        monkeypatch.setattr("backend.services.token_crypto.encrypt_token", lambda v, **_: v)
         legacy = MagicMock()
         legacy.id = "00000000-0000-0000-0000-000000000002"
         legacy.trakt_uuid = None
@@ -1716,7 +1716,7 @@ class TestPKCE:
         (restricted to uuid-less rows) misses it; a fresh account is created and
         the old row's stale slug is released.
         """
-        monkeypatch.setattr("backend.services.token_crypto.encrypt_token", lambda v: v)
+        monkeypatch.setattr("backend.services.token_crypto.encrypt_token", lambda v, **_: v)
         db = self._lookup_db(None, None)
         newcomer = {"user": {"username": "alice", "ids": {"slug": "alice", "uuid": "uuid-mallory"}}}
 

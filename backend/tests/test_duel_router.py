@@ -21,7 +21,7 @@ from backend.config import get_settings  # noqa: E402
 
 get_settings.cache_clear()
 
-from backend.services.token_crypto import _fernet  # noqa: E402
+from backend.services.token_crypto import TokenPurpose, _fernet  # noqa: E402
 
 _fernet.cache_clear()
 
@@ -335,7 +335,7 @@ class TestSubmitDuel:
         mid_b = str(uuid.uuid4())
         plaintext = f"{FAKE_USER.id},{mid_a},{mid_b}".encode()
         minted_at = int(time.time()) - PAIR_TOKEN_TTL_SECONDS - 60
-        token = _fernet().encrypt_at_time(plaintext, minted_at).decode()
+        token = _fernet(TokenPurpose.PAIR).encrypt_at_time(plaintext, minted_at).decode()
 
         with patch(
             "backend.routers.duels.process_duel", new_callable=AsyncMock

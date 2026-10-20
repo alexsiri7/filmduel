@@ -171,7 +171,7 @@ class TestSubmitFeedback:
         assert "image" in response.json()["detail"].lower()
 
     def test_screenshot_stored_encrypted(self, client):
-        from backend.services.token_crypto import decrypt_token
+        from backend.services.token_crypto import TokenPurpose, decrypt_token
 
         jpeg_data = b"\xff\xd8\xff" + b"\x00" * 10  # valid JPEG magic bytes
         response = self._post(
@@ -182,11 +182,11 @@ class TestSubmitFeedback:
         assert report.screenshot_data_enc is not None
         assert not report.screenshot_data_enc.startswith("data:")
         # Decrypted value is the original data URL
-        decrypted = decrypt_token(report.screenshot_data_enc)
+        decrypted = decrypt_token(report.screenshot_data_enc, purpose=TokenPurpose.SCREENSHOT)
         assert decrypted.startswith("data:image/jpeg;base64,")
 
     def test_png_screenshot_stored_encrypted_with_png_mime(self, client):
-        from backend.services.token_crypto import decrypt_token
+        from backend.services.token_crypto import TokenPurpose, decrypt_token
 
         png_data = b"\x89PNG\r\n\x1a\n" + b"\x00" * 10  # valid PNG magic bytes
         response = self._post(
@@ -194,7 +194,7 @@ class TestSubmitFeedback:
         )
         report = response._created_reports[0]
         assert report.screenshot_data_enc is not None
-        decrypted = decrypt_token(report.screenshot_data_enc)
+        decrypted = decrypt_token(report.screenshot_data_enc, purpose=TokenPurpose.SCREENSHOT)
         assert decrypted.startswith("data:image/png;base64,")
 
     def test_no_screenshot_stores_none(self, client):
@@ -327,10 +327,10 @@ class TestViewScreenshot:
             app.dependency_overrides.clear()
 
     def test_returns_decrypted_screenshot(self, client):
-        from backend.services.token_crypto import encrypt_token
+        from backend.services.token_crypto import TokenPurpose, encrypt_token
 
         report = _make_feedback_report(
-            screenshot_data_enc=encrypt_token("data:image/jpeg;base64,abc123")
+            screenshot_data_enc=encrypt_token("data:image/jpeg;base64,abc123", purpose=TokenPurpose.SCREENSHOT)
         )
         response = self._view(client, report.id, row=report)
         assert response.status_code == 200
@@ -341,11 +341,11 @@ class TestViewScreenshot:
         assert response.headers["Cache-Control"] == "no-store"
 
     def test_logs_screenshot_viewed_with_admin_id(self, client):
-        from backend.services.token_crypto import encrypt_token
+        from backend.services.token_crypto import TokenPurpose, encrypt_token
 
         admin = _make_user()
         report = _make_feedback_report(
-            screenshot_data_enc=encrypt_token("data:image/jpeg;base64,abc123")
+            screenshot_data_enc=encrypt_token("data:image/jpeg;base64,abc123", purpose=TokenPurpose.SCREENSHOT)
         )
         with patch("backend.routers.feedback.logger") as mock_logger:
             self._view(client, report.id, row=report, user=admin)

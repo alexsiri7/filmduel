@@ -23,7 +23,7 @@ def upgrade() -> None:
     ).fetchall()
     if not rows:
         return
-    from backend.services.token_crypto import encrypt_token
+    from backend.services.token_crypto import TokenPurpose, encrypt_token
 
     for row in rows:
         conn.execute(
@@ -34,8 +34,8 @@ def upgrade() -> None:
             ),
             {
                 "id": row.id,
-                "a": encrypt_token(row.trakt_access_token),
-                "r": encrypt_token(row.trakt_refresh_token),
+                "a": encrypt_token(row.trakt_access_token, purpose=TokenPurpose.OAUTH),
+                "r": encrypt_token(row.trakt_refresh_token, purpose=TokenPurpose.OAUTH),
             },
         )
 
@@ -45,7 +45,7 @@ def downgrade() -> None:
     rows = conn.execute(
         sa.text("SELECT id, trakt_access_token, trakt_refresh_token FROM users")
     ).fetchall()
-    from backend.services.token_crypto import decrypt_token
+    from backend.services.token_crypto import TokenPurpose, decrypt_token
 
     for row in rows:
         conn.execute(
@@ -56,7 +56,7 @@ def downgrade() -> None:
             ),
             {
                 "id": row.id,
-                "a": decrypt_token(row.trakt_access_token),
-                "r": decrypt_token(row.trakt_refresh_token),
+                "a": decrypt_token(row.trakt_access_token, purpose=TokenPurpose.OAUTH),
+                "r": decrypt_token(row.trakt_refresh_token, purpose=TokenPurpose.OAUTH),
             },
         )

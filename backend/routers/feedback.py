@@ -30,7 +30,7 @@ from backend.schemas import (
     FeedbackReportResponse,
     FeedbackScreenshotResponse,
 )
-from backend.services.token_crypto import decrypt_token, encrypt_token
+from backend.services.token_crypto import TokenPurpose, decrypt_token, encrypt_token
 from backend.services.retention import purge_expired_screenshots as _purge_expired_screenshots
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ def _safe_decrypt(report_id: str, ciphertext: str | None) -> str | None:
     if not ciphertext:
         return None
     try:
-        return decrypt_token(ciphertext)
+        return decrypt_token(ciphertext, purpose=TokenPurpose.SCREENSHOT)
     except RuntimeError:
         logger.error(
             "screenshot_decrypt_failed report_id=%s — returning null screenshot",
@@ -139,7 +139,7 @@ async def submit_feedback(
             )
         plain = f"data:{mime};base64," + base64.b64encode(raw).decode()
         try:
-            screenshot_data_enc = encrypt_token(plain)
+            screenshot_data_enc = encrypt_token(plain, purpose=TokenPurpose.SCREENSHOT)
         except RuntimeError:
             logger.error(
                 "screenshot_encrypt_failed user_id=%s — TOKEN_ENC_KEY misconfigured?",
