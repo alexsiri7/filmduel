@@ -17,9 +17,16 @@ _migration_path = (
     / "versions"
     / "028_rekey_tokens_per_purpose.py"
 )
-_spec = importlib.util.spec_from_file_location("migration_028", _migration_path)
-_migration = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_migration)
+
+
+def _load(name: str):
+    spec = importlib.util.spec_from_file_location(name, _migration_path.with_name(name))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_migration = _load("028_rekey_tokens_per_purpose.py")
 
 TEST_KEY = "a-very-long-test-key-that-is-at-least-32-characters"
 SCREENSHOT = "data:image/png;base64,iVBORw0KGgo="
@@ -138,3 +145,21 @@ def test_undecryptable_value_names_the_row(conn):
     conn.execute(sa.text("INSERT INTO feedback_reports VALUES (7, 'garbage')"))
     with pytest.raises(RuntimeError, match="feedback report id=7"):
         _migration.upgrade()
+
+
+def test_plaintext_tokens_survive_the_whole_encryption_chain(conn):
+    """013 encrypts, 020 re-keys, 028 moves onto the OAuth key, in one upgrade."""
+    conn.execute(
+        sa.text("INSERT INTO users VALUES (1, 'trakt-access', 'trakt-refresh', NULL, NULL)")
+    )
+
+    for name in (
+        "013_encrypt_trakt_tokens.py",
+        "020_rekey_tokens_hkdf.py",
+        "028_rekey_tokens_per_purpose.py",
+    ):
+        _load(name).upgrade()
+
+    user = _users(conn)[0]
+    assert decrypt_token(user.trakt_access_token, purpose=TokenPurpose.OAUTH) == "trakt-access"
+    assert decrypt_token(user.trakt_refresh_token, purpose=TokenPurpose.OAUTH) == "trakt-refresh"
