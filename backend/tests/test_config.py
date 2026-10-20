@@ -178,6 +178,22 @@ class TestCorsOriginsValidation:
         with pytest.raises(ValidationError, match="scheme://host\\[:port\\]"):
             _make_settings(CORS_ORIGINS=["https://ok.example.com", origin])
 
+    @pytest.mark.parametrize(
+        "origin",
+        [
+            "https://user:hunter2@filmduel.example.com",
+            "https://user:hun@ter2@filmduel.example.com",
+            "https://user:hun/ter2@filmduel.example.com",
+            "user:hunter2@filmduel.example.com",
+        ],
+    )
+    def test_rejected_userinfo_not_echoed(self, origin):
+        """Startup errors reach container logs and must not print the credential."""
+        with pytest.raises(ValidationError) as exc:
+            _make_settings(CORS_ORIGINS=[origin])
+        assert "***@filmduel.example.com" in str(exc.value)
+        assert "hun" not in str(exc.value)
+
     def test_plain_url_env_var_accepted(self, monkeypatch):
         """A plain URL (not JSON) in CORS_ORIGINS env var must be accepted.
 

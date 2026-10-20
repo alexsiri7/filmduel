@@ -124,6 +124,15 @@ def _is_bare_origin(origin: str) -> bool:
     )
 
 
+def _redact_userinfo(entry: str) -> str:
+    """Mask everything between the scheme and the last '@', so a credential never reaches startup logs."""
+    if "@" not in entry:
+        return entry
+    head, _, host = entry.rpartition("@")
+    scheme, sep, _ = head.partition("://")
+    return f"{scheme}{sep}***@{host}" if sep else f"***@{host}"
+
+
 def detected_proxy_platform() -> str | None:
     """Name of the first known TLS-terminating-proxy platform env var that is set, else None."""
     return next((v for v in _PROXY_PLATFORM_ENV_VARS if os.environ.get(v)), None)
@@ -278,7 +287,7 @@ class Settings(BaseSettings):
             raise ValueError(
                 "CORS_ORIGINS must not contain '*' when allow_credentials=True"
             )
-        malformed = [e for e in entries if not _is_bare_origin(e)]
+        malformed = [_redact_userinfo(e) for e in entries if not _is_bare_origin(e)]
         if malformed:
             raise ValueError(
                 f"CORS_ORIGINS entries must be scheme://host[:port] with no userinfo, "
