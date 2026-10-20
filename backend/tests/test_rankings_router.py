@@ -119,6 +119,32 @@ class TestRankingsRouter:
         assert resp.json()["detail"][0]["type"] == "string_too_long"
         mock_rankings.assert_not_awaited()
 
+    def test_get_rankings_genre_at_length_bound_is_accepted(self):
+        """A genre of exactly 200 characters still reaches the service."""
+        user = _make_user()
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+        genre = "x" * 200
+
+        with (
+            patch(
+                "backend.routers.rankings.get_user_rankings",
+                new_callable=AsyncMock,
+                return_value=([], 0),
+            ) as mock_rankings,
+            patch(
+                "backend.routers.rankings.get_elo_ratings",
+                new_callable=AsyncMock,
+                return_value={},
+            ),
+        ):
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.get(f"/api/rankings?genre={genre}")
+
+        assert resp.status_code == 200
+        mock_rankings.assert_awaited_once()
+        assert mock_rankings.await_args.kwargs["genre"] == genre
+
     def test_export_csv_headers(self):
         """GET /api/rankings/export/csv returns correct Content-Type and filename."""
         user = _make_user()
