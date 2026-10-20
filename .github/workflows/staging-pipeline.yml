@@ -38,7 +38,23 @@ jobs:
           fi
 
       - name: Install Railway CLI
-        run: npm install -g @railway/cli@5.8.0  # pinned 2026-06-10, latest stable — update when upgrading Railway CLI
+        env:
+          # Pinned 2026-06-10 — update version AND hash together when upgrading Railway CLI.
+          # Hash: release asset digest from `gh release view v<version> -R railwayapp/cli --json assets`.
+          # Installed from the release binary (not npm): the npm package's postinstall downloads
+          # this same tarball without verifying it (#795).
+          RAILWAY_CLI_VERSION: "5.8.0"
+          RAILWAY_CLI_SHA256: "0991a582229954d1037cc77e928b5480486a6d8c1aa6a14f8504f9401593e254"
+        run: |
+          # Download outside the workspace: `railway up` uploads the checkout.
+          cd "$RUNNER_TEMP"
+          curl -fsSL --retry 3 -o railway.tar.gz \
+            "https://github.com/railwayapp/cli/releases/download/v${RAILWAY_CLI_VERSION}/railway-v${RAILWAY_CLI_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${RAILWAY_CLI_SHA256}  railway.tar.gz" | sha256sum -c -
+          mkdir -p railway-bin
+          tar -xzf railway.tar.gz -C railway-bin railway
+          echo "$RUNNER_TEMP/railway-bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/railway-bin/railway" --version
 
       - name: Deploy to staging
         env:
@@ -161,7 +177,23 @@ jobs:
           ref: ${{ needs.deploy-staging.outputs.deploy_sha }}
 
       - name: Install Railway CLI
-        run: npm install -g @railway/cli@5.8.0  # pinned 2026-06-10, latest stable — update when upgrading Railway CLI
+        env:
+          # Pinned 2026-06-10 — update version AND hash together when upgrading Railway CLI.
+          # Hash: release asset digest from `gh release view v<version> -R railwayapp/cli --json assets`.
+          # Installed from the release binary (not npm): the npm package's postinstall downloads
+          # this same tarball without verifying it (#795).
+          RAILWAY_CLI_VERSION: "5.8.0"
+          RAILWAY_CLI_SHA256: "0991a582229954d1037cc77e928b5480486a6d8c1aa6a14f8504f9401593e254"
+        run: |
+          # Download outside the workspace: `railway up` uploads the checkout.
+          cd "$RUNNER_TEMP"
+          curl -fsSL --retry 3 -o railway.tar.gz \
+            "https://github.com/railwayapp/cli/releases/download/v${RAILWAY_CLI_VERSION}/railway-v${RAILWAY_CLI_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${RAILWAY_CLI_SHA256}  railway.tar.gz" | sha256sum -c -
+          mkdir -p railway-bin
+          tar -xzf railway.tar.gz -C railway-bin railway
+          echo "$RUNNER_TEMP/railway-bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/railway-bin/railway" --version
 
       - name: Deploy to production
         env:
