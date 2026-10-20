@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { logout, getMe, updateSettings } from "../api";
+import { logout, getMe, updateSettings, deleteAccount } from "../api";
 import ReportIssueModal from "./ReportIssueModal";
 
 function ToggleRow({ label, checked, onToggle }) {
@@ -86,6 +86,20 @@ export default function Nav({ mediaType, setMediaType }) {
   const handleLogout = async () => {
     await logout();
     window.location.href = "/login";
+  };
+
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      await deleteAccount();
+      window.location.href = "/login";
+    } catch {
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
   };
 
   return (
@@ -179,6 +193,34 @@ export default function Nav({ mediaType, setMediaType }) {
         >
           Download My Data
         </a>
+        {!confirmDelete ? (
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="block w-full text-center text-[#F5F0E8]/30 hover:text-red-400/80 font-headline font-bold uppercase text-xs tracking-widest py-2 transition-colors"
+          >
+            Delete My Account
+          </button>
+        ) : (
+          <div role="alertdialog" aria-label="Confirm account deletion" className="space-y-2 px-1">
+            <p className="text-[#F5F0E8]/60 text-xs font-body">
+              This permanently deletes your account, rankings, tournaments and history. It cannot be undone.
+            </p>
+            <button
+              onClick={handleDeleteAccount}
+              disabled={deleting}
+              className="block w-full text-center bg-red-900/60 text-[#F5F0E8] font-headline font-bold uppercase text-xs tracking-widest py-2 disabled:opacity-50"
+            >
+              {deleting ? "Deleting…" : "Yes, delete everything"}
+            </button>
+            <button
+              onClick={() => setConfirmDelete(false)}
+              disabled={deleting}
+              className="block w-full text-center text-[#F5F0E8]/30 hover:text-[#F5F0E8]/60 font-headline font-bold uppercase text-xs tracking-widest py-2"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
         {hasTrakt && (
           <ToggleRow label="Sync to Trakt" checked={syncRatings} onToggle={handleSyncToggle} />
         )}

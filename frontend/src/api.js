@@ -72,6 +72,10 @@ export function submitSwipeResults(results, mediaType = "movie") {
 
 export function logout() { return request("/auth/logout", { method: "POST" }); }
 
+// DELETE /api/me — GDPR Art. 17. The server revokes provider tokens, cascade-
+// deletes the account and clears the session cookie (204).
+export function deleteAccount() { return request("/api/me", { method: "DELETE" }); }
+
 // POST /api/sync is provider-agnostic — syncs all connected providers.
 export function syncTrakt() { return request("/api/sync", { method: "POST" }); }
 

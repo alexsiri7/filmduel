@@ -11,10 +11,11 @@ vi.mock("../api", async (importOriginal) => {
     ...actual,
     getMe: vi.fn(),
     updateSettings: vi.fn(() => Promise.resolve()),
+    deleteAccount: vi.fn(() => Promise.resolve(null)),
   };
 });
 
-import { getMe, updateSettings } from "../api";
+import { getMe, updateSettings, deleteAccount } from "../api";
 
 
 describe("Nav — Sync to Trakt toggle", () => {
@@ -352,5 +353,36 @@ describe("Nav", () => {
     const link = screen.getByRole("link", { name: /download my data/i });
     expect(link).toHaveAttribute("href", "/api/me/export");
     expect(link).toHaveAttribute("download");
+  });
+});
+
+describe("Nav — Delete My Account", () => {
+  const renderNav = () =>
+    render(
+      <MemoryRouter>
+        <Nav />
+      </MemoryRouter>
+    );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getMe.mockResolvedValue({ trakt_username: "testuser" });
+  });
+
+  it("exposes a delete control that requires confirmation before calling the API", async () => {
+    renderNav();
+    const trigger = await screen.findByRole("button", { name: /delete my account/i });
+    fireEvent.click(trigger);
+    expect(deleteAccount).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /yes, delete everything/i }));
+    await waitFor(() => expect(deleteAccount).toHaveBeenCalledTimes(1));
+  });
+
+  it("cancel backs out without calling the API", async () => {
+    renderNav();
+    fireEvent.click(await screen.findByRole("button", { name: /delete my account/i }));
+    fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    expect(deleteAccount).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /delete my account/i })).toBeInTheDocument();
   });
 });
