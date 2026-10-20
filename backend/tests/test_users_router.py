@@ -24,7 +24,7 @@ from backend.config import get_settings
 # TOKEN_ENC_KEY default above was set; rebuild so it is picked up.
 get_settings.cache_clear()
 
-from backend.services.token_crypto import _fernet, encrypt_token  # noqa: E402
+from backend.services.token_crypto import TokenPurpose, _fernet, encrypt_token  # noqa: E402
 
 _fernet.cache_clear()
 
@@ -412,7 +412,10 @@ class TestViewMyScreenshot(_OwnerFeedbackRoutes):
     PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
 
     def _stored(self):
-        return encrypt_token("data:image/png;base64," + base64.b64encode(self.PNG).decode())
+        return encrypt_token(
+            "data:image/png;base64," + base64.b64encode(self.PNG).decode(),
+            purpose=TokenPurpose.SCREENSHOT,
+        )
 
     def _get(self, user, db, report_id):
         with self._client(user, db) as client:
@@ -453,7 +456,7 @@ class TestViewMyScreenshot(_OwnerFeedbackRoutes):
     )
     def test_unreadable_screenshot_is_not_found(self, stored):
         if stored and stored.startswith("data:"):
-            stored = encrypt_token(stored)
+            stored = encrypt_token(stored, purpose=TokenPurpose.SCREENSHOT)
         db = self._db(one=MagicMock(screenshot_data_enc=stored))
         resp = self._get(_make_user(), db, uuid.uuid4())
         assert resp.status_code == 404

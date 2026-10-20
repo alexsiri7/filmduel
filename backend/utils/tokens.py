@@ -8,7 +8,7 @@ the same token back as an anti-repeat hint, where age does not matter.
 
 from __future__ import annotations
 
-from backend.services.token_crypto import decrypt_token, encrypt_token
+from backend.services.token_crypto import TokenPurpose, decrypt_token, encrypt_token
 
 # The client prefetches the next pair as soon as one is shown, so a token is
 # roughly two deliberations old at submit. 15 minutes covers that while
@@ -17,7 +17,7 @@ PAIR_TOKEN_TTL_SECONDS = 900
 
 
 def encode_pair_token(id_a: str, id_b: str, *, user_id: str) -> str:
-    return encrypt_token(f"{user_id},{id_a},{id_b}")
+    return encrypt_token(f"{user_id},{id_a},{id_b}", purpose=TokenPurpose.PAIR)
 
 
 def decode_pair_token(
@@ -26,7 +26,7 @@ def decode_pair_token(
     """Return the bound movie IDs, or None if the token is invalid, older than
     ``ttl`` seconds (``None`` never expires), or was issued to a different user."""
     try:
-        parts = decrypt_token(token, ttl=ttl).split(",")
+        parts = decrypt_token(token, purpose=TokenPurpose.PAIR, ttl=ttl).split(",")
     except Exception:
         return None
     if len(parts) != 3 or parts[0] != user_id:

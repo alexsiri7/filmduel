@@ -20,7 +20,7 @@ from backend.config import get_settings  # noqa: E402
 
 get_settings.cache_clear()
 
-from backend.services.token_crypto import _fernet, encrypt_token  # noqa: E402
+from backend.services.token_crypto import TokenPurpose, _fernet, encrypt_token  # noqa: E402
 
 _fernet.cache_clear()
 
@@ -82,7 +82,7 @@ def test_pair_token_rejects_legacy_two_field_format():
     """Pre-user-binding tokens (movie IDs only) are rejected for every user."""
     id_a = str(uuid.uuid4())
     id_b = str(uuid.uuid4())
-    legacy = encrypt_token(f"{id_a},{id_b}")
+    legacy = encrypt_token(f"{id_a},{id_b}", purpose=TokenPurpose.PAIR)
     assert decode_pair_token(legacy, user_id=str(uuid.uuid4())) is None
 
 
@@ -93,10 +93,10 @@ def test_pair_token_expires_after_ttl():
     plaintext = f"{user_id},{id_a},{id_b}".encode()
     now = int(time.time())
 
-    fresh = _fernet().encrypt_at_time(plaintext, now - PAIR_TOKEN_TTL_SECONDS + 60)
+    fresh = _fernet(TokenPurpose.PAIR).encrypt_at_time(plaintext, now - PAIR_TOKEN_TTL_SECONDS + 60)
     assert decode_pair_token(fresh.decode(), user_id=user_id) == {id_a, id_b}
 
-    stale = _fernet().encrypt_at_time(plaintext, now - PAIR_TOKEN_TTL_SECONDS - 60)
+    stale = _fernet(TokenPurpose.PAIR).encrypt_at_time(plaintext, now - PAIR_TOKEN_TTL_SECONDS - 60)
     assert decode_pair_token(stale.decode(), user_id=user_id) is None
 
 
@@ -107,7 +107,7 @@ def test_pair_token_ttl_none_accepts_aged_token():
     id_a = str(uuid.uuid4())
     id_b = str(uuid.uuid4())
     plaintext = f"{user_id},{id_a},{id_b}".encode()
-    aged = _fernet().encrypt_at_time(
+    aged = _fernet(TokenPurpose.PAIR).encrypt_at_time(
         plaintext, int(time.time()) - PAIR_TOKEN_TTL_SECONDS - 60
     ).decode()
 
@@ -191,7 +191,7 @@ class TestGetMoviePair:
         """FD-024: a client that deliberated past the submit TTL must still not
         be re-served the pair it is looking at."""
         plaintext = f"{self.user.id},{self.id_a},{self.id_b}".encode()
-        aged = _fernet().encrypt_at_time(
+        aged = _fernet(TokenPurpose.PAIR).encrypt_at_time(
             plaintext, int(time.time()) - PAIR_TOKEN_TTL_SECONDS - 60
         ).decode()
 

@@ -35,14 +35,14 @@ class EncryptedToken:
     def __get__(self, obj, objtype=None):
         if obj is None:
             return self
-        from backend.services.token_crypto import decrypt_token
+        from backend.services.token_crypto import TokenPurpose, decrypt_token
 
-        return decrypt_token(getattr(obj, self._enc_attr))
+        return decrypt_token(getattr(obj, self._enc_attr), purpose=TokenPurpose.OAUTH)
 
     def __set__(self, obj, value):
-        from backend.services.token_crypto import encrypt_token
+        from backend.services.token_crypto import TokenPurpose, encrypt_token
 
-        setattr(obj, self._enc_attr, encrypt_token(value))
+        setattr(obj, self._enc_attr, encrypt_token(value, purpose=TokenPurpose.OAUTH))
 
 
 class User(Base):

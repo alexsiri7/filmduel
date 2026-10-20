@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import pathlib
-from unittest.mock import MagicMock, patch
 
 import pytest
 from cryptography.fernet import InvalidToken
@@ -23,22 +22,13 @@ _spec.loader.exec_module(_migration)
 _make_fernets = _migration._make_fernets
 _rekey = _migration._rekey
 
-from backend.services.token_crypto import _fernet, encrypt_token
+_spec_028 = importlib.util.spec_from_file_location(
+    "migration_028", _migration_path.with_name("028_rekey_tokens_per_purpose.py")
+)
+_migration_028 = importlib.util.module_from_spec(_spec_028)
+_spec_028.loader.exec_module(_migration_028)
 
 TEST_KEY = "a-very-long-test-key-that-is-at-least-32-characters"
-
-
-@pytest.fixture(autouse=True)
-def _clean_fernet_cache():
-    """Clear the shared _fernet LRU cache even if a test fails mid-way.
-
-    Without this, a failure between the two inline cache_clear() calls left
-    later tests (in this or other modules) picking up a Fernet built from a
-    MagicMock-patched get_settings().
-    """
-    _fernet.cache_clear()
-    yield
-    _fernet.cache_clear()
 
 
 class TestMakeFernets:
@@ -50,15 +40,12 @@ class TestMakeFernets:
         with pytest.raises(InvalidToken):
             new.decrypt(ct)
 
-    def test_new_key_matches_token_crypto(self):
-        """New Fernet key in migration must match what token_crypto._fernet() produces."""
-        mock_settings = MagicMock()
-        mock_settings.TOKEN_ENC_KEY = TEST_KEY
-        with patch("backend.services.token_crypto.get_settings", return_value=mock_settings):
-            ciphertext = encrypt_token("alignment-check")
-
+    def test_new_key_is_the_shared_key_028_rekeys_from(self):
+        """The HKDF key 020 writes must be the one 028 reads as its source."""
         _, new_fernet = _make_fernets(TEST_KEY)
-        assert new_fernet.decrypt(ciphertext.encode()) == b"alignment-check"
+        shared_028, _, _ = _migration_028._make_fernets(TEST_KEY)
+        ciphertext = new_fernet.encrypt(b"alignment-check")
+        assert shared_028.decrypt(ciphertext) == b"alignment-check"
 
 
 class TestRekey:
