@@ -169,6 +169,8 @@ class TestCorsOriginsValidation:
             "https://filmduel.example.com#frag",
             "filmduel.example.com",
             "https://",
+            "https://user:pass@filmduel.example.com",
+            "https://admin@filmduel.example.com",
         ],
     )
     def test_non_bare_origin_rejected(self, origin):
@@ -741,16 +743,22 @@ class TestCorsLoopbackFailClosed:
             "https://localhost-fans.example.org",
         ]
 
+    @pytest.mark.parametrize(
+        "cors_origins",
+        [
+            "http://filmduel.example.com,https://filmduel.example.com",
+            "https://filmduel.example.com,http://filmduel.example.com",
+        ],
+    )
     @pytest.mark.parametrize("var", _PROXY_PLATFORM_ENV_VARS_PROD)
-    def test_plain_http_public_origin_raises_on_each_platform(self, monkeypatch, var):
-        """SEC-25 (#797): hosted platforms terminate TLS, so origins must be https."""
+    def test_plain_http_public_origin_raises_on_each_platform(
+        self, monkeypatch, var, cors_origins
+    ):
+        """SEC-25 (#797): hosted platforms terminate TLS, so every origin must be https."""
         self._only_platform(monkeypatch, var)
 
         with pytest.raises(ValidationError, match="cors_origins_insecure") as exc:
-            _make_settings(
-                BASE_URL="https://example.com",
-                CORS_ORIGINS="https://filmduel.example.com,http://filmduel.example.com",
-            )
+            _make_settings(BASE_URL="https://example.com", CORS_ORIGINS=cors_origins)
 
         assert var in str(exc.value)
 

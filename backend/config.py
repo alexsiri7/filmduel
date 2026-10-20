@@ -117,7 +117,11 @@ def _is_loopback_origin(origin: str) -> bool:
 def _is_bare_origin(origin: str) -> bool:
     """True when the entry is exactly scheme://host[:port], the only shape a browser's Origin takes."""
     parsed = urlparse(origin)
-    return bool(parsed.netloc) and origin == f"{parsed.scheme}://{parsed.netloc}"
+    return (
+        bool(parsed.netloc)
+        and "@" not in parsed.netloc
+        and origin == f"{parsed.scheme}://{parsed.netloc}"
+    )
 
 
 def detected_proxy_platform() -> str | None:
@@ -277,8 +281,8 @@ class Settings(BaseSettings):
         malformed = [e for e in entries if not _is_bare_origin(e)]
         if malformed:
             raise ValueError(
-                f"CORS_ORIGINS entries must be scheme://host[:port] with no trailing "
-                f"slash, path, query or fragment; got {malformed!r}"
+                f"CORS_ORIGINS entries must be scheme://host[:port] with no userinfo, "
+                f"trailing slash, path, query or fragment; got {malformed!r}"
             )
         return entries
 
