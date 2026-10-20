@@ -34,9 +34,18 @@ A signed-in user SHALL be able to list their own reports' metadata — whether a
 - THEN it is refused as not found
 
 #### Scenario: Deleting own report
-- GIVEN a user's report with a screenshot
+- GIVEN a user's report with a screenshot, submitted more than 24 hours ago
 - WHEN they delete it
 - THEN neither the report nor its screenshot remains
+
+### Requirement: Deleting a report does not lift the submission cap
+
+A user SHALL NOT be able to delete their own report until 24 hours after submitting it, so that deleting cannot free a slot under the daily cap.
+
+#### Scenario: Deleting a recent report
+- GIVEN a report the user submitted an hour ago
+- WHEN they delete it
+- THEN it is refused and the report remains
 
 ### Requirement: Screenshots can be redacted before sending
 

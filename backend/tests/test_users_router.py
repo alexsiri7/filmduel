@@ -34,6 +34,7 @@ from backend.db import get_db
 from backend.db_models import User
 from backend.rate_limit import limiter
 from backend.routers.auth import CURRENT_PRIVACY_POLICY_VERSION, get_current_user
+from backend.services.data_export import FEEDBACK_SCREENSHOT_PATH
 from backend.routers.users import (
     _effective_pool_import_status,
     _record_pool_import_outcome,
@@ -396,6 +397,11 @@ class TestListMyFeedback(_OwnerFeedbackRoutes):
         assert "screenshot_data_enc" not in names
         assert f"feedback_reports.user_id = '{user.id.hex}'" in _where_sql(stmt)
 
+    def test_works_without_current_consent(self):
+        user = _make_user(privacy_policy_accepted=False, privacy_policy_version=None)
+        with self._client(user, self._db()) as client:
+            assert client.get("/api/me/feedback").status_code == 200
+
     def test_rejects_page_over_100(self):
         with self._client(_make_user(), self._db()) as client:
             resp = client.get("/api/me/feedback", params={"limit": 101})
@@ -428,6 +434,13 @@ class TestViewMyScreenshot(_OwnerFeedbackRoutes):
         db = self._db(one=MagicMock(screenshot_data_enc=self._stored()))
         assert self._get(user, db, uuid.uuid4()).status_code == 200
 
+    def test_export_link_reaches_this_route(self):
+        report_id = uuid.uuid4()
+        link = FEEDBACK_SCREENSHOT_PATH.format(report_id=report_id)
+        with self._client(_make_user(), self._db(one=None)) as client:
+            assert app.url_path_for("view_my_screenshot", report_id=report_id) == link
+            assert client.get(link).json()["detail"] == "Report not found"
+
     def test_missing_or_foreign_report_is_not_found(self):
         resp = self._get(_make_user(), self._db(one=None), uuid.uuid4())
         assert resp.status_code == 404
@@ -448,22 +461,47 @@ class TestViewMyScreenshot(_OwnerFeedbackRoutes):
 
 
 class TestDeleteMyFeedback(_OwnerFeedbackRoutes):
-    def test_owner_deletes_report(self):
-        user, report_id = _make_user(), uuid.uuid4()
-        db = self._db(rowcount=1)
+    def _db(self, *, age):
+        db = AsyncMock()
+        db.scalar.return_value = (
+            None if age is None else datetime.now(timezone.utc) - age
+        )
+        return db
+
+    def _delete(self, user, db, report_id):
         with self._client(user, db) as client:
-            resp = client.delete(f"/api/me/feedback/{report_id}")
+            return client.delete(f"/api/me/feedback/{report_id}")
+
+    def test_owner_deletes_report_older_than_cap_window(self):
+        user, report_id = _make_user(), uuid.uuid4()
+        db = self._db(age=timedelta(hours=25))
+        resp = self._delete(user, db, report_id)
 
         assert resp.status_code == 204
+        _assert_owner_scoped(db.scalar.call_args.args[0], report_id, user)
         stmt = db.execute.call_args.args[0]
         assert isinstance(stmt, sa.Delete)
         _assert_owner_scoped(stmt, report_id, user)
 
+    def test_report_inside_cap_window_is_kept(self):
+        """Deleting a recent report would free a slot under MAX_FEEDBACK_PER_DAY."""
+        db = self._db(age=timedelta(hours=23))
+        resp = self._delete(_make_user(), db, uuid.uuid4())
+
+        assert resp.status_code == 409
+        db.execute.assert_not_called()
+
+    def test_works_without_current_consent(self):
+        user = _make_user(privacy_policy_accepted=False, privacy_policy_version=None)
+        db = self._db(age=timedelta(hours=25))
+        assert self._delete(user, db, uuid.uuid4()).status_code == 204
+
     def test_missing_or_foreign_report_is_not_found(self):
-        with self._client(_make_user(), self._db(rowcount=0)) as client:
-            resp = client.delete(f"/api/me/feedback/{uuid.uuid4()}")
+        db = self._db(age=None)
+        resp = self._delete(_make_user(), db, uuid.uuid4())
         assert resp.status_code == 404
         assert resp.json()["detail"] == "Report not found"
+        db.execute.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

@@ -58,6 +58,7 @@ def _safe_decrypt(report_id: str, ciphertext: str | None) -> str | None:
 MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024  # 5 MB
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 MAX_FEEDBACK_PER_DAY = 20  # per-user daily cap
+FEEDBACK_CAP_WINDOW = timedelta(hours=24)
 
 # Magic bytes for allowed image types
 _IMAGE_SIGNATURES = {
@@ -103,7 +104,7 @@ async def submit_feedback(
     # read the same count and bypass the cap (SEC-02, #570).
     await acquire_quota_lock(db, "feedback_daily_cap", current_user.id)
 
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    cutoff = datetime.now(timezone.utc) - FEEDBACK_CAP_WINDOW
     daily_count: int = (
         await db.scalar(
             select(func.count()).where(

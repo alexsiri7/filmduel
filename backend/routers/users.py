@@ -34,14 +34,14 @@ from backend.routers.auth import (
     has_current_consent,
     require_consent,
 )
-from backend.routers.feedback import _safe_decrypt
+from backend.routers.feedback import FEEDBACK_CAP_WINDOW, _safe_decrypt
 from backend.schemas import (
     ConsentAccept,
     FeedbackOwnResponse,
     UserResponse,
     UserSettingsUpdate,
 )
-from backend.services.data_export import export_user_data
+from backend.services.data_export import FEEDBACK_SCREENSHOT_PATH, export_user_data
 from backend.services.pool import populate_movie_pool
 from backend.services.tmdb import backfill_posters_background
 from backend.services.trakt import TraktClient
@@ -338,7 +338,7 @@ def _decode_data_url(data_url: str) -> tuple[str, bytes] | None:
         return None
 
 
-@router.get("/api/me/feedback/{report_id}/screenshot")
+@router.get(FEEDBACK_SCREENSHOT_PATH)
 @limiter.limit("10/minute")
 async def view_my_screenshot(
     request: Request,
@@ -379,15 +379,30 @@ async def delete_my_feedback(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Delete one of the user's own reports, screenshot included."""
-    result = await db.execute(
+    """Delete one of the user's own reports, screenshot included.
+
+    A report still inside the submission cap's window is refused: deleting it
+    would free a slot and let the user exceed MAX_FEEDBACK_PER_DAY.
+    """
+    created_at = await db.scalar(
+        select(FeedbackReport.created_at).where(
+            FeedbackReport.id == report_id,
+            FeedbackReport.user_id == current_user.id,
+        )
+    )
+    if created_at is None:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if created_at >= datetime.now(timezone.utc) - FEEDBACK_CAP_WINDOW:
+        raise HTTPException(
+            status_code=409,
+            detail="A report can be deleted 24 hours after it was submitted.",
+        )
+    await db.execute(
         delete(FeedbackReport).where(
             FeedbackReport.id == report_id,
             FeedbackReport.user_id == current_user.id,
         )
     )
-    if result.rowcount == 0:
-        raise HTTPException(status_code=404, detail="Report not found")
     logger.info(
         "feedback_deleted_by_owner report_id=%s user_id=%s",
         report_id,
