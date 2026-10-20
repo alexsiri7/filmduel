@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import time
+import uuid
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -24,7 +25,9 @@ from backend.rate_limit import (
     _build_limiter,
     _rate_limit_key,
     count_ai_curation_attempt,
+    empty_suggestions_recent,
     limiter,
+    record_empty_suggestions,
 )
 from backend.utils.cookies import COOKIE_NAME, cookie_name
 
@@ -224,3 +227,18 @@ def test_ai_curation_attempt_fails_open_when_storage_unreachable(caplog):
         with caplog.at_level(logging.WARNING, logger="backend.rate_limit"):
             assert count_ai_curation_attempt(_make_request()) is None
     assert "attempt not counted" in caplog.text
+
+
+def test_empty_suggestions_record_fails_open_when_storage_unreachable(caplog):
+    with patch.object(limiter.limiter, "hit", side_effect=ConnectionError("redis down")):
+        with caplog.at_level(logging.WARNING, logger="backend.rate_limit"):
+            assert record_empty_suggestions(uuid.uuid4(), "movie") is None
+    assert "empty attempt not recorded" in caplog.text
+
+
+def test_empty_suggestions_cooldown_fails_open_when_storage_unreachable(caplog):
+    """A storage error must not deny suggestions: the cooldown reads as inactive."""
+    with patch.object(limiter.limiter, "test", side_effect=ConnectionError("redis down")):
+        with caplog.at_level(logging.WARNING, logger="backend.rate_limit"):
+            assert empty_suggestions_recent(uuid.uuid4(), "movie") is False
+    assert "not enforced" in caplog.text

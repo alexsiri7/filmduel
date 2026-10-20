@@ -344,7 +344,13 @@ class TestGetSuggestionsEmptyCooldown:
     """An LLM reply with nothing usable must not be retried on the next GET (SEC-11, #783)."""
 
     CANDIDATES = [
-        {"trakt_id": i, "movie_id": f"00000000-0000-0000-0000-{i:012d}"}
+        {
+            "trakt_id": i,
+            "movie_id": f"00000000-0000-0000-0000-{i:012d}",
+            "title": f"Film {i}",
+            "year": 2000 + i,
+            "community_rating": None,
+        }
         for i in range(1, 10)
     ]
 
@@ -357,8 +363,11 @@ class TestGetSuggestionsEmptyCooldown:
     def teardown_method(self):
         app.dependency_overrides.clear()
 
-    def _get_twice(self, llm_reply, *, candidates=None, query=""):
-        """GET twice against the real generate_suggestions; return (responses, LLM mock)."""
+    def _get_twice(self, llm_reply="", *, llm_error=None, candidates=None, query=""):
+        """GET twice against the real generate_suggestions; return (responses, LLM mock).
+
+        llm_reply is the raw reply text; llm_error, when set, is raised by the LLM call instead.
+        """
         profile = {"total_ranked": 20, "genre_affinities": {}, "top_10": [], "bottom_5": []}
         with patch(
             "backend.routers.suggestions.has_enough_ranked",
@@ -385,16 +394,17 @@ class TestGetSuggestionsEmptyCooldown:
             new_callable=AsyncMock,
             return_value=self.CANDIDATES if candidates is None else candidates,
         ), patch(
-            "backend.services.suggest._call_llm",
+            "backend.services.suggest.chat_completion",
             new_callable=AsyncMock,
             return_value=llm_reply,
+            side_effect=llm_error,
         ) as mock_llm:
             with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 responses = [client.get(f"/api/suggestions{query}") for _ in range(2)]
         return responses, mock_llm
 
     def test_out_of_pool_reply_is_not_retried_on_next_get(self):
-        responses, mock_llm = self._get_twice([{"trakt_id": 999}])
+        responses, mock_llm = self._get_twice('{"picks": [{"trakt_id": 999}]}')
 
         for resp in responses:
             assert resp.status_code == 200
@@ -402,18 +412,39 @@ class TestGetSuggestionsEmptyCooldown:
         assert mock_llm.await_count == 1
 
     def test_malformed_reply_is_not_retried_on_next_get(self):
-        responses, mock_llm = self._get_twice(["oops"])
+        responses, mock_llm = self._get_twice('{"picks": ["oops"]}')
 
         assert responses[0].status_code == 500
         assert responses[1].status_code == 200
         assert responses[1].json()["status"] == "no_candidates"
         assert mock_llm.await_count == 1
 
+    @pytest.mark.parametrize(
+        "llm_reply",
+        ['Here are my picks: {"picks": [', '{"suggestions": []}', '[]', '{"picks": 6}'],
+    )
+    def test_unusable_reply_is_not_retried_on_next_get(self, llm_reply):
+        responses, mock_llm = self._get_twice(llm_reply)
+
+        assert responses[0].status_code == 500
+        assert responses[1].status_code == 200
+        assert responses[1].json()["status"] == "no_candidates"
+        assert mock_llm.await_count == 1
+
+    def test_busy_llm_does_not_start_cooldown(self):
+        """A transient failure answers 503 and retry; a cooldown would contradict that."""
+        from backend.services.llm import LLMBusyError
+
+        responses, mock_llm = self._get_twice(llm_error=LLMBusyError("busy"))
+
+        assert [r.status_code for r in responses] == [503, 503]
+        assert mock_llm.await_count == 2
+
     def test_insufficient_candidates_does_not_start_cooldown(self):
         """No LLM call was made, so "swipe more, then come back" must keep working."""
         from backend.rate_limit import empty_suggestions_recent
 
-        _, mock_llm = self._get_twice([], candidates=self.CANDIDATES[:3])
+        _, mock_llm = self._get_twice(candidates=self.CANDIDATES[:3])
 
         mock_llm.assert_not_awaited()
         assert empty_suggestions_recent(self.user.id, "movie") is False
@@ -422,7 +453,7 @@ class TestGetSuggestionsEmptyCooldown:
         from backend.rate_limit import record_empty_suggestions
 
         record_empty_suggestions(self.user.id, "movie")
-        _, mock_llm = self._get_twice([{"trakt_id": 999}], query="?media_type=show")
+        _, mock_llm = self._get_twice('{"picks": [{"trakt_id": 999}]}', query="?media_type=show")
 
         assert mock_llm.await_count == 1
 

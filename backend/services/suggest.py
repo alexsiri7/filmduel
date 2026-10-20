@@ -132,8 +132,8 @@ async def _get_candidates(
     return candidates
 
 
-async def _call_llm(taste_profile: dict, candidates: list[dict]) -> list[dict]:
-    """Call LLM to pick 6 films. Returns list of {trakt_id, reason}."""
+async def _call_llm(taste_profile: dict, candidates: list[dict]) -> list | None:
+    """Call LLM to pick 6 films. Returns the reply's picks, or None if it holds no picks list."""
     system_prompt = (
         "You are a film recommendation assistant for FilmDuel, a movie ranking app. "
         "The user has ranked films via head-to-head duels, producing ELO ratings. "
@@ -180,8 +180,17 @@ async def _call_llm(taste_profile: dict, candidates: list[dict]) -> list[dict]:
     )
 
     text_content = await chat_completion(system_prompt, user_message, max_tokens=1500)
-    parsed = parse_json_response(text_content)
-    return parsed["picks"]
+    return _reply_picks(text_content)
+
+
+def _reply_picks(text: str) -> list | None:
+    """The reply's picks list, or None when the reply is not a JSON object holding one."""
+    try:
+        parsed = parse_json_response(text)
+    except ValueError:
+        return None
+    picks = parsed.get("picks") if isinstance(parsed, dict) else None
+    return picks if isinstance(picks, list) else None
 
 
 async def generate_suggestions(
@@ -190,7 +199,8 @@ async def generate_suggestions(
     """Generate 6 personalized film suggestions.
 
     Returns list of {movie_id: str, reason: str}.
-    Raises ValueError if LLM_API_KEY is not set, RuntimeError if every LLM pick is malformed.
+    Raises ValueError if LLM_API_KEY is not set, RuntimeError if the LLM reply is not a
+    picks list or every pick in it is malformed.
     Returns empty list if user has < MIN_RANKED films (caller should check taste_profile).
     An LLM reply with no usable pick starts the empty-suggestions cooldown.
     """
@@ -229,6 +239,10 @@ async def generate_suggestions(
     trakt_to_movie = {c["trakt_id"]: c["movie_id"] for c in candidates}
 
     picks = await _call_llm(taste_profile, candidates)
+    if picks is None:
+        record_empty_suggestions(user_id, media_type)
+        # Not ValueError: the routers read that as "LLM_API_KEY not configured".
+        raise RuntimeError("LLM reply was not a JSON picks list")
     logger.info(
         "suggest_llm_response user_id=%s picks_returned=%d", user_id, len(picks)
     )
@@ -260,7 +274,6 @@ async def generate_suggestions(
     if not results:
         record_empty_suggestions(user_id, media_type)
     if picks and not well_formed:
-        # Not ValueError: the routers read that as "LLM_API_KEY not configured".
         raise RuntimeError("LLM reply contained no well-formed picks")
     return results
 
