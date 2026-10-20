@@ -135,6 +135,52 @@ class TestGetSuggestions:
         assert resp.status_code == 503
         assert resp.headers.get("Retry-After") == "15"
 
+    def test_get_suggestions_500_when_all_picks_malformed(self):
+        """An all-malformed LLM reply is a 500, not a false "no_candidates" 200."""
+        user = _make_user(privacy_policy_accepted=True)
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+
+        candidates = [
+            {"trakt_id": i, "movie_id": f"00000000-0000-0000-0000-{i:012d}"}
+            for i in range(1, 10)
+        ]
+        profile = {"total_ranked": 20, "genre_affinities": {}, "top_10": [], "bottom_5": []}
+
+        with patch(
+            "backend.routers.suggestions.has_enough_ranked",
+            new_callable=AsyncMock,
+            return_value=True,
+        ), patch(
+            "backend.routers.suggestions._get_active_suggestions",
+            new_callable=AsyncMock,
+            return_value=[],
+        ), patch(
+            "backend.routers.suggestions._latest_generated_at",
+            new_callable=AsyncMock,
+            return_value=None,
+        ), patch(
+            "backend.routers.suggestions.try_acquire_xact_lock",
+            new_callable=AsyncMock,
+            return_value=True,
+        ), patch(
+            "backend.services.suggest._build_taste_profile",
+            new_callable=AsyncMock,
+            return_value=profile,
+        ), patch(
+            "backend.services.suggest._get_candidates",
+            new_callable=AsyncMock,
+            return_value=candidates,
+        ), patch(
+            "backend.services.suggest._call_llm",
+            new_callable=AsyncMock,
+            return_value=["oops", {"trakt_id": True}],
+        ):
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.get("/api/suggestions")
+
+        assert resp.status_code == 500
+
 
 def _fake_suggestion_schema() -> SuggestionSchema:
     return SuggestionSchema(
