@@ -178,6 +178,20 @@ class TestReasonTruncation:
         ):
             await generate_suggestions(uuid.uuid4(), AsyncMock())
 
+    @pytest.mark.asyncio
+    async def test_out_of_pool_pick_returns_empty_without_raising(self):
+        """A well-formed pick outside the candidate pool is an empty result, not a malformed reply."""
+        fake_picks = [{"trakt_id": 999, "reason": "not a real candidate"}]
+
+        with (
+            patch("backend.services.suggest._build_taste_profile", AsyncMock(return_value=_FAKE_PROFILE)),
+            patch("backend.services.suggest._get_candidates", AsyncMock(return_value=_FAKE_CANDIDATES)),
+            patch("backend.services.suggest._call_llm", AsyncMock(return_value=fake_picks)),
+        ):
+            result = await generate_suggestions(uuid.uuid4(), AsyncMock())
+
+        assert result == []
+
 
 class TestHasEnoughRanked:
     @pytest.mark.asyncio
