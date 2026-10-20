@@ -114,6 +114,25 @@ def _is_loopback_origin(origin: str) -> bool:
     return ip.is_loopback or ip.is_unspecified
 
 
+def _is_bare_origin(origin: str) -> bool:
+    """True when the entry is exactly scheme://host[:port], the only shape a browser's Origin takes."""
+    parsed = urlparse(origin)
+    return (
+        bool(parsed.netloc)
+        and "@" not in parsed.netloc
+        and origin == f"{parsed.scheme}://{parsed.netloc}"
+    )
+
+
+def _redact_userinfo(entry: str) -> str:
+    """Mask everything between the scheme and the last '@', so a credential never reaches startup logs."""
+    if "@" not in entry:
+        return entry
+    head, _, host = entry.rpartition("@")
+    scheme, sep, _ = head.partition("://")
+    return f"{scheme}{sep}***@{host}" if sep else f"***@{host}"
+
+
 def detected_proxy_platform() -> str | None:
     """Name of the first known TLS-terminating-proxy platform env var that is set, else None."""
     return next((v for v in _PROXY_PLATFORM_ENV_VARS if os.environ.get(v)), None)
@@ -268,6 +287,12 @@ class Settings(BaseSettings):
             raise ValueError(
                 "CORS_ORIGINS must not contain '*' when allow_credentials=True"
             )
+        malformed = [_redact_userinfo(e) for e in entries if not _is_bare_origin(e)]
+        if malformed:
+            raise ValueError(
+                f"CORS_ORIGINS entries must be scheme://host[:port] with no userinfo, "
+                f"trailing slash, path, query or fragment; got {malformed!r}"
+            )
         return entries
 
     @model_validator(mode="after")
@@ -291,6 +316,26 @@ class Settings(BaseSettings):
                 "default applies when CORS_ORIGINS is unset). Refusing to start: the "
                 "CSRF origin check would trust them. Set CORS_ORIGINS to the public "
                 "origin(s) of this deployment, e.g. https://filmduel.example.com."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def require_https_cors_origins_on_proxy_platform(self) -> "Settings":
+        """Refuse to start on a hosted platform while CORS_ORIGINS names a non-https origin.
+
+        Hosted platforms terminate TLS, so a plain-http origin there is a
+        misconfiguration that the CSRF origin check would still trust (SEC-25, #797).
+        """
+        detected = detected_proxy_platform()
+        if not detected:
+            return self
+        insecure = [o for o in self.CORS_ORIGINS if urlparse(o).scheme != "https"]
+        if insecure:
+            raise ValueError(
+                f"cors_origins_insecure: detected platform env var {detected!r} but "
+                f"CORS_ORIGINS contains non-https origin(s) {insecure!r}. Refusing to "
+                "start: the CSRF origin check would trust them. Use the https:// "
+                "origin(s) of this deployment."
             )
         return self
 

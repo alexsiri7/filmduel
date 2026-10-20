@@ -160,6 +160,40 @@ class TestCorsOriginsValidation:
         s = _make_settings(CORS_ORIGINS=["http://localhost:5173"])
         assert s.CORS_ORIGINS == ["http://localhost:5173"]
 
+    @pytest.mark.parametrize(
+        "origin",
+        [
+            "https://filmduel.example.com/",
+            "https://filmduel.example.com/app",
+            "https://filmduel.example.com?x=1",
+            "https://filmduel.example.com#frag",
+            "filmduel.example.com",
+            "https://",
+            "https://user:pass@filmduel.example.com",
+            "https://admin@filmduel.example.com",
+        ],
+    )
+    def test_non_bare_origin_rejected(self, origin):
+        """SEC-25 (#797): a browser Origin is scheme://host[:port] only."""
+        with pytest.raises(ValidationError, match="scheme://host\\[:port\\]"):
+            _make_settings(CORS_ORIGINS=["https://ok.example.com", origin])
+
+    @pytest.mark.parametrize(
+        "origin",
+        [
+            "https://user:hunter2@filmduel.example.com",
+            "https://user:hun@ter2@filmduel.example.com",
+            "https://user:hun/ter2@filmduel.example.com",
+            "user:hunter2@filmduel.example.com",
+        ],
+    )
+    def test_rejected_userinfo_not_echoed(self, origin):
+        """Startup errors reach container logs and must not print the credential."""
+        with pytest.raises(ValidationError) as exc:
+            _make_settings(CORS_ORIGINS=[origin])
+        assert "***@filmduel.example.com" in str(exc.value)
+        assert "hun" not in str(exc.value)
+
     def test_plain_url_env_var_accepted(self, monkeypatch):
         """A plain URL (not JSON) in CORS_ORIGINS env var must be accepted.
 
@@ -664,7 +698,8 @@ class TestTmdbAuthStartupWarning:
 
 
 class TestCorsLoopbackFailClosed:
-    """AUD-23 (#705): on a hosted platform a loopback CORS origin refuses to start."""
+    """AUD-23 (#705) / SEC-25 (#797): on a hosted platform a loopback or plain-http
+    CORS origin refuses to start."""
 
     _PROXY_PLATFORM_ENV_VARS = _PROXY_PLATFORM_ENV_VARS_PROD
 
@@ -723,6 +758,32 @@ class TestCorsLoopbackFailClosed:
             "https://filmduel.example.com",
             "https://localhost-fans.example.org",
         ]
+
+    @pytest.mark.parametrize(
+        "cors_origins",
+        [
+            "http://filmduel.example.com,https://filmduel.example.com",
+            "https://filmduel.example.com,http://filmduel.example.com",
+        ],
+    )
+    @pytest.mark.parametrize("var", _PROXY_PLATFORM_ENV_VARS_PROD)
+    def test_plain_http_public_origin_raises_on_each_platform(
+        self, monkeypatch, var, cors_origins
+    ):
+        """SEC-25 (#797): hosted platforms terminate TLS, so every origin must be https."""
+        self._only_platform(monkeypatch, var)
+
+        with pytest.raises(ValidationError, match="cors_origins_insecure") as exc:
+            _make_settings(BASE_URL="https://example.com", CORS_ORIGINS=cors_origins)
+
+        assert var in str(exc.value)
+
+    def test_plain_http_public_origin_allowed_off_platform(self, monkeypatch):
+        self._only_platform(monkeypatch, None)
+
+        s = _make_settings(CORS_ORIGINS="http://filmduel.example.com")
+
+        assert s.CORS_ORIGINS == ["http://filmduel.example.com"]
 
     def test_localhost_default_allowed_off_platform(self, monkeypatch):
         """Local dev keeps the localhost default."""

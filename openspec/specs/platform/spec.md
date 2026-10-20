@@ -72,17 +72,31 @@ Values taken from users or providers, such as usernames, SHALL be encoded before
 
 ### Requirement: Misconfiguration stops the service at startup
 
-The service SHALL refuse to start when the database URL is missing or a placeholder, a secret key is under 32 characters, a placeholder or has under 6 distinct characters, a sign-in provider lacks a valid token-encryption key, or, on a hosted platform, the allowed origins include a loopback origin (as the unset default does). Startup checks SHALL NOT print secret values.
+The service SHALL refuse to start when the database URL is missing or a placeholder, a secret key is under 32 characters, a placeholder or has under 6 distinct characters, a sign-in provider lacks a valid token-encryption key, or the allowed cross-origin list is misconfigured. Startup checks SHALL NOT print secret values.
 
 #### Scenario: Placeholder secret
 - GIVEN the session secret is the example placeholder
 - WHEN the service starts
 - THEN it refuses to start and names the problem
 
+### Requirement: Allowed origins are checked at startup
+
+The service SHALL refuse to start when an allowed origin is not exactly scheme://host[:port], with no userinfo, trailing slash, path, query or fragment. On a hosted platform it SHALL also refuse to start when any allowed origin is a loopback origin (as the unset default is) or is not https.
+
 #### Scenario: Allowed origins left at the development default
 - GIVEN a hosted deployment where the allowed cross-origin list was never configured
 - WHEN the service starts
 - THEN it refuses to start and names the loopback origins
+
+#### Scenario: Allowed origin with a trailing slash
+- GIVEN an allowed origin configured as "https://filmduel.example.com/"
+- WHEN the service starts
+- THEN it refuses to start and names the malformed origin
+
+#### Scenario: Plain-http allowed origin on a hosted platform
+- GIVEN a hosted deployment whose allowed origins include an http:// origin
+- WHEN the service starts
+- THEN it refuses to start and names the non-https origins
 
 ### Requirement: One service serves the app and the API
 
