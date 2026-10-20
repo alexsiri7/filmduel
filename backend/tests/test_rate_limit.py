@@ -185,17 +185,19 @@ def test_build_limiter_falls_back_to_memory_when_redis_unreachable(caplog):
         return {"ok": True}
 
     client = TestClient(app, raise_server_exceptions=False)
-    with caplog.at_level(logging.WARNING, logger="backend.rate_limit"):
+    with caplog.at_level(logging.WARNING, logger="slowapi"):
         statuses = [client.get("/limited").status_code for _ in range(3)]
 
     assert statuses == [200, 200, 429]
     assert lim._storage_dead is True
     fallback_records = [
         r for r in caplog.records
-        if r.name == "backend.rate_limit" and "rate_limit_storage_fallback" in r.getMessage()
+        if r.name == "slowapi" and "falling back to in-memory storage" in r.getMessage()
     ]
     assert len(fallback_records) == 1
     assert fallback_records[0].levelno == logging.WARNING
+    # slowapi's own no-op handler is a StreamHandler subclass; a real one must sit beside it.
+    assert any(type(h) is logging.StreamHandler for h in logging.getLogger("slowapi").handlers)
 
 
 def test_spoofed_x_forwarded_for_does_not_reset_anonymous_limit_on_railway(monkeypatch):
