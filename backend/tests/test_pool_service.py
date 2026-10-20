@@ -313,6 +313,30 @@ class TestSafeFetch:
         assert fetch.await_count == 2
 
     @pytest.mark.asyncio
+    async def test_failure_logs_carry_no_request_url(self, no_retry_delay, caplog):
+        from backend.services.pool import _safe_fetch
+
+        request = httpx.Request("GET", "https://api.trakt.tv/users/alice-smith/x?k=SECRET")
+        errors = [
+            httpx.HTTPStatusError(
+                f"Server error for url '{request.url}'",
+                request=request,
+                response=httpx.Response(status, request=request),
+            )
+            for status in (503, 503, 404)
+        ]
+        fetch = AsyncMock(side_effect=errors)
+        fetch.__name__ = "get_user_watched"
+
+        with caplog.at_level("WARNING", logger="backend.services.pool"):
+            assert await _safe_fetch(fetch) == []
+
+        assert "HTTPStatusError 503" in caplog.text
+        assert "HTTPStatusError 404" in caplog.text
+        assert "alice-smith" not in caplog.text
+        assert "SECRET" not in caplog.text
+
+    @pytest.mark.asyncio
     async def test_unexpected_error_is_not_retried(self, no_retry_delay):
         from backend.services.pool import _safe_fetch
 

@@ -170,76 +170,36 @@ class TestTraktClientAuthHeader:
         assert "Authorization" not in client._headers
 
 
-class TestTraktClientUserEndpointsUrlEncoding:
-    @pytest.mark.asyncio
-    async def test_get_user_watched_encodes_username(self):
-        """get_user_watched URL-encodes the username to prevent SSRF via API path injection."""
-        mock_resp = _mock_response([{"movie": {"ids": {"trakt": 1}, "title": "Film"}}])
+class TestTraktClientUserEndpoints:
+    """User endpoints address ``/users/me`` so the account slug never enters a URL."""
 
+    @staticmethod
+    def _mock_client(body: list[dict]) -> AsyncMock:
         mock_client = AsyncMock()
-        mock_client.get.return_value = mock_resp
+        mock_client.get.return_value = _mock_response(body)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        client = TraktClient(client_id="test-id")
-        with patch.object(client, "_client", return_value=mock_client):
-            await client.get_user_watched("foo/bar", media_type="movie")
-
-        url = mock_client.get.call_args[0][0]
-        assert "foo/bar" not in url
-        assert "foo%2Fbar" in url
+        return mock_client
 
     @pytest.mark.asyncio
-    async def test_get_user_ratings_encodes_username(self):
-        """get_user_ratings URL-encodes the username to prevent SSRF via API path injection."""
-        mock_resp = _mock_response([{"rating": 8, "movie": {"ids": {"trakt": 42}}}])
-
-        mock_client = AsyncMock()
-        mock_client.get.return_value = mock_resp
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        client = TraktClient(client_id="test-id")
+    async def test_get_user_watched_uses_me(self):
+        mock_client = self._mock_client([{"show": {"ids": {"trakt": 1}}}])
+        client = TraktClient(client_id="test-id", access_token="tok")
         with patch.object(client, "_client", return_value=mock_client):
-            await client.get_user_ratings("foo/bar", media_type="movie")
+            assert await client.get_user_watched(media_type="show") == [{"ids": {"trakt": 1}}]
 
-        url = mock_client.get.call_args[0][0]
-        assert "foo/bar" not in url
-        assert "foo%2Fbar" in url
+        assert mock_client.get.call_args[0][0] == "/users/me/watched/shows"
 
     @pytest.mark.asyncio
-    async def test_get_user_watched_plain_username_unchanged(self):
-        """Plain usernames are not mangled by URL encoding."""
-        mock_resp = _mock_response([{"movie": {"ids": {"trakt": 1}, "title": "Film"}}])
-
-        mock_client = AsyncMock()
-        mock_client.get.return_value = mock_resp
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        client = TraktClient(client_id="test-id")
+    async def test_get_user_ratings_uses_me(self):
+        mock_client = self._mock_client([{"rating": 8, "movie": {"ids": {"trakt": 42}}}])
+        client = TraktClient(client_id="test-id", access_token="tok")
         with patch.object(client, "_client", return_value=mock_client):
-            await client.get_user_watched("johnsmith", media_type="movie")
+            assert await client.get_user_ratings(media_type="movie") == [
+                {"rating": 8, "trakt_id": 42}
+            ]
 
-        url = mock_client.get.call_args[0][0]
-        assert "/users/johnsmith/" in url
-
-    @pytest.mark.asyncio
-    async def test_get_user_ratings_plain_username_unchanged(self):
-        """Plain usernames are not mangled by URL encoding."""
-        mock_resp = _mock_response([{"rating": 8, "movie": {"ids": {"trakt": 42}}}])
-
-        mock_client = AsyncMock()
-        mock_client.get.return_value = mock_resp
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        client = TraktClient(client_id="test-id")
-        with patch.object(client, "_client", return_value=mock_client):
-            await client.get_user_ratings("johnsmith", media_type="movie")
-
-        url = mock_client.get.call_args[0][0]
-        assert "/users/johnsmith/" in url
+        assert mock_client.get.call_args[0][0] == "/users/me/ratings/movies"
 
 
 class TestTraktClientErrorPropagation:

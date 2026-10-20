@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from urllib.parse import quote
 
 import httpx
 
@@ -111,38 +110,28 @@ class TraktClient:
             resp.raise_for_status()
             return [item[media_type] for item in resp.json()]
 
-    async def get_user_watched(
-        self, username: str, media_type: str = "movie"
-    ) -> list[dict]:
-        """Fetch a user's watched movies or shows.
-
-        The username is URL-encoded (including ``/``) to prevent SSRF via API
-        path injection.
+    async def get_user_watched(self, media_type: str = "movie") -> list[dict]:
+        """Fetch the authenticated user's watched movies or shows.
 
         Returns [{plays, last_watched_at, movie/show}, ...] — this extracts
         the inner dicts.
         """
         async with self._client() as client:
             resp = await client.get(
-                f"/users/{quote(username, safe='')}/watched/{media_type}s",
+                f"/users/me/watched/{media_type}s",
                 params={"extended": "full"},
             )
             resp.raise_for_status()
             return [item[media_type] for item in resp.json()]
 
-    async def get_user_ratings(
-        self, username: str, media_type: str = "movie"
-    ) -> list[dict]:
-        """Fetch a user's movie or show ratings.
-
-        The username is URL-encoded (including ``/``) to prevent SSRF via API
-        path injection.
+    async def get_user_ratings(self, media_type: str = "movie") -> list[dict]:
+        """Fetch the authenticated user's movie or show ratings.
 
         Returns [{rating, trakt_id}, ...].
         """
         async with self._client() as client:
             resp = await client.get(
-                f"/users/{quote(username, safe='')}/ratings/{media_type}s",
+                f"/users/me/ratings/{media_type}s",
             )
             resp.raise_for_status()
             return [

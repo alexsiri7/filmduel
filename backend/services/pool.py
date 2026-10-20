@@ -119,6 +119,13 @@ def _is_transient(exc: Exception) -> bool:
     return False
 
 
+def _describe_failure(exc: Exception) -> str:
+    """Name the failure without its message: httpx embeds the request URL there."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        return f"{type(exc).__name__} {exc.response.status_code}"
+    return type(exc).__name__
+
+
 async def _safe_fetch(
     coro_func, *args, failures: list[str] | None = None, **kwargs
 ) -> list:
@@ -132,14 +139,16 @@ async def _safe_fetch(
         except Exception as exc:
             if delay is not None and _is_transient(exc):
                 logger.warning(
-                    "Transient error fetching %s (%r), retrying in %ss",
+                    "Transient error fetching %s (%s), retrying in %ss",
                     coro_func.__name__,
-                    exc,
+                    _describe_failure(exc),
                     delay,
                 )
                 await asyncio.sleep(delay)
                 continue
-            logger.exception("Failed to fetch: %s", coro_func.__name__)
+            logger.error(
+                "Failed to fetch %s (%s)", coro_func.__name__, _describe_failure(exc)
+            )
             if failures is not None:
                 failures.append(coro_func.__name__)
             return []
@@ -164,10 +173,10 @@ async def _fetch_trakt_pool(
         client.get_recommendations, limit=100, media_type=media_type, failures=failures
     )
     watched = await _safe_fetch(
-        client.get_user_watched, user.trakt_user_id, media_type=media_type, failures=failures
+        client.get_user_watched, media_type=media_type, failures=failures
     )
     ratings_list = await _safe_fetch(
-        client.get_user_ratings, user.trakt_user_id, media_type=media_type, failures=failures
+        client.get_user_ratings, media_type=media_type, failures=failures
     )
 
     ratings_by_trakt_id: dict[int, int] = {
