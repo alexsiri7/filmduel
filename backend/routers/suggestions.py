@@ -18,7 +18,7 @@ from backend.db import (
     get_db,
     try_acquire_xact_lock,
 )
-from backend.rate_limit import limiter
+from backend.rate_limit import empty_suggestions_recent, limiter
 from backend.db_models import Movie, Suggestion, User, UserMovie
 from backend.routers.auth import ensure_fresh_token, get_current_user, require_ai_consent, require_consent
 from backend.schemas import (
@@ -157,7 +157,7 @@ async def get_suggestions(
     media_type: MediaType = Query(default="movie"),
 ):
     """Return current suggestions. Generate only if none exist or the newest batch
-    (dismissed included) is >24h old."""
+    (dismissed included) is >24h old, and no recent LLM attempt came back empty."""
     uid = current_user.id
 
     require_ai_consent(current_user)
@@ -188,6 +188,9 @@ async def get_suggestions(
         if active:
             return _ready_response(active)
         return SuggestionsResponse(suggestions=[], status="all_dismissed")
+
+    if empty_suggestions_recent(uid, media_type):
+        return SuggestionsResponse(suggestions=[], status="no_candidates")
 
     # Stale or none — generate new
     try:

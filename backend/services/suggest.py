@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from backend.db_models import Movie, UserMovie
+from backend.rate_limit import record_empty_suggestions
 from backend.services.curator import elo_tier, sanitize_llm_input
 from backend.services.llm import chat_completion, parse_json_response
 from backend.services.ranking import ranked_user_movies_stmt
@@ -191,6 +192,7 @@ async def generate_suggestions(
     Returns list of {movie_id: str, reason: str}.
     Raises ValueError if LLM_API_KEY is not set, RuntimeError if every LLM pick is malformed.
     Returns empty list if user has < MIN_RANKED films (caller should check taste_profile).
+    An LLM reply with no usable pick starts the empty-suggestions cooldown.
     """
     taste_profile = await _build_taste_profile(user_id, db, media_type)
     if taste_profile is None:
@@ -255,6 +257,8 @@ async def generate_suggestions(
         if len(results) >= NUM_PICKS:
             break
 
+    if not results:
+        record_empty_suggestions(user_id, media_type)
     if picks and not well_formed:
         # Not ValueError: the routers read that as "LLM_API_KEY not configured".
         raise RuntimeError("LLM reply contained no well-formed picks")

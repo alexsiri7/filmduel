@@ -5,6 +5,7 @@ from __future__ import annotations
 import ipaddress
 import logging
 import os
+import uuid
 
 import jwt
 from fastapi import HTTPException
@@ -117,3 +118,29 @@ def count_ai_curation_attempt(request: Request) -> None:
             status_code=429,
             detail="Daily AI curation limit reached. Please try again later.",
         )
+
+
+# An LLM reply with no usable pick writes no Suggestion row, so GET would
+# otherwise ask the LLM again on every request (SEC-11, #783).
+EMPTY_SUGGESTIONS_COOLDOWN = parse("1/hour")
+
+
+def record_empty_suggestions(user_id: uuid.UUID, media_type: str) -> None:
+    """Remember that the LLM just produced no usable suggestion for this user."""
+    try:
+        limiter.limiter.hit(
+            EMPTY_SUGGESTIONS_COOLDOWN, f"user:{user_id}", "suggestions_empty", media_type
+        )
+    except Exception:
+        logger.warning("Suggestions cooldown storage unavailable; empty attempt not recorded")
+
+
+def empty_suggestions_recent(user_id: uuid.UUID, media_type: str) -> bool:
+    """True when an empty LLM attempt was recorded within the cooldown. Fails open."""
+    try:
+        return not limiter.limiter.test(
+            EMPTY_SUGGESTIONS_COOLDOWN, f"user:{user_id}", "suggestions_empty", media_type
+        )
+    except Exception:
+        logger.warning("Suggestions cooldown storage unavailable; not enforced")
+        return False
