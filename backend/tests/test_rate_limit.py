@@ -1,4 +1,4 @@
-"""Unit tests for rate_limit._rate_limit_key and _build_limiter."""
+"""Unit tests for rate_limit._rate_limit_key, _build_limiter and count_ai_curation_attempt."""
 
 from __future__ import annotations
 
@@ -20,7 +20,12 @@ from slowapi.errors import RateLimitExceeded
 from starlette.requests import Request
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
-from backend.rate_limit import _build_limiter, _rate_limit_key
+from backend.rate_limit import (
+    _build_limiter,
+    _rate_limit_key,
+    count_ai_curation_attempt,
+    limiter,
+)
 from backend.utils.cookies import COOKIE_NAME, cookie_name
 
 
@@ -211,3 +216,11 @@ def test_spoofed_x_forwarded_for_does_not_reset_anonymous_limit_on_railway(monke
 
     other = client.get("/limited", headers={"X-Real-IP": "203.0.113.10"})
     assert other.status_code == 200
+
+
+def test_ai_curation_attempt_fails_open_when_storage_unreachable(caplog):
+    """A storage error must not block curation: the attempt goes uncounted."""
+    with patch.object(limiter.limiter, "hit", side_effect=ConnectionError("redis down")):
+        with caplog.at_level(logging.WARNING, logger="backend.rate_limit"):
+            assert count_ai_curation_attempt(_make_request()) is None
+    assert "attempt not counted" in caplog.text
