@@ -382,6 +382,37 @@ class TestGetCurrentUserId:
         assert "missing subject" in exc_info.value.detail.lower()
         _assert_session_cookie_cleared(exc_info.value.headers["set-cookie"])
 
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            pytest.param(
+                {k: v for k, v in _make_jwt_payload().items() if k != "iat"},
+                id="missing-iat",
+            ),
+            pytest.param(
+                {k: v for k, v in _make_jwt_payload().items() if k != "exp"},
+                id="missing-exp",
+            ),
+            pytest.param(_make_jwt_payload(sub="not-a-uuid"), id="non-uuid-sub"),
+            pytest.param(_make_jwt_payload(iat="1700000000"), id="string-iat"),
+            pytest.param(_make_jwt_payload(orig_iat=1e20), id="out-of-range-orig-iat"),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_signed_token_with_malformed_claims_raises_401(
+        self, monkeypatch, payload
+    ):
+        """A correctly signed token with malformed claims is 401, not a 500."""
+        monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
+        token = pyjwt.encode(payload, SETTINGS.SECRET_KEY, algorithm=JWT_ALGORITHM)
+        request = _make_request({COOKIE_NAME: token})
+        response = _make_response()
+        with pytest.raises(HTTPException) as exc_info:
+            await get_current_user_id(request, response, _make_db())
+        assert exc_info.value.status_code == 401
+        assert exc_info.value.detail == "Invalid session"
+        _assert_session_cookie_cleared(exc_info.value.headers["set-cookie"])
+
     @pytest.mark.asyncio
     async def test_revoked_token_raises_401(self, monkeypatch):
         """Token issued before tokens_invalid_before must be rejected."""
