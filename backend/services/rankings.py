@@ -243,14 +243,21 @@ async def get_user_stats(
     }
 
 
-_FORMULA_PREFIXES = frozenset("=+-@\t\r\n")
+# A field can start at the beginning of a cell or, when a spreadsheet in a
+# semicolon-delimited locale re-splits the comma CSV, after any ";" or line
+# break in it — optionally behind '"' characters, which that re-split reads as
+# the field's own quoting. Comma-CSV quoting does not stop the re-split, so each
+# such start is neutralized. "\r\n" is one break: "\r" alone only counts when
+# no "\n" follows, so the prefix never lands inside the pair.
+FORMULA_TRIGGER_CHARS = "=+-@\t\r\n"
+_FORMULA_FIELD_START = re.compile(
+    rf'(^|(?:;|\r\n|\r(?!\n)|\n)"*)(?=[{re.escape(FORMULA_TRIGGER_CHARS)}])'
+)
 
 
 def _sanitize_csv_cell(value: str) -> str:
     """Prevent CSV formula injection by prepending a single quote to dangerous prefixes."""
-    if value and value[0] in _FORMULA_PREFIXES:
-        return "'" + value
-    return value
+    return _FORMULA_FIELD_START.sub(r"\1'", value)
 
 
 async def export_rankings_csv(

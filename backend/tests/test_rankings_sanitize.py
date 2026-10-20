@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from backend.services.rankings import (
     _sanitize_csv_cell,
     parse_decade,
@@ -37,6 +39,28 @@ class TestSanitizeCsvCell:
 
     def test_safe_string_passthrough(self):
         assert _sanitize_csv_cell("Normal Title") == "Normal Title"
+
+    def test_formula_after_semicolon(self):
+        assert _sanitize_csv_cell('Heat;=HYPERLINK("x")') == 'Heat;\'=HYPERLINK("x")'
+
+    def test_every_semicolon_field_start(self):
+        assert _sanitize_csv_cell("=A;+B;C;@D") == "'=A;'+B;C;'@D"
+
+    def test_safe_semicolon_passthrough(self):
+        assert _sanitize_csv_cell("Heat; The Movie") == "Heat; The Movie"
+
+    def test_formula_after_semicolon_and_quotes(self):
+        assert _sanitize_csv_cell('X;""=CMD()') == 'X;""\'=CMD()'
+
+    def test_formula_after_line_breaks(self):
+        assert _sanitize_csv_cell("X\n=A\r+B\r\n@C") == "X\n'=A\r'+B\r\n'@C"
+
+    @pytest.mark.parametrize("anchor", ["\n", "\r", "\r\n"])
+    def test_formula_after_line_break_and_quote(self, anchor):
+        assert _sanitize_csv_cell(f'X{anchor}"=CMD()') == f"X{anchor}\"'=CMD()"
+
+    def test_crlf_followed_by_safe_text_passthrough(self):
+        assert _sanitize_csv_cell("X\r\nY") == "X\r\nY"
 
 
 # ---------------------------------------------------------------------------

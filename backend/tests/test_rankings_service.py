@@ -10,6 +10,7 @@ import pytest
 from sqlalchemy.dialects import postgresql
 
 from backend.services.rankings import (
+    FORMULA_TRIGGER_CHARS,
     export_rankings_csv,
     get_elo_ratings,
     get_user_stats,
@@ -210,6 +211,34 @@ async def test_export_rankings_csv_sanitizes_formula_title():
     rows = list(reader)
 
     assert rows[1][1] == "'=CMD()"
+
+
+@pytest.mark.asyncio
+async def test_export_rankings_csv_semicolon_locale_cannot_start_formula():
+    """Re-split on ";" as semicolon-locale spreadsheets do, no field may start a formula."""
+    fake_ums = [
+        _make_export_user_movie('Heat;=HYPERLINK("http://x")', 2020, "tt1;@x", 1000),
+        _make_export_user_movie('X;"=CMD()', 2021, 'tt2;""+1', 990),
+        _make_export_user_movie("X\n=CMD()", 2022, "tt3\r\n-1", 980),
+    ]
+
+    mock_result = MagicMock()
+    mock_result.unique.return_value.scalars.return_value.all.return_value = fake_ums
+    mock_result.all.return_value = [_rating_row(um.elo, 0, 1, 1) for um in fake_ums]
+    db = AsyncMock()
+    db.execute.return_value = mock_result
+
+    csv_content = await export_rankings_csv(db, uuid.uuid4(), media_type="movie")
+    semicolon_fields = [
+        field
+        for row in csv.reader(io.StringIO(csv_content, newline=""), delimiter=";")
+        for field in row
+    ]
+
+    assert len(semicolon_fields) > 1
+    assert not any(
+        field.startswith(tuple(FORMULA_TRIGGER_CHARS)) for field in semicolon_fields
+    )
 
 
 @pytest.mark.asyncio
