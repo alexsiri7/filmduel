@@ -7,6 +7,8 @@ import logging
 import os
 
 import jwt
+from fastapi import HTTPException
+from limits import parse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from starlette.requests import Request
@@ -90,3 +92,28 @@ def _build_limiter(settings: Settings) -> Limiter:
 
 
 limiter = _build_limiter(get_settings())
+
+
+# One budget for every LLM curation call (tournament create + regenerate),
+# spent per attempt so failed curations count too (SEC-10, #782).
+AI_CURATION_DAILY_LIMIT = parse("50/day")
+
+
+def count_ai_curation_attempt(request: Request) -> None:
+    """Spend one unit of the caller's daily AI curation budget; 429 when spent.
+
+    Fails open when the limiter storage is unreachable, matching the route
+    limits' in-memory fallback: the 10/minute route limit still applies.
+    """
+    try:
+        allowed = limiter.limiter.hit(
+            AI_CURATION_DAILY_LIMIT, _rate_limit_key(request), "ai_curation"
+        )
+    except Exception:
+        logger.warning("AI curation cap storage unavailable; attempt not counted")
+        return
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Daily AI curation limit reached. Please try again later.",
+        )

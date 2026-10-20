@@ -525,6 +525,7 @@ requirements:
       - "An LLM failure returns 500 'AI curation failed' without creating a partial tournament"
       - "filter_value carries a max_length constraint (SEC-012)"
       - "llm_response is nulled by retention after 180 days (FD-011)"
+      - "Each AI curation attempt (create or regenerate, success or failure) spends one unit of a shared per-user 50/day budget, counted before the LLM call; beyond it returns 429 (SEC-10, #782)"
 
   # ── Feedback ────────────────────────────────────────────────────────────
 
