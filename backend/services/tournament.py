@@ -8,10 +8,11 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import Select, exists, func, literal_column, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
-from backend.db_models import Tournament, TournamentMatch, UserMovie
+from backend.db_models import Movie, Tournament, TournamentMatch, UserMovie
 from backend.schemas import FilterType
 from backend.services.curator import curate_tournament
 from backend.services.duel import apply_elo_result
@@ -21,6 +22,9 @@ logger = logging.getLogger(__name__)
 
 
 # ── AI curation orchestration ────────────────────────────────────────
+
+
+CANDIDATE_POOL_FACTOR = 3
 
 
 async def curate_and_select_films(
@@ -35,7 +39,7 @@ async def curate_and_select_films(
     Returns (selected_user_movies_sorted_by_elo, llm_result_dict).
     Raises ValueError if LLM returns IDs not in the candidate pool.
     """
-    candidate_pool = user_movies[: bracket_size * 3]
+    candidate_pool = user_movies[: bracket_size * CANDIDATE_POOL_FACTOR]
     candidates = [
         {
             "id": str(um.movie_id),
@@ -133,6 +137,38 @@ def _num_rounds(bracket_size: int) -> int:
 # ── DB-dependent service functions ───────────────────────────────────
 
 
+def _filtered_ranked_stmt(
+    user_id: uuid.UUID,
+    filter_type: Optional[FilterType],
+    filter_value: Optional[str],
+    media_type: str,
+) -> Select:
+    """Ranked films of this media_type, narrowed by an optional genre/decade.
+
+    Genre matches case-insensitively. Raises ValueError for invalid decade format.
+    """
+    stmt = ranked_user_movies_stmt(user_id, media_type)
+    if filter_type == "genre" and filter_value:
+        genres = func.unnest(Movie.genres).table_valued("name").render_derived(
+            name="genre"
+        )
+        stmt = stmt.where(
+            exists(
+                select(literal_column("1"))
+                .select_from(genres)
+                .where(func.lower(genres.c.name) == filter_value.lower())
+            )
+        )
+    elif filter_type == "decade" and filter_value:
+        decade_str = filter_value.rstrip("s")
+        try:
+            decade_start = int(decade_str)
+        except ValueError:
+            raise ValueError("Invalid decade format")
+        stmt = stmt.where(Movie.year.between(decade_start, decade_start + 9))
+    return stmt
+
+
 async def get_filtered_ranked_films(
     db: AsyncSession,
     user_id: uuid.UUID,
@@ -140,42 +176,40 @@ async def get_filtered_ranked_films(
     filter_value: Optional[str] = None,
     *,
     media_type: str,
+    limit: int,
 ) -> list[UserMovie]:
-    """Query ranked films with optional genre/decade filtering.
+    """Return the top ``limit`` ranked films matching an optional genre/decade.
 
     Returns UserMovie list with .movie eagerly loaded, sorted by ELO desc.
     Raises ValueError for invalid decade format.
     """
-    from sqlalchemy.orm import joinedload
-
-    stmt = ranked_user_movies_stmt(user_id, media_type).options(
-        joinedload(UserMovie.movie)
+    stmt = (
+        _filtered_ranked_stmt(user_id, filter_type, filter_value, media_type)
+        .options(joinedload(UserMovie.movie))
+        .order_by(UserMovie.elo.desc())
+        .limit(limit)
     )
     result = await db.execute(stmt)
-    user_movies = list(result.unique().scalars().all())
+    return list(result.unique().scalars().all())
 
-    if filter_type == "genre" and filter_value:
-        genre_lower = filter_value.lower()
-        user_movies = [
-            um
-            for um in user_movies
-            if um.movie.genres
-            and any(g.lower() == genre_lower for g in um.movie.genres)
-        ]
-    elif filter_type == "decade" and filter_value:
-        decade_str = filter_value.rstrip("s")
-        try:
-            decade_start = int(decade_str)
-        except ValueError:
-            raise ValueError("Invalid decade format")
-        user_movies = [
-            um
-            for um in user_movies
-            if um.movie.year and decade_start <= um.movie.year <= decade_start + 9
-        ]
 
-    user_movies.sort(key=lambda um: um.elo or 0, reverse=True)
-    return user_movies
+async def count_filtered_ranked_films(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    filter_type: Optional[FilterType] = None,
+    filter_value: Optional[str] = None,
+    *,
+    media_type: str,
+) -> int:
+    """Count the ranked films matching an optional genre/decade.
+
+    Raises ValueError for invalid decade format.
+    """
+    stmt = _filtered_ranked_stmt(
+        user_id, filter_type, filter_value, media_type
+    ).with_only_columns(func.count())
+    result = await db.execute(stmt)
+    return result.scalar() or 0
 
 
 async def create_tournament_bracket(

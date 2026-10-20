@@ -3,13 +3,15 @@
 import csv
 import io
 import uuid
+from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy.dialects import postgresql
 
 from backend.services.rankings import (
     export_rankings_csv,
-    get_ranked_elos,
+    get_elo_ratings,
     get_user_stats,
     parse_decade,
 )
@@ -180,6 +182,7 @@ async def test_export_rankings_csv_valid_csv():
 
     mock_result = MagicMock()
     mock_result.unique.return_value.scalars.return_value.all.return_value = fake_ums
+    mock_result.all.return_value = [_rating_row(um.elo, 0, 1, 1) for um in fake_ums]
     db = AsyncMock()
     db.execute.return_value = mock_result
 
@@ -198,6 +201,7 @@ async def test_export_rankings_csv_sanitizes_formula_title():
 
     mock_result = MagicMock()
     mock_result.unique.return_value.scalars.return_value.all.return_value = fake_ums
+    mock_result.all.return_value = [_rating_row(um.elo, 0, 1, 1) for um in fake_ums]
     db = AsyncMock()
     db.execute.return_value = mock_result
 
@@ -219,10 +223,12 @@ async def test_export_rankings_csv_rates_by_percentile():
 
     rows_result = MagicMock()
     rows_result.unique.return_value.scalars.return_value.all.return_value = fake_ums
-    elos_result = MagicMock()
-    elos_result.scalars.return_value.all.return_value = sorted(elos)
+    ratings_result = MagicMock()
+    ratings_result.all.return_value = [
+        _rating_row(elo, below, 1, len(elos)) for below, elo in enumerate(sorted(elos))
+    ]
     db = AsyncMock()
-    db.execute.side_effect = [rows_result, elos_result]
+    db.execute.side_effect = [rows_result, ratings_result]
 
     csv_content = await export_rankings_csv(db, uuid.uuid4(), media_type="movie")
     rows = list(csv.reader(io.StringIO(csv_content)))
@@ -232,43 +238,79 @@ async def test_export_rankings_csv_rates_by_percentile():
 
 @pytest.mark.asyncio
 async def test_export_rankings_csv_rates_against_full_population_not_capped_rows():
-    """Rating10 ranks against get_ranked_elos, not only the rows under the export cap."""
+    """Rating10 ranks against the population get_elo_ratings counts, not only the rows under the export cap."""
     fake_ums = [_make_export_user_movie("Kept", 2020, "tt0000001", 1100)]
 
     rows_result = MagicMock()
     rows_result.unique.return_value.scalars.return_value.all.return_value = fake_ums
-    elos_result = MagicMock()
-    elos_result.scalars.return_value.all.return_value = [900, 1100]
+    ratings_result = MagicMock()
+    ratings_result.all.return_value = [_rating_row(1100, below=1, equal=1, n=2)]
     db = AsyncMock()
-    db.execute.side_effect = [rows_result, elos_result]
+    db.execute.side_effect = [rows_result, ratings_result]
 
     csv_content = await export_rankings_csv(db, uuid.uuid4(), media_type="show")
     rows = list(csv.reader(io.StringIO(csv_content)))
 
     assert rows[1][4] == "8"
-    elos_stmt = db.execute.await_args_list[1].args[0]
-    assert "ORDER BY user_movies.elo ASC" in str(elos_stmt)
-    assert "LIMIT" not in str(elos_stmt)
-    assert "show" in elos_stmt.compile().params.values()
+    ratings_stmt = db.execute.await_args_list[1].args[0]
+    assert "show" in ratings_stmt.compile().params.values()
 
 
-# --- get_ranked_elos ---
+# --- get_elo_ratings ---
+
+
+def _rating_row(elo, below, equal, n):
+    row = MagicMock()
+    row.elo, row.below, row.equal, row.n = elo, below, equal, n
+    return row
 
 
 @pytest.mark.asyncio
-async def test_get_ranked_elos_returns_ascending_ranked_population():
+async def test_get_elo_ratings_skips_the_query_without_elos():
+    db = AsyncMock()
+
+    assert await get_elo_ratings(db, uuid.uuid4(), [], media_type="show") == {}
+    db.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_get_elo_ratings_rates_each_elo_by_its_percentile_counts():
     mock_result = MagicMock()
-    mock_result.scalars.return_value.all.return_value = [900, 1000]
+    mock_result.all.return_value = [
+        _rating_row(900.0, Decimal(0), Decimal(1), Decimal(2)),
+        _rating_row(1100.0, Decimal(1), Decimal(1), Decimal(2)),
+        _rating_row(1000.0, Decimal(0), Decimal(0), Decimal(0)),
+    ]
     db = AsyncMock()
     db.execute.return_value = mock_result
 
-    assert await get_ranked_elos(db, uuid.uuid4(), media_type="show") == [900, 1000]
+    ratings = await get_elo_ratings(db, uuid.uuid4(), [1100.0, 900.0, 1100.0, 1000.0])
 
-    sql = str(db.execute.call_args[0][0])
-    assert "media_type" in sql
-    assert "battles" in sql
-    assert "seen" in sql
-    assert "ORDER BY user_movies.elo ASC" in sql
+    assert ratings == {900.0: 3, 1100.0: 8, 1000.0: 5}
+
+
+@pytest.mark.asyncio
+async def test_get_elo_ratings_counts_the_whole_ranked_population_in_sql():
+    uid = uuid.uuid4()
+    mock_result = MagicMock()
+    mock_result.all.return_value = []
+    db = AsyncMock()
+    db.execute.return_value = mock_result
+
+    await get_elo_ratings(db, uid, [1100.0, 900.0, 900.0], media_type="show")
+
+    compiled = db.execute.call_args[0][0].compile(dialect=postgresql.dialect())
+    sql = str(compiled)
+    assert "user_movies.seen IS " in sql
+    assert "user_movies.battles > " in sql
+    assert "movies.media_type = " in sql
+    assert "unnest(CAST(" in sql
+    assert "OVER (ORDER BY" in sql
+    assert "LIMIT" not in sql
+    params = list(compiled.params.values())
+    assert uid in params
+    assert "show" in params
+    assert [900.0, 1100.0] in params
 
 
 # --- CSV format ---

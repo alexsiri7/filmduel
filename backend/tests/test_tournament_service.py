@@ -4,9 +4,11 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy.dialects import postgresql
 
 from backend.services.tournament import (
     _num_rounds,
+    count_filtered_ranked_films,
     create_tournament_bracket,
     curate_and_select_films,
     generate_seeded_bracket,
@@ -30,6 +32,98 @@ class TestGetFilteredRankedFilmsSignature:
     def test_passing_media_type_positionally_raises(self):
         with pytest.raises(TypeError):
             get_filtered_ranked_films(MagicMock(), uuid.uuid4(), None, None, "movie")
+
+    def test_omitting_limit_raises(self):
+        with pytest.raises(TypeError):
+            get_filtered_ranked_films(
+                MagicMock(), uuid.uuid4(), None, None, media_type="movie"
+            )
+
+
+def _db_returning(user_movies=(), count=0):
+    db = AsyncMock()
+    result = MagicMock()
+    result.unique.return_value.scalars.return_value.all.return_value = list(user_movies)
+    result.scalar.return_value = count
+    db.execute.return_value = result
+    return db
+
+
+def _compiled(db):
+    return db.execute.await_args.args[0].compile(dialect=postgresql.dialect())
+
+
+class TestGetFilteredRankedFilmsQuery:
+    """Filtering, ordering and the limit run in SQL, not over the whole library."""
+
+    @pytest.mark.asyncio
+    async def test_orders_by_elo_desc_and_limits(self):
+        films = [MagicMock(), MagicMock()]
+        db = _db_returning(films)
+
+        result = await get_filtered_ranked_films(
+            db, uuid.uuid4(), media_type="show", limit=24
+        )
+
+        assert result == films
+        compiled = _compiled(db)
+        sql = str(compiled)
+        assert "ORDER BY user_movies.elo DESC" in sql
+        assert "LIMIT" in sql
+        assert 24 in compiled.params.values()
+        assert "show" in compiled.params.values()
+
+    @pytest.mark.asyncio
+    async def test_genre_matches_case_insensitively_in_sql(self):
+        db = _db_returning()
+
+        await get_filtered_ranked_films(
+            db, uuid.uuid4(), "genre", "Science-Fiction", media_type="movie", limit=24
+        )
+
+        compiled = _compiled(db)
+        sql = str(compiled)
+        assert "EXISTS (SELECT 1" in sql
+        assert "unnest(movies.genres) AS genre(name)" in sql
+        assert "lower(genre.name) = " in sql
+        assert "science-fiction" in compiled.params.values()
+
+    @pytest.mark.asyncio
+    async def test_decade_filters_year_range_in_sql(self):
+        db = _db_returning()
+
+        await get_filtered_ranked_films(
+            db, uuid.uuid4(), "decade", "1990s", media_type="movie", limit=24
+        )
+
+        compiled = _compiled(db)
+        assert "movies.year BETWEEN " in str(compiled)
+        assert {1990, 1999} <= set(compiled.params.values())
+
+    @pytest.mark.asyncio
+    async def test_invalid_decade_raises_before_querying(self):
+        db = _db_returning()
+
+        with pytest.raises(ValueError, match="Invalid decade format"):
+            await get_filtered_ranked_films(
+                db, uuid.uuid4(), "decade", "abc", media_type="movie", limit=24
+            )
+        db.execute.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_count_uses_the_same_filters(self):
+        db = _db_returning(count=7)
+
+        count = await count_filtered_ranked_films(
+            db, uuid.uuid4(), "genre", "Drama", media_type="movie"
+        )
+
+        assert count == 7
+        compiled = _compiled(db)
+        sql = str(compiled)
+        assert sql.startswith("SELECT count(*)")
+        assert "unnest(movies.genres)" in sql
+        assert "drama" in compiled.params.values()
 
 
 class TestGenerateSeededBracket:

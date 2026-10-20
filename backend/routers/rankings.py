@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import io
-from collections.abc import Sequence
+from collections.abc import Mapping
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -21,10 +21,9 @@ from backend.schemas import (
     RankingsResponse,
     StatsResponse,
 )
-from backend.services.elo import elo_to_rating
 from backend.services.rankings import (
     export_rankings_csv,
-    get_ranked_elos,
+    get_elo_ratings,
     get_user_rankings,
     get_user_stats,
 )
@@ -33,14 +32,14 @@ router = APIRouter(prefix="/api/rankings", tags=["rankings"])
 
 
 def _build_ranked_movie(
-    um: UserMovie, rank: int, sorted_elos: Sequence[float]
+    um: UserMovie, rank: int, ratings_by_elo: Mapping[float, int]
 ) -> RankedMovie:
     return RankedMovie(
         rank=rank,
         movie=MovieSchema.from_model(um.movie),
         elo=round(um.elo),
         battles=um.battles,
-        trakt_rating=elo_to_rating(um.elo, sorted_elos),
+        trakt_rating=ratings_by_elo[um.elo],
     )
 
 
@@ -69,11 +68,11 @@ async def get_rankings(
         )
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid decade format")
-    sorted_elos = (
-        await get_ranked_elos(db, current_user.id, media_type) if user_movies else []
+    ratings = await get_elo_ratings(
+        db, current_user.id, [um.elo for um in user_movies], media_type
     )
     rankings = [
-        _build_ranked_movie(um, rank=offset + i + 1, sorted_elos=sorted_elos)
+        _build_ranked_movie(um, rank=offset + i + 1, ratings_by_elo=ratings)
         for i, um in enumerate(user_movies)
     ]
     return RankingsResponse(rankings=rankings, total=total)
@@ -98,10 +97,15 @@ async def get_stats(
             average_elo=stats["average_elo"],
         )
 
-    sorted_elos = await get_ranked_elos(db, current_user.id, media_type)
-    highest = _build_ranked_movie(stats["highest_rated"], 1, sorted_elos)
+    ratings = await get_elo_ratings(
+        db,
+        current_user.id,
+        [stats["highest_rated"].elo, stats["lowest_rated"].elo],
+        media_type,
+    )
+    highest = _build_ranked_movie(stats["highest_rated"], 1, ratings)
     lowest = _build_ranked_movie(
-        stats["lowest_rated"], stats["total_movies_ranked"], sorted_elos
+        stats["lowest_rated"], stats["total_movies_ranked"], ratings
     )
 
     return StatsResponse(

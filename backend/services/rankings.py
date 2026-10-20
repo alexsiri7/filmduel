@@ -6,14 +6,25 @@ import csv
 import io
 import re
 import uuid
+from collections.abc import Iterable
 from typing import Optional
 
-from sqlalchemy import select, func
+from sqlalchemy import (
+    Float,
+    bindparam,
+    cast,
+    false,
+    func,
+    literal_column,
+    select,
+    true,
+)
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from backend.db_models import Movie, UserMovie
-from backend.services.elo import elo_to_rating
+from backend.services.elo import percentile_rating
 
 _DECADE_RE = re.compile(r"[0-9]{4}s?")
 
@@ -82,16 +93,29 @@ async def get_user_rankings(
     return user_movies, total
 
 
-async def get_ranked_elos(
-    db: AsyncSession, user_id: uuid.UUID, media_type: str = "movie"
-) -> list[float]:
-    """Return the ELOs of the user's ranked films of this media_type, ascending.
+async def get_elo_ratings(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    elos: Iterable[float],
+    media_type: str = "movie",
+) -> dict[float, int]:
+    """Return the 1-10 rating of each ELO in ``elos``, keyed by ELO.
 
-    This is the population elo_to_rating() ranks against; genre/decade filters
-    deliberately do not apply, so a film's rating is the same everywhere.
+    Each ELO is rated against the user's ranked films of this media_type;
+    genre/decade filters deliberately do not apply, so a film's rating is the
+    same everywhere. The percentile counts are computed in SQL so the
+    population never leaves the database (SEC-12, #784).
     """
-    stmt = (
-        select(UserMovie.elo)
+    probes = sorted(set(elos))
+    if not probes:
+        return {}
+
+    population = (
+        select(
+            UserMovie.elo.label("elo"),
+            literal_column("1").label("weight"),
+            false().label("probe"),
+        )
         .join(Movie, UserMovie.movie_id == Movie.id)
         .where(
             UserMovie.user_id == user_id,
@@ -99,10 +123,42 @@ async def get_ranked_elos(
             UserMovie.battles > 0,
             Movie.media_type == media_type,
         )
-        .order_by(UserMovie.elo.asc())
+    )
+    # Weight-0 probe rows let an ELO outside the population still be ranked.
+    probe_rows = select(
+        func.unnest(cast(bindparam("elos", probes), ARRAY(Float))).label("elo"),
+        literal_column("0").label("weight"),
+        true().label("probe"),
+    )
+    points = population.union_all(probe_rows).subquery("points")
+    distinct_elos = (
+        select(
+            points.c.elo,
+            func.sum(points.c.weight).label("equal"),
+            func.bool_or(points.c.probe).label("probe"),
+        )
+        .group_by(points.c.elo)
+        .subquery("distinct_elos")
+    )
+    counted = select(
+        distinct_elos.c.elo,
+        distinct_elos.c.probe,
+        (
+            func.sum(distinct_elos.c.equal).over(order_by=distinct_elos.c.elo)
+            - distinct_elos.c.equal
+        ).label("below"),
+        distinct_elos.c.equal,
+        func.sum(distinct_elos.c.equal).over().label("n"),
+    ).subquery("counted")
+    stmt = select(counted.c.elo, counted.c.below, counted.c.equal, counted.c.n).where(
+        counted.c.probe
     )
     result = await db.execute(stmt)
-    return list(result.scalars().all())
+    # sum() over integers comes back as numeric.
+    return {
+        row.elo: percentile_rating(int(row.below), int(row.equal), int(row.n))
+        for row in result.all()
+    }
 
 
 async def get_user_stats(
@@ -216,8 +272,8 @@ async def export_rankings_csv(
     )
     result = await db.execute(stmt)
     user_movies = result.unique().scalars().all()
-    sorted_elos = (
-        await get_ranked_elos(db, user_id, media_type) if user_movies else []
+    ratings = await get_elo_ratings(
+        db, user_id, [um.elo for um in user_movies], media_type
     )
 
     output = io.StringIO()
@@ -226,14 +282,13 @@ async def export_rankings_csv(
 
     for i, um in enumerate(user_movies):
         movie = um.movie
-        rating = elo_to_rating(um.elo, sorted_elos)
         writer.writerow(
             [
                 i + 1,
                 _sanitize_csv_cell(movie.title),
                 movie.year or "",
                 _sanitize_csv_cell(movie.imdb_id or ""),
-                rating,
+                ratings[um.elo],
             ]
         )
 

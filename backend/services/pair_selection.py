@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import random
 
-from sqlalchemy import select
+from sqlalchemy import Text, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from backend.db_models import Movie, UserMovie
-from backend.services.elo import get_initial_elo
+from backend.services.elo import DEFAULT_ELO, get_initial_elo
 
 CLOSEST_CANDIDATES = 5
 
@@ -32,8 +32,14 @@ async def select_pair(
        anchor's effective ELO, skipping the anchor's partner from the last pair
        unless it is the only other film.
 
+    Selection runs in SQL, so only the anchor and at most CLOSEST_CANDIDATES
+    challengers are loaded (SEC-12, #784).
+
     Raises ValueError if fewer than 2 seen films exist.
     """
+    not_enough = ValueError(
+        f"Need more seen {media_type}s to duel. Swipe to classify some {media_type}s first!"
+    )
     seen_stmt = (
         select(UserMovie)
         .options(joinedload(UserMovie.movie))
@@ -44,24 +50,32 @@ async def select_pair(
             Movie.media_type == media_type,
         )
     )
-    seen_result = await db.execute(seen_stmt)
-    seen_films = list(seen_result.unique().scalars().all())
 
-    if len(seen_films) < 2:
-        raise ValueError(
-            f"Need more seen {media_type}s to duel. Swipe to classify some {media_type}s first!"
-        )
+    anchor_result = await db.execute(
+        seen_stmt.order_by(UserMovie.battles, func.random()).limit(1)
+    )
+    anchor = anchor_result.unique().scalars().first()
+    if anchor is None:
+        raise not_enough
 
-    fewest = min(f.battles for f in seen_films)
-    anchor = random.choice([f for f in seen_films if f.battles == fewest])
-
-    candidates = [f for f in seen_films if f.movie_id != anchor.movie_id]
+    # Fresh challengers sort ahead of the anchor's last partner, so the fetched
+    # rows hold the closest fresh ones whenever any exist.
+    stale_ids: set[str] = set()
     if last_pair_ids and str(anchor.movie_id) in last_pair_ids:
-        fresh = [f for f in candidates if str(f.movie_id) not in last_pair_ids]
-        if fresh:
-            candidates = fresh
+        stale_ids = last_pair_ids - {str(anchor.movie_id)}
+    effective_elo = func.coalesce(UserMovie.elo, UserMovie.seeded_elo, DEFAULT_ELO)
+    order_by = [func.abs(effective_elo - _effective_elo(anchor))]
+    if stale_ids:
+        order_by.insert(0, cast(UserMovie.movie_id, Text).in_(stale_ids))
+    challenger_result = await db.execute(
+        seen_stmt.where(UserMovie.movie_id != anchor.movie_id)
+        .order_by(*order_by)
+        .limit(CLOSEST_CANDIDATES)
+    )
+    nearest = list(challenger_result.unique().scalars().all())
+    if not nearest:
+        raise not_enough
 
-    anchor_elo = _effective_elo(anchor)
-    candidates.sort(key=lambda f: abs(_effective_elo(f) - anchor_elo))
-    challenger = random.choice(candidates[:CLOSEST_CANDIDATES])
+    fresh = [f for f in nearest if str(f.movie_id) not in stale_ids]
+    challenger = random.choice(fresh or nearest)
     return anchor, challenger

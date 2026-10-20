@@ -6,8 +6,6 @@ Ratings are kept as unrounded floats. Default starting rating is 1000.
 """
 
 import math
-from bisect import bisect_left, bisect_right
-from collections.abc import Sequence
 
 # Replaying real duels scored K0=200/300/400 within 0.008 log-loss; 300 was best (#649).
 K0 = 300
@@ -67,18 +65,16 @@ def trakt_rating_to_seeded_elo(rating: int) -> int:
     return round(600 + (rating - 1) * (800 / 9))
 
 
-def elo_to_rating(elo: float, sorted_elos: Sequence[float]) -> int:
+def percentile_rating(below: int, equal: int, n: int) -> int:
     """Map an ELO to the 1-10 scale by its percentile among the user's ranked ELOs.
 
-    ``sorted_elos`` must be ascending. Uses the mid-rank percentile, so N
+    ``below`` and ``equal`` count the population ELOs less than and equal to
+    it; ``n`` is the population size. Uses the mid-rank percentile, so N
     distinct films split into N equal slices of the scale and ties share a
     rating. An empty population rates 5.
     """
-    n = len(sorted_elos)
     if n == 0:
         return 5
-    below = bisect_left(sorted_elos, elo)
-    equal = bisect_right(sorted_elos, elo) - below
     # ceil(10 * (below + equal/2) / n) in integer arithmetic, so exact decile
     # boundaries don't round up through float error.
     rating = -(-10 * (2 * below + equal) // (2 * n))
