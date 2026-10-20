@@ -39,6 +39,7 @@ from backend.routers import (
     tournaments,
     feedback,
     users,
+    csp_report,
 )
 from backend.schemas import SELF_DUEL_ERROR_MSG
 
@@ -274,9 +275,15 @@ async def csrf_origin_check(request: Request, call_next):
     Requests with X-Requested-With: XMLHttpRequest (set by our SPA) are
     accepted; anything else must carry an Origin (or Referer fallback) in the
     CORS allowlist. Requests with none of these headers are rejected.
-    Exempt: GET, HEAD, OPTIONS (safe methods / preflight).
+    Exempt: GET, HEAD, OPTIONS (safe methods / preflight) and the CSP report
+    endpoint.
     """
     if request.method in ("GET", "HEAD", "OPTIONS"):
+        return await call_next(request)
+
+    # Browsers send CSP reports without X-Requested-With; the endpoint is
+    # unauthenticated and changes no state, so there is nothing to forge.
+    if request.url.path == csp_report.CSP_REPORT_PATH:
         return await call_next(request)
 
     # X-Requested-With is a custom header — browsers never send it cross-site
@@ -339,9 +346,14 @@ async def add_security_headers(request: Request, call_next):
         "frame-ancestors 'none'; "
         "base-uri 'self'; "
         "form-action 'self'; "
-        "object-src 'none'"
+        "object-src 'none'; "
+        f"report-uri {csp_report.CSP_REPORT_PATH}; "
+        "report-to csp-endpoint"
     )
+    response.headers["Reporting-Endpoints"] = f'csp-endpoint="{csp_report.CSP_REPORT_PATH}"'
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
     return response
 
 
@@ -355,6 +367,7 @@ app.include_router(suggestions.router)
 app.include_router(swipe.router)
 app.include_router(tournaments.router)
 app.include_router(feedback.router)
+app.include_router(csp_report.router)
 
 
 @app.get("/health")

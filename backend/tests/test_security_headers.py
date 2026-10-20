@@ -57,6 +57,24 @@ def test_permissions_policy_disables_geolocation(response):
     assert "geolocation=()" in response.headers["permissions-policy"]
 
 
+def test_coop_same_origin(response):
+    assert response.headers["cross-origin-opener-policy"] == "same-origin"
+
+
+def test_corp_same_origin(response):
+    assert response.headers["cross-origin-resource-policy"] == "same-origin"
+
+
+def test_csp_reports_violations(response):
+    csp = response.headers["content-security-policy"]
+    assert "report-uri /api/csp-report" in csp
+    assert "report-to csp-endpoint" in csp
+
+
+def test_reporting_endpoints_names_csp_endpoint(response):
+    assert response.headers["reporting-endpoints"] == 'csp-endpoint="/api/csp-report"'
+
+
 class TestHSTS:
     def test_hsts_present_when_https_base_url(self, monkeypatch):
         """HSTS header emitted when BASE_URL uses https://."""

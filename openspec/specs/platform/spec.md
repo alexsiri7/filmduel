@@ -8,7 +8,7 @@ FilmDuel runs as a single web service in front of a shared Postgres database. Th
 
 ### Requirement: State-changing requests must come from the app
 
-Any request other than GET, HEAD or OPTIONS SHALL be accepted only when it carries the app's X-Requested-With header or an Origin or Referer in the allowed origins; otherwise it SHALL be refused, with "CSRF check failed: unexpected origin" for an unknown origin and "CSRF check failed: missing Origin/Referer" when none is present. The allowed origins SHALL never include a wildcard.
+Any request other than GET, HEAD or OPTIONS, except a browser's content security policy violation report, SHALL be accepted only when it carries the app's X-Requested-With header or an Origin or Referer in the allowed origins; otherwise it SHALL be refused, with "CSRF check failed: unexpected origin" for an unknown origin and "CSRF check failed: missing Origin/Referer" when none is present. The allowed origins SHALL never include a wildcard.
 
 #### Scenario: Cross-site post
 - GIVEN a signed-in user visiting https://evil.example
@@ -35,12 +35,21 @@ On a known hosted platform, connections to the database SHALL use TLS and SHALL 
 
 ### Requirement: Responses carry security headers
 
-Every response, API or page, SHALL carry nosniff, frame denial, a referrer policy, a permissions policy and a content security policy allowing scripts and styles only from the app, images only from the app, TMDB and data URLs, and connections only to the app and error tracking; HSTS SHALL be sent whenever cookies are secure. Fonts SHALL be self-hosted.
+Every response, API or page, SHALL carry nosniff, frame denial, a referrer policy, a permissions policy, same-origin cross-origin opener and resource policies, and a content security policy allowing scripts and styles only from the app, images only from the app, TMDB and data URLs, and connections only to the app and error tracking; HSTS SHALL be sent whenever cookies are secure. Fonts SHALL be self-hosted.
 
 #### Scenario: Page response
 - GIVEN any page of the app
 - WHEN it is served
 - THEN its response carries the full set of security headers
+
+### Requirement: Content security policy violations are reported
+
+The content security policy SHALL ask browsers to report violations to the app, which SHALL log each one's directive, the blocked resource's origin and the page's path, never a query string, and SHALL bound how many reports it accepts.
+
+#### Scenario: Policy violation
+- GIVEN a page whose content breaks the content security policy
+- WHEN the browser reports the violation
+- THEN the app logs the directive and blocked origin without the page's query string
 
 ### Requirement: Rate limits follow the user and hold under concurrency
 
