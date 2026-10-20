@@ -40,14 +40,16 @@ def test_railway_cli_is_verified_before_use():
     workflow = _load(STAGING_PIPELINE)
     assert re.fullmatch(r"[0-9a-f]{64}", workflow["env"]["RAILWAY_CLI_SHA256"])
     installs = {
-        job_name: step
+        job_name: (job, step)
         for job_name, job in workflow["jobs"].items()
         for step in job.get("steps", [])
         if step.get("name") == "Install Railway CLI"
     }
     assert set(installs) == {"deploy-staging", "deploy-production"}
-    for job_name, step in installs.items():
-        overrides = {"RAILWAY_CLI_VERSION", "RAILWAY_CLI_SHA256"} & set(step.get("env") or {})
+    for job_name, (job, step) in installs.items():
+        overrides = {"RAILWAY_CLI_VERSION", "RAILWAY_CLI_SHA256"} & (
+            set(job.get("env") or {}) | set(step.get("env") or {})
+        )
         assert not overrides, f"{job_name} shadows the shared Railway CLI pin: {overrides}"
         lines = step["run"].splitlines()
         verify = next(
