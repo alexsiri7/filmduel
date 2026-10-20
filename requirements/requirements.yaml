@@ -413,7 +413,7 @@ requirements:
 
   - id: FD-033
     title: Letterboxd-compatible CSV export
-    statement: "When a user requests GET /api/rankings/export/csv, the system shall stream a CSV with header Position,Title,Year,imdbID,Rating10 of ranked films in ELO order, sanitizing cells by prefixing a single quote wherever formula characters (=+-@ tab newline) begin the cell or follow a semicolon, capped at 10000 rows and rate-limited to 10 exports/hour."
+    statement: "When a user requests GET /api/rankings/export/csv, the system shall stream a CSV with header Position,Title,Year,imdbID,Rating10 of ranked films in ELO order, sanitizing cells by prefixing a single quote wherever formula characters (=+-@ tab newline) begin the cell or follow a semicolon or line break (optionally behind double quotes), capped at 10000 rows and rate-limited to 10 exports/hour."
     category: functional
     priority: must
     status: active
@@ -421,7 +421,7 @@ requirements:
     acceptance:
       - "Response has Content-Disposition attachment; filename=filmduel_rankings.csv"
       - "A title beginning with '=' is emitted as \"'=...\" (CSV formula-injection guard)"
-      - "A title containing ';=' is emitted as \";'=...\", so a semicolon-locale spreadsheet re-splitting the row never starts a field with a formula"
+      - "A title containing ';=', ';\"=' or a line break followed by '=' has the quote prefix inserted before the '=', so a semicolon-locale spreadsheet re-splitting the row never starts a field with a formula"
       - "Rating10 equals elo_to_rating(elo, the user's ranked ELOs of that media_type)"
 
   # ── TV show support ─────────────────────────────────────────────────────

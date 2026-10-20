@@ -216,7 +216,9 @@ async def test_export_rankings_csv_sanitizes_formula_title():
 async def test_export_rankings_csv_semicolon_locale_cannot_start_formula():
     """Re-split on ";" as semicolon-locale spreadsheets do, no field may start a formula."""
     fake_ums = [
-        _make_export_user_movie('Heat;=HYPERLINK("http://x")', 2020, "tt1;@x", 1000)
+        _make_export_user_movie('Heat;=HYPERLINK("http://x")', 2020, "tt1;@x", 1000),
+        _make_export_user_movie('X;"=CMD()', 2021, 'tt2;""+1', 990),
+        _make_export_user_movie("X\n=CMD()", 2022, "tt3\r\n-1", 980),
     ]
 
     mock_result = MagicMock()
@@ -228,12 +230,12 @@ async def test_export_rankings_csv_semicolon_locale_cannot_start_formula():
     csv_content = await export_rankings_csv(db, uuid.uuid4(), media_type="movie")
     semicolon_fields = [
         field
-        for row in csv.reader(io.StringIO(csv_content), delimiter=";")
+        for row in csv.reader(io.StringIO(csv_content, newline=""), delimiter=";")
         for field in row
     ]
 
     assert len(semicolon_fields) > 1
-    assert not any(field.startswith(tuple("=+-@")) for field in semicolon_fields)
+    assert not any(field.startswith(tuple("=+-@\t")) for field in semicolon_fields)
 
 
 @pytest.mark.asyncio

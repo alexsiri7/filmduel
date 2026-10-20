@@ -47,6 +47,15 @@ class TestSanitizeCsvCell:
     def test_safe_semicolon_passthrough(self):
         assert _sanitize_csv_cell("Heat; The Movie") == "Heat; The Movie"
 
+    def test_formula_after_semicolon_and_quotes(self):
+        assert _sanitize_csv_cell('X;""=CMD()') == 'X;""\'=CMD()'
+
+    def test_formula_after_line_breaks(self):
+        assert _sanitize_csv_cell("X\n=A\r+B\r\n@C") == "X\n'=A\r'+B\r\n'@C"
+
+    def test_crlf_followed_by_safe_text_passthrough(self):
+        assert _sanitize_csv_cell("X\r\nY") == "X\r\nY"
+
 
 # ---------------------------------------------------------------------------
 # parse_decade (Item 8)
