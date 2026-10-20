@@ -61,8 +61,22 @@ describe("PrivacyPolicy", () => {
     expect(screen.getByText("Railway")).toBeInTheDocument();
     expect(screen.getByText("Supabase")).toBeInTheDocument();
     expect(screen.getByText("IP address")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /Changes We Make to Your Trakt Account/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Changes We Make to Your Trakt or SIMKL Account/ })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /Who Can See Your Data/ })).toBeInTheDocument();
     expect(screen.getByText(/if you attach one, a screenshot/)).toBeInTheDocument();
+  });
+
+  it("matches the code on Redis, TMDB posters, the AI toggle and SIMKL write-back (#780)", () => {
+    render(
+      <MemoryRouter>
+        <PrivacyPolicy />
+      </MemoryRouter>
+    );
+    expect(screen.getByText("Redis")).toBeInTheDocument();
+    expect(screen.getByText(/never written to our main database/)).toBeInTheDocument();
+    expect(screen.getByText(/TMDB receives your IP address/)).toBeInTheDocument();
+    expect(screen.getByText(/Turn off "AI Suggestions"/)).toBeInTheDocument();
+    expect(screen.getByText(/Apart from the ratings you choose to sync/)).toBeInTheDocument();
+    expect(screen.queryByText(/does not currently write anything to SIMKL/)).toBeNull();
   });
 });
