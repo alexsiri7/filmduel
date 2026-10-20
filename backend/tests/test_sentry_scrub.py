@@ -64,6 +64,15 @@ class TestRedactText:
             "For more information check: https://developer.mozilla.org/404"
         )
 
+    def test_uuids_are_redacted(self):
+        user_id = uuid.uuid4()
+        assert _redact_text(f"Pool import failed for user {user_id}") == (
+            "Pool import failed for user [Filtered]"
+        )
+        assert _redact_text(f"user_id={str(user_id).upper()} reason=same") == (
+            "user_id=[Filtered] reason=same"
+        )
+
     def test_text_without_urls_is_unchanged(self):
         assert _redact_text("Failed to fetch get_popular") == "Failed to fetch get_popular"
 
@@ -242,6 +251,22 @@ def test_logged_http_status_error_carries_no_provider_secrets(sentry_events):
     assert b"HTTPStatusError" in payload
     assert _TMDB_KEY.encode() not in payload
     assert _TRAKT_USER.encode() not in payload
+
+
+def test_logged_user_id_does_not_reach_sentry(sentry_events):
+    """Sentry keeps events after account deletion, so logged user ids must not reach it."""
+    user_id = uuid.uuid4()
+    log = logging.getLogger("backend.tests.sentry_scrub")
+    log.warning("duel_rejection user_id=%s reason=%s", user_id, "same_movie")
+    try:
+        raise RuntimeError("boom")
+    except RuntimeError:
+        log.exception("Pool import failed for user %s", user_id)
+
+    payload = _sent_payload(sentry_events)
+    assert b"Pool import failed for user [Filtered]" in payload
+    assert b"duel_rejection user_id=[Filtered] reason=same_movie" in payload
+    assert str(user_id).encode() not in payload
 
 
 def test_real_sdk_event_carries_no_request_body(sentry_events):

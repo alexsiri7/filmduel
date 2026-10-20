@@ -57,7 +57,7 @@ export default function PrivacyPolicy() {
             <li>• <strong className="text-[#F5F0E8]">Redis</strong> — Holds the rate-limit counters, keyed by your IP address for requests made before you sign in, until each counter's time window ends (at most one day)</li>
             <li>• <strong className="text-[#F5F0E8]">TMDB</strong> — Movie metadata and poster images. Your browser loads poster images directly from TMDB's image server (image.tmdb.org), so TMDB receives your IP address, your browser's user agent and which posters you view — from which it could infer the films in your duels, rankings and suggestions — along with FilmDuel's site address (not the page you are on)</li>
             <li>• <strong className="text-[#F5F0E8]">Requesty.ai (LLM gateway)</strong> — Routes AI requests to underlying models (e.g. Google Gemini). Prompts are not stored by Requesty.ai. EU-hosted (Frankfurt). GDPR DPA available on request.</li>
-            <li>• <strong className="text-[#F5F0E8]">Sentry</strong> — Error tracking and application monitoring. Error reports and performance traces are scrubbed before sending: they exclude request bodies (such as feedback text), sign-in codes and other query strings, cookies, and account names, but may include the API path requested and your browser's user agent.</li>
+            <li>• <strong className="text-[#F5F0E8]">Sentry</strong> — Error tracking and application monitoring. Error reports and performance traces are scrubbed before sending: they exclude request bodies (such as feedback text), sign-in codes and other query strings, cookies, and account names and IDs, but may include the API path requested and your browser's user agent.</li>
           </ul>
         </section>
 
