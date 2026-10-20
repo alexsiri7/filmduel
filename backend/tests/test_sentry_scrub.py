@@ -220,7 +220,11 @@ def test_real_sdk_event_carries_no_provider_secrets(sentry_events):
 
 
 def test_logged_http_status_error_carries_no_provider_secrets(sentry_events):
-    """httpx puts the request URL in HTTPStatusError's text; logging one must not ship it."""
+    """httpx puts the request URL in HTTPStatusError's text; logging one must not ship it to Sentry.
+
+    This covers the Sentry channel only: stdout still renders the exception text, which is
+    why ``_safe_fetch`` logs ``_describe_failure`` instead of the exception itself.
+    """
     client = httpx.Client(transport=httpx.MockTransport(lambda req: httpx.Response(404)))
     log = logging.getLogger("backend.tests.sentry_scrub")
     for url in (
