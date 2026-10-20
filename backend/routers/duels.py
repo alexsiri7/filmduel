@@ -80,7 +80,7 @@ async def submit_duel(
         await db.rollback()
         raise HTTPException(status_code=409, detail="Duel already recorded")
 
-    # Trakt sync in background (fire-and-forget)
+    # Rating sync in background (fire-and-forget)
     if (
         outcome in ("a_wins", "b_wins")
         and result.new_elo_a is not None

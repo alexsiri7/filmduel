@@ -526,7 +526,7 @@ async def submit_match_result_endpoint(
         uid,
     )
 
-    # Same fire-and-forget Trakt sync a regular duel gets (FD-040)
+    # Same fire-and-forget rating sync a regular duel gets (FD-040)
     background_tasks.add_task(
         sync_ratings_background,
         uid,

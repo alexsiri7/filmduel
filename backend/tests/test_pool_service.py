@@ -12,6 +12,7 @@ from sqlalchemy.sql import Select
 from sqlalchemy.sql.dml import Insert, Update
 
 from sqlalchemy import Column
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.sql.elements import BindParameter
 
 from backend.services.pool import (
@@ -223,6 +224,22 @@ class TestBuildMovieUpsertSimkl:
         stmt = build_movie_upsert(movie_data, now, media_type="show", simkl_id=12345)
         params = stmt.compile().params
         assert params["media_type"] == "show"
+
+    @staticmethod
+    def _update_set_sql(stmt) -> str:
+        return str(stmt.compile(dialect=postgresql.dialect())).split("DO UPDATE SET", 1)[1]
+
+    def test_trakt_upsert_keeps_existing_simkl_id(self):
+        """A Trakt upsert has no SIMKL id, so it must not overwrite one with NULL."""
+        now = datetime.now(timezone.utc)
+        stmt = build_movie_upsert({"ids": {"trakt": 5}, "title": "X"}, now, "movie")
+        assert "simkl_id" not in self._update_set_sql(stmt)
+
+    def test_simkl_upsert_updates_simkl_id(self):
+        """A SIMKL upsert writes its SIMKL id onto an existing row."""
+        now = datetime.now(timezone.utc)
+        stmt = build_movie_upsert(self._make_movie_data(simkl_id=7), now, "movie", simkl_id=7)
+        assert "simkl_id" in self._update_set_sql(stmt)
 
 
 # ---------------------------------------------------------------------------

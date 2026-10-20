@@ -1,4 +1,4 @@
-"""Tests for sync service — _rate_with_retry."""
+"""Tests for sync service — _rate_with_retry and the provider pushes."""
 
 from __future__ import annotations
 
@@ -7,11 +7,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from backend.services.sync import _rate_with_retry, sync_post_duel
+from backend.services.sync import _rate_with_retry, sync_post_duel, sync_post_duel_simkl
 
 
 def _make_client(side_effects=None):
-    """Build a mock TraktClient whose rate() method uses the given side_effects."""
+    """Build a mock provider client whose rate() method uses the given side_effects."""
     client = AsyncMock()
     if side_effects is not None:
         client.rate.side_effect = side_effects
@@ -30,7 +30,7 @@ class TestRateWithRetry:
     async def test_succeeds_on_first_attempt(self):
         """When rate() succeeds immediately, it is only called once."""
         client = _make_client()
-        await _rate_with_retry(client, trakt_id=123, rating=8, media_type="movie")
+        await _rate_with_retry(client, item_id=123, rating=8, media_type="movie")
         client.rate.assert_awaited_once_with(123, 8, media_type="movie")
 
     @pytest.mark.asyncio
@@ -39,7 +39,7 @@ class TestRateWithRetry:
         client = _make_client(
             side_effects=[_http_error(503), None]  # fail then succeed
         )
-        await _rate_with_retry(client, trakt_id=456, rating=7, media_type="movie")
+        await _rate_with_retry(client, item_id=456, rating=7, media_type="movie")
         assert client.rate.await_count == 2
 
     @pytest.mark.asyncio
@@ -48,7 +48,7 @@ class TestRateWithRetry:
         client = _make_client(
             side_effects=[_http_error(422)]
         )
-        await _rate_with_retry(client, trakt_id=789, rating=5, media_type="movie")
+        await _rate_with_retry(client, item_id=789, rating=5, media_type="movie")
         # Should return after first attempt without retrying
         assert client.rate.await_count == 1
 
@@ -59,7 +59,7 @@ class TestRateWithRetry:
             side_effects=[_http_error(500), _http_error(500)]
         )
         # Should not raise — errors are logged and swallowed
-        await _rate_with_retry(client, trakt_id=1, rating=3, media_type="movie")
+        await _rate_with_retry(client, item_id=1, rating=3, media_type="movie")
         assert client.rate.await_count == 2
 
     @pytest.mark.asyncio
@@ -68,14 +68,14 @@ class TestRateWithRetry:
         client = _make_client(
             side_effects=[RuntimeError("unexpected")]
         )
-        await _rate_with_retry(client, trakt_id=99, rating=6, media_type="movie")
+        await _rate_with_retry(client, item_id=99, rating=6, media_type="movie")
         assert client.rate.await_count == 1
 
     @pytest.mark.asyncio
     async def test_passes_media_type_to_client(self):
         """media_type kwarg is forwarded to the underlying client.rate() call."""
         client = _make_client()
-        await _rate_with_retry(client, trakt_id=10, rating=9, media_type="show")
+        await _rate_with_retry(client, item_id=10, rating=9, media_type="show")
         client.rate.assert_awaited_once_with(10, 9, media_type="show")
 
 
@@ -91,4 +91,19 @@ async def test_sync_post_duel_rates_by_percentile_of_population():
     assert client.rate.await_args_list == [
         ((111, 8), {"media_type": "show"}),
         ((222, 3), {"media_type": "show"}),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_sync_post_duel_simkl_rates_by_percentile_of_population():
+    """Each dueled title is pushed to SIMKL at its percentile rating within sorted_elos."""
+    client = AsyncMock()
+    with patch("backend.services.sync.SimklClient", return_value=client):
+        await sync_post_duel_simkl(
+            "token", [(333, 1100), (444, 900)], [900, 1100], media_type="show"
+        )
+
+    assert client.rate.await_args_list == [
+        ((333, 8), {"media_type": "show"}),
+        ((444, 3), {"media_type": "show"}),
     ]

@@ -33,7 +33,8 @@ def build_movie_upsert(
 
     When *simkl_id* is provided the SIMKL ID is stored in both the trakt_id
     column (for compatibility) and the dedicated simkl_id column, and
-    community_rating is left as None (SIMKL does not provide it).
+    community_rating is left as None (SIMKL does not provide it). An upsert
+    without *simkl_id* leaves an existing row's simkl_id untouched.
     """
     ids = movie_data.get("ids", {})
     if simkl_id is not None:
@@ -60,6 +61,8 @@ def build_movie_upsert(
     update_set = {
         k: v for k, v in values.items() if k not in ("trakt_id", "media_type")
     }
+    if simkl_id is None:
+        update_set.pop("simkl_id")
     stmt = (
         insert(Movie.__table__)
         .values(**values)

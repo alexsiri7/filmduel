@@ -1,4 +1,4 @@
-"""Rating sync service — pushes ELO-derived ratings to Trakt."""
+"""Rating sync service — pushes ELO-derived ratings to Trakt and SIMKL."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from backend.db import async_session_factory
 from backend.db_models import Movie, User
 from backend.services.elo import elo_to_rating
 from backend.services.rankings import get_ranked_elos
+from backend.services.simkl import SimklClient
 from backend.services.token_refresh import (
     ensure_fresh_token,
     trakt_token_needs_refresh,
@@ -24,26 +25,30 @@ logger = logging.getLogger(__name__)
 
 
 async def _rate_with_retry(
-    client: TraktClient, trakt_id: int, rating: int, media_type: str = "movie"
+    client: TraktClient | SimklClient,
+    item_id: int,
+    rating: int,
+    media_type: str = "movie",
+    provider: str = "Trakt",
 ) -> None:
-    """Submit a single rating to Trakt, retrying once on 5xx."""
+    """Submit a single rating to the provider, retrying once on 5xx."""
     for attempt in range(2):
         try:
-            await client.rate(trakt_id, rating, media_type=media_type)
+            await client.rate(item_id, rating, media_type=media_type)
             return
         except httpx.HTTPStatusError as exc:
             status = exc.response.status_code
             if status >= 500 and attempt == 0:
                 logger.warning(
-                    "Trakt 5xx (status=%d) for trakt_id=%s, retrying", status, trakt_id
+                    "%s 5xx (status=%d) for id=%s, retrying", provider, status, item_id
                 )
                 continue
             logger.error(
-                "Failed to sync rating for trakt_id=%s: HTTP %d", trakt_id, status
+                "Failed to sync %s rating for id=%s: HTTP %d", provider, item_id, status
             )
             return
         except Exception:
-            logger.exception("Unexpected error syncing trakt_id=%s", trakt_id)
+            logger.exception("Unexpected error syncing %s id=%s", provider, item_id)
             return
 
 
@@ -69,6 +74,23 @@ async def sync_post_duel(
         await _rate_with_retry(client, trakt_id, rating, media_type)
 
 
+async def sync_post_duel_simkl(
+    access_token: str,
+    movie_ratings: list[tuple[int, float]],
+    sorted_elos: Sequence[float],
+    media_type: str = "movie",
+) -> None:
+    """Sync two specific movie/show ratings to SIMKL after a duel.
+
+    Args mirror sync_post_duel; ids are SIMKL ids.
+    """
+    settings = get_settings()
+    client = SimklClient(client_id=settings.SIMKL_CLIENT_ID, access_token=access_token)
+    for simkl_id, elo in movie_ratings:
+        rating = elo_to_rating(elo, sorted_elos)
+        await _rate_with_retry(client, simkl_id, rating, media_type, provider="SIMKL")
+
+
 async def sync_ratings_background(
     user_id: uuid.UUID,
     movie_a_id: uuid.UUID,
@@ -76,46 +98,70 @@ async def sync_ratings_background(
     movie_b_id: uuid.UUID,
     new_elo_b: float,
 ) -> None:
-    """Fire-and-forget Trakt rating sync after a duel with a winner."""
+    """Fire-and-forget rating sync to every provider the user enabled, after a duel with a winner."""
     try:
         async with async_session_factory() as session:
             user_stmt = select(User).where(User.id == user_id)
             result = await session.execute(user_stmt)
             user = result.scalar_one_or_none()
-            if (
-                not user
-                or not user.trakt_access_token
-                or not user.sync_ratings_to_trakt
-            ):
+            if not user:
                 return
-            if trakt_token_needs_refresh(user):
+            sync_trakt = bool(user.sync_ratings_to_trakt and user.trakt_access_token)
+            sync_simkl = bool(user.sync_ratings_to_simkl and user.simkl_access_token)
+            if not (sync_trakt or sync_simkl):
+                return
+            simkl_token = user.simkl_access_token if sync_simkl else None
+            if sync_trakt and trakt_token_needs_refresh(user):
                 # Lock the user row only to serialize the (rare) token refresh:
                 # an unconditional FOR UPDATE made every post-duel sync queue on
                 # the row and hold a pooled connection while it waited.
-                result = await session.execute(
-                    user_stmt.with_for_update().execution_options(populate_existing=True)
-                )
-                user = result.scalar_one()
-                user = await ensure_fresh_token(user, session)
+                try:
+                    result = await session.execute(
+                        user_stmt.with_for_update().execution_options(
+                            populate_existing=True
+                        )
+                    )
+                    user = result.scalar_one()
+                    user = await ensure_fresh_token(user, session)
+                except Exception:
+                    # A Trakt failure must not cost the user their SIMKL push.
+                    logger.exception(
+                        "Trakt token refresh failed for user %s; skipping Trakt sync",
+                        user_id,
+                    )
+                    await session.rollback()
+                    sync_trakt = False
+                    if not sync_simkl:
+                        return
             # End the read transaction so no connection is held idle in it.
             await session.commit()
-            access_token = user.trakt_access_token
-            movies_stmt = select(Movie.id, Movie.trakt_id, Movie.media_type).where(
-                Movie.id.in_([movie_a_id, movie_b_id])
-            )
+            trakt_token = user.trakt_access_token if sync_trakt else None
+            movies_stmt = select(
+                Movie.id, Movie.trakt_id, Movie.simkl_id, Movie.media_type
+            ).where(Movie.id.in_([movie_a_id, movie_b_id]))
             result = await session.execute(movies_stmt)
             rows = result.all()
-            trakt_map = {row.id: row.trakt_id for row in rows}
             # Both movies in a duel are the same media_type
             media_type = rows[0].media_type if rows else "movie"
             sorted_elos = await get_ranked_elos(session, user_id, media_type)
-        movie_ratings = []
-        if movie_a_id in trakt_map:
-            movie_ratings.append((trakt_map[movie_a_id], new_elo_a))
-        if movie_b_id in trakt_map:
-            movie_ratings.append((trakt_map[movie_b_id], new_elo_b))
-        if movie_ratings:
-            await sync_post_duel(access_token, movie_ratings, sorted_elos, media_type)
+        rows_by_id = {row.id: row for row in rows}
+        dueled = [
+            (rows_by_id[movie_id], elo)
+            for movie_id, elo in ((movie_a_id, new_elo_a), (movie_b_id, new_elo_b))
+            if movie_id in rows_by_id
+        ]
+        if sync_trakt:
+            trakt_ratings = [(row.trakt_id, elo) for row, elo in dueled]
+            if trakt_ratings:
+                await sync_post_duel(trakt_token, trakt_ratings, sorted_elos, media_type)
+        if sync_simkl:
+            simkl_ratings = [
+                (row.simkl_id, elo) for row, elo in dueled if row.simkl_id is not None
+            ]
+            if simkl_ratings:
+                await sync_post_duel_simkl(
+                    simkl_token, simkl_ratings, sorted_elos, media_type
+                )
     except Exception:
         logger.exception(
             "Background rating sync failed for user %s (token refresh or sync error)",

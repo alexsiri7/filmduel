@@ -2,7 +2,7 @@
 
 ## Overview
 
-FilmDuel is a web app that helps users discover and rank movies and TV shows through pairwise comparisons. Users authenticate with their Trakt or SIMKL account, toggle between Movies and TV Shows via the nav bar, classify films rapidly via a Tinder-style swipe session, then duel seen films against each other to build an ELO-ranked library. ELO ratings can optionally sync back to Trakt in real time when the user enables the "Sync to Trakt" toggle.
+FilmDuel is a web app that helps users discover and rank movies and TV shows through pairwise comparisons. Users authenticate with their Trakt or SIMKL account, toggle between Movies and TV Shows via the nav bar, classify films rapidly via a Tinder-style swipe session, then duel seen films against each other to build an ELO-ranked library. ELO ratings can optionally sync back to Trakt and/or SIMKL in real time when the user enables the "Sync to Trakt" and/or "Sync to SIMKL" toggle.
 
 The experience has two distinct modes that alternate naturally:
 - **Swipe** — fast, mindless sorting. Seen it or not?
@@ -497,7 +497,7 @@ GET  /api/stats
 
 ---
 
-## Rating Sync to Trakt
+## Rating Sync to Trakt and SIMKL
 
 Fire-and-forget after every `a_wins` or `b_wins`.
 
@@ -510,6 +510,8 @@ trakt-api-version: 2
 ```
 
 Retry once on 5xx. On 401: refresh token then retry. Log failures to Sentry.
+
+With "Sync to SIMKL" on, the same scores go to SIMKL's `POST https://api.simkl.com/sync/ratings` by SIMKL id (`{ "movies": [{ "rating": 8, "ids": { "simkl": 12345 } }] }`); titles without a SIMKL id are skipped. Each provider is pushed independently: a Trakt failure never blocks the SIMKL push.
 
 ---
 

@@ -375,16 +375,17 @@ requirements:
 
   - id: FD-030
     title: Opt-in post-duel rating sync
-    statement: "When a duel produces a winner and the user has sync_ratings_to_trakt enabled, the system shall push both films' updated 1-10 ratings to Trakt as a fire-and-forget background task, refreshing the token first, retrying once on 5xx, and logging (never surfacing) failures."
+    statement: "When a duel produces a winner, for each provider the user has enabled (sync_ratings_to_trakt, sync_ratings_to_simkl), the system shall push both films' updated 1-10 ratings to that provider as a fire-and-forget background task, refreshing the Trakt token first, retrying once on 5xx, and logging (never surfacing) failures."
     category: functional
     priority: must
     status: active
     source: back-ported
     acceptance:
       - "No sync occurs when sync_ratings_to_trakt=false (the default)"
+      - "No SIMKL sync occurs when sync_ratings_to_simkl=false (the default); titles without a SIMKL id are skipped"
       - "A Trakt 5xx triggers exactly one retry; failures are logged/captured without failing the duel response"
       - "The duel API response is not delayed by sync (BackgroundTasks)"
-    notes: "An analogous SIMKL path exists (sync_post_duel_simkl / sync_ratings_to_simkl toggle)."
+    notes: "SIMKL ratings are keyed by movies.simkl_id; SIMKL has no token refresh flow."
 
   # ── Rankings & export ───────────────────────────────────────────────────
 

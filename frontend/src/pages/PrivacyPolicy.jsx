@@ -24,7 +24,7 @@ export default function PrivacyPolicy() {
             <li>• <strong className="text-[#F5F0E8]">Duel choices and ELO rankings</strong> generated through your matchup decisions, plus your swipe answers, tournaments and responses to Watch Suggestions</li>
             <li>• <strong className="text-[#F5F0E8]">Taste profiles</strong> — film titles, years, genres, and preference tiers (top/bottom ranked films, genre affinities) — sent to AI providers for personalized recommendations</li>
             <li>• <strong className="text-[#F5F0E8]">Feedback reports</strong> you choose to send: a title, a description and, if you attach one, a screenshot (stored encrypted at rest)</li>
-            <li>• <strong className="text-[#F5F0E8]">IP address</strong> — used to rate-limit requests made before you sign in (the counters are held in memory, expire when the limit's time window ends — at most one day — and are never written to our database), and recorded in our hosting provider's request logs</li>
+            <li>• <strong className="text-[#F5F0E8]">IP address</strong> — used to rate-limit requests made before you sign in. The rate-limit counters are kept in Redis (see Third-Party Services), or in the application's memory if Redis is unavailable; they expire when the limit's time window ends — at most one day — and are never written to our main database. Your IP address is also recorded in our hosting provider's request logs</li>
             <li>• <strong className="text-[#F5F0E8]">Error reports</strong> sent to Sentry for application stability</li>
             <li>• <strong className="text-[#F5F0E8]">Session cookies</strong> (strictly necessary, httponly, samesite=lax)</li>
           </ul>
@@ -50,11 +50,12 @@ export default function PrivacyPolicy() {
             Third-Party Services
           </h2>
           <ul className="space-y-2 text-[#d6c4ae] text-sm font-body">
-            <li>• <strong className="text-[#F5F0E8]">Trakt</strong> — OAuth authentication and watch history import; optional write-back of ratings and watchlist entries (see "Changes We Make to Your Trakt Account")</li>
-            <li>• <strong className="text-[#F5F0E8]">SIMKL</strong> — OAuth authentication and watch history and ratings import, if you sign in with SIMKL</li>
+            <li>• <strong className="text-[#F5F0E8]">Trakt</strong> — OAuth authentication and watch history import; optional write-back of ratings and watchlist entries (see "Changes We Make to Your Trakt or SIMKL Account")</li>
+            <li>• <strong className="text-[#F5F0E8]">SIMKL</strong> — OAuth authentication and watch history and ratings import, if you sign in with SIMKL; optional write-back of ratings (see "Changes We Make to Your Trakt or SIMKL Account")</li>
             <li>• <strong className="text-[#F5F0E8]">Railway</strong> — Hosts the FilmDuel application. Every request passes through Railway, which keeps request logs including your IP address</li>
             <li>• <strong className="text-[#F5F0E8]">Supabase</strong> — Hosts the FilmDuel database, where all the data listed above is stored</li>
-            <li>• <strong className="text-[#F5F0E8]">TMDB</strong> — Movie poster images and metadata</li>
+            <li>• <strong className="text-[#F5F0E8]">Redis</strong> — Holds the rate-limit counters, keyed by your IP address for requests made before you sign in, until each counter's time window ends (at most one day)</li>
+            <li>• <strong className="text-[#F5F0E8]">TMDB</strong> — Movie metadata and poster images. Your browser loads poster images directly from TMDB's image server (image.tmdb.org), so TMDB receives your IP address, your browser's user agent and which posters you view — from which it could infer the films in your duels, rankings and suggestions — along with FilmDuel's site address (not the page you are on)</li>
             <li>• <strong className="text-[#F5F0E8]">Requesty.ai (LLM gateway)</strong> — Routes AI requests to underlying models (e.g. Google Gemini). Prompts are not stored by Requesty.ai. EU-hosted (Frankfurt). GDPR DPA available on request.</li>
             <li>• <strong className="text-[#F5F0E8]">Sentry</strong> — Error tracking and application monitoring. Error reports and performance traces are scrubbed before sending: they exclude request bodies (such as feedback text), sign-in codes and other query strings, cookies, and account names, but may include the API path requested and your browser's user agent.</li>
           </ul>
@@ -64,14 +65,14 @@ export default function PrivacyPolicy() {
 
         <section className="mb-10">
           <h2 className="font-headline font-bold text-lg text-[#F5F0E8] uppercase tracking-wider mb-4">
-            Changes We Make to Your Trakt Account
+            Changes We Make to Your Trakt or SIMKL Account
           </h2>
           <ul className="space-y-2 text-[#d6c4ae] text-sm font-body">
-            <li>• <strong className="text-[#F5F0E8]">Ratings</strong> — only if you turn on rating sync in settings, FilmDuel writes a 1–10 rating, derived from each film's position in your rankings, to your Trakt account after duels. It is off unless you turn it on.</li>
-            <li>• <strong className="text-[#F5F0E8]">Watchlist</strong> — when you add a Watch Suggestion to your watchlist, FilmDuel adds that film to your Trakt watchlist.</li>
+            <li>• <strong className="text-[#F5F0E8]">Ratings</strong> — only if you turn on rating sync for that service in settings ("Sync to Trakt" or "Sync to SIMKL"), FilmDuel writes a 1–10 rating, derived from each film's position in your rankings, to that account after duels. Each is off unless you turn it on.</li>
+            <li>• <strong className="text-[#F5F0E8]">Watchlist</strong> — when you add a Watch Suggestion to your watchlist, FilmDuel adds that film to your Trakt watchlist (Trakt accounts only).</li>
           </ul>
           <p className="text-[#d6c4ae] text-sm font-body leading-relaxed mt-4">
-            FilmDuel does not currently write anything to SIMKL.
+            Apart from the ratings you choose to sync, FilmDuel does not write anything to SIMKL.
           </p>
         </section>
 
@@ -120,11 +121,12 @@ export default function PrivacyPolicy() {
             No account identifiers (username, user ID, email) are included in AI requests.
           </p>
           <p className="text-[#d6c4ae] text-sm font-body leading-relaxed">
-            <strong className="text-[#F5F0E8]">Opt-out:</strong> You can decline or revoke
-            privacy policy consent at any time. Revoking consent disables AI-powered
-            features (Watch Suggestions and AI-Curated Tournaments) while all other
-            FilmDuel features remain available. To revoke consent, delete your account
-            or contact us via GitHub.
+            <strong className="text-[#F5F0E8]">Opt-out:</strong> Turn off "AI Suggestions" in
+            the settings panel of the desktop navigation at any time. While it is off, nothing is
+            sent to Requesty.ai: Watch Suggestions and AI-Curated Tournaments are unavailable, and
+            every other FilmDuel feature keeps working. You can turn it back on whenever you like.
+            Withdrawing your consent to this policy — by deleting your account or contacting us via
+            GitHub — also stops all AI processing.
           </p>
         </section>
 
