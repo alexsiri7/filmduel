@@ -19,7 +19,11 @@ from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from backend.config import detected_proxy_platform, get_settings
+from backend.config import (
+    detected_proxy_platform,
+    get_settings,
+    is_cleartext_public_redis_uri,
+)
 from backend.middleware.body_limit import BodyLimitMiddleware
 from backend.rate_limit import limiter
 from backend.scheduler import build_scheduler
@@ -164,6 +168,14 @@ async def lifespan(app: FastAPI):
     detected = detected_proxy_platform()
     if settings.RATE_LIMIT_STORAGE_URI:
         logger.info("rate_limit_storage: redis (shared, survives restarts)")
+        if is_cleartext_public_redis_uri(settings.RATE_LIMIT_STORAGE_URI):
+            logger.warning(
+                "rate_limit_storage_cleartext: RATE_LIMIT_STORAGE_URI uses redis:// (no TLS) "
+                "to a host that is not loopback, a private IP or an internal hostname, so "
+                "rate-limit keys (client IPs, user IDs) cross the network in plaintext. Use "
+                "rediss:// or a private-network address (on Railway, ${{Redis.REDIS_URL}}, "
+                "not REDIS_PUBLIC_URL) (SEC-26, #798)."
+            )
     elif detected:
         logger.warning(
             "rate_limit_storage_unset: detected platform env var %r but "

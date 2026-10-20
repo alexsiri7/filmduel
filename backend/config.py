@@ -114,6 +114,34 @@ def _is_loopback_origin(origin: str) -> bool:
     return ip.is_loopback or ip.is_unspecified
 
 
+_PRIVATE_HOST_SUFFIXES = (".localhost", ".internal", ".local", ".home.arpa")
+
+
+def is_cleartext_public_redis_uri(uri: str) -> bool:
+    """True when uri is plain redis:// (no TLS) to a host not recognisably private (SEC-26, #798).
+
+    Judged from the URI text only (no DNS): loopback, private and link-local IP
+    literals, single-label names, localhost and the .internal/.local/.home.arpa
+    suffixes (e.g. Railway's *.railway.internal) count as private.
+    """
+    parsed = urlparse(uri)
+    if parsed.scheme != "redis":
+        return False
+    host = (parsed.hostname or "").lower().rstrip(".")
+    # IP literals first: an IPv6 literal has no dot and would pass as a single-label name.
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        private_name = (
+            not host
+            or host == "localhost"
+            or "." not in host
+            or host.endswith(_PRIVATE_HOST_SUFFIXES)
+        )
+        return not private_name
+    return not (ip.is_private or ip.is_loopback or ip.is_link_local)
+
+
 def _is_bare_origin(origin: str) -> bool:
     """True when the entry is exactly scheme://host[:port], the only shape a browser's Origin takes."""
     parsed = urlparse(origin)
@@ -354,6 +382,8 @@ class Settings(BaseSettings):
     # Rate-limit counter storage (slowapi). Empty = per-process in-memory (counters
     # reset on restart and are not shared across replicas). Set to a redis:// URI
     # so limits survive restarts and are shared by all instances (SEC-04, #572).
+    # Plain redis:// to a non-private host logs a startup warning; prefer rediss://
+    # or a private-network host (SEC-26, #798).
     RATE_LIMIT_STORAGE_URI: str = ""
 
     @field_validator("RATE_LIMIT_STORAGE_URI", mode="before")

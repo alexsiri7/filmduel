@@ -12,7 +12,11 @@ from fastapi import FastAPI
 from pydantic import ValidationError
 
 import backend.config
-from backend.config import Settings, database_connect_args
+from backend.config import (
+    Settings,
+    database_connect_args,
+    is_cleartext_public_redis_uri,
+)
 from backend.config import _PROXY_PLATFORM_ENV_VARS as _PROXY_PLATFORM_ENV_VARS_PROD
 
 
@@ -666,6 +670,87 @@ class TestRateLimitStorageStartupWarning:
             for r in caplog.records
         ), "Redis confirmation must not depend on hosted-platform detection"
         assert "127.0.0.1:1" not in caplog.text, "URI must never be logged"
+
+    @pytest.mark.asyncio
+    async def test_cleartext_warning_for_public_host_never_logs_uri(self, monkeypatch, caplog):
+        for var in self._PROXY_PLATFORM_ENV_VARS:
+            monkeypatch.delenv(var, raising=False)
+
+        await _run_lifespan(
+            _make_settings(
+                RATE_LIMIT_STORAGE_URI="redis://default:s3cret@redis.example.com:6379/0"
+            ),
+            caplog,
+        )
+
+        assert any(
+            r.levelno == logging.WARNING and "rate_limit_storage_cleartext" in r.message
+            for r in caplog.records
+        ), "Expected rate_limit_storage_cleartext warning"
+        assert "s3cret" not in caplog.text, "URI must never be logged"
+        assert "redis.example.com" not in caplog.text, "URI must never be logged"
+
+    @pytest.mark.asyncio
+    async def test_no_cleartext_warning_for_tls_uri(self, monkeypatch, caplog):
+        for var in self._PROXY_PLATFORM_ENV_VARS:
+            monkeypatch.delenv(var, raising=False)
+
+        await _run_lifespan(
+            _make_settings(RATE_LIMIT_STORAGE_URI="rediss://redis.example.com:6380/0"),
+            caplog,
+        )
+
+        assert "rate_limit_storage_cleartext" not in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_no_cleartext_warning_for_private_host(self, monkeypatch, caplog):
+        """The recommended Railway URI (${{Redis.REDIS_URL}}) is cleartext but private."""
+        for var in self._PROXY_PLATFORM_ENV_VARS:
+            monkeypatch.delenv(var, raising=False)
+
+        await _run_lifespan(
+            _make_settings(
+                RATE_LIMIT_STORAGE_URI="redis://default:pw@redis.railway.internal:6379/0"
+            ),
+            caplog,
+        )
+
+        assert "rate_limit_storage: redis" in caplog.text
+        assert "rate_limit_storage_cleartext" not in caplog.text
+
+
+class TestCleartextPublicRedisUri:
+    """SEC-26 (#798): plain redis:// is flagged only when the host is not recognisably private."""
+
+    @pytest.mark.parametrize(
+        "uri",
+        [
+            "redis://default:pw@redis.railway.internal:6379",
+            "redis://10.0.0.5:6379/0",
+            "redis://[fd12::1]:6379",
+            "redis://redis:6379",
+            "redis://127.0.0.1:1/0",
+            "redis://localhost",
+            "redis://",
+            "rediss://redis.example.com:6380",
+            "redis+unix:///tmp/redis.sock",
+        ],
+    )
+    def test_not_flagged(self, uri):
+        assert not is_cleartext_public_redis_uri(uri)
+
+    @pytest.mark.parametrize(
+        "uri",
+        [
+            "redis://default:pw@monorail.proxy.rlwy.net:12345",
+            "redis://redis.example.com:6379",
+            "redis://8.8.8.8:6379",
+            # an IPv6 literal has no dot, so it must not pass as a single-label name
+            "redis://[2606:4700::1]:6379",
+        ],
+    )
+    def test_flagged(self, uri):
+        assert is_cleartext_public_redis_uri(uri)
 
 
 class TestTmdbAuthStartupWarning:
