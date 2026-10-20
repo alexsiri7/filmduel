@@ -38,6 +38,15 @@ class TestSanitizeCsvCell:
     def test_safe_string_passthrough(self):
         assert _sanitize_csv_cell("Normal Title") == "Normal Title"
 
+    def test_formula_after_semicolon(self):
+        assert _sanitize_csv_cell('Heat;=HYPERLINK("x")') == 'Heat;\'=HYPERLINK("x")'
+
+    def test_every_semicolon_field_start(self):
+        assert _sanitize_csv_cell("=A;+B;C;@D") == "'=A;'+B;C;'@D"
+
+    def test_safe_semicolon_passthrough(self):
+        assert _sanitize_csv_cell("Heat; The Movie") == "Heat; The Movie"
+
 
 # ---------------------------------------------------------------------------
 # parse_decade (Item 8)

@@ -213,6 +213,30 @@ async def test_export_rankings_csv_sanitizes_formula_title():
 
 
 @pytest.mark.asyncio
+async def test_export_rankings_csv_semicolon_locale_cannot_start_formula():
+    """Re-split on ";" as semicolon-locale spreadsheets do, no field may start a formula."""
+    fake_ums = [
+        _make_export_user_movie('Heat;=HYPERLINK("http://x")', 2020, "tt1;@x", 1000)
+    ]
+
+    mock_result = MagicMock()
+    mock_result.unique.return_value.scalars.return_value.all.return_value = fake_ums
+    mock_result.all.return_value = [_rating_row(um.elo, 0, 1, 1) for um in fake_ums]
+    db = AsyncMock()
+    db.execute.return_value = mock_result
+
+    csv_content = await export_rankings_csv(db, uuid.uuid4(), media_type="movie")
+    semicolon_fields = [
+        field
+        for row in csv.reader(io.StringIO(csv_content), delimiter=";")
+        for field in row
+    ]
+
+    assert len(semicolon_fields) > 1
+    assert not any(field.startswith(tuple("=+-@")) for field in semicolon_fields)
+
+
+@pytest.mark.asyncio
 async def test_export_rankings_csv_rates_by_percentile():
     """Ten films on a narrow ELO range export Rating10 of 10 down to 1."""
     elos = [1342, 1250, 1150, 1100, 1050, 1000, 940, 900, 850, 813]
