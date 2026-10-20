@@ -30,6 +30,8 @@ from backend.services.ranking import ranked_user_movies_stmt
 from backend.services.curator import CurationError
 from backend.services.llm import LLMBusyError
 from backend.services.tournament import (
+    CANDIDATE_POOL_FACTOR,
+    count_filtered_ranked_films,
     create_tournament_bracket,
     curate_and_select_films,
     get_filtered_ranked_films,
@@ -174,7 +176,7 @@ async def get_pool_count(
 ):
     """Return number of ranked films matching the given filter."""
     try:
-        user_movies = await get_filtered_ranked_films(
+        count = await count_filtered_ranked_films(
             db,
             current_user.id,
             filter_type,
@@ -183,10 +185,7 @@ async def get_pool_count(
         )
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid decade format")
-    return {
-        "count": len(user_movies),
-        "max_bracket_size": max_bracket_size(len(user_movies)),
-    }
+    return {"count": count, "max_bracket_size": max_bracket_size(count)}
 
 
 @router.post("", response_model=TournamentSchema)
@@ -223,6 +222,8 @@ async def create_tournament(
             detail="Daily tournament creation limit reached (100 per 24 hours). Please try again later.",
         )
 
+    # The capped length answers both pool checks below exactly as the full
+    # count would: it is at least 24, and a pool of 3x the bracket fills it.
     try:
         user_movies = await get_filtered_ranked_films(
             db,
@@ -230,6 +231,7 @@ async def create_tournament(
             body.filter_type,
             body.filter_value,
             media_type=body.media_type,
+            limit=body.bracket_size * CANDIDATE_POOL_FACTOR,
         )
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid decade format")
@@ -352,6 +354,7 @@ async def regenerate_tournament(
             tournament.filter_type,
             tournament.filter_value,
             media_type=tournament.media_type,
+            limit=tournament.bracket_size * CANDIDATE_POOL_FACTOR,
         )
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid decade format")

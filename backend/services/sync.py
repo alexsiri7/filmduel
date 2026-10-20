@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from collections.abc import Sequence
+from collections.abc import Mapping
 
 import httpx
 from sqlalchemy import select
@@ -12,8 +12,7 @@ from sqlalchemy import select
 from backend.config import get_settings
 from backend.db import async_session_factory
 from backend.db_models import Movie, User
-from backend.services.elo import elo_to_rating
-from backend.services.rankings import get_ranked_elos
+from backend.services.rankings import get_elo_ratings
 from backend.services.simkl import SimklClient
 from backend.services.token_refresh import (
     ensure_fresh_token,
@@ -55,7 +54,7 @@ async def _rate_with_retry(
 async def sync_post_duel(
     access_token: str,
     movie_ratings: list[tuple[int, float]],
-    sorted_elos: Sequence[float],
+    ratings_by_elo: Mapping[float, int],
     media_type: str = "movie",
 ) -> None:
     """Fire-and-forget: sync two specific movie/show ratings to Trakt after a duel.
@@ -63,21 +62,20 @@ async def sync_post_duel(
     Args:
         access_token: User's current Trakt access token.
         movie_ratings: List of (trakt_id, elo) pairs to sync.
-        sorted_elos: The user's ranked ELOs of this media_type, ascending —
-            the population each ELO is rated against.
+        ratings_by_elo: The 1-10 rating of each ELO in movie_ratings, as
+            returned by get_elo_ratings.
         media_type: "movie" or "show".
     """
     settings = get_settings()
     client = TraktClient(client_id=settings.TRAKT_CLIENT_ID, access_token=access_token)
     for trakt_id, elo in movie_ratings:
-        rating = elo_to_rating(elo, sorted_elos)
-        await _rate_with_retry(client, trakt_id, rating, media_type)
+        await _rate_with_retry(client, trakt_id, ratings_by_elo[elo], media_type)
 
 
 async def sync_post_duel_simkl(
     access_token: str,
     movie_ratings: list[tuple[int, float]],
-    sorted_elos: Sequence[float],
+    ratings_by_elo: Mapping[float, int],
     media_type: str = "movie",
 ) -> None:
     """Sync two specific movie/show ratings to SIMKL after a duel.
@@ -87,8 +85,9 @@ async def sync_post_duel_simkl(
     settings = get_settings()
     client = SimklClient(client_id=settings.SIMKL_CLIENT_ID, access_token=access_token)
     for simkl_id, elo in movie_ratings:
-        rating = elo_to_rating(elo, sorted_elos)
-        await _rate_with_retry(client, simkl_id, rating, media_type, provider="SIMKL")
+        await _rate_with_retry(
+            client, simkl_id, ratings_by_elo[elo], media_type, provider="SIMKL"
+        )
 
 
 async def sync_ratings_background(
@@ -143,7 +142,9 @@ async def sync_ratings_background(
             rows = result.all()
             # Both movies in a duel are the same media_type
             media_type = rows[0].media_type if rows else "movie"
-            sorted_elos = await get_ranked_elos(session, user_id, media_type)
+            ratings_by_elo = await get_elo_ratings(
+                session, user_id, [new_elo_a, new_elo_b], media_type
+            )
         rows_by_id = {row.id: row for row in rows}
         dueled = [
             (rows_by_id[movie_id], elo)
@@ -153,14 +154,16 @@ async def sync_ratings_background(
         if sync_trakt:
             trakt_ratings = [(row.trakt_id, elo) for row, elo in dueled]
             if trakt_ratings:
-                await sync_post_duel(trakt_token, trakt_ratings, sorted_elos, media_type)
+                await sync_post_duel(
+                    trakt_token, trakt_ratings, ratings_by_elo, media_type
+                )
         if sync_simkl:
             simkl_ratings = [
                 (row.simkl_id, elo) for row, elo in dueled if row.simkl_id is not None
             ]
             if simkl_ratings:
                 await sync_post_duel_simkl(
-                    simkl_token, simkl_ratings, sorted_elos, media_type
+                    simkl_token, simkl_ratings, ratings_by_elo, media_type
                 )
     except Exception:
         logger.exception(

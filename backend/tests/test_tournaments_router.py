@@ -583,6 +583,7 @@ class TestRegenerateCandidatePool:
 
         assert resp.status_code == 200
         assert mock_pool.call_args.kwargs["media_type"] == "show"
+        assert mock_pool.call_args.kwargs["limit"] == tournament.bracket_size * 3
 
     def test_tournament_is_locked_before_regen_count_is_read(self):
         """The tournament advisory lock must precede the load that reads _regen_count (SEC-02, #570)."""
@@ -689,7 +690,7 @@ class TestRegenerateCandidatePool:
             "backend.routers.tournaments.get_filtered_ranked_films",
             new_callable=AsyncMock,
             return_value=[MagicMock() for _ in range(8)],
-        ), patch(
+        ) as mock_pool, patch(
             "backend.routers.tournaments.create_tournament_bracket",
             new_callable=AsyncMock,
         ), patch(
@@ -710,6 +711,7 @@ class TestRegenerateCandidatePool:
 
         assert resp.status_code == 200
         assert mock_db.add.call_args[0][0].media_type == "show"
+        assert mock_pool.call_args.kwargs["limit"] == 8 * 3
 
 
 # ---------------------------------------------------------------------------
@@ -960,9 +962,9 @@ class TestBracketSizeCap:
         app.dependency_overrides[get_db] = lambda: AsyncMock()
 
         with patch(
-            "backend.routers.tournaments.get_filtered_ranked_films",
+            "backend.routers.tournaments.count_filtered_ranked_films",
             new_callable=AsyncMock,
-            return_value=[MagicMock() for _ in range(9)],
+            return_value=9,
         ):
             with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.get("/api/tournaments/pool-count")

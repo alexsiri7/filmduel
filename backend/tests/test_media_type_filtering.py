@@ -7,11 +7,17 @@ pass and use the media_type parameter.
 from __future__ import annotations
 
 import uuid
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from backend.services.sync import _rate_with_retry
+
+
+def _rating_rows(*rows):
+    """get_elo_ratings result rows as (elo, below, equal, n)."""
+    return [SimpleNamespace(elo=e, below=b, equal=q, n=n) for e, b, q, n in rows]
 
 
 # ---------------------------------------------------------------------------
@@ -157,7 +163,7 @@ async def testsync_ratings_background_refreshes_expired_token():
         mock_movies_result = MagicMock()
         mock_movies_result.all.return_value = mock_rows
         mock_elos_result = MagicMock()
-        mock_elos_result.scalars.return_value.all.return_value = [900, 1100]
+        mock_elos_result.all.return_value = _rating_rows((900, 0, 1, 2), (1100, 1, 1, 2))
         mock_session.execute.side_effect = [
             mock_user_result,
             mock_locked_user_result,
@@ -173,7 +179,7 @@ async def testsync_ratings_background_refreshes_expired_token():
         call_args = mock_sync.call_args
         assert call_args[0][0] == "fresh-token"
         assert set(call_args[0][1]) == {(trakt_id_a, 1100), (trakt_id_b, 900)}
-        assert call_args[0][2] == [900, 1100]
+        assert call_args[0][2] == {900: 3, 1100: 8}
         assert call_args[0][3] == "movie"
 
 
@@ -339,7 +345,9 @@ async def testsync_ratings_background_syncs_when_opt_in():
     mock_movies_result.all.return_value = [mock_movie_row_a, mock_movie_row_b]
 
     mock_elos_result = MagicMock()
-    mock_elos_result.scalars.return_value.all.return_value = [850, 900, 1100]
+    mock_elos_result.all.return_value = _rating_rows(
+        (900, 1, 1, 3), (1100, 2, 1, 3)
+    )
 
     mock_session = AsyncMock()
     mock_session.execute.side_effect = [
@@ -368,7 +376,7 @@ async def testsync_ratings_background_syncs_when_opt_in():
         await sync_ratings_background(uid, mid_a, 1100, mid_b, 900)
 
         mock_sync.assert_awaited_once_with(
-            "valid_token", [(111, 1100), (222, 900)], [850, 900, 1100], "movie"
+            "valid_token", [(111, 1100), (222, 900)], {900: 5, 1100: 9}, "movie"
         )
 
 
@@ -464,7 +472,7 @@ async def _run_sync_with_providers(
     movies_result = MagicMock()
     movies_result.all.return_value = rows
     elos_result = MagicMock()
-    elos_result.scalars.return_value.all.return_value = [900, 1100]
+    elos_result.all.return_value = _rating_rows((900, 0, 1, 2), (1100, 1, 1, 2))
 
     async def execute(stmt, *args, **kwargs):
         captured_stmts.append(stmt)
@@ -527,7 +535,7 @@ async def testsync_ratings_background_syncs_to_simkl_when_opt_in():
     )
 
     mock_simkl_sync.assert_awaited_once_with(
-        "simkl-token", [(333, 1100), (444, 900)], [900, 1100], "movie"
+        "simkl-token", [(333, 1100), (444, 900)], {900: 3, 1100: 8}, "movie"
     )
     mock_sync.assert_not_awaited()
     mock_refresh.assert_not_awaited()
@@ -551,7 +559,7 @@ async def testsync_ratings_background_skips_titles_without_simkl_id():
     )
 
     mock_simkl_sync.assert_awaited_once_with(
-        "simkl-token", [(444, 900)], [900, 1100], "movie"
+        "simkl-token", [(444, 900)], {900: 3, 1100: 8}, "movie"
     )
 
 
@@ -585,10 +593,10 @@ async def testsync_ratings_background_syncs_to_both_providers():
     )
 
     mock_sync.assert_awaited_once_with(
-        "trakt-token", [(111, 1100), (222, 900)], [900, 1100], "movie"
+        "trakt-token", [(111, 1100), (222, 900)], {900: 3, 1100: 8}, "movie"
     )
     mock_simkl_sync.assert_awaited_once_with(
-        "simkl-token", [(333, 1100), (444, 900)], [900, 1100], "movie"
+        "simkl-token", [(333, 1100), (444, 900)], {900: 3, 1100: 8}, "movie"
     )
 
 
@@ -617,7 +625,7 @@ async def testsync_ratings_background_trakt_refresh_failure_still_syncs_simkl():
     mock_refresh.assert_awaited_once()
     mock_sync.assert_not_awaited()
     mock_simkl_sync.assert_awaited_once_with(
-        "simkl-token", [(333, 1100), (444, 900)], [900, 1100], "movie"
+        "simkl-token", [(333, 1100), (444, 900)], {900: 3, 1100: 8}, "movie"
     )
 
 

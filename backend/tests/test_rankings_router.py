@@ -135,9 +135,9 @@ class TestRankingsRouter:
                 return_value=([_make_user_movie(1100), _make_user_movie(900)], 2),
             ),
             patch(
-                "backend.routers.rankings.get_ranked_elos",
+                "backend.routers.rankings.get_elo_ratings",
                 new_callable=AsyncMock,
-                return_value=[900, 1100],
+                return_value={1100: 8, 900: 3},
             ) as mock_elos,
         ):
             with TestClient(app, raise_server_exceptions=False) as client:
@@ -151,7 +151,7 @@ class TestRankingsRouter:
         assert resp.status_code == 200
         assert [r["trakt_rating"] for r in resp.json()["rankings"]] == [8, 3]
         mock_elos.assert_awaited_once()
-        assert mock_elos.await_args.args[1:] == (user.id, "show")
+        assert mock_elos.await_args.args[1:] == (user.id, [1100, 900], "show")
 
     def test_get_rankings_rounds_elo_but_rates_the_unrounded_value(self):
         user = _make_user()
@@ -164,10 +164,10 @@ class TestRankingsRouter:
                 return_value=([_make_user_movie(1016.6)], 1),
             ),
             patch(
-                "backend.routers.rankings.get_ranked_elos",
+                "backend.routers.rankings.get_elo_ratings",
                 new_callable=AsyncMock,
-                return_value=[1016.6, 1017.4],
-            ),
+                return_value={1016.6: 3},
+            ) as mock_elos,
         ):
             with TestClient(app, raise_server_exceptions=False) as client:
                 resp = client.get("/api/rankings")
@@ -175,15 +175,15 @@ class TestRankingsRouter:
         assert resp.status_code == 200
         (ranked,) = resp.json()["rankings"]
         assert ranked["elo"] == 1017
-        # Rating the rounded 1017 would place it between the two films: a 5.
         assert ranked["trakt_rating"] == 3
+        assert mock_elos.await_args.args[2] == [1016.6]
 
     def test_get_rankings_genre_filter_does_not_narrow_population(self):
         """A genre filter leaves the percentile population unfiltered."""
         user, resp, mock_elos = self._get_rankings("genre=Drama&media_type=show")
 
         assert resp.status_code == 200
-        assert mock_elos.await_args.args[1:] == (user.id, "show")
+        assert mock_elos.await_args.args[1:] == (user.id, [1100, 900], "show")
         assert not mock_elos.await_args.kwargs
 
     def test_get_stats_rates_highest_and_lowest_by_percentile(self):
@@ -206,9 +206,9 @@ class TestRankingsRouter:
                 return_value=stats,
             ),
             patch(
-                "backend.routers.rankings.get_ranked_elos",
+                "backend.routers.rankings.get_elo_ratings",
                 new_callable=AsyncMock,
-                return_value=[900, 1000, 1100],
+                return_value={1100: 9, 900: 2},
             ) as mock_elos,
         ):
             with TestClient(app, raise_server_exceptions=False) as client:
@@ -219,4 +219,4 @@ class TestRankingsRouter:
         assert body["highest_rated"]["trakt_rating"] == 9
         assert body["lowest_rated"]["trakt_rating"] == 2
         mock_elos.assert_awaited_once()
-        assert mock_elos.await_args.args[1:] == (user.id, "show")
+        assert mock_elos.await_args.args[1:] == (user.id, [1100, 900], "show")

@@ -56,9 +56,9 @@ class TestGetPoolCountFilterTypeValidation:
     def test_valid_filter_type_genre_accepted(self):
         app.dependency_overrides[get_db] = _fake_db
         with patch(
-            "backend.routers.tournaments.get_filtered_ranked_films",
+            "backend.routers.tournaments.count_filtered_ranked_films",
             new_callable=AsyncMock,
-            return_value=[],
+            return_value=0,
         ):
             resp = client.get("/api/tournaments/pool-count?filter_type=genre")
         assert resp.status_code != 422
@@ -66,9 +66,9 @@ class TestGetPoolCountFilterTypeValidation:
     def test_valid_filter_type_decade_accepted(self):
         app.dependency_overrides[get_db] = _fake_db
         with patch(
-            "backend.routers.tournaments.get_filtered_ranked_films",
+            "backend.routers.tournaments.count_filtered_ranked_films",
             new_callable=AsyncMock,
-            return_value=[],
+            return_value=0,
         ):
             resp = client.get("/api/tournaments/pool-count?filter_type=decade")
         assert resp.status_code != 422
@@ -76,9 +76,9 @@ class TestGetPoolCountFilterTypeValidation:
     def test_no_filter_type_accepted(self):
         app.dependency_overrides[get_db] = _fake_db
         with patch(
-            "backend.routers.tournaments.get_filtered_ranked_films",
+            "backend.routers.tournaments.count_filtered_ranked_films",
             new_callable=AsyncMock,
-            return_value=[],
+            return_value=0,
         ):
             resp = client.get("/api/tournaments/pool-count")
         assert resp.status_code != 422
@@ -94,7 +94,7 @@ class TestGetPoolCountDecadeValueValidation:
 
     def test_invalid_decade_value_returns_400(self):
         with patch(
-            "backend.routers.tournaments.get_filtered_ranked_films",
+            "backend.routers.tournaments.count_filtered_ranked_films",
             new_callable=AsyncMock,
             side_effect=ValueError("Invalid decade format"),
         ):
@@ -106,9 +106,9 @@ class TestGetPoolCountDecadeValueValidation:
 
     def test_valid_decade_value_returns_count(self):
         with patch(
-            "backend.routers.tournaments.get_filtered_ranked_films",
+            "backend.routers.tournaments.count_filtered_ranked_films",
             new_callable=AsyncMock,
-            return_value=[],
+            return_value=0,
         ):
             resp = client.get(
                 "/api/tournaments/pool-count?filter_type=decade&filter_value=1990s"

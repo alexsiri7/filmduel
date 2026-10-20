@@ -81,11 +81,11 @@ class TestRateWithRetry:
 
 @pytest.mark.asyncio
 async def test_sync_post_duel_rates_by_percentile_of_population():
-    """Each dueled film is pushed at its percentile rating within sorted_elos."""
+    """Each dueled film is pushed at its rating in ratings_by_elo."""
     client = AsyncMock()
     with patch("backend.services.sync.TraktClient", return_value=client):
         await sync_post_duel(
-            "token", [(111, 1100), (222, 900)], [900, 1100], media_type="show"
+            "token", [(111, 1100), (222, 900)], {1100: 8, 900: 3}, media_type="show"
         )
 
     assert client.rate.await_args_list == [
@@ -96,11 +96,11 @@ async def test_sync_post_duel_rates_by_percentile_of_population():
 
 @pytest.mark.asyncio
 async def test_sync_post_duel_simkl_rates_by_percentile_of_population():
-    """Each dueled title is pushed to SIMKL at its percentile rating within sorted_elos."""
+    """Each dueled title is pushed to SIMKL at its rating in ratings_by_elo."""
     client = AsyncMock()
     with patch("backend.services.sync.SimklClient", return_value=client):
         await sync_post_duel_simkl(
-            "token", [(333, 1100), (444, 900)], [900, 1100], media_type="show"
+            "token", [(333, 1100), (444, 900)], {1100: 8, 900: 3}, media_type="show"
         )
 
     assert client.rate.await_args_list == [

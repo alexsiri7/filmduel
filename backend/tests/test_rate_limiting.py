@@ -274,6 +274,9 @@ async def test_export_csv_respects_row_limit():
 
     mock_result = MagicMock()
     mock_result.unique.return_value.scalars.return_value.all.return_value = fake_ums
+    mock_result.all.return_value = [
+        MagicMock(elo=um.elo, below=0, equal=1, n=5) for um in fake_ums
+    ]
 
     db = AsyncMock()
     db.execute.return_value = mock_result

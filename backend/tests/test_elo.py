@@ -3,13 +3,14 @@
 import itertools
 import math
 import random
+from bisect import bisect_left, bisect_right
 
 import pytest
 
 from backend.services.elo import (
-    elo_to_rating,
     expected_score,
     get_initial_elo,
+    percentile_rating,
     k_factor,
     trakt_rating_to_seeded_elo,
     update_elo,
@@ -101,38 +102,45 @@ def test_trakt_rating_to_seeded_elo_max():
     assert trakt_rating_to_seeded_elo(10) == 1400
 
 
-# --- elo_to_rating ---
+# --- percentile_rating ---
 
 
-def test_elo_to_rating_ten_films_fill_the_scale_on_a_narrow_range():
+def _rate(elo, sorted_elos):
+    below = bisect_left(sorted_elos, elo)
+    equal = bisect_right(sorted_elos, elo) - below
+    return percentile_rating(below, equal, len(sorted_elos))
+
+
+def test_percentile_rating_ten_films_fill_the_scale_on_a_narrow_range():
     elos = [813, 850, 900, 940, 1000, 1050, 1100, 1150, 1250, 1342]
-    assert [elo_to_rating(e, elos) for e in elos] == list(range(1, 11))
+    assert [_rate(e, elos) for e in elos] == list(range(1, 11))
 
 
-def test_elo_to_rating_clumped_population_splits_into_equal_deciles():
+def test_percentile_rating_clumped_population_splits_into_equal_deciles():
     elos = list(range(950, 1050))
-    ratings = [elo_to_rating(e, elos) for e in elos]
+    ratings = [_rate(e, elos) for e in elos]
     assert all(ratings.count(r) == 10 for r in range(1, 11))
     assert ratings == sorted(ratings)
 
 
-def test_elo_to_rating_ties_share_a_rating():
+def test_percentile_rating_ties_share_a_rating():
     elos = [900, 1000, 1000, 1100]
-    assert elo_to_rating(1000, elos) == 5
-    assert elo_to_rating(1000, [1000] * 7) == 5
+    assert _rate(1000, elos) == 5
+    assert _rate(1000, [1000] * 7) == 5
 
 
-def test_elo_to_rating_small_populations():
-    assert elo_to_rating(1000, [1000]) == 5
-    assert elo_to_rating(900, [900, 1100]) == 3
-    assert elo_to_rating(1100, [900, 1100]) == 8
+def test_percentile_rating_small_populations():
+    assert _rate(1000, [1000]) == 5
+    assert _rate(900, [900, 1100]) == 3
+    assert _rate(1100, [900, 1100]) == 8
 
 
-def test_elo_to_rating_outside_population_and_empty():
+def test_percentile_rating_outside_population_and_empty():
     elos = [900, 1000, 1100]
-    assert elo_to_rating(500, elos) == 1
-    assert elo_to_rating(2000, elos) == 10
-    assert elo_to_rating(1000, []) == 5
+    assert _rate(500, elos) == 1
+    assert _rate(2000, elos) == 10
+    assert _rate(1000, []) == 5
+    assert percentile_rating(0, 0, 0) == 5
 
 
 # --- get_initial_elo ---
