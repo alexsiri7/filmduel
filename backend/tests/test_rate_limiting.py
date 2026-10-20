@@ -69,6 +69,23 @@ def test_export_csv_rate_limit_is_10_per_hour():
     )
 
 
+def test_csp_report_is_registered_with_rate_limiter():
+    """csp_report must be registered in the slowapi limiter."""
+    assert (
+        "backend.routers.csp_report.csp_report"
+        in limiter._Limiter__marked_for_limiting
+    )
+
+
+def test_csp_report_rate_limit_is_30_per_minute():
+    """csp_report is unauthenticated and CSRF-exempt; its limit must stay 30/minute."""
+    limits = limiter._route_limits.get("backend.routers.csp_report.csp_report", [])
+    limit_strings = [str(lim.limit) for lim in limits]
+    assert any("30 per 1 minute" in s for s in limit_strings), (
+        f"Expected '30/minute' limit on csp_report, got: {limit_strings}"
+    )
+
+
 def test_export_my_data_is_registered_with_rate_limiter():
     """export_my_data (GET /api/me/export) must be registered in the slowapi limiter."""
     assert (

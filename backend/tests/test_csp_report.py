@@ -99,6 +99,24 @@ def test_malformed_body_is_accepted_silently(caplog, content):
     assert "csp_violation" not in caplog.text
 
 
+@pytest.mark.parametrize(
+    "content",
+    [
+        b'{"csp-report": {"blocked-uri": "http://[::1"}}',
+        b'[{"type": "csp-violation", "body": {"documentURL": "https://[x/"}}]',
+    ],
+)
+def test_unparseable_url_is_logged_empty(caplog, content):
+    r = client.post(
+        "/api/csp-report",
+        content=content,
+        headers={"Content-Type": "application/csp-report"},
+    )
+    assert r.status_code == 204
+    assert "csp_violation" in caplog.text
+    assert "[" not in caplog.text
+
+
 def test_csrf_exemption_is_limited_to_the_report_path():
     r = client.post("/api/duels", json={}, headers={"Origin": "https://evil.example"})
     assert r.status_code == 403

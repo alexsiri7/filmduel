@@ -12,7 +12,7 @@ from backend.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api", tags=["security"])
+router = APIRouter(tags=["security"])
 
 CSP_REPORT_PATH = "/api/csp-report"
 
@@ -56,7 +56,10 @@ def _violations(payload: object) -> list[dict[str, str]]:
 def _scrub_blocked(value: str) -> str:
     # Reports carry full URLs; keep only the origin. Keywords such as
     # "inline" or "eval" have no scheme and pass through.
-    parsed = urlparse(value)
+    try:
+        parsed = urlparse(value)
+    except ValueError:
+        return ""
     if parsed.scheme in ("http", "https") or parsed.netloc:
         value = f"{parsed.scheme}://{parsed.netloc}"
     return value[:_MAX_FIELD]
@@ -64,10 +67,13 @@ def _scrub_blocked(value: str) -> str:
 
 def _scrub_document(value: str) -> str:
     # The query string can hold OAuth code/state and pair tokens.
-    return urlparse(value).path[:_MAX_FIELD]
+    try:
+        return urlparse(value).path[:_MAX_FIELD]
+    except ValueError:
+        return ""
 
 
-@router.post("/csp-report", status_code=204)
+@router.post(CSP_REPORT_PATH, status_code=204)
 @limiter.limit("30/minute")
 async def csp_report(request: Request) -> Response:
     # Browsers send application/csp-report or application/reports+json, which
