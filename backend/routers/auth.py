@@ -166,8 +166,8 @@ async def get_current_user_id(
             algorithms=[JWT_ALGORITHM],
             issuer=JWT_ISSUER,
             audience=JWT_AUDIENCE,
+            options={"require": ["exp", "iat"]},
         )
-        user_id = payload.get("sub")
         iat = datetime.fromtimestamp(payload["iat"], tz=timezone.utc)
         raw_orig = payload.get("orig_iat")
         if raw_orig is not None:
@@ -176,16 +176,20 @@ async def get_current_user_id(
             orig_iat = datetime.fromtimestamp(float(raw_orig), tz=timezone.utc)
         else:
             orig_iat = iat  # legacy tokens: treat iat as orig_iat
+        user_id = payload.get("sub")
         if not user_id:
             _reject("Invalid session — missing subject")
+        user_uuid = uuid.UUID(user_id)
     except jwt.ExpiredSignatureError:
         _reject("Session expired")
-    except jwt.InvalidTokenError:
+    except (jwt.InvalidTokenError, ValueError, OverflowError, OSError):
+        # ValueError/OverflowError/OSError: a signed token whose sub is not a
+        # UUID, or whose timestamps fall outside the platform's datetime range.
         _reject("Invalid session")
 
     # Server-side revocation: catches logout from another device or admin revoke.
     invalid_before = await db.scalar(
-        select(User.tokens_invalid_before).where(User.id == uuid.UUID(user_id))
+        select(User.tokens_invalid_before).where(User.id == user_uuid)
     )
     if invalid_before is None:
         _reject("User not found")
