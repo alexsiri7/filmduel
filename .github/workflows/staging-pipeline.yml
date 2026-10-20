@@ -46,7 +46,8 @@ jobs:
             echo "sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Install Railway CLI
+      - &install_railway_cli
+        name: Install Railway CLI
         run: |
           # Download outside the workspace: `railway up` uploads the checkout.
           cd "$RUNNER_TEMP"
@@ -178,17 +179,7 @@ jobs:
         with:
           ref: ${{ needs.deploy-staging.outputs.deploy_sha }}
 
-      - name: Install Railway CLI
-        run: |
-          # Download outside the workspace: `railway up` uploads the checkout.
-          cd "$RUNNER_TEMP"
-          curl -fsSL --retry 3 -o railway.tar.gz \
-            "https://github.com/railwayapp/cli/releases/download/v${RAILWAY_CLI_VERSION}/railway-v${RAILWAY_CLI_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
-          echo "${RAILWAY_CLI_SHA256}  railway.tar.gz" | sha256sum -c -
-          mkdir -p railway-bin
-          tar -xzf railway.tar.gz -C railway-bin railway
-          echo "$RUNNER_TEMP/railway-bin" >> "$GITHUB_PATH"
-          "$RUNNER_TEMP/railway-bin/railway" --version
+      - *install_railway_cli
 
       - name: Deploy to production
         env:
