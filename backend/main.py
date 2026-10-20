@@ -299,7 +299,7 @@ async def csrf_origin_check(request: Request, call_next):
     logger.warning(
         "csrf_check_failed method=%s origin=%r path=%s",
         request.method,
-        origin,
+        origin_base,
         request.url.path,
     )
     return JSONResponse(
@@ -377,8 +377,6 @@ async def spa_fallback(full_path: str):
             return FileResponse(file_path)
         safe_path = full_path.replace("\n", "\\n").replace("\r", "\\r")
         logger.warning(
-            "spa_fallback blocked out-of-bounds access: requested=%s resolved=%s",
-            safe_path,
-            file_path,
+            "spa_fallback blocked out-of-bounds access: requested=%s", safe_path
         )
     return FileResponse(index_html)

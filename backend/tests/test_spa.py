@@ -148,3 +148,31 @@ def test_log_injection_newlines_are_escaped(tmp_path, caplog):
         assert "\r" not in record.getMessage(), (
             "raw CR found in log — sanitization is broken"
         )
+
+
+def test_blocked_access_log_omits_resolved_path(tmp_path, caplog):
+    """The out-of-bounds warning names the requested path, never the resolved server path."""
+    import logging
+
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<html>app</html>")
+    outside = tmp_path / "outside.txt"
+    outside.write_text("OUTSIDE")
+    (dist / "escape").symlink_to("../outside.txt")
+
+    with (
+        patch.object(main_module, "STATIC_DIR", dist),
+        caplog.at_level(logging.WARNING, logger="backend.main"),
+    ):
+        response = client.get("/escape")
+    assert response.status_code == 200
+    assert "OUTSIDE" not in response.text
+
+    messages = [
+        r.getMessage() for r in caplog.records if "out-of-bounds" in r.getMessage()
+    ]
+    assert messages
+    for message in messages:
+        assert "requested=escape" in message
+        assert str(tmp_path) not in message

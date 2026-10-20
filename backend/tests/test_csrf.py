@@ -120,6 +120,25 @@ def test_post_blocked_unknown_referer():
     assert response.json()["detail"] == "CSRF check failed: unexpected origin"
 
 
+def test_post_blocked_referer_logs_only_origin(caplog):
+    """A rejected Referer is logged as scheme+host; its path and query stay out of logs."""
+    with caplog.at_level(logging.WARNING, logger="backend.main"):
+        response = client.post(
+            "/api/duels",
+            json={"winner_id": 1, "loser_id": 2},
+            headers={"Referer": "https://attacker.example.com/reset?token=s3cret"},
+        )
+    assert response.status_code == 403
+    messages = [
+        r.getMessage() for r in caplog.records if "csrf_check_failed" in r.getMessage()
+    ]
+    assert messages
+    for message in messages:
+        assert "origin='https://attacker.example.com'" in message
+        assert "s3cret" not in message
+        assert "/reset" not in message
+
+
 def test_post_allowed_known_referer_with_path():
     """POST with Referer from allowed origin including path is normalized and allowed."""
     response = client.post(
