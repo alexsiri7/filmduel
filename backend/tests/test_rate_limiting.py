@@ -736,6 +736,21 @@ def test_view_screenshot_rate_limit_is_10_per_minute():
     )
 
 
+@pytest.mark.parametrize(
+    "route, expected",
+    [
+        ("list_my_feedback", "30 per 1 minute"),
+        ("view_my_screenshot", "10 per 1 minute"),
+        ("delete_my_feedback", "30 per 1 hour"),
+    ],
+)
+def test_owner_feedback_rate_limits(route, expected):
+    """Owner feedback routes (#791); view_my_screenshot decrypts up to 5 MB per call."""
+    limits = limiter._route_limits.get(f"backend.routers.users.{route}", [])
+    limit_strings = [str(lim.limit) for lim in limits]
+    assert expected in limit_strings, f"Expected {expected!r} on {route}, got: {limit_strings}"
+
+
 def test_purge_expired_screenshots_rate_limit_is_10_per_minute():
     """purge_expired_screenshots rate limit must be exactly 10/minute."""
     limits = limiter._route_limits.get(

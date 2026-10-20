@@ -27,6 +27,10 @@ from backend.db_models import (
 # in the payload's ``truncated_sections`` rather than silently cut.
 EXPORT_ROW_CAP = 10_000
 
+# The owner screenshot route is declared with this path, so export links
+# cannot drift from it.
+FEEDBACK_SCREENSHOT_PATH = "/api/me/feedback/{report_id}/screenshot"
+
 
 def _iso(dt: datetime | None) -> str | None:
     return dt.isoformat() if dt is not None else None
@@ -195,6 +199,11 @@ def build_export_payload(
                 "description": fr.description,
                 "created_at": _iso(fr.created_at),
                 "has_screenshot": fr.screenshot_data_enc is not None,
+                "screenshot_url": (
+                    FEEDBACK_SCREENSHOT_PATH.format(report_id=fr.id)
+                    if fr.screenshot_data_enc is not None
+                    else None
+                ),
                 "purge_after": _iso(fr.purge_after),
             }
             for fr in feedback_reports

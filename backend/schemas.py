@@ -249,14 +249,17 @@ class FeedbackReportResponse(BaseModel):
     created_at: datetime
 
 
-class FeedbackAdminResponse(BaseModel):
+class FeedbackOwnResponse(BaseModel):
     id: str
-    user_id: str
     title: str
     description: str
     has_screenshot: bool
     created_at: datetime
     purge_after: Optional[datetime] = None
+
+
+class FeedbackAdminResponse(FeedbackOwnResponse):
+    user_id: str
 
 
 class FeedbackScreenshotResponse(BaseModel):

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import os
 import uuid
 from contextlib import asynccontextmanager
@@ -17,11 +18,23 @@ import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from backend.config import get_settings
+
+# conftest already built the cached Settings (via backend.rate_limit) before the
+# TOKEN_ENC_KEY default above was set; rebuild so it is picked up.
+get_settings.cache_clear()
+
+from backend.services.token_crypto import _fernet, encrypt_token  # noqa: E402
+
+_fernet.cache_clear()
+
 from backend.main import app
 from backend.tests import SPA_HEADERS
 from backend.db import get_db
 from backend.db_models import User
+from backend.rate_limit import limiter
 from backend.routers.auth import CURRENT_PRIVACY_POLICY_VERSION, get_current_user
+from backend.services.data_export import FEEDBACK_SCREENSHOT_PATH
 from backend.routers.users import (
     _effective_pool_import_status,
     _record_pool_import_outcome,
@@ -320,6 +333,175 @@ class TestExportMyData:
 
         assert resp.status_code == 200
         mock_export.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# Owner access to and erasure of their own feedback reports (#791)
+# ---------------------------------------------------------------------------
+
+
+def _where_sql(stmt) -> str:
+    return str(stmt.whereclause.compile(compile_kwargs={"literal_binds": True}))
+
+
+def _assert_owner_scoped(stmt, report_id, user):
+    where = _where_sql(stmt)
+    assert f"feedback_reports.id = '{report_id.hex}'" in where
+    assert f"feedback_reports.user_id = '{user.id.hex}'" in where
+
+
+class _OwnerFeedbackRoutes:
+    @pytest.fixture(autouse=True)
+    def _isolate(self):
+        app.dependency_overrides.clear()
+        limiter.reset()
+        yield
+        app.dependency_overrides.clear()
+        limiter.reset()
+
+    def _client(self, user, db):
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: db
+        return TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False)
+
+    def _db(self, *, rows=None, one=None, rowcount=1):
+        result = MagicMock()
+        result.all.return_value = rows or []
+        result.one_or_none.return_value = one
+        result.rowcount = rowcount
+        db = AsyncMock()
+        db.execute.return_value = result
+        return db
+
+
+class TestListMyFeedback(_OwnerFeedbackRoutes):
+    def test_lists_only_own_metadata_without_ciphertext(self):
+        user = _make_user()
+        row = MagicMock(
+            id=uuid.uuid4(), title="Bug", description="Broke",
+            created_at=datetime.now(timezone.utc), purge_after=None,
+            has_screenshot=True,
+        )
+        db = self._db(rows=[row])
+        with patch("backend.routers.feedback.decrypt_token") as mock_decrypt:
+            with self._client(user, db) as client:
+                resp = client.get("/api/me/feedback")
+
+        assert resp.status_code == 200
+        assert resp.json()[0]["id"] == str(row.id)
+        assert resp.json()[0]["has_screenshot"] is True
+        assert "user_id" not in resp.json()[0]
+        mock_decrypt.assert_not_called()
+        stmt = db.execute.call_args.args[0]
+        names = [c.name for c in stmt.selected_columns]
+        assert "screenshot_data_enc" not in names
+        assert f"feedback_reports.user_id = '{user.id.hex}'" in _where_sql(stmt)
+
+    def test_works_without_current_consent(self):
+        user = _make_user(privacy_policy_accepted=False, privacy_policy_version=None)
+        with self._client(user, self._db()) as client:
+            assert client.get("/api/me/feedback").status_code == 200
+
+    def test_rejects_page_over_100(self):
+        with self._client(_make_user(), self._db()) as client:
+            resp = client.get("/api/me/feedback", params={"limit": 101})
+        assert resp.status_code == 422
+
+
+class TestViewMyScreenshot(_OwnerFeedbackRoutes):
+    PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
+
+    def _stored(self):
+        return encrypt_token("data:image/png;base64," + base64.b64encode(self.PNG).decode())
+
+    def _get(self, user, db, report_id):
+        with self._client(user, db) as client:
+            return client.get(f"/api/me/feedback/{report_id}/screenshot")
+
+    def test_owner_gets_raw_image(self):
+        user, report_id = _make_user(), uuid.uuid4()
+        db = self._db(one=MagicMock(screenshot_data_enc=self._stored()))
+        resp = self._get(user, db, report_id)
+
+        assert resp.status_code == 200
+        assert resp.content == self.PNG
+        assert resp.headers["content-type"] == "image/png"
+        assert resp.headers["cache-control"] == "no-store"
+        _assert_owner_scoped(db.execute.call_args.args[0], report_id, user)
+
+    def test_works_without_current_consent(self):
+        user = _make_user(privacy_policy_accepted=False, privacy_policy_version=None)
+        db = self._db(one=MagicMock(screenshot_data_enc=self._stored()))
+        assert self._get(user, db, uuid.uuid4()).status_code == 200
+
+    def test_export_link_reaches_this_route(self):
+        report_id = uuid.uuid4()
+        link = FEEDBACK_SCREENSHOT_PATH.format(report_id=report_id)
+        with self._client(_make_user(), self._db(one=None)) as client:
+            assert app.url_path_for("view_my_screenshot", report_id=report_id) == link
+            assert client.get(link).json()["detail"] == "Report not found"
+
+    def test_missing_or_foreign_report_is_not_found(self):
+        resp = self._get(_make_user(), self._db(one=None), uuid.uuid4())
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Report not found"
+
+    @pytest.mark.parametrize(
+        "stored",
+        [None, "not-a-valid-ciphertext", "data:image/png;base64,@@@"],
+        ids=["no-screenshot", "corrupt-ciphertext", "corrupt-data-url"],
+    )
+    def test_unreadable_screenshot_is_not_found(self, stored):
+        if stored and stored.startswith("data:"):
+            stored = encrypt_token(stored)
+        db = self._db(one=MagicMock(screenshot_data_enc=stored))
+        resp = self._get(_make_user(), db, uuid.uuid4())
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Screenshot not found"
+
+
+class TestDeleteMyFeedback(_OwnerFeedbackRoutes):
+    def _db(self, *, age):
+        db = AsyncMock()
+        db.scalar.return_value = (
+            None if age is None else datetime.now(timezone.utc) - age
+        )
+        return db
+
+    def _delete(self, user, db, report_id):
+        with self._client(user, db) as client:
+            return client.delete(f"/api/me/feedback/{report_id}")
+
+    def test_owner_deletes_report_older_than_cap_window(self):
+        user, report_id = _make_user(), uuid.uuid4()
+        db = self._db(age=timedelta(hours=25))
+        resp = self._delete(user, db, report_id)
+
+        assert resp.status_code == 204
+        _assert_owner_scoped(db.scalar.call_args.args[0], report_id, user)
+        stmt = db.execute.call_args.args[0]
+        assert isinstance(stmt, sa.Delete)
+        _assert_owner_scoped(stmt, report_id, user)
+
+    def test_report_inside_cap_window_is_kept(self):
+        """Deleting a recent report would free a slot under MAX_FEEDBACK_PER_DAY."""
+        db = self._db(age=timedelta(hours=23))
+        resp = self._delete(_make_user(), db, uuid.uuid4())
+
+        assert resp.status_code == 409
+        db.execute.assert_not_called()
+
+    def test_works_without_current_consent(self):
+        user = _make_user(privacy_policy_accepted=False, privacy_policy_version=None)
+        db = self._db(age=timedelta(hours=25))
+        assert self._delete(user, db, uuid.uuid4()).status_code == 204
+
+    def test_missing_or_foreign_report_is_not_found(self):
+        db = self._db(age=None)
+        resp = self._delete(_make_user(), db, uuid.uuid4())
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Report not found"
+        db.execute.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
