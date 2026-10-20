@@ -115,11 +115,24 @@ async def sync_ratings_background(
                 # Lock the user row only to serialize the (rare) token refresh:
                 # an unconditional FOR UPDATE made every post-duel sync queue on
                 # the row and hold a pooled connection while it waited.
-                result = await session.execute(
-                    user_stmt.with_for_update().execution_options(populate_existing=True)
-                )
-                user = result.scalar_one()
-                user = await ensure_fresh_token(user, session)
+                try:
+                    result = await session.execute(
+                        user_stmt.with_for_update().execution_options(
+                            populate_existing=True
+                        )
+                    )
+                    user = result.scalar_one()
+                    user = await ensure_fresh_token(user, session)
+                except Exception:
+                    # A Trakt failure must not cost the user their SIMKL push.
+                    logger.exception(
+                        "Trakt token refresh failed for user %s; skipping Trakt sync",
+                        user_id,
+                    )
+                    await session.rollback()
+                    sync_trakt = False
+                    if not sync_simkl:
+                        return
             # End the read transaction so no connection is held idle in it.
             await session.commit()
             trakt_token = user.trakt_access_token if sync_trakt else None
