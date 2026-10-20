@@ -201,6 +201,31 @@ class TestCurateTournamentLogging:
         assert "len=" in caplog.text  # length digest must appear
 
     @pytest.mark.asyncio
+    async def test_null_content_reply_raises_curation_error(self, monkeypatch, caplog):
+        """A reply with no text (content=null) is reported as invalid JSON, not a crash."""
+        from unittest.mock import MagicMock
+
+        from backend.config import get_settings
+        from backend.services.curator import curate_tournament
+
+        async def fake_acompletion(**kwargs):
+            msg = MagicMock()
+            msg.message.content = None
+            resp = MagicMock()
+            resp.choices = [msg]
+            resp.usage = None
+            return resp
+
+        monkeypatch.setattr("litellm.acompletion", fake_acompletion)
+        monkeypatch.setattr(get_settings(), "LLM_API_KEY", "x")
+
+        with caplog.at_level(logging.ERROR, logger="backend.services.curator"):
+            with pytest.raises(CurationError, match="invalid JSON"):
+                await curate_tournament(candidates=[], bracket_size=8)
+
+        assert "len=0" in caplog.text
+
+    @pytest.mark.asyncio
     async def test_missing_keys_logs_key_names_not_values(self, caplog):
         """On missing-key validation failure, log must not echo the result dict values."""
         from unittest.mock import AsyncMock, patch
