@@ -23,7 +23,7 @@ from backend.services.sync import _rate_with_retry
 async def test_rate_with_retry_dispatches_to_movie():
     """Default media_type='movie' calls rate with media_type='movie'."""
     client = AsyncMock()
-    await _rate_with_retry(client, trakt_id=123, rating=8, media_type="movie")
+    await _rate_with_retry(client, item_id=123, rating=8, media_type="movie")
     client.rate.assert_awaited_once_with(123, 8, media_type="movie")
 
 
@@ -31,7 +31,7 @@ async def test_rate_with_retry_dispatches_to_movie():
 async def test_rate_with_retry_dispatches_to_show():
     """media_type='show' calls rate with media_type='show'."""
     client = AsyncMock()
-    await _rate_with_retry(client, trakt_id=456, rating=7, media_type="show")
+    await _rate_with_retry(client, item_id=456, rating=7, media_type="show")
     client.rate.assert_awaited_once_with(456, 7, media_type="show")
 
 
@@ -122,11 +122,12 @@ async def testsync_ratings_background_refreshes_expired_token():
     trakt_id_b = 200000
 
     mock_user = MagicMock()
+    mock_user.sync_ratings_to_simkl = False
     mock_user.trakt_access_token = "expired-token"
 
     mock_rows = [
-        MagicMock(id=mid_a, trakt_id=trakt_id_a, media_type="movie"),
-        MagicMock(id=mid_b, trakt_id=trakt_id_b, media_type="movie"),
+        MagicMock(id=mid_a, trakt_id=trakt_id_a, simkl_id=None, media_type="movie"),
+        MagicMock(id=mid_b, trakt_id=trakt_id_b, simkl_id=None, media_type="movie"),
     ]
 
     with (
@@ -207,6 +208,7 @@ async def testsync_ratings_background_skips_if_no_trakt_token():
     from backend.services.sync import sync_ratings_background
 
     mock_user = MagicMock()
+    mock_user.sync_ratings_to_simkl = False
     mock_user.trakt_access_token = None
 
     with (
@@ -240,6 +242,7 @@ async def testsync_ratings_background_refresh_failure_is_swallowed():
     mid_b = uuid.uuid4()
 
     mock_user = MagicMock()
+    mock_user.sync_ratings_to_simkl = False
     mock_user.trakt_access_token = "expired-token"
 
     with (
@@ -269,10 +272,11 @@ async def testsync_ratings_background_refresh_failure_is_swallowed():
 
 @pytest.mark.asyncio
 async def testsync_ratings_background_skips_when_opt_out():
-    """sync_ratings_background skips sync when sync_ratings_to_trakt is False."""
+    """sync_ratings_background pushes nothing when every provider's sync is off."""
     from backend.services.sync import sync_ratings_background
 
     mock_user = MagicMock()
+    mock_user.sync_ratings_to_simkl = False
     mock_user.trakt_access_token = "valid_token"
     mock_user.sync_ratings_to_trakt = False
 
@@ -284,6 +288,9 @@ async def testsync_ratings_background_skips_when_opt_out():
         patch(
             "backend.services.sync.sync_post_duel", new_callable=AsyncMock
         ) as mock_sync,
+        patch(
+            "backend.services.sync.sync_post_duel_simkl", new_callable=AsyncMock
+        ) as mock_simkl_sync,
     ):
         mock_session = AsyncMock()
         mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
@@ -298,6 +305,7 @@ async def testsync_ratings_background_skips_when_opt_out():
 
         mock_refresh.assert_not_awaited()
         mock_sync.assert_not_awaited()
+        mock_simkl_sync.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -310,6 +318,7 @@ async def testsync_ratings_background_syncs_when_opt_in():
     mid_b = uuid.uuid4()
 
     mock_user = MagicMock()
+    mock_user.sync_ratings_to_simkl = False
     mock_user.trakt_access_token = "valid_token"
     mock_user.sync_ratings_to_trakt = True
 
@@ -382,12 +391,13 @@ async def testsync_ratings_background_locks_user_only_for_refresh(needs_refresh)
     captured_stmts = []
 
     mock_user = MagicMock()
+    mock_user.sync_ratings_to_simkl = False
     mock_user.trakt_access_token = "token"
     mock_user.sync_ratings_to_trakt = True
 
     mock_rows = [
-        MagicMock(id=mid_a, trakt_id=111, media_type="movie"),
-        MagicMock(id=mid_b, trakt_id=222, media_type="movie"),
+        MagicMock(id=mid_a, trakt_id=111, simkl_id=None, media_type="movie"),
+        MagicMock(id=mid_b, trakt_id=222, simkl_id=None, media_type="movie"),
     ]
 
     with (
@@ -435,3 +445,138 @@ async def testsync_ratings_background_locks_user_only_for_refresh(needs_refresh)
             assert locked == []
             mock_refresh.assert_not_awaited()
         mock_session.commit.assert_awaited_once()
+
+
+async def _run_sync_with_providers(user, rows, mid_a, mid_b):
+    """Run sync_ratings_background with both provider pushes patched.
+
+    Returns (trakt push mock, SIMKL push mock, token refresh mock, statements executed).
+    """
+    from backend.services.sync import sync_ratings_background
+
+    captured_stmts = []
+    user_result = MagicMock()
+    user_result.scalar_one_or_none.return_value = user
+    movies_result = MagicMock()
+    movies_result.all.return_value = rows
+    elos_result = MagicMock()
+    elos_result.scalars.return_value.all.return_value = [900, 1100]
+
+    async def execute(stmt, *args, **kwargs):
+        captured_stmts.append(stmt)
+        return [user_result, movies_result, elos_result][len(captured_stmts) - 1]
+
+    with (
+        patch("backend.services.sync.async_session_factory") as mock_factory,
+        patch(
+            "backend.services.sync.ensure_fresh_token", new_callable=AsyncMock
+        ) as mock_refresh,
+        patch(
+            "backend.services.sync.sync_post_duel", new_callable=AsyncMock
+        ) as mock_sync,
+        patch(
+            "backend.services.sync.sync_post_duel_simkl", new_callable=AsyncMock
+        ) as mock_simkl_sync,
+        patch(
+            "backend.services.sync.trakt_token_needs_refresh", return_value=False
+        ),
+    ):
+        mock_session = AsyncMock()
+        mock_session.execute.side_effect = execute
+        mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        await sync_ratings_background(user.id, mid_a, 1100, mid_b, 900)
+
+    return mock_sync, mock_simkl_sync, mock_refresh, captured_stmts
+
+
+def _provider_user(*, trakt: bool, simkl: bool):
+    user = MagicMock()
+    user.id = uuid.uuid4()
+    user.sync_ratings_to_trakt = trakt
+    user.trakt_access_token = "trakt-token" if trakt else None
+    user.sync_ratings_to_simkl = simkl
+    user.simkl_access_token = "simkl-token" if simkl else None
+    return user
+
+
+@pytest.mark.asyncio
+async def testsync_ratings_background_syncs_to_simkl_when_opt_in():
+    """With only SIMKL sync on, ratings go to SIMKL by SIMKL id and Trakt is untouched."""
+    from sqlalchemy.dialects import postgresql
+
+    mid_a, mid_b = uuid.uuid4(), uuid.uuid4()
+    rows = [
+        MagicMock(id=mid_b, trakt_id=222, simkl_id=444, media_type="movie"),
+        MagicMock(id=mid_a, trakt_id=111, simkl_id=333, media_type="movie"),
+    ]
+
+    mock_sync, mock_simkl_sync, mock_refresh, stmts = await _run_sync_with_providers(
+        _provider_user(trakt=False, simkl=True), rows, mid_a, mid_b
+    )
+
+    mock_simkl_sync.assert_awaited_once_with(
+        "simkl-token", [(333, 1100), (444, 900)], [900, 1100], "movie"
+    )
+    mock_sync.assert_not_awaited()
+    mock_refresh.assert_not_awaited()
+    assert not any(
+        "FOR UPDATE" in str(st.compile(dialect=postgresql.dialect())).upper()
+        for st in stmts
+    )
+
+
+@pytest.mark.asyncio
+async def testsync_ratings_background_skips_titles_without_simkl_id():
+    """A title with no SIMKL id is left out of the SIMKL push."""
+    mid_a, mid_b = uuid.uuid4(), uuid.uuid4()
+    rows = [
+        MagicMock(id=mid_a, trakt_id=111, simkl_id=None, media_type="movie"),
+        MagicMock(id=mid_b, trakt_id=222, simkl_id=444, media_type="movie"),
+    ]
+
+    _, mock_simkl_sync, _, _ = await _run_sync_with_providers(
+        _provider_user(trakt=False, simkl=True), rows, mid_a, mid_b
+    )
+
+    mock_simkl_sync.assert_awaited_once_with(
+        "simkl-token", [(444, 900)], [900, 1100], "movie"
+    )
+
+
+@pytest.mark.asyncio
+async def testsync_ratings_background_no_simkl_push_without_simkl_ids():
+    """When neither title has a SIMKL id, nothing is pushed to SIMKL."""
+    mid_a, mid_b = uuid.uuid4(), uuid.uuid4()
+    rows = [
+        MagicMock(id=mid_a, trakt_id=111, simkl_id=None, media_type="movie"),
+        MagicMock(id=mid_b, trakt_id=222, simkl_id=None, media_type="movie"),
+    ]
+
+    _, mock_simkl_sync, _, _ = await _run_sync_with_providers(
+        _provider_user(trakt=False, simkl=True), rows, mid_a, mid_b
+    )
+
+    mock_simkl_sync.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def testsync_ratings_background_syncs_to_both_providers():
+    """With both syncs on, each provider gets its own token and ids."""
+    mid_a, mid_b = uuid.uuid4(), uuid.uuid4()
+    rows = [
+        MagicMock(id=mid_a, trakt_id=111, simkl_id=333, media_type="movie"),
+        MagicMock(id=mid_b, trakt_id=222, simkl_id=444, media_type="movie"),
+    ]
+
+    mock_sync, mock_simkl_sync, _, _ = await _run_sync_with_providers(
+        _provider_user(trakt=True, simkl=True), rows, mid_a, mid_b
+    )
+
+    mock_sync.assert_awaited_once_with(
+        "trakt-token", [(111, 1100), (222, 900)], [900, 1100], "movie"
+    )
+    mock_simkl_sync.assert_awaited_once_with(
+        "simkl-token", [(333, 1100), (444, 900)], [900, 1100], "movie"
+    )
