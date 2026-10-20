@@ -75,6 +75,25 @@ def _rate_limit_key(request: Request) -> str:
 _REDIS_STORAGE_OPTIONS = {"socket_connect_timeout": 1, "socket_timeout": 1}
 
 
+class _FallbackLoggingLimiter(Limiter):
+    """Limiter that reports the switch to in-memory counters on our own logger.
+
+    slowapi logs that switch on its "slowapi" logger, but also attaches a no-op
+    handler to it, so the warning never reaches the process output.
+    """
+
+    def _check_request_limit(self, *args, **kwargs) -> None:
+        storage_was_dead = self._storage_dead
+        try:
+            super()._check_request_limit(*args, **kwargs)
+        finally:
+            if self._storage_dead and not storage_was_dead:
+                logger.warning(
+                    "rate_limit_storage_fallback: rate limit storage unreachable; "
+                    "falling back to per-process in-memory counters"
+                )
+
+
 def _build_limiter(settings: Settings) -> Limiter:
     """Build the app limiter; Redis-backed when RATE_LIMIT_STORAGE_URI is set.
 
@@ -84,7 +103,7 @@ def _build_limiter(settings: Settings) -> Limiter:
     """
     if not settings.RATE_LIMIT_STORAGE_URI:
         return Limiter(key_func=_rate_limit_key)
-    return Limiter(
+    return _FallbackLoggingLimiter(
         key_func=_rate_limit_key,
         storage_uri=settings.RATE_LIMIT_STORAGE_URI,
         storage_options=dict(_REDIS_STORAGE_OPTIONS),
