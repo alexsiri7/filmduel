@@ -10,6 +10,7 @@ import pytest
 from sqlalchemy.dialects import postgresql
 
 from backend.services.rankings import (
+    FORMULA_TRIGGER_CHARS,
     export_rankings_csv,
     get_elo_ratings,
     get_user_stats,
@@ -235,7 +236,9 @@ async def test_export_rankings_csv_semicolon_locale_cannot_start_formula():
     ]
 
     assert len(semicolon_fields) > 1
-    assert not any(field.startswith(tuple("=+-@\t")) for field in semicolon_fields)
+    assert not any(
+        field.startswith(tuple(FORMULA_TRIGGER_CHARS)) for field in semicolon_fields
+    )
 
 
 @pytest.mark.asyncio

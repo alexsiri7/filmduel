@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from backend.services.rankings import (
     _sanitize_csv_cell,
     parse_decade,
@@ -52,6 +54,10 @@ class TestSanitizeCsvCell:
 
     def test_formula_after_line_breaks(self):
         assert _sanitize_csv_cell("X\n=A\r+B\r\n@C") == "X\n'=A\r'+B\r\n'@C"
+
+    @pytest.mark.parametrize("anchor", ["\n", "\r", "\r\n"])
+    def test_formula_after_line_break_and_quote(self, anchor):
+        assert _sanitize_csv_cell(f'X{anchor}"=CMD()') == f"X{anchor}\"'=CMD()"
 
     def test_crlf_followed_by_safe_text_passthrough(self):
         assert _sanitize_csv_cell("X\r\nY") == "X\r\nY"

@@ -249,7 +249,10 @@ async def get_user_stats(
 # the field's own quoting. Comma-CSV quoting does not stop the re-split, so each
 # such start is neutralized. "\r\n" is one break: "\r" alone only counts when
 # no "\n" follows, so the prefix never lands inside the pair.
-_FORMULA_FIELD_START = re.compile(r'(^|(?:;|\r\n|\r(?!\n)|\n)"*)(?=[=+\-@\t\r\n])')
+FORMULA_TRIGGER_CHARS = "=+-@\t\r\n"
+_FORMULA_FIELD_START = re.compile(
+    rf'(^|(?:;|\r\n|\r(?!\n)|\n)"*)(?=[{re.escape(FORMULA_TRIGGER_CHARS)}])'
+)
 
 
 def _sanitize_csv_cell(value: str) -> str:
