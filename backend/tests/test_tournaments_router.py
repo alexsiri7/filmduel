@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 os.environ.setdefault("TOKEN_ENC_KEY", "test-secret-key-for-unit-tests-32b")
@@ -898,14 +899,14 @@ class TestMatchResultSyncsRatings:
 
 
 def _lock_index(events: list, scope: str, key) -> int:
-    """Index of the pg_advisory_xact_lock statement for (scope, key) in `events`."""
+    """Index of the advisory-lock statement (blocking or try-variant) for (scope, key) in `events`."""
     from sqlalchemy.dialects import postgresql
 
     for i, e in enumerate(events):
         if isinstance(e, str):
             continue
         compiled = e.compile(dialect=postgresql.dialect())
-        if "pg_advisory_xact_lock" not in str(compiled):
+        if "advisory_xact_lock" not in str(compiled):
             continue
         params = set(compiled.params.values())
         if scope in params and str(key) in params:
@@ -1044,3 +1045,59 @@ class TestTournamentStatusTransitions:
         assert resp.status_code == 400
         assert resp.json()["detail"] == "Tournament is not active"
         mock_record.assert_not_awaited()
+
+    def test_submit_match_429_when_lock_held(self):
+        """A match submission that collides with an in-flight regenerate is rejected, not queued (SEC-02)."""
+        user = _make_user()
+        tournament_id = uuid.uuid4()
+        mock_db = AsyncMock()
+
+        async def record_execute(stmt, *args, **kwargs):
+            result = MagicMock()
+            result.scalar_one.return_value = False  # lock not acquired
+            return result
+
+        mock_db.execute = AsyncMock(side_effect=record_execute)
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with patch(
+            "backend.routers.tournaments._load_tournament", new_callable=AsyncMock
+        ) as mock_load:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.post(
+                    f"/api/tournaments/{tournament_id}/matches/{uuid.uuid4()}",
+                    json={"winner_movie_id": str(uuid.uuid4())},
+                )
+
+        assert resp.status_code == 429
+        assert resp.headers.get("Retry-After") == "5"
+        mock_load.assert_not_awaited()
+
+    def test_abandon_429_when_lock_held(self):
+        """Abandon that collides with an in-flight regenerate is rejected, not queued (SEC-02)."""
+        user = _make_user()
+        tournament_id = uuid.uuid4()
+        mock_db = AsyncMock()
+
+        async def record_execute(stmt, *args, **kwargs):
+            result = MagicMock()
+            result.scalar_one.return_value = False
+            return result
+
+        mock_db.execute = AsyncMock(side_effect=record_execute)
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+            resp = client.delete(f"/api/tournaments/{tournament_id}")
+
+        assert resp.status_code == 429
+
+
+def test_tournament_status_lock_is_never_blocking():
+    """Any handler on the tournament_status scope must use the nowait variant (SEC-02)."""
+    src = Path(__file__).resolve().parents[2].joinpath(
+        "backend/routers/tournaments.py"
+    ).read_text()
+    assert 'acquire_quota_lock(db, "tournament_status"' not in src

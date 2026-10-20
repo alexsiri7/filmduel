@@ -12,7 +12,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from backend.db import acquire_quota_lock, acquire_quota_lock_nowait, get_db
+from backend.db import acquire_quota_lock_nowait, get_db
 from backend.rate_limit import limiter
 from backend.db_models import Movie, Tournament, TournamentMatch, User
 from backend.routers.auth import get_current_user, require_ai_consent, require_consent
@@ -498,10 +498,12 @@ async def submit_match_result_endpoint(
     """Submit a tournament match result."""
     uid = current_user.id
 
-    # Serialize against abandon_tournament (SEC-19, #587): held until get_db
-    # commits, so the status validate_match reads cannot be flipped underneath
-    # the bracket write.
-    await acquire_quota_lock(db, "tournament_status", tournament_id)
+    # Serialize against abandon_tournament (SEC-19, #587) and regenerate (#692):
+    # held until get_db commits, so the status validate_match reads cannot be
+    # flipped underneath the bracket write. Non-blocking (AUD-01, SEC-02):
+    # regenerate holds this lock across an LLM call, so a queued waiter would
+    # pin a pooled connection for up to LLM_TIMEOUT_SECONDS.
+    await acquire_quota_lock_nowait(db, "tournament_status", tournament_id)
 
     tournament = await _load_tournament(tournament_id, uid, db)
     try:
@@ -551,7 +553,8 @@ async def abandon_tournament(
 
     # Same lock as submit_match_result_endpoint (SEC-19, #587), taken before
     # the read so a match result that just completed the bracket is visible.
-    await acquire_quota_lock(db, "tournament_status", tournament_id)
+    # Non-blocking for the same reason (AUD-01, SEC-02).
+    await acquire_quota_lock_nowait(db, "tournament_status", tournament_id)
 
     stmt = select(Tournament).where(Tournament.id == tournament_id)
     result = await db.execute(stmt)
