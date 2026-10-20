@@ -44,6 +44,9 @@ settings = get_settings()
 
 _PROVIDER_USER_PATH = re.compile(r"/users/[^/?#\s]+")
 _URL_IN_TEXT = re.compile(r"https?://[^\s'\"<>]+")
+_UUID_IN_TEXT = re.compile(
+    r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.IGNORECASE
+)
 
 
 def _strip_query(url: str) -> str:
@@ -56,8 +59,13 @@ def _redact_url(url: str) -> str:
 
 
 def _redact_text(text: str) -> str:
-    """Redact every URL embedded in free text, such as httpx's error messages."""
-    return _URL_IN_TEXT.sub(lambda m: _redact_url(m.group()), text)
+    """Redact every URL and UUID embedded in free text, such as httpx's error messages.
+
+    User ids are UUIDs and log lines embed them; Sentry keeps events after the
+    account is deleted, so no UUID may reach it.
+    """
+    text = _URL_IN_TEXT.sub(lambda m: _redact_url(m.group()), text)
+    return _UUID_IN_TEXT.sub("[Filtered]", text)
 
 
 class _AccessLogQueryFilter(logging.Filter):
@@ -97,7 +105,7 @@ def _scrub_breadcrumb(crumb: dict, hint: dict) -> dict:
 
 
 def _scrub_logentry(logentry: dict) -> None:
-    """Redact URLs in a log event's text.
+    """Redact URLs and UUIDs in a log event's text.
 
     ``params`` holds the raw log arguments, which may be exceptions whose repr
     embeds a URL; ``formatted`` already renders them, so they are dropped.
@@ -112,7 +120,7 @@ def _scrub_event(event: dict, hint: dict) -> dict:
     """Strip query strings and provider account paths from every URL the event carries.
 
     Covers incoming requests (OAuth ``code``/``state``), outgoing span URLs, and
-    URLs embedded in log messages and exception text.
+    URLs and UUIDs embedded in log messages and exception text.
     """
     request = event.get("request") or {}
     request.pop("query_string", None)

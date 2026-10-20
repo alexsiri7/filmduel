@@ -40,6 +40,23 @@ describe("PrivacyPolicy", () => {
     );
   });
 
+  it("discloses that Sentry error reports outlive account deletion (#789)", () => {
+    render(
+      <MemoryRouter>
+        <PrivacyPolicy />
+      </MemoryRouter>
+    );
+    expect(screen.getByText(/kept by Sentry for the retention period of its plan/)).toHaveTextContent(
+      /not removed when you delete your account/
+    );
+    expect(screen.getByText(/removes all associated data/)).toHaveTextContent(
+      /Error reports already sent to Sentry are not part of deletion/
+    );
+    expect(screen.getByText(/Delete your account and all associated data/)).toHaveTextContent(
+      /except error reports already sent to Sentry/
+    );
+  });
+
   it("shows the policy version users are asked to consent to", () => {
     render(
       <MemoryRouter>

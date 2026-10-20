@@ -57,7 +57,7 @@ export default function PrivacyPolicy() {
             <li>• <strong className="text-[#F5F0E8]">Redis</strong> — Holds the rate-limit counters, keyed by your IP address for requests made before you sign in, until each counter's time window ends (at most one day)</li>
             <li>• <strong className="text-[#F5F0E8]">TMDB</strong> — Movie metadata and poster images. Your browser loads poster images directly from TMDB's image server (image.tmdb.org), so TMDB receives your IP address, your browser's user agent and which posters you view — from which it could infer the films in your duels, rankings and suggestions — along with FilmDuel's site address (not the page you are on)</li>
             <li>• <strong className="text-[#F5F0E8]">Requesty.ai (LLM gateway)</strong> — Routes AI requests to underlying models (e.g. Google Gemini). Prompts are not stored by Requesty.ai. EU-hosted (Frankfurt). GDPR DPA available on request.</li>
-            <li>• <strong className="text-[#F5F0E8]">Sentry</strong> — Error tracking and application monitoring. Error reports and performance traces are scrubbed before sending: they exclude request bodies (such as feedback text), sign-in codes and other query strings, cookies, and account names, but may include the API path requested and your browser's user agent.</li>
+            <li>• <strong className="text-[#F5F0E8]">Sentry</strong> — Error tracking and application monitoring. Error reports and performance traces are scrubbed before sending: they exclude request bodies (such as feedback text), sign-in codes and other query strings, cookies, and account names and IDs, but may include the API path requested and your browser's user agent.</li>
           </ul>
         </section>
 
@@ -141,12 +141,13 @@ export default function PrivacyPolicy() {
             <li>• <strong className="text-[#F5F0E8]">Swipe answers and Watch Suggestions</strong> — deleted after 180 days</li>
             <li>• <strong className="text-[#F5F0E8]">AI tournament responses</strong> — the AI response stored with a tournament is removed after 180 days; the tournament itself is kept</li>
             <li>• <strong className="text-[#F5F0E8]">Feedback reports</strong> — deleted after 365 days; attached screenshots are deleted after 90 days</li>
+            <li>• <strong className="text-[#F5F0E8]">Error reports</strong> — kept by Sentry for the retention period of its plan, not by FilmDuel, and not removed when you delete your account</li>
             <li>• <strong className="text-[#F5F0E8]">Everything else</strong> — your account, rankings, tournaments, and duel history are kept until you delete your account</li>
           </ul>
           <p className="text-[#d6c4ae] text-sm font-body leading-relaxed">
             You can delete your account at any time through the application settings. Deletion is
             permanent and removes all associated data, including rankings, duels, duel history, and
-            tournament history.
+            tournament history. Error reports already sent to Sentry are not part of deletion.
             AI requests processed via Requesty.ai are not stored by Requesty.ai; prompt content is discarded after delivery.
           </p>
         </section>
@@ -163,7 +164,7 @@ export default function PrivacyPolicy() {
           <ul className="space-y-2 text-[#d6c4ae] text-sm font-body">
             <li>• <strong className="text-[#F5F0E8]">Access</strong> — Download a copy of all the data we hold about you using "Download My Data" in the desktop navigation, or by visiting /api/me/export while signed in</li>
             <li>• <strong className="text-[#F5F0E8]">Rectification</strong> — Request correction of inaccurate data</li>
-            <li>• <strong className="text-[#F5F0E8]">Erasure</strong> — Delete your account and all associated data</li>
+            <li>• <strong className="text-[#F5F0E8]">Erasure</strong> — Delete your account and all associated data, except error reports already sent to Sentry (see Data Retention)</li>
             <li>• <strong className="text-[#F5F0E8]">Portability</strong> — The same download is a machine-readable JSON file you can take to another service</li>
           </ul>
         </section>
