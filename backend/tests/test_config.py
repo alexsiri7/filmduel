@@ -702,6 +702,22 @@ class TestRateLimitStorageStartupWarning:
 
         assert "rate_limit_storage_cleartext" not in caplog.text
 
+    @pytest.mark.asyncio
+    async def test_no_cleartext_warning_for_private_host(self, monkeypatch, caplog):
+        """The recommended Railway URI (${{Redis.REDIS_URL}}) is cleartext but private."""
+        for var in self._PROXY_PLATFORM_ENV_VARS:
+            monkeypatch.delenv(var, raising=False)
+
+        await _run_lifespan(
+            _make_settings(
+                RATE_LIMIT_STORAGE_URI="redis://default:pw@redis.railway.internal:6379/0"
+            ),
+            caplog,
+        )
+
+        assert "rate_limit_storage: redis" in caplog.text
+        assert "rate_limit_storage_cleartext" not in caplog.text
+
 
 class TestCleartextPublicRedisUri:
     """SEC-26 (#798): plain redis:// is flagged only when the host is not recognisably private."""
