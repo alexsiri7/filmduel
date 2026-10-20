@@ -53,7 +53,7 @@ extra_deny_paths:
   - "backend/main.py"      # Sentry init, CORS, CSRF and CSP middleware
   - "backend/rate_limit.py"  # abuse guard; reads env and session cookies
   - "backend/utils/cookies.py"  # session/OAuth cookie names (__Host- rule)
-  - "backend/duel_smoke.py"  # post-deploy smoke test run with prod SECRET_KEY
+  - "backend/duel_smoke.py"  # post-deploy smoke test; signs sessions with SMOKE_SESSION_KEY
   - "backend/services/llm.py"   # LLM API key client
   - "backend/services/tmdb.py"  # TMDB API key client
   - "backend/services/trakt.py"  # Trakt OAuth client (client secret)

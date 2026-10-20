@@ -87,6 +87,27 @@ def create_jwt(
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 
+def decode_session_jwt(token: str, settings: Settings) -> dict:
+    """Verify a session JWT signed with SECRET_KEY or, for the smoke user only,
+    with SMOKE_SESSION_KEY, so the post-deploy smoke test never holds SECRET_KEY (#794).
+    """
+    verify = dict(
+        algorithms=[JWT_ALGORITHM],
+        issuer=JWT_ISSUER,
+        audience=JWT_AUDIENCE,
+        options={"require": JWT_REQUIRED_CLAIMS},
+    )
+    try:
+        return jwt.decode(token, settings.SECRET_KEY, **verify)
+    except jwt.InvalidSignatureError:
+        if not settings.SMOKE_SESSION_KEY:
+            raise
+    payload = jwt.decode(token, settings.SMOKE_SESSION_KEY, **verify)
+    if payload.get("sub") != settings.SMOKE_USER_ID:
+        raise jwt.InvalidTokenError("smoke session key is valid for the smoke user only")
+    return payload
+
+
 def set_session_cookie(
     response: Response,
     user_id: str,
@@ -167,14 +188,7 @@ async def get_current_user_id(
         return datetime.fromtimestamp(float(value), tz=timezone.utc)
 
     try:
-        payload = jwt.decode(
-            token,
-            settings.SECRET_KEY,
-            algorithms=[JWT_ALGORITHM],
-            issuer=JWT_ISSUER,
-            audience=JWT_AUDIENCE,
-            options={"require": JWT_REQUIRED_CLAIMS},
-        )
+        payload = decode_session_jwt(token, settings)
         iat = _claim_time(payload["iat"])
         raw_orig = payload.get("orig_iat")
         if raw_orig is not None:

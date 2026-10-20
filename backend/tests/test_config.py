@@ -325,6 +325,46 @@ class TestTokenEncKeyValidation:
         assert s.TOKEN_ENC_KEY == _KEY_32
 
 
+class TestSmokeSessionSettings:
+    """#794: the smoke-session key is optional, paired with its user, and not SECRET_KEY."""
+
+    _USER_ID = "550E8400-E29B-41D4-A716-446655440000"
+
+    def test_both_unset_accepted(self):
+        s = _make_settings()
+        assert (s.SMOKE_SESSION_KEY, s.SMOKE_USER_ID) == ("", "")
+
+    def test_both_set_accepted_and_user_id_canonicalised(self):
+        s = _make_settings(SMOKE_SESSION_KEY=_KEY_32, SMOKE_USER_ID=self._USER_ID)
+        assert s.SMOKE_SESSION_KEY == _KEY_32
+        assert s.SMOKE_USER_ID == self._USER_ID.lower()
+
+    @pytest.mark.parametrize(
+        "overrides",
+        [{"SMOKE_SESSION_KEY": _KEY_32}, {"SMOKE_USER_ID": _USER_ID}],
+    )
+    def test_one_without_the_other_rejected(self, overrides):
+        with pytest.raises(ValidationError, match="must be set together"):
+            _make_settings(**overrides)
+
+    def test_key_equal_to_secret_key_rejected(self):
+        with pytest.raises(ValidationError, match="must differ from SECRET_KEY"):
+            _make_settings(
+                SECRET_KEY=_KEY_32, SMOKE_SESSION_KEY=_KEY_32, SMOKE_USER_ID=self._USER_ID
+            )
+
+    @pytest.mark.parametrize(
+        ("key", "message"), [("a" * 32, "distinct characters"), ("changeme", "placeholder")]
+    )
+    def test_weak_key_rejected(self, key, message):
+        with pytest.raises(ValidationError, match=message):
+            _make_settings(SMOKE_SESSION_KEY=key, SMOKE_USER_ID=self._USER_ID)
+
+    def test_non_uuid_user_id_rejected(self):
+        with pytest.raises(ValidationError, match="SMOKE_USER_ID must be a UUID"):
+            _make_settings(SMOKE_SESSION_KEY=_KEY_32, SMOKE_USER_ID="smoke-user")
+
+
 class TestCookieSecure:
     def test_defaults_to_is_https_when_unset(self):
         """cookie_secure mirrors is_https when SECURE_COOKIES is not set."""

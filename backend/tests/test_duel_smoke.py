@@ -13,19 +13,11 @@ import pytest
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
 
-from backend.config import get_settings  # noqa: E402
-
-get_settings.cache_clear()
+from backend.config import Settings  # noqa: E402
 
 from backend import duel_smoke  # noqa: E402
 from backend.duel_smoke import SmokeFailure, mint_session_jwt, run  # noqa: E402
-from backend.routers.auth import (  # noqa: E402
-    JWT_ALGORITHM,
-    JWT_AUDIENCE,
-    JWT_EXPIRY_HOURS,
-    JWT_ISSUER,
-    JWT_REQUIRED_CLAIMS,
-)
+from backend.routers.auth import JWT_EXPIRY_HOURS, decode_session_jwt  # noqa: E402
 from backend.utils.cookies import COOKIE_NAME, cookie_name  # noqa: E402
 
 PAIR = {
@@ -46,16 +38,15 @@ class FakeRequest:
 
 
 def test_minted_session_is_accepted_by_backend_decoder():
-    settings = get_settings()
     user_id = str(uuid.uuid4())
-    payload = jwt.decode(
-        mint_session_jwt(user_id, settings.SECRET_KEY),
-        settings.SECRET_KEY,
-        algorithms=[JWT_ALGORITHM],
-        issuer=JWT_ISSUER,
-        audience=JWT_AUDIENCE,
-        options={"require": JWT_REQUIRED_CLAIMS},
+    smoke_key = "3f9a0c7d1e5b8264a9f0c3d7e1b5a826"
+    settings = Settings(
+        SECRET_KEY="test-secret-key-for-unit-tests!!",
+        DATABASE_URL="postgresql+asyncpg://localhost/test",
+        SMOKE_SESSION_KEY=smoke_key,
+        SMOKE_USER_ID=user_id,
     )
+    payload = decode_session_jwt(mint_session_jwt(user_id, smoke_key), settings)
     assert payload["sub"] == user_id
     assert isinstance(payload["orig_iat"], float)
     assert payload["exp"] - payload["iat"] <= JWT_EXPIRY_HOURS * 3600
@@ -100,18 +91,18 @@ def test_missing_consent_explains_privacy_policy():
 
 
 def test_main_reports_missing_env_by_name(monkeypatch, capsys):
-    for name in ("SMOKE_BASE_URL", "SMOKE_USER_ID", "SECRET_KEY"):
+    for name in ("SMOKE_BASE_URL", "SMOKE_USER_ID", "SMOKE_SESSION_KEY"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("SMOKE_BASE_URL", "https://env.example")
     assert duel_smoke.main() == 2
-    assert "SMOKE_USER_ID, SECRET_KEY" in capsys.readouterr().err
+    assert "SMOKE_USER_ID, SMOKE_SESSION_KEY" in capsys.readouterr().err
 
 
 @pytest.fixture
 def smoke_env(monkeypatch):
     monkeypatch.setenv("SMOKE_BASE_URL", "https://env.example")
     monkeypatch.setenv("SMOKE_USER_ID", "u")
-    monkeypatch.setenv("SECRET_KEY", "k")
+    monkeypatch.setenv("SMOKE_SESSION_KEY", "k")
 
 
 def test_main_exits_nonzero_when_run_fails(smoke_env, monkeypatch, capsys):
@@ -126,6 +117,14 @@ def test_main_exits_nonzero_when_run_fails(smoke_env, monkeypatch, capsys):
 def test_main_exits_zero_when_run_succeeds(smoke_env, monkeypatch):
     monkeypatch.setattr(duel_smoke, "run", lambda *args: {"outcome": "a_wins"})
     assert duel_smoke.main() == 0
+
+
+def test_main_does_not_need_secret_key(smoke_env, monkeypatch):
+    monkeypatch.delenv("SECRET_KEY", raising=False)
+    signed_with = []
+    monkeypatch.setattr(duel_smoke, "run", lambda url, user, key: signed_with.append(key))
+    assert duel_smoke.main() == 0
+    assert signed_with == ["k"]
 
 
 def test_script_imports_only_the_standard_library():
