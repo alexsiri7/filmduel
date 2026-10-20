@@ -259,6 +259,11 @@ def test_feedback_reports_expose_screenshot_presence_not_bytes():
     assert payload["feedback_reports"][0]["purge_after"] == NOW.isoformat()
     assert payload["feedback_reports"][1]["has_screenshot"] is False
     assert payload["feedback_reports"][1]["purge_after"] is None
+    assert (
+        payload["feedback_reports"][0]["screenshot_url"]
+        == f"/api/me/feedback/{with_shot.id}/screenshot"
+    )
+    assert payload["feedback_reports"][1]["screenshot_url"] is None
     for entry in payload["feedback_reports"]:
         assert not any("screenshot_data" in k for k in entry)
     assert "enc-bytes" not in json.dumps(payload)

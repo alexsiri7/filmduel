@@ -24,6 +24,20 @@ A user SHALL submit at most 5 reports per hour and 20 per 24 hours.
 - WHEN they submit another
 - THEN it is refused as rate limited
 
+### Requirement: Users can review and delete their own reports
+
+A signed-in user SHALL be able to list their own reports' metadata — whether a screenshot exists, but never its content — in pages of at most 100, view one of their own screenshots at a time, and delete one of their own reports, whether or not they have current consent. A report that belongs to another user SHALL be refused as not found. Each action SHALL be rate limited.
+
+#### Scenario: Another user's report
+- GIVEN a report submitted by user A
+- WHEN user B requests its screenshot
+- THEN it is refused as not found
+
+#### Scenario: Deleting own report
+- GIVEN a user's report with a screenshot
+- WHEN they delete it
+- THEN neither the report nor its screenshot remains
+
 ### Requirement: Screenshots can be redacted before sending
 
 Before submitting, the user SHALL be able to edit the screenshot with redact, highlight, arrow and text tools and undo. Saving SHALL flatten the image and every annotation into a single JPEG, with redactions painted opaquely over the original pixels, and only that flattened image SHALL be submitted. Re-opening the editor SHALL start from the last saved image, so earlier redactions are kept.

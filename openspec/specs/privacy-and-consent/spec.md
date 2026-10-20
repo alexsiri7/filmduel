@@ -72,6 +72,15 @@ A signed-in user SHALL be able to download, as a JSON file, every record held ab
 - WHEN they request their data export
 - THEN they receive the JSON file
 
+### Requirement: Exported feedback links to its screenshots
+
+Each feedback report with a screenshot SHALL link to that screenshot, which the user fetches one report at a time rather than embedded in the file.
+
+#### Scenario: Report with a screenshot
+- GIVEN a user's feedback report with a stored screenshot
+- WHEN they request their data export
+- THEN the report links to its screenshot and the image is not in the file
+
 ### Requirement: Users can delete their account
 
 Deleting an account SHALL make a best-effort revocation of the user's provider tokens upstream, remove the user and every record that depends on them, end the session, and be limited to 3 attempts per hour.

@@ -259,6 +259,15 @@ class FeedbackAdminResponse(BaseModel):
     purge_after: Optional[datetime] = None
 
 
+class FeedbackOwnResponse(BaseModel):
+    id: str
+    title: str
+    description: str
+    has_screenshot: bool
+    created_at: datetime
+    purge_after: Optional[datetime] = None
+
+
 class FeedbackScreenshotResponse(BaseModel):
     id: str
     screenshot_data: str

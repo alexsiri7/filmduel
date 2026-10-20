@@ -2,11 +2,21 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+)
 from fastapi.responses import JSONResponse
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.config import get_settings
 from backend.db import async_session_factory, get_db
 from backend.rate_limit import limiter
-from backend.db_models import User, UserMovie
+from backend.db_models import FeedbackReport, User, UserMovie
 from backend.routers.auth import (
     CURRENT_PRIVACY_POLICY_VERSION,
     delete_session_cookie,
@@ -24,7 +34,13 @@ from backend.routers.auth import (
     has_current_consent,
     require_consent,
 )
-from backend.schemas import ConsentAccept, UserResponse, UserSettingsUpdate
+from backend.routers.feedback import _safe_decrypt
+from backend.schemas import (
+    ConsentAccept,
+    FeedbackOwnResponse,
+    UserResponse,
+    UserSettingsUpdate,
+)
 from backend.services.data_export import export_user_data
 from backend.services.pool import populate_movie_pool
 from backend.services.tmdb import backfill_posters_background
@@ -263,6 +279,121 @@ async def export_my_data(
         content=payload,
         headers={"Content-Disposition": "attachment; filename=filmduel_data_export.json"},
     )
+
+
+# The owner feedback routes use get_current_user, not require_consent, for the
+# same reason as export_my_data: access and erasure do not depend on consent.
+
+
+@router.get("/api/me/feedback", response_model=list[FeedbackOwnResponse])
+@limiter.limit("30/minute")
+async def list_my_feedback(
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List the user's own report metadata, newest first.
+
+    Like the admin list, screenshot ciphertext is never selected (#691); the
+    user fetches screenshots one at a time from view_my_screenshot.
+    """
+    result = await db.execute(
+        select(
+            FeedbackReport.id,
+            FeedbackReport.title,
+            FeedbackReport.description,
+            FeedbackReport.created_at,
+            FeedbackReport.purge_after,
+            FeedbackReport.screenshot_data_enc.isnot(None).label("has_screenshot"),
+        )
+        .where(FeedbackReport.user_id == current_user.id)
+        .order_by(FeedbackReport.created_at.desc(), FeedbackReport.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    return [
+        FeedbackOwnResponse(
+            id=str(r.id),
+            title=r.title,
+            description=r.description,
+            has_screenshot=bool(r.has_screenshot),
+            created_at=r.created_at,
+            purge_after=r.purge_after,
+        )
+        for r in result.all()
+    ]
+
+
+def _decode_data_url(data_url: str) -> tuple[str, bytes] | None:
+    header, _, payload = data_url.partition(",")
+    if not (header.startswith("data:") and header.endswith(";base64")):
+        return None
+    try:
+        return header[len("data:") : -len(";base64")], base64.b64decode(
+            payload, validate=True
+        )
+    except (binascii.Error, ValueError):
+        return None
+
+
+@router.get("/api/me/feedback/{report_id}/screenshot")
+@limiter.limit("10/minute")
+async def view_my_screenshot(
+    request: Request,
+    report_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return one of the user's own screenshots as the raw image.
+
+    Another user's report is reported as not found, never as forbidden, so the
+    response does not reveal whether it exists.
+    """
+    result = await db.execute(
+        select(FeedbackReport.screenshot_data_enc).where(
+            FeedbackReport.id == report_id,
+            FeedbackReport.user_id == current_user.id,
+        )
+    )
+    row = result.one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Report not found")
+    plain = _safe_decrypt(str(report_id), row.screenshot_data_enc)
+    if plain is None:
+        raise HTTPException(status_code=404, detail="Screenshot not found")
+    decoded = _decode_data_url(plain)
+    if decoded is None:
+        logger.error("screenshot_decode_failed report_id=%s", report_id)
+        raise HTTPException(status_code=404, detail="Screenshot not found")
+    mime, raw = decoded
+    return Response(content=raw, media_type=mime, headers={"Cache-Control": "no-store"})
+
+
+@router.delete("/api/me/feedback/{report_id}", status_code=204)
+@limiter.limit("30/hour")
+async def delete_my_feedback(
+    request: Request,
+    report_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete one of the user's own reports, screenshot included."""
+    result = await db.execute(
+        delete(FeedbackReport).where(
+            FeedbackReport.id == report_id,
+            FeedbackReport.user_id == current_user.id,
+        )
+    )
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Report not found")
+    logger.info(
+        "feedback_deleted_by_owner report_id=%s user_id=%s",
+        report_id,
+        current_user.id,
+    )
+    return Response(status_code=204)
 
 
 @router.post("/api/sync")
