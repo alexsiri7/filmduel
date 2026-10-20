@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import os
+import uuid
 from urllib.parse import parse_qs, urlparse
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
@@ -628,6 +629,21 @@ class TestSmokeSessionKey:
     async def test_smoke_key_token_accepted_for_smoke_user(self, monkeypatch):
         token = pyjwt.encode(_make_jwt_payload(), _SMOKE_KEY, algorithm=JWT_ALGORITHM)
         assert await self._authenticate(monkeypatch, SMOKE_SETTINGS, token) == _SMOKE_USER_ID
+
+    @pytest.mark.asyncio
+    async def test_smoke_key_token_accepted_for_upper_case_smoke_user(self, monkeypatch):
+        token = pyjwt.encode(
+            _make_jwt_payload(sub=_SMOKE_USER_ID.upper()), _SMOKE_KEY, algorithm=JWT_ALGORITHM
+        )
+        user_id = await self._authenticate(monkeypatch, SMOKE_SETTINGS, token)
+        assert uuid.UUID(user_id) == uuid.UUID(_SMOKE_USER_ID)
+
+    @pytest.mark.asyncio
+    async def test_smoke_key_token_rejected_for_non_uuid_sub(self, monkeypatch):
+        token = pyjwt.encode(_make_jwt_payload(sub="not-a-uuid"), _SMOKE_KEY, algorithm=JWT_ALGORITHM)
+        with pytest.raises(HTTPException) as exc_info:
+            await self._authenticate(monkeypatch, SMOKE_SETTINGS, token)
+        assert exc_info.value.status_code == 401
 
     @pytest.mark.asyncio
     async def test_smoke_key_token_rejected_for_other_user(self, monkeypatch):

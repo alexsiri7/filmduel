@@ -103,9 +103,17 @@ def decode_session_jwt(token: str, settings: Settings) -> dict:
         if not settings.SMOKE_SESSION_KEY:
             raise
     payload = jwt.decode(token, settings.SMOKE_SESSION_KEY, **verify)
-    if payload.get("sub") != settings.SMOKE_USER_ID:
+    if not _is_smoke_user(payload.get("sub"), settings):
         raise jwt.InvalidTokenError("smoke session key is valid for the smoke user only")
     return payload
+
+
+def _is_smoke_user(sub: object, settings: Settings) -> bool:
+    # The CI secret may spell the UUID in any case; SMOKE_USER_ID is canonical.
+    try:
+        return uuid.UUID(str(sub)) == uuid.UUID(settings.SMOKE_USER_ID)
+    except ValueError:
+        return False
 
 
 def set_session_cookie(
