@@ -40,6 +40,17 @@ describe("PrivacyPolicy", () => {
     );
   });
 
+  it("discloses that Sentry error reports outlive account deletion (#789)", () => {
+    render(
+      <MemoryRouter>
+        <PrivacyPolicy />
+      </MemoryRouter>
+    );
+    expect(screen.getByText(/kept by Sentry for the retention period of its plan/)).toHaveTextContent(
+      /not removed when you delete your account/
+    );
+  });
+
   it("shows the policy version users are asked to consent to", () => {
     render(
       <MemoryRouter>

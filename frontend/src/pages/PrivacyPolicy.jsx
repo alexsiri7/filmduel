@@ -141,12 +141,13 @@ export default function PrivacyPolicy() {
             <li>• <strong className="text-[#F5F0E8]">Swipe answers and Watch Suggestions</strong> — deleted after 180 days</li>
             <li>• <strong className="text-[#F5F0E8]">AI tournament responses</strong> — the AI response stored with a tournament is removed after 180 days; the tournament itself is kept</li>
             <li>• <strong className="text-[#F5F0E8]">Feedback reports</strong> — deleted after 365 days; attached screenshots are deleted after 90 days</li>
+            <li>• <strong className="text-[#F5F0E8]">Error reports</strong> — kept by Sentry for the retention period of its plan, not by FilmDuel, and not removed when you delete your account</li>
             <li>• <strong className="text-[#F5F0E8]">Everything else</strong> — your account, rankings, tournaments, and duel history are kept until you delete your account</li>
           </ul>
           <p className="text-[#d6c4ae] text-sm font-body leading-relaxed">
             You can delete your account at any time through the application settings. Deletion is
             permanent and removes all associated data, including rankings, duels, duel history, and
-            tournament history.
+            tournament history. Error reports already sent to Sentry are not part of deletion.
             AI requests processed via Requesty.ai are not stored by Requesty.ai; prompt content is discarded after delivery.
           </p>
         </section>
