@@ -24,6 +24,7 @@ from backend.routers.auth import (  # noqa: E402
     JWT_AUDIENCE,
     JWT_EXPIRY_HOURS,
     JWT_ISSUER,
+    JWT_REQUIRED_CLAIMS,
 )
 from backend.utils.cookies import COOKIE_NAME, cookie_name  # noqa: E402
 
@@ -53,6 +54,7 @@ def test_minted_session_is_accepted_by_backend_decoder():
         algorithms=[JWT_ALGORITHM],
         issuer=JWT_ISSUER,
         audience=JWT_AUDIENCE,
+        options={"require": JWT_REQUIRED_CLAIMS},
     )
     assert payload["sub"] == user_id
     assert isinstance(payload["orig_iat"], float)

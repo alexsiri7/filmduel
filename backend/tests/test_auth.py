@@ -394,6 +394,7 @@ class TestGetCurrentUserId:
                 id="missing-exp",
             ),
             pytest.param(_make_jwt_payload(sub="not-a-uuid"), id="non-uuid-sub"),
+            pytest.param(_make_jwt_payload(iat="1700000000"), id="string-iat"),
             pytest.param(_make_jwt_payload(orig_iat=1e20), id="out-of-range-orig-iat"),
         ],
     )
