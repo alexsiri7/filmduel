@@ -147,7 +147,14 @@ class TestReasonTruncation:
     @pytest.mark.asyncio
     async def test_malformed_picks_skipped(self):
         """A malformed pick is dropped without discarding the well-formed ones."""
-        fake_picks = ["oops", None, {"trakt_id": [1]}, {"trakt_id": "2"}, {"trakt_id": 3, "reason": "ok"}]
+        fake_picks = [
+            "oops",
+            None,
+            {"trakt_id": [1]},
+            {"trakt_id": "2"},
+            {"trakt_id": True},
+            {"trakt_id": 3, "reason": "ok"},
+        ]
 
         with (
             patch("backend.services.suggest._build_taste_profile", AsyncMock(return_value=_FAKE_PROFILE)),
@@ -157,6 +164,19 @@ class TestReasonTruncation:
             result = await generate_suggestions(uuid.uuid4(), AsyncMock())
 
         assert result == [{"movie_id": _FAKE_CANDIDATES[2]["movie_id"], "reason": "ok"}]
+
+    @pytest.mark.asyncio
+    async def test_all_malformed_picks_raise(self):
+        """An all-malformed reply is a failure, not an empty "nothing to suggest" result."""
+        fake_picks = ["oops", None, {"trakt_id": True}]
+
+        with (
+            patch("backend.services.suggest._build_taste_profile", AsyncMock(return_value=_FAKE_PROFILE)),
+            patch("backend.services.suggest._get_candidates", AsyncMock(return_value=_FAKE_CANDIDATES)),
+            patch("backend.services.suggest._call_llm", AsyncMock(return_value=fake_picks)),
+            pytest.raises(RuntimeError),
+        ):
+            await generate_suggestions(uuid.uuid4(), AsyncMock())
 
 
 class TestHasEnoughRanked:

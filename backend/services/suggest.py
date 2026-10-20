@@ -189,7 +189,7 @@ async def generate_suggestions(
     """Generate 6 personalized film suggestions.
 
     Returns list of {movie_id: str, reason: str}.
-    Raises ValueError if LLM_API_KEY is not set.
+    Raises ValueError if LLM_API_KEY is not set, RuntimeError if every LLM pick is malformed.
     Returns empty list if user has < MIN_RANKED films (caller should check taste_profile).
     """
     taste_profile = await _build_taste_profile(user_id, db, media_type)
@@ -233,10 +233,13 @@ async def generate_suggestions(
 
     # Validate and map picks
     results = []
+    well_formed = 0
     for pick in picks:
-        if not isinstance(pick, dict) or not isinstance(pick.get("trakt_id"), int):
+        # type() rather than isinstance: bool is an int subclass, and True would match trakt_id 1.
+        if not isinstance(pick, dict) or type(pick.get("trakt_id")) is not int:
             logger.warning("suggest_malformed_pick user_id=%s type=%s", user_id, type(pick).__name__)
             continue
+        well_formed += 1
         trakt_id = pick["trakt_id"]
         reason = pick.get("reason")
         if not isinstance(reason, str):
@@ -252,6 +255,9 @@ async def generate_suggestions(
         if len(results) >= NUM_PICKS:
             break
 
+    if picks and not well_formed:
+        # Not ValueError: the routers read that as "LLM_API_KEY not configured".
+        raise RuntimeError("LLM reply contained no well-formed picks")
     return results
 
 
