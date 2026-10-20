@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from urllib.parse import urlparse
 
@@ -76,11 +75,12 @@ def _scrub_document(value: str) -> str:
 @router.post(CSP_REPORT_PATH, status_code=204)
 @limiter.limit("30/minute")
 async def csp_report(request: Request) -> Response:
-    # Browsers send application/csp-report or application/reports+json, which
-    # FastAPI's JSON body parsing rejects, so the body is decoded by hand.
-    # Malformed bodies still get 204 so probers learn nothing.
+    # Browsers send application/csp-report or application/reports+json, never
+    # application/json, so the body is read from the request rather than
+    # declared as a body model. Malformed bodies still get 204 so probers
+    # learn nothing.
     try:
-        payload = json.loads(await request.body())
+        payload = await request.json()
     except ValueError:
         return Response(status_code=204)
 
