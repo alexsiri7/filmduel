@@ -69,7 +69,7 @@ jobs:
           python-version: "3.14"
 
       - name: Install pip-audit
-        run: pip install pip-audit==2.8.0
+        run: pip install --require-hashes -r .github/tools/requirements.txt
 
       - name: Audit Python dependencies
         run: pip-audit -r backend/requirements.txt -r backend/requirements-dev.txt
@@ -94,6 +94,6 @@ jobs:
     name: unsafe-change checker tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - name: Unit tests (system python3 + PyYAML, as the check uses)
         run: python3 -m unittest discover -s .github/unsafe-change

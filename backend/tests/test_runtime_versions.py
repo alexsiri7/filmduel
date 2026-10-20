@@ -16,6 +16,7 @@ LOCK_FILES = [
     REPO_ROOT / "backend" / "requirements-dev.in",
     REPO_ROOT / "backend" / "requirements.txt",
     REPO_ROOT / "backend" / "requirements-dev.txt",
+    REPO_ROOT / ".github" / "tools" / "requirements.txt",
 ]
 
 
