@@ -59,6 +59,16 @@ A user with AI features available SHALL be able to ask for an AI-curated tournam
 - THEN the AI chooses 16 of their top 48 films and names the theme
 - AND the bracket is seeded by rating
 
+### Requirement: AI curation attempts share a daily budget
+
+Each AI curation attempt, on creation or regeneration and whether or not it succeeds, SHALL count against one per-user budget of 50 per day. Beyond it, further curation SHALL be refused as rate limited, while non-AI creation is unaffected.
+
+#### Scenario: Failed curations exhaust the daily budget
+- GIVEN a user whose 50 AI curation attempts today all failed
+- WHEN they request another AI-curated tournament or regeneration
+- THEN the request is refused as rate limited
+- AND no AI call is made
+
 ### Requirement: An AI-curated tournament can be regenerated before play
 
 Before any match of an AI-curated tournament has been played, the user SHALL be able to regenerate it at most 3 times with the same theme hint and pool.

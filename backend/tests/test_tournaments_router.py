@@ -713,6 +713,130 @@ class TestRegenerateCandidatePool:
 
 
 # ---------------------------------------------------------------------------
+# SEC-10 (#782): AI curation attempts, not successes, spend a daily budget
+# ---------------------------------------------------------------------------
+
+
+class TestAiCurationDailyCap:
+    """The budget is patched to 1/day so it is reachable under the 10/minute route limit."""
+
+    def setup_method(self):
+        app.dependency_overrides.clear()
+
+    def teardown_method(self):
+        app.dependency_overrides.clear()
+
+    def _override_create_deps(self, user):
+        mock_db = AsyncMock()
+        mock_db.add = MagicMock()
+        mock_db.execute = AsyncMock(side_effect=_db_execute_side_effect(count=0))
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+    def test_failed_ai_curation_spends_the_daily_budget(self):
+        from limits import parse
+
+        from backend.services.curator import CurationError
+
+        self._override_create_deps(_make_user())
+
+        with patch(
+            "backend.rate_limit.AI_CURATION_DAILY_LIMIT", parse("1/day")
+        ), patch(
+            "backend.routers.tournaments.get_filtered_ranked_films",
+            new_callable=AsyncMock,
+            return_value=[MagicMock() for _ in range(8)],
+        ), patch(
+            "backend.routers.tournaments.curate_and_select_films",
+            new_callable=AsyncMock,
+            side_effect=CurationError("short"),
+        ) as mock_curate:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                body = {"bracket_size": 8, "ai_curated": True}
+                first = client.post("/api/tournaments", json=body)
+                second = client.post("/api/tournaments", json=body)
+
+        assert first.status_code == 500
+        assert second.status_code == 429
+        assert "Daily AI curation limit" in second.json()["detail"]
+        mock_curate.assert_awaited_once()
+
+    def test_regenerate_shares_the_ai_curation_budget(self):
+        from limits import parse
+
+        from backend.services.curator import CurationError
+
+        user = _make_user()
+        self._override_create_deps(user)
+        tournament = _make_tournament(user.id, is_ai_curated=True, matches=[])
+        tournament.llm_response = {"_regen_count": 0, "_theme_hint": ""}
+
+        with patch(
+            "backend.rate_limit.AI_CURATION_DAILY_LIMIT", parse("1/day")
+        ), patch(
+            "backend.routers.tournaments._load_tournament",
+            new_callable=AsyncMock,
+            return_value=tournament,
+        ), patch(
+            "backend.routers.tournaments.get_filtered_ranked_films",
+            new_callable=AsyncMock,
+            return_value=[MagicMock() for _ in range(8)],
+        ), patch(
+            "backend.routers.tournaments.curate_and_select_films",
+            new_callable=AsyncMock,
+            side_effect=CurationError("short"),
+        ) as mock_curate:
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                create = client.post(
+                    "/api/tournaments", json={"bracket_size": 8, "ai_curated": True}
+                )
+                regen = client.post(f"/api/tournaments/{tournament.id}/regenerate")
+
+        assert create.status_code == 500
+        assert regen.status_code == 429
+        assert "Daily AI curation limit" in regen.json()["detail"]
+        mock_curate.assert_awaited_once()
+
+    def test_plain_create_ignores_the_ai_curation_budget(self):
+        from limits import parse
+
+        from backend.services.curator import CurationError
+
+        user = _make_user()
+        self._override_create_deps(user)
+
+        with patch(
+            "backend.rate_limit.AI_CURATION_DAILY_LIMIT", parse("1/day")
+        ), patch(
+            "backend.routers.tournaments.get_filtered_ranked_films",
+            new_callable=AsyncMock,
+            return_value=[MagicMock() for _ in range(8)],
+        ), patch(
+            "backend.routers.tournaments.curate_and_select_films",
+            new_callable=AsyncMock,
+            side_effect=CurationError("short"),
+        ), patch(
+            "backend.routers.tournaments.create_tournament_bracket",
+            new_callable=AsyncMock,
+        ), patch(
+            "backend.routers.tournaments._load_tournament",
+            new_callable=AsyncMock,
+            return_value=_make_tournament(user.id),
+        ):
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                ai = client.post(
+                    "/api/tournaments", json={"bracket_size": 8, "ai_curated": True}
+                )
+                plain = client.post(
+                    "/api/tournaments",
+                    json={"name": "Plain", "bracket_size": 8, "ai_curated": False},
+                )
+
+        assert ai.status_code == 500
+        assert plain.status_code == 200
+
+
+# ---------------------------------------------------------------------------
 # FD-040: brackets the pool cannot half-fill, and provider sync after a match
 # ---------------------------------------------------------------------------
 

@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from backend.db import acquire_quota_lock_nowait, get_db
-from backend.rate_limit import limiter
+from backend.rate_limit import count_ai_curation_attempt, limiter
 from backend.db_models import Movie, Tournament, TournamentMatch, User
 from backend.routers.auth import get_current_user, require_ai_consent, require_consent
 from backend.services.sync import sync_ratings_background
@@ -245,6 +245,8 @@ async def create_tournament(
     ai_llm_response = None
 
     if body.ai_curated:
+        # Spend the attempt before the LLM call so failures count (SEC-10, #782).
+        count_ai_curation_attempt(request)
         try:
             seeded_films, llm_result = await curate_and_select_films(
                 user_movies=user_movies,
@@ -357,6 +359,8 @@ async def regenerate_tournament(
     _reject_unfillable_bracket(tournament.bracket_size, len(user_movies))
 
     original_hint = llm_response.get("_theme_hint", "")
+    # Spend the attempt before the LLM call so failures count (SEC-10, #782).
+    count_ai_curation_attempt(request)
     try:
         selected_ums, llm_result = await curate_and_select_films(
             user_movies=user_movies,

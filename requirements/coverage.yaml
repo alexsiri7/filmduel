@@ -212,7 +212,7 @@ coverage:
   - id: FD-041
     status: partial
     code_paths: ["backend/services/tournament.py:26-77", "backend/services/curator.py:78-188", "backend/routers/tournaments.py:247-272", "backend/routers/tournaments.py:299-398"]
-    test_paths: ["backend/tests/test_consent_guard.py:412-500", "backend/tests/test_schemas.py:289-295", "backend/tests/test_retention.py:125", "backend/tests/test_llm_disclosure.py:187-234", "backend/tests/test_tournaments_router.py:534-585"]
+    test_paths: ["backend/tests/test_consent_guard.py:412-500", "backend/tests/test_schemas.py:289-295", "backend/tests/test_retention.py:125", "backend/tests/test_llm_disclosure.py:187-234", "backend/tests/test_tournaments_router.py:534-585", "backend/tests/test_tournaments_router.py:715-836"]
     notes: "Curation failure 500, schema and disclosure tested; the bracket_size*3 candidate cap and ELO-sorted seeding of LLM picks are not asserted, and regeneration constraints (see orphans) are unspecified."
   - id: FD-042
     status: partial
