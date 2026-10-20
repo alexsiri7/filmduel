@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import os
+import uuid
 from urllib.parse import parse_qs, urlparse
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
@@ -609,6 +610,73 @@ class TestGetCurrentUserId:
 
         assert resp.status_code == 401
         _assert_session_cookie_cleared(resp.headers["set-cookie"])
+
+
+_SMOKE_KEY = "3f9a0c7d1e5b8264a9f0c3d7e1b5a826"
+_SMOKE_USER_ID = "550e8400-e29b-41d4-a716-446655440000"
+SMOKE_SETTINGS = _make_settings(SMOKE_SESSION_KEY=_SMOKE_KEY, SMOKE_USER_ID=_SMOKE_USER_ID)
+
+
+class TestSmokeSessionKey:
+    """#794: the post-deploy smoke test signs with SMOKE_SESSION_KEY, never SECRET_KEY."""
+
+    async def _authenticate(self, monkeypatch, settings: Settings, token: str) -> str:
+        monkeypatch.setattr("backend.routers.auth.get_settings", lambda: settings)
+        request = _make_request({COOKIE_NAME: token})
+        return await get_current_user_id(request, _make_response(), _make_db())
+
+    @pytest.mark.asyncio
+    async def test_smoke_key_token_accepted_for_smoke_user(self, monkeypatch):
+        token = pyjwt.encode(_make_jwt_payload(), _SMOKE_KEY, algorithm=JWT_ALGORITHM)
+        assert await self._authenticate(monkeypatch, SMOKE_SETTINGS, token) == _SMOKE_USER_ID
+
+    @pytest.mark.asyncio
+    async def test_smoke_key_token_accepted_for_upper_case_smoke_user(self, monkeypatch):
+        token = pyjwt.encode(
+            _make_jwt_payload(sub=_SMOKE_USER_ID.upper()), _SMOKE_KEY, algorithm=JWT_ALGORITHM
+        )
+        user_id = await self._authenticate(monkeypatch, SMOKE_SETTINGS, token)
+        assert uuid.UUID(user_id) == uuid.UUID(_SMOKE_USER_ID)
+
+    @pytest.mark.asyncio
+    async def test_smoke_key_token_rejected_for_non_uuid_sub(self, monkeypatch):
+        token = pyjwt.encode(_make_jwt_payload(sub="not-a-uuid"), _SMOKE_KEY, algorithm=JWT_ALGORITHM)
+        with pytest.raises(HTTPException) as exc_info:
+            await self._authenticate(monkeypatch, SMOKE_SETTINGS, token)
+        assert exc_info.value.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_smoke_key_token_rejected_for_other_user(self, monkeypatch):
+        payload = _make_jwt_payload(sub="11111111-2222-3333-4444-555555555555")
+        token = pyjwt.encode(payload, _SMOKE_KEY, algorithm=JWT_ALGORITHM)
+        with pytest.raises(HTTPException) as exc_info:
+            await self._authenticate(monkeypatch, SMOKE_SETTINGS, token)
+        assert exc_info.value.status_code == 401
+        assert exc_info.value.detail == "Invalid session"
+
+    @pytest.mark.asyncio
+    async def test_smoke_key_token_rejected_when_smoke_settings_unset(self, monkeypatch):
+        token = pyjwt.encode(_make_jwt_payload(), _SMOKE_KEY, algorithm=JWT_ALGORITHM)
+        with pytest.raises(HTTPException) as exc_info:
+            await self._authenticate(monkeypatch, SETTINGS, token)
+        assert exc_info.value.status_code == 401
+        assert exc_info.value.detail == "Invalid session"
+
+    @pytest.mark.asyncio
+    async def test_expired_smoke_key_token_rejected(self, monkeypatch):
+        now = datetime.now(timezone.utc)
+        payload = _make_jwt_payload(exp=now - timedelta(minutes=1), iat=now - timedelta(minutes=11))
+        token = pyjwt.encode(payload, _SMOKE_KEY, algorithm=JWT_ALGORITHM)
+        with pytest.raises(HTTPException) as exc_info:
+            await self._authenticate(monkeypatch, SMOKE_SETTINGS, token)
+        assert exc_info.value.status_code == 401
+        assert exc_info.value.detail == "Session expired"
+
+    @pytest.mark.asyncio
+    async def test_secret_key_token_still_accepted_for_any_user(self, monkeypatch):
+        user_id = "11111111-2222-3333-4444-555555555555"
+        token = create_jwt(user_id, SMOKE_SETTINGS)
+        assert await self._authenticate(monkeypatch, SMOKE_SETTINGS, token) == user_id
 
 
 # ---------------------------------------------------------------------------

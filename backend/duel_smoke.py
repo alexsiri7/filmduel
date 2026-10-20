@@ -1,10 +1,10 @@
 """Post-deploy duel smoke test: fetch a pair and submit a duel as a smoke user (#648).
 
-Run against a deployed environment through ``railway run``, which injects the
-service's ``SECRET_KEY`` so a short-lived session can be minted for the smoke user:
+Run against a deployed environment with the service's smoke-session key (never
+``SECRET_KEY``), which it accepts for the smoke user only (#794):
 
-    SMOKE_BASE_URL=https://... SMOKE_USER_ID=<uuid> \\
-        railway run --service web --environment staging -- python3 -m backend.duel_smoke
+    SMOKE_BASE_URL=https://... SMOKE_USER_ID=<uuid> SMOKE_SESSION_KEY=... \\
+        python3 -m backend.duel_smoke
 
 Standard library only: CI runs it with the runner's python3 without installing
 backend/requirements.txt. Never print the key or the minted token.
@@ -108,7 +108,8 @@ def run(base_url: str, user_id: str, secret: str, request: Request = _request) -
     if status == 401:
         raise SmokeFailure(
             f"GET /api/movies/pair {_describe(status, pair)} — smoke user not found or "
-            "session rejected; check SMOKE_USER_ID for this environment"
+            "session rejected; check that SMOKE_USER_ID and SMOKE_SESSION_KEY match the "
+            "service's SMOKE_USER_ID / SMOKE_SESSION_KEY for this environment"
         )
     if status == 404:
         raise SmokeFailure(
@@ -141,13 +142,14 @@ def run(base_url: str, user_id: str, secret: str, request: Request = _request) -
 
 
 def main() -> int:
-    env = {name: os.environ.get(name) for name in ("SMOKE_BASE_URL", "SMOKE_USER_ID", "SECRET_KEY")}
+    names = ("SMOKE_BASE_URL", "SMOKE_USER_ID", "SMOKE_SESSION_KEY")
+    env = {name: os.environ.get(name) for name in names}
     missing = [name for name, value in env.items() if not value]
     if missing:
         print(f"FAIL: missing environment variables: {', '.join(missing)}", file=sys.stderr)
         return 2
     try:
-        run(env["SMOKE_BASE_URL"], env["SMOKE_USER_ID"], env["SECRET_KEY"])
+        run(env["SMOKE_BASE_URL"], env["SMOKE_USER_ID"], env["SMOKE_SESSION_KEY"])
     except (SmokeFailure, urllib.error.URLError, TimeoutError) as exc:
         print(f"FAIL: {exc}", file=sys.stderr)
         return 1

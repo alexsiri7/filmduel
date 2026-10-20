@@ -3,6 +3,7 @@
 import ipaddress
 import os
 import ssl
+import uuid
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
@@ -156,6 +157,10 @@ class Settings(BaseSettings):
     # App secrets
     SECRET_KEY: str
     TOKEN_ENC_KEY: str = ""  # ≥32 chars; rotate independently of SECRET_KEY
+    # Post-deploy duel smoke test (#648, #794): sessions signed with this key are
+    # accepted for SMOKE_USER_ID only, so CI never holds SECRET_KEY.
+    SMOKE_SESSION_KEY: str = ""
+    SMOKE_USER_ID: str = ""
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
@@ -188,6 +193,33 @@ class Settings(BaseSettings):
             raise ValueError(
                 "TOKEN_ENC_KEY must be set when TRAKT_CLIENT_ID or SIMKL_CLIENT_ID is configured"
             )
+        return self
+
+    @field_validator("SMOKE_SESSION_KEY", mode="before")
+    @classmethod
+    def validate_smoke_session_key(cls, v: str) -> str:
+        if v == "":
+            return v  # optional; pairing enforced by require_smoke_settings_together
+        return _validate_key_strength("SMOKE_SESSION_KEY", v)
+
+    @field_validator("SMOKE_USER_ID", mode="before")
+    @classmethod
+    def validate_smoke_user_id(cls, v: str) -> str:
+        stripped = v.strip()
+        if not stripped:
+            return stripped
+        try:
+            return str(uuid.UUID(stripped))
+        except ValueError:
+            raise ValueError("SMOKE_USER_ID must be a UUID") from None
+
+    @model_validator(mode="after")
+    def require_smoke_settings_together(self) -> "Settings":
+        """A smoke key needs the one user it may sign for, and must not be SECRET_KEY."""
+        if bool(self.SMOKE_SESSION_KEY) != bool(self.SMOKE_USER_ID):
+            raise ValueError("SMOKE_SESSION_KEY and SMOKE_USER_ID must be set together")
+        if self.SMOKE_SESSION_KEY and self.SMOKE_SESSION_KEY == self.SECRET_KEY:
+            raise ValueError("SMOKE_SESSION_KEY must differ from SECRET_KEY")
         return self
 
     BASE_URL: str = "http://localhost:8000"
@@ -316,8 +348,8 @@ class Settings(BaseSettings):
             )
         return self
 
-    # hide_input_in_errors: a rejected SECRET_KEY / TOKEN_ENC_KEY / DATABASE_URL
-    # must not be echoed into startup logs via ValidationError's input_value.
+    # hide_input_in_errors: a rejected SECRET_KEY / TOKEN_ENC_KEY / SMOKE_SESSION_KEY /
+    # DATABASE_URL must not be echoed into startup logs via ValidationError's input_value.
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
