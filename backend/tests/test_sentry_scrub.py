@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import uuid
 
@@ -19,6 +20,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from backend.main import (  # noqa: E402
     SENTRY_OPTIONS,
+    _redact_text,
     _redact_url,
     _scrub_breadcrumb,
     _scrub_event,
@@ -49,6 +51,23 @@ class TestRedactUrl:
         )
 
 
+class TestRedactText:
+    def test_urls_inside_httpx_error_text_are_redacted(self):
+        text = (
+            "Client error '404 Not Found' for url "
+            "'https://api.trakt.tv/users/alice/watched/movies?api_key=SECRET'\n"
+            "For more information check: https://developer.mozilla.org/404"
+        )
+        assert _redact_text(text) == (
+            "Client error '404 Not Found' for url "
+            "'https://api.trakt.tv/users/[Filtered]/watched/movies'\n"
+            "For more information check: https://developer.mozilla.org/404"
+        )
+
+    def test_text_without_urls_is_unchanged(self):
+        assert _redact_text("Failed to fetch get_popular") == "Failed to fetch get_popular"
+
+
 class TestScrubBreadcrumb:
     def test_http_breadcrumb_url_and_query_are_scrubbed(self):
         crumb = {
@@ -66,6 +85,15 @@ class TestScrubBreadcrumb:
             "http.method": "GET",
             "url": "https://api.trakt.tv/users/[Filtered]/watched/movies",
         }
+
+    def test_log_breadcrumb_message_is_redacted(self):
+        crumb = {
+            "category": "backend.services.pool",
+            "message": "retrying https://api.trakt.tv/users/alice/ratings/movies?k=SECRET",
+        }
+        assert _scrub_breadcrumb(crumb, {})["message"] == (
+            "retrying https://api.trakt.tv/users/[Filtered]/ratings/movies"
+        )
 
     def test_breadcrumb_without_data_passes_through(self):
         crumb = {"category": "query", "message": "SELECT 1"}
@@ -108,6 +136,25 @@ class TestScrubEvent:
         )
         assert http_span["data"] == {"url": "https://api.themoviedb.org/3/movie/550"}
         assert db_span == {"op": "db", "description": "SELECT 1"}
+
+    def test_log_entry_and_exception_text_are_redacted(self):
+        url = "https://api.themoviedb.org/3/movie/550?api_key=SECRET"
+        event = {
+            "logentry": {
+                "message": f"failed {url}",
+                "formatted": f"failed {url}",
+                "params": [url],
+            },
+            "exception": {"values": [{"type": "HTTPStatusError", "value": f"for url '{url}'"}]},
+        }
+        result = _scrub_event(event, {})
+        assert result["logentry"] == {
+            "message": "failed https://api.themoviedb.org/3/movie/550",
+            "formatted": "failed https://api.themoviedb.org/3/movie/550",
+        }
+        assert result["exception"]["values"][0]["value"] == (
+            "for url 'https://api.themoviedb.org/3/movie/550'"
+        )
 
     def test_event_without_request_passes_through(self):
         event = {"message": "hello", "level": "info"}
@@ -168,6 +215,31 @@ def test_real_sdk_event_carries_no_provider_secrets(sentry_events):
     payload = _sent_payload(sentry_events)
     assert b"breadcrumbs" in payload
     assert b"api.themoviedb.org/3/movie/550" in payload
+    assert _TMDB_KEY.encode() not in payload
+    assert _TRAKT_USER.encode() not in payload
+
+
+def test_logged_http_status_error_carries_no_provider_secrets(sentry_events):
+    """httpx puts the request URL in HTTPStatusError's text; logging one must not ship it to Sentry.
+
+    This covers the Sentry channel only: stdout still renders the exception text, which is
+    why ``_safe_fetch`` logs ``_describe_failure`` instead of the exception itself.
+    """
+    client = httpx.Client(transport=httpx.MockTransport(lambda req: httpx.Response(404)))
+    log = logging.getLogger("backend.tests.sentry_scrub")
+    for url in (
+        f"https://api.themoviedb.org/3/movie/550?api_key={_TMDB_KEY}",
+        f"https://api.trakt.tv/users/{_TRAKT_USER}/watched/movies",
+    ):
+        try:
+            client.get(url).raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            assert url in str(exc)
+            log.warning("retrying after %s", exc)
+            log.exception("fetch failed: %r", exc)
+
+    payload = _sent_payload(sentry_events)
+    assert b"HTTPStatusError" in payload
     assert _TMDB_KEY.encode() not in payload
     assert _TRAKT_USER.encode() not in payload
 
