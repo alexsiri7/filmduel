@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import sqlalchemy as sa
+from cryptography.fernet import Fernet
 
 from backend.services.token_crypto import TokenPurpose, _fernet, decrypt_token
 
@@ -141,10 +142,72 @@ def test_downgrade_restores_the_shared_key(conn):
     assert shared.decrypt(_screenshot(conn).encode()) == SCREENSHOT.encode()
 
 
-def test_undecryptable_value_names_the_row(conn):
-    conn.execute(sa.text("INSERT INTO feedback_reports VALUES (7, 'garbage')"))
-    with pytest.raises(RuntimeError, match="feedback report id=7"):
+def test_undecryptable_values_are_nulled_and_good_ones_rekeyed(conn, caplog):
+    shared, _, _ = _migration._make_fernets(TEST_KEY)
+    _seed(conn, shared)
+    stale = Fernet(Fernet.generate_key())
+    conn.execute(
+        sa.text("INSERT INTO users VALUES (3, :ta, :tr, NULL, NULL)"),
+        {
+            "ta": stale.encrypt(b"old-access").decode(),
+            "tr": stale.encrypt(b"old-refresh").decode(),
+        },
+    )
+    conn.execute(
+        sa.text("INSERT INTO feedback_reports VALUES (7, :s)"),
+        {"s": stale.encrypt(SCREENSHOT.encode()).decode()},
+    )
+
+    with caplog.at_level("WARNING"):
         _migration.upgrade()
+
+    oauth = lambda v: decrypt_token(v, purpose=TokenPurpose.OAUTH)  # noqa: E731
+    first, second, third = _users(conn)
+    assert oauth(first.trakt_access_token) == "trakt-access"
+    assert oauth(second.simkl_refresh_token) == "simkl-refresh"
+    assert (third.trakt_access_token, third.trakt_refresh_token) == (None, None)
+    assert decrypt_token(_screenshot(conn), purpose=TokenPurpose.SCREENSHOT) == SCREENSHOT
+    assert (
+        conn.execute(
+            sa.text("SELECT screenshot_data_enc FROM feedback_reports WHERE id = 7")
+        ).scalar_one()
+        is None
+    )
+    warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    assert any("users.trakt_access_token for id=3" in m for m in warnings)
+    assert any("users.trakt_refresh_token for id=3" in m for m in warnings)
+    assert any("feedback_reports.screenshot_data_enc for id=7" in m for m in warnings)
+    # The values themselves never reach the log.
+    assert not any("gAAAA" in m for m in warnings)
+
+
+def test_nulled_rows_survive_a_rerun(conn):
+    shared, _, _ = _migration._make_fernets(TEST_KEY)
+    _seed(conn, shared)
+    conn.execute(sa.text("INSERT INTO users VALUES (3, 'garbage', NULL, NULL, NULL)"))
+    _migration.upgrade()
+    after_first = (_users(conn), _screenshot(conn))
+
+    _migration.upgrade()
+
+    assert (_users(conn), _screenshot(conn)) == after_first
+
+
+def test_wrong_key_aborts_without_touching_anything(conn):
+    """When nothing decrypts, TOKEN_ENC_KEY is wrong: never wipe every token."""
+    other_key = Fernet(Fernet.generate_key())
+    _seed(conn, other_key)
+    before = (_users(conn), _screenshot(conn))
+
+    with pytest.raises(RuntimeError, match="TOKEN_ENC_KEY is probably wrong"):
+        _migration.upgrade()
+
+    assert (_users(conn), _screenshot(conn)) == before
+
+
+def test_empty_tables_need_no_key_check(conn):
+    _migration.upgrade()
+    assert _users(conn) == []
 
 
 def test_plaintext_tokens_survive_the_whole_encryption_chain(conn):
