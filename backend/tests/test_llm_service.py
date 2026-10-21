@@ -104,6 +104,23 @@ async def test_chat_completion_passes_timeout(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_chat_completion_null_content_returns_empty_text(monkeypatch):
+    """A reply with no text (content=null) is returned as "" so callers parse it as non-JSON."""
+
+    async def fake_acompletion(**kwargs):
+        msg = MagicMock()
+        msg.message.content = None
+        resp = MagicMock()
+        resp.choices = [msg]
+        resp.usage = None
+        return resp
+
+    monkeypatch.setattr("litellm.acompletion", fake_acompletion)
+    monkeypatch.setattr(get_settings(), "LLM_API_KEY", "x")
+    assert await chat_completion("sys", "user") == ""
+
+
+@pytest.mark.asyncio
 async def test_chat_completion_fails_fast_when_slots_full(monkeypatch):
     reset_llm_slots()
     monkeypatch.setattr(get_settings(), "LLM_MAX_CONCURRENT", 1)

@@ -93,7 +93,8 @@ async def chat_completion(
             total_tokens,
         )
 
-        return response.choices[0].message.content
+        # content is null when the model replies with no text.
+        return response.choices[0].message.content or ""
 
 
 def parse_json_response(text: str) -> dict:
