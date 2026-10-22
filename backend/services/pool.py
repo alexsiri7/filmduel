@@ -267,8 +267,8 @@ async def populate_movie_pool(user: User, db: AsyncSession, *, force: bool = Fal
         return True
 
     settings = get_settings()
-    has_trakt = bool(user.trakt_user_id and user.trakt_access_token_enc)
-    has_simkl = bool(user.simkl_user_id and user.simkl_access_token_enc)
+    has_trakt = bool(user.trakt_user_id and user.trakt_access_token)
+    has_simkl = bool(user.simkl_user_id and user.simkl_access_token)
     failures: list[str] = []
 
     for media_type in ("movie", "show"):

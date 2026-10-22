@@ -7,9 +7,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from backend.db_models import User
 from backend.services.token_crypto import (
+    TokenDecryptError,
     TokenPurpose,
     _fernet,
+    decrypt_and_rotate,
     decrypt_token,
     encrypt_token,
 )
@@ -25,10 +28,24 @@ def _clear_fernet_cache():
     _fernet.cache_clear()
 
 
-def _mock_settings(token_enc_key: str = "a-very-long-test-key-that-is-at-least-32-characters"):
+KEY_A = "key-a-long-enough-for-validation-32chars"
+KEY_B = "key-b-long-enough-for-validation-32chars"
+KEY_C = "key-c-long-enough-for-validation-32chars"
+
+
+def _mock_settings(
+    token_enc_key: str = "a-very-long-test-key-that-is-at-least-32-characters",
+    previous: str = "",
+):
     settings = MagicMock()
     settings.TOKEN_ENC_KEY = token_enc_key
+    settings.TOKEN_ENC_KEY_PREVIOUS = previous
     return settings
+
+
+def _rotate_to(mock_get_settings, current: str, previous: str = "") -> None:
+    _fernet.cache_clear()
+    mock_get_settings.return_value = _mock_settings(current, previous)
 
 
 class TestTokenCrypto:
@@ -107,3 +124,65 @@ class TestTokenCrypto:
                 else:
                     with pytest.raises(RuntimeError, match="Token decryption failed"):
                         decrypt_token(ciphertext, purpose=other)
+
+
+@patch("backend.services.token_crypto.get_settings")
+class TestKeyRotation:
+    def test_previous_key_decrypts_and_rotates_to_current(self, mock_get_settings):
+        _rotate_to(mock_get_settings, KEY_A)
+        ciphertext = encrypt_token("secret", purpose=OAUTH)
+
+        _rotate_to(mock_get_settings, KEY_B, previous=f" {KEY_C} , {KEY_A} ")
+        assert decrypt_token(ciphertext, purpose=OAUTH) == "secret"
+        plain, rotated = decrypt_and_rotate(ciphertext, purpose=OAUTH)
+        assert plain == "secret"
+
+        _rotate_to(mock_get_settings, KEY_B)
+        assert decrypt_and_rotate(rotated, purpose=OAUTH) == ("secret", None)
+
+    def test_current_key_value_is_not_rotated(self, mock_get_settings):
+        _rotate_to(mock_get_settings, KEY_B, previous=KEY_A)
+        ciphertext = encrypt_token("secret", purpose=OAUTH)
+        assert decrypt_and_rotate(ciphertext, purpose=OAUTH) == ("secret", None)
+        assert decrypt_and_rotate("", purpose=OAUTH) == ("", None)
+
+    def test_previous_key_never_encrypts(self, mock_get_settings):
+        _rotate_to(mock_get_settings, KEY_B, previous=KEY_A)
+        ciphertext = encrypt_token("secret", purpose=OAUTH)
+        _rotate_to(mock_get_settings, KEY_A)
+        with pytest.raises(TokenDecryptError):
+            decrypt_token(ciphertext, purpose=OAUTH)
+
+    def test_unknown_key_raises(self, mock_get_settings):
+        _rotate_to(mock_get_settings, KEY_A)
+        ciphertext = encrypt_token("secret", purpose=OAUTH)
+        _rotate_to(mock_get_settings, KEY_B, previous=KEY_C)
+        with pytest.raises(TokenDecryptError, match="Token decryption failed"):
+            decrypt_and_rotate(ciphertext, purpose=OAUTH)
+
+
+@patch("backend.services.token_crypto.get_settings")
+class TestEncryptedTokenRotation:
+    def test_row_under_previous_key_is_rewritten_under_current(self, mock_get_settings):
+        _rotate_to(mock_get_settings, KEY_A)
+        user = User(trakt_access_token="oauth-access")
+        stored_under_a = user.trakt_access_token_enc
+
+        _rotate_to(mock_get_settings, KEY_B, previous=KEY_A)
+        assert user.trakt_access_token == "oauth-access"
+        assert user.trakt_access_token_enc != stored_under_a
+
+        _rotate_to(mock_get_settings, KEY_B)
+        assert user.trakt_access_token == "oauth-access"
+
+    def test_row_no_key_decrypts_reads_as_disconnected(self, mock_get_settings, caplog):
+        _rotate_to(mock_get_settings, KEY_A)
+        user = User(trakt_access_token="oauth-access")
+        stored_under_a = user.trakt_access_token_enc
+
+        _rotate_to(mock_get_settings, KEY_B)
+        with caplog.at_level("WARNING", logger="backend.db_models"):
+            assert user.trakt_access_token == ""
+        assert user.trakt_access_token_enc == stored_under_a
+        assert "oauth_token_undecryptable" in caplog.text
+        assert stored_under_a not in caplog.text

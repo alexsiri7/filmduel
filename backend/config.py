@@ -204,6 +204,9 @@ class Settings(BaseSettings):
     # App secrets
     SECRET_KEY: str
     TOKEN_ENC_KEY: str = ""  # ≥32 chars; rotate independently of SECRET_KEY
+    # Comma-separated keys TOKEN_ENC_KEY replaced; decrypt only, so values
+    # stored before a rotation stay readable until they are re-encrypted.
+    TOKEN_ENC_KEY_PREVIOUS: str = ""
     # Post-deploy duel smoke test (#648, #794): sessions signed with this key are
     # accepted for SMOKE_USER_ID only, so CI never holds SECRET_KEY.
     SMOKE_SESSION_KEY: str = ""

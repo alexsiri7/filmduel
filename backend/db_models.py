@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -21,13 +22,20 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+logger = logging.getLogger(__name__)
+
 
 class Base(DeclarativeBase):
     pass
 
 
 class EncryptedToken:
-    """Descriptor that transparently encrypts on write and decrypts on read."""
+    """Descriptor that transparently encrypts on write and decrypts on read.
+
+    A value only a TOKEN_ENC_KEY_PREVIOUS key decrypts is rewritten under the
+    current key on read; one no configured key decrypts reads as "" (not
+    connected).
+    """
 
     def __init__(self, enc_attr: str) -> None:
         self._enc_attr = enc_attr
@@ -35,9 +43,28 @@ class EncryptedToken:
     def __get__(self, obj, objtype=None):
         if obj is None:
             return self
-        from backend.services.token_crypto import TokenPurpose, decrypt_token
+        from backend.services.token_crypto import (
+            TokenDecryptError,
+            TokenPurpose,
+            decrypt_and_rotate,
+        )
 
-        return decrypt_token(getattr(obj, self._enc_attr), purpose=TokenPurpose.OAUTH)
+        try:
+            plain, rotated = decrypt_and_rotate(
+                getattr(obj, self._enc_attr), purpose=TokenPurpose.OAUTH
+            )
+        except TokenDecryptError:
+            # The ciphertext stays stored: a key missing from
+            # TOKEN_ENC_KEY_PREVIOUS can still be added back to recover it.
+            logger.warning(
+                "oauth_token_undecryptable user_id=%s column=%s — treating as disconnected",
+                obj.id,
+                self._enc_attr,
+            )
+            return ""
+        if rotated is not None:
+            setattr(obj, self._enc_attr, rotated)
+        return plain
 
     def __set__(self, obj, value):
         from backend.services.token_crypto import TokenPurpose, encrypt_token

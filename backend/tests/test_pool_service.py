@@ -119,7 +119,7 @@ class TestPopulateMoviePool:
         (#662-#665)."""
         recent_time = datetime.now(timezone.utc) - timedelta(minutes=30)
         user = _make_user(last_seen_at=recent_time)
-        user.simkl_access_token_enc = None
+        user.simkl_access_token = None
         db = AsyncMock()
         events: list[str] = []
         db.commit.side_effect = lambda: events.append("commit")
@@ -154,7 +154,7 @@ class TestPopulateMoviePool:
     @pytest.mark.asyncio
     async def test_returns_true_when_every_fetch_succeeds(self):
         user = _make_user(last_seen_at=None)
-        user.simkl_access_token_enc = None
+        user.simkl_access_token = None
         db = AsyncMock()
         trakt_mock = AsyncMock()
         for method in (
@@ -371,7 +371,6 @@ class TestSafeFetch:
         user = _make_user(last_seen_at=None)
         # Remove SIMKL-related attrs to focus test on Trakt failure path
         user.simkl_access_token = None
-        user.simkl_access_token_enc = None
         db = AsyncMock()
 
         exec_count = 0
