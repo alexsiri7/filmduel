@@ -1,7 +1,11 @@
-# Secrets & local config — never bake into image
-.env
-.env.*
-!.env.example
+# Secrets & local config — never bake into image.
+# Unlike .gitignore, bare .dockerignore patterns match only at the context root; **/ matches at any depth.
+**/.env
+**/.env.*
+!**/.env.example
+**/*.pem
+**/*.key
+**/*.p12
 
 # Version control
 .git
