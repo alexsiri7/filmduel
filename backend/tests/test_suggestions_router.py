@@ -421,7 +421,7 @@ class TestGetSuggestionsEmptyCooldown:
 
     @pytest.mark.parametrize(
         "llm_reply",
-        ['Here are my picks: {"picks": [', '{"suggestions": []}', '[]', '{"picks": 6}'],
+        ['Here are my picks: {"picks": [', '{"suggestions": []}', '[]', '{"picks": 6}', ""],
     )
     def test_unusable_reply_is_not_retried_on_next_get(self, llm_reply):
         responses, mock_llm = self._get_twice(llm_reply)
