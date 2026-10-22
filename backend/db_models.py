@@ -9,6 +9,7 @@ from typing import Optional
 
 from sqlalchemy import (
     Boolean,
+    Column,
     DateTime,
     Float,
     ForeignKey,
@@ -17,10 +18,21 @@ from sqlalchemy import (
     Numeric,
     Text,
     UniqueConstraint,
+    event,
     text,
+    update,
 )
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    Session,
+    mapped_column,
+    object_session,
+    relationship,
+)
+from sqlalchemy.orm.attributes import set_committed_value
 
 logger = logging.getLogger(__name__)
 
@@ -33,12 +45,22 @@ class EncryptedToken:
     """Descriptor that transparently encrypts on write and decrypts on read.
 
     A value only a TOKEN_ENC_KEY_PREVIOUS key decrypts is rewritten under the
-    current key on read; one no configured key decrypts reads as "" (not
-    connected).
+    current key when its session commits; one no configured key decrypts reads
+    as "" (not connected).
     """
 
     def __init__(self, enc_attr: str) -> None:
         self._enc_attr = enc_attr
+
+    @classmethod
+    def columns(cls, model: type[Base]) -> list[Column]:
+        """The stored ciphertext column behind every EncryptedToken on ``model``."""
+        mapper = sa_inspect(model)
+        return [
+            mapper.columns[descriptor._enc_attr]
+            for descriptor in vars(model).values()
+            if isinstance(descriptor, cls)
+        ]
 
     def __get__(self, obj, objtype=None):
         if obj is None:
@@ -49,10 +71,9 @@ class EncryptedToken:
             decrypt_and_rotate,
         )
 
+        stored = getattr(obj, self._enc_attr)
         try:
-            plain, rotated = decrypt_and_rotate(
-                getattr(obj, self._enc_attr), purpose=TokenPurpose.OAUTH
-            )
+            plain, rotated = decrypt_and_rotate(stored, purpose=TokenPurpose.OAUTH)
         except TokenDecryptError:
             # The ciphertext stays stored: a key missing from
             # TOKEN_ENC_KEY_PREVIOUS can still be added back to recover it.
@@ -63,13 +84,37 @@ class EncryptedToken:
             )
             return ""
         if rotated is not None:
-            setattr(obj, self._enc_attr, rotated)
+            # Not a plain attribute write: flushing it would overwrite a token
+            # another transaction committed since this one loaded the row.
+            set_committed_value(obj, self._enc_attr, rotated)
+            session = object_session(obj)
+            if session is not None:
+                column = sa_inspect(type(obj)).columns[self._enc_attr]
+                session.info.setdefault(_PENDING_ROTATIONS, {})[
+                    (column, obj.id)
+                ] = (stored, rotated)
         return plain
 
     def __set__(self, obj, value):
         from backend.services.token_crypto import TokenPurpose, encrypt_token
 
         setattr(obj, self._enc_attr, encrypt_token(value, purpose=TokenPurpose.OAUTH))
+
+
+_PENDING_ROTATIONS = "pending_token_rotations"
+
+
+@event.listens_for(Session, "before_commit")
+def _persist_token_rotations(session: Session) -> None:
+    for (column, row_id), (stored, rotated) in session.info.pop(
+        _PENDING_ROTATIONS, {}
+    ).items():
+        # Only while the row still holds the ciphertext that was read.
+        session.execute(
+            update(column.table)
+            .where(column.table.c.id == row_id, column == stored)
+            .values({column: rotated})
+        )
 
 
 class User(Base):

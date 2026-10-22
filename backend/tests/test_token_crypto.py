@@ -6,6 +6,8 @@ import time
 from unittest.mock import MagicMock, patch
 
 import pytest
+import sqlalchemy as sa
+from sqlalchemy.orm import Session
 
 from backend.db_models import User
 from backend.services.token_crypto import (
@@ -161,6 +163,21 @@ class TestKeyRotation:
             decrypt_and_rotate(ciphertext, purpose=OAUTH)
 
 
+@pytest.fixture
+def users_db(tmp_path):
+    engine = sa.create_engine(f"sqlite:///{tmp_path / 'users.db'}")
+    User.__table__.create(engine)
+    yield engine
+    engine.dispose()
+
+
+def _stored_token(engine, user_id) -> str:
+    with engine.connect() as conn:
+        return conn.execute(
+            sa.select(User.trakt_access_token_enc).where(User.id == user_id)
+        ).scalar_one()
+
+
 @patch("backend.services.token_crypto.get_settings")
 class TestEncryptedTokenRotation:
     def test_row_under_previous_key_is_rewritten_under_current(self, mock_get_settings):
@@ -186,3 +203,34 @@ class TestEncryptedTokenRotation:
         assert user.trakt_access_token_enc == stored_under_a
         assert "oauth_token_undecryptable" in caplog.text
         assert stored_under_a not in caplog.text
+
+    def test_rewrite_is_stored_when_the_session_commits(self, mock_get_settings, users_db):
+        _rotate_to(mock_get_settings, KEY_A)
+        with Session(users_db, expire_on_commit=False) as session, session.begin():
+            user = User(trakt_access_token="oauth-access")
+            session.add(user)
+
+        _rotate_to(mock_get_settings, KEY_B, previous=KEY_A)
+        with Session(users_db) as session, session.begin():
+            assert session.get(User, user.id).trakt_access_token == "oauth-access"
+
+        _rotate_to(mock_get_settings, KEY_B)
+        stored = _stored_token(users_db, user.id)
+        assert decrypt_and_rotate(stored, purpose=OAUTH) == ("oauth-access", None)
+
+    def test_rewrite_never_overwrites_a_token_committed_since_the_read(
+        self, mock_get_settings, users_db
+    ):
+        _rotate_to(mock_get_settings, KEY_A)
+        with Session(users_db, expire_on_commit=False) as session, session.begin():
+            user = User(trakt_access_token="old")
+            session.add(user)
+
+        _rotate_to(mock_get_settings, KEY_B, previous=KEY_A)
+        with Session(users_db) as reader:
+            assert reader.get(User, user.id).trakt_access_token == "old"
+            with Session(users_db) as writer, writer.begin():
+                writer.get(User, user.id).trakt_access_token = "refreshed"
+            reader.commit()
+
+        assert decrypt_token(_stored_token(users_db, user.id), purpose=OAUTH) == "refreshed"

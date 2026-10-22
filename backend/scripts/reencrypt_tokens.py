@@ -18,6 +18,7 @@ import logging
 
 import sqlalchemy as sa
 
+from backend.db_models import EncryptedToken, FeedbackReport, User
 from backend.services.token_crypto import (
     TokenDecryptError,
     TokenPurpose,
@@ -27,43 +28,45 @@ from backend.services.token_crypto import (
 logger = logging.getLogger("reencrypt_tokens")
 
 _COLUMNS = (
-    ("users", "trakt_access_token", TokenPurpose.OAUTH),
-    ("users", "trakt_refresh_token", TokenPurpose.OAUTH),
-    ("users", "simkl_access_token", TokenPurpose.OAUTH),
-    ("users", "simkl_refresh_token", TokenPurpose.OAUTH),
-    ("feedback_reports", "screenshot_data_enc", TokenPurpose.SCREENSHOT),
+    *((column, TokenPurpose.OAUTH) for column in EncryptedToken.columns(User)),
+    (FeedbackReport.__table__.c.screenshot_data_enc, TokenPurpose.SCREENSHOT),
 )
 
 
 def reencrypt(conn: sa.Connection) -> tuple[int, int]:
     """Rewrite every value a previous key minted; return (rewritten, unreadable)."""
     rewritten = unreadable = 0
-    for table, column, purpose in _COLUMNS:
+    for column, purpose in _COLUMNS:
+        table = column.table
         # One value at a time: screenshots run to megabytes each.
         ids = conn.execute(
-            sa.text(f"SELECT id FROM {table} WHERE {column} IS NOT NULL AND {column} != ''")
+            sa.select(table.c.id).where(column.is_not(None), column != "")
         ).scalars().all()
         for row_id in ids:
             value = conn.execute(
-                sa.text(f"SELECT {column} FROM {table} WHERE id = :id"), {"id": row_id}
-            ).scalar_one()
+                sa.select(column).where(table.c.id == row_id)
+            ).scalar_one_or_none()
+            if not value:
+                continue  # deleted or cleared since the id listing
             try:
                 _, rotated = decrypt_and_rotate(value, purpose=purpose)
             except TokenDecryptError:
                 logger.warning(
-                    "unreadable %s.%s id=%s — no configured key decrypts it",
-                    table,
+                    "unreadable %s id=%s — no configured key decrypts it",
                     column,
                     row_id,
                 )
                 unreadable += 1
                 continue
-            if rotated is not None:
-                conn.execute(
-                    sa.text(f"UPDATE {table} SET {column} = :v WHERE id = :id"),
-                    {"id": row_id, "v": rotated},
-                )
-                rewritten += 1
+            if rotated is None:
+                continue
+            # A live request may have stored a newer value since the read.
+            result = conn.execute(
+                sa.update(table)
+                .where(table.c.id == row_id, column == value)
+                .values({column: rotated})
+            )
+            rewritten += result.rowcount
     return rewritten, unreadable
 
 
