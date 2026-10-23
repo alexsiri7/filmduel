@@ -33,8 +33,8 @@ def _clear_dependency_overrides():
 def _make_user(*, trakt_token=None, simkl_token=None):
     user = MagicMock()
     user.id = uuid.uuid4()
-    user.trakt_access_token_enc = trakt_token
-    user.simkl_access_token_enc = simkl_token
+    user.trakt_access_token = trakt_token or ""
+    user.simkl_access_token = simkl_token or ""
     return user
 
 

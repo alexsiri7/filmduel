@@ -6,10 +6,15 @@ import time
 from unittest.mock import MagicMock, patch
 
 import pytest
+import sqlalchemy as sa
+from sqlalchemy.orm import Session
 
+from backend.db_models import User
 from backend.services.token_crypto import (
+    TokenDecryptError,
     TokenPurpose,
     _fernet,
+    decrypt_and_rotate,
     decrypt_token,
     encrypt_token,
 )
@@ -25,10 +30,24 @@ def _clear_fernet_cache():
     _fernet.cache_clear()
 
 
-def _mock_settings(token_enc_key: str = "a-very-long-test-key-that-is-at-least-32-characters"):
+KEY_A = "key-a-long-enough-for-validation-32chars"
+KEY_B = "key-b-long-enough-for-validation-32chars"
+KEY_C = "key-c-long-enough-for-validation-32chars"
+
+
+def _mock_settings(
+    token_enc_key: str = "a-very-long-test-key-that-is-at-least-32-characters",
+    previous: str = "",
+):
     settings = MagicMock()
     settings.TOKEN_ENC_KEY = token_enc_key
+    settings.TOKEN_ENC_KEY_PREVIOUS = previous
     return settings
+
+
+def _rotate_to(mock_get_settings, current: str, previous: str = "") -> None:
+    _fernet.cache_clear()
+    mock_get_settings.return_value = _mock_settings(current, previous)
 
 
 class TestTokenCrypto:
@@ -107,3 +126,111 @@ class TestTokenCrypto:
                 else:
                     with pytest.raises(RuntimeError, match="Token decryption failed"):
                         decrypt_token(ciphertext, purpose=other)
+
+
+@patch("backend.services.token_crypto.get_settings")
+class TestKeyRotation:
+    def test_previous_key_decrypts_and_rotates_to_current(self, mock_get_settings):
+        _rotate_to(mock_get_settings, KEY_A)
+        ciphertext = encrypt_token("secret", purpose=OAUTH)
+
+        _rotate_to(mock_get_settings, KEY_B, previous=f" {KEY_C} , {KEY_A} ")
+        assert decrypt_token(ciphertext, purpose=OAUTH) == "secret"
+        plain, rotated = decrypt_and_rotate(ciphertext, purpose=OAUTH)
+        assert plain == "secret"
+
+        _rotate_to(mock_get_settings, KEY_B)
+        assert decrypt_and_rotate(rotated, purpose=OAUTH) == ("secret", None)
+
+    def test_current_key_value_is_not_rotated(self, mock_get_settings):
+        _rotate_to(mock_get_settings, KEY_B, previous=KEY_A)
+        ciphertext = encrypt_token("secret", purpose=OAUTH)
+        assert decrypt_and_rotate(ciphertext, purpose=OAUTH) == ("secret", None)
+        assert decrypt_and_rotate("", purpose=OAUTH) == ("", None)
+
+    def test_previous_key_never_encrypts(self, mock_get_settings):
+        _rotate_to(mock_get_settings, KEY_B, previous=KEY_A)
+        ciphertext = encrypt_token("secret", purpose=OAUTH)
+        _rotate_to(mock_get_settings, KEY_A)
+        with pytest.raises(TokenDecryptError):
+            decrypt_token(ciphertext, purpose=OAUTH)
+
+    def test_unknown_key_raises(self, mock_get_settings):
+        _rotate_to(mock_get_settings, KEY_A)
+        ciphertext = encrypt_token("secret", purpose=OAUTH)
+        _rotate_to(mock_get_settings, KEY_B, previous=KEY_C)
+        with pytest.raises(TokenDecryptError, match="Token decryption failed"):
+            decrypt_and_rotate(ciphertext, purpose=OAUTH)
+
+
+@pytest.fixture
+def users_db(tmp_path):
+    engine = sa.create_engine(f"sqlite:///{tmp_path / 'users.db'}")
+    User.__table__.create(engine)
+    yield engine
+    engine.dispose()
+
+
+def _stored_token(engine, user_id) -> str:
+    with engine.connect() as conn:
+        return conn.execute(
+            sa.select(User.trakt_access_token_enc).where(User.id == user_id)
+        ).scalar_one()
+
+
+@patch("backend.services.token_crypto.get_settings")
+class TestEncryptedTokenRotation:
+    def test_row_under_previous_key_is_rewritten_under_current(self, mock_get_settings):
+        _rotate_to(mock_get_settings, KEY_A)
+        user = User(trakt_access_token="oauth-access")
+        stored_under_a = user.trakt_access_token_enc
+
+        _rotate_to(mock_get_settings, KEY_B, previous=KEY_A)
+        assert user.trakt_access_token == "oauth-access"
+        assert user.trakt_access_token_enc != stored_under_a
+
+        _rotate_to(mock_get_settings, KEY_B)
+        assert user.trakt_access_token == "oauth-access"
+
+    def test_row_no_key_decrypts_reads_as_disconnected(self, mock_get_settings, caplog):
+        _rotate_to(mock_get_settings, KEY_A)
+        user = User(trakt_access_token="oauth-access")
+        stored_under_a = user.trakt_access_token_enc
+
+        _rotate_to(mock_get_settings, KEY_B)
+        with caplog.at_level("WARNING", logger="backend.db_models"):
+            assert user.trakt_access_token == ""
+        assert user.trakt_access_token_enc == stored_under_a
+        assert "oauth_token_undecryptable" in caplog.text
+        assert stored_under_a not in caplog.text
+
+    def test_rewrite_is_stored_when_the_session_commits(self, mock_get_settings, users_db):
+        _rotate_to(mock_get_settings, KEY_A)
+        with Session(users_db, expire_on_commit=False) as session, session.begin():
+            user = User(trakt_access_token="oauth-access")
+            session.add(user)
+
+        _rotate_to(mock_get_settings, KEY_B, previous=KEY_A)
+        with Session(users_db) as session, session.begin():
+            assert session.get(User, user.id).trakt_access_token == "oauth-access"
+
+        _rotate_to(mock_get_settings, KEY_B)
+        stored = _stored_token(users_db, user.id)
+        assert decrypt_and_rotate(stored, purpose=OAUTH) == ("oauth-access", None)
+
+    def test_rewrite_never_overwrites_a_token_committed_since_the_read(
+        self, mock_get_settings, users_db
+    ):
+        _rotate_to(mock_get_settings, KEY_A)
+        with Session(users_db, expire_on_commit=False) as session, session.begin():
+            user = User(trakt_access_token="old")
+            session.add(user)
+
+        _rotate_to(mock_get_settings, KEY_B, previous=KEY_A)
+        with Session(users_db) as reader:
+            assert reader.get(User, user.id).trakt_access_token == "old"
+            with Session(users_db) as writer, writer.begin():
+                writer.get(User, user.id).trakt_access_token = "refreshed"
+            reader.commit()
+
+        assert decrypt_token(_stored_token(users_db, user.id), purpose=OAUTH) == "refreshed"

@@ -129,8 +129,31 @@ SENTRY_DSN=
 # App
 SECRET_KEY=       # openssl rand -hex 32 — required in production
 TOKEN_ENC_KEY=    # openssl rand -hex 32 — required in production (must be ≥ 32 chars)
+TOKEN_ENC_KEY_PREVIOUS=   # optional, comma-separated retired TOKEN_ENC_KEYs (decrypt only)
 BASE_URL=https://filmduel.interstellarai.net
 ```
+
+### Rotating TOKEN_ENC_KEY
+
+`TOKEN_ENC_KEY` encrypts stored OAuth tokens and feedback screenshots. Keys in
+`TOKEN_ENC_KEY_PREVIOUS` are only used to decrypt, and a token read with one is
+re-encrypted under the current key on the spot.
+
+1. Generate a new key: `openssl rand -hex 32`.
+2. Set `TOKEN_ENC_KEY_PREVIOUS` to the current `TOKEN_ENC_KEY` (append it,
+   comma-separated, if the variable already holds keys), then set
+   `TOKEN_ENC_KEY` to the new key.
+3. Deploy.
+4. Re-encrypt everything still under a previous key:
+   `railway ssh --service web --environment production -- python -m backend.scripts.reencrypt_tokens`.
+   It is idempotent; check that its final line reports `unreadable=0`.
+5. Remove `TOKEN_ENC_KEY_PREVIOUS` and deploy again.
+
+A token no configured key decrypts reads as disconnected: calls to that
+provider are skipped until the user signs in with it again, which stores fresh
+tokens, and a warning naming the user (never the ciphertext) is logged. The
+ciphertext stays stored, so adding a forgotten key back to
+`TOKEN_ENC_KEY_PREVIOUS` recovers it.
 
 ---
 

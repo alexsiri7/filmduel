@@ -30,7 +30,7 @@ async def _resolve_uuid(user: User, settings) -> str | None:
         return str(profile["user"]["ids"]["uuid"])
     except (httpx.HTTPError, KeyError, TypeError):
         pass
-    if not user.trakt_refresh_token_enc:
+    if not user.trakt_refresh_token:
         return None
     try:
         tokens = await TraktClient(client_id=settings.TRAKT_CLIENT_ID).refresh_token(
@@ -58,14 +58,11 @@ async def main() -> None:
         ).scalars().all()
         logger.info("legacy_rows=%d", len(rows))
         for user in rows:
-            if not user.trakt_access_token_enc:
+            if not user.trakt_access_token:
                 user.trakt_user_id = None
                 cleared += 1
                 continue
-            try:
-                found = await _resolve_uuid(user, settings)
-            except RuntimeError:  # undecryptable token
-                found = None
+            found = await _resolve_uuid(user, settings)
             if found:
                 user.trakt_uuid = found
                 resolved += 1

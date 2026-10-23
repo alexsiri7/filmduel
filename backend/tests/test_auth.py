@@ -1756,7 +1756,7 @@ class TestPKCE:
     async def test_legacy_admin_row_is_never_adopted(self, monkeypatch):
         legacy = MagicMock()
         legacy.is_admin = True
-        legacy.trakt_access_token_enc = "enc"
+        legacy.trakt_access_token = "tok"
         settings = MagicMock()
         from backend.routers.auth import _legacy_row_belongs_to
         assert await _legacy_row_belongs_to(legacy, "uuid-alice", settings) is False
@@ -1765,9 +1765,8 @@ class TestPKCE:
     async def test_legacy_row_belongs_to_compares_profile_uuid(self, monkeypatch):
         legacy = MagicMock()
         legacy.is_admin = False
-        legacy.trakt_access_token_enc = "enc"
         legacy.trakt_access_token = "tok"
-        legacy.trakt_refresh_token_enc = None
+        legacy.trakt_refresh_token = ""
         settings = MagicMock(TRAKT_CLIENT_ID="cid")
         profile = {"user": {"ids": {"uuid": "uuid-alice"}}}
         with patch("backend.routers.auth.TraktClient") as client_cls:
