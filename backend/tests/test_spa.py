@@ -58,6 +58,8 @@ def test_spa_fallback_serves_index_html_for_spa_route(tmp_path):
     with patch.object(main_module, "STATIC_DIR", dist):
         response = client.get("/login")
     assert response.status_code == 200
+    assert response.text == "<html>app</html>"
+    assert response.headers["content-type"].startswith("text/html")
 
 
 def test_spa_fallback_serves_static_file_when_it_exists(tmp_path):
@@ -70,6 +72,7 @@ def test_spa_fallback_serves_static_file_when_it_exists(tmp_path):
     with patch.object(main_module, "STATIC_DIR", dist):
         response = client.get("/favicon.ico")
     assert response.status_code == 200
+    assert response.content == b"\x00"
 
 
 def test_path_traversal_is_blocked(tmp_path):
@@ -84,6 +87,7 @@ def test_path_traversal_is_blocked(tmp_path):
         response = client.get("/../secret.txt")
     assert response.status_code == 200
     assert "SECRET" not in response.text
+    assert "app" in response.text
 
 
 def test_sibling_directory_is_blocked_via_symlink(tmp_path):
