@@ -154,6 +154,7 @@ export default function Nav({ mediaType, setMediaType }) {
             <Link
               key={item.path}
               to={item.path}
+              aria-current={isActive ? "page" : undefined}
               className={
                 isActive
                   ? "flex items-center gap-4 px-4 py-3 bg-primary-container text-[#0F0E0D] rounded-none shadow-accent-sm font-headline font-bold uppercase tracking-wider transition-all duration-300"

@@ -27,6 +27,7 @@ from slowapi.errors import RateLimitExceeded
 def _clear_dependency_overrides():
     """Ensure dependency overrides are cleaned up even if a test raises."""
     yield
+    app.dependency_overrides.clear()
 
 
 def _make_user():
@@ -681,6 +682,7 @@ def test_create_tournament_daily_cap_allows_below_limit():
                     "ai_curated": False,
                 },
             )
+        mock_films.assert_awaited_once()
 
     # 500 means cap was NOT hit (we passed through to the next step which we forced to fail)
     assert resp.status_code != 429

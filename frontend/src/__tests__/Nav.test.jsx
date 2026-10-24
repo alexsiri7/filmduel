@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Nav from "../components/Nav";
 
 // ── Sync to Trakt toggle tests (use vi.mock to control api module) ─────────
@@ -17,6 +17,16 @@ vi.mock("../api", async (importOriginal) => {
 
 import { getMe, updateSettings, deleteAccount } from "../api";
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+beforeEach(() => {
+  vi.resetAllMocks();
+  getMe.mockResolvedValue(null);
+  updateSettings.mockResolvedValue(null);
+  deleteAccount.mockResolvedValue(null);
+});
 
 describe("Nav — Sync to Trakt toggle", () => {
   const renderNav = () =>
@@ -280,22 +290,22 @@ describe("Nav", () => {
     expect(screen.getByText("Rankings")).toBeInTheDocument();
   });
 
-  it("active nav item (Current Duel) has accent bg styling on /", () => {
+  it("marks Current Duel as the current page on /", () => {
     renderNav("/");
     const duelLink = screen.getByText("Current Duel").closest("a");
-    expect(duelLink.className).toContain("bg-primary-container");
+    expect(duelLink).toHaveAttribute("aria-current", "page");
   });
 
-  it("active nav item (Rankings) has accent styling on /rankings", () => {
+  it("marks Rankings as the current page on /rankings", () => {
     renderNav("/rankings");
     const rankingsLink = screen.getByText("Rankings").closest("a");
-    expect(rankingsLink.className).toContain("bg-primary-container");
+    expect(rankingsLink).toHaveAttribute("aria-current", "page");
   });
 
-  it("inactive nav item does NOT have accent bg", () => {
+  it("does not mark an inactive nav item as the current page", () => {
     renderNav("/");
     const swipeLink = screen.getByText("Swipe").closest("a");
-    expect(swipeLink.className).not.toContain("bg-primary-container");
+    expect(swipeLink).not.toHaveAttribute("aria-current");
   });
 
   it("Report Issue is a button (not a link)", () => {
@@ -327,8 +337,6 @@ describe("Nav", () => {
         expect.objectContaining({ method: "POST" })
       );
     });
-
-    vi.unstubAllGlobals();
   });
 
   it("renders START DUEL button", () => {
@@ -367,6 +375,7 @@ describe("Nav — Delete My Account", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getMe.mockResolvedValue({ trakt_username: "testuser" });
+    vi.stubGlobal("location", { href: "" });
   });
 
   it("exposes a delete control that requires confirmation before calling the API", async () => {
