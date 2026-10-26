@@ -38,7 +38,7 @@ SETTINGS = _make_settings()
             SimpleNamespace(
                 trakt_token_expires_at=datetime.now(timezone.utc).replace(tzinfo=None)
                 + timedelta(minutes=30),
-                trakt_access_token_enc="enc",
+                trakt_access_token="enc",
             ),
             True,
             id="naive-expiry-30min-future-needs-refresh",
@@ -47,7 +47,7 @@ SETTINGS = _make_settings()
             SimpleNamespace(
                 trakt_token_expires_at=datetime.now(timezone.utc).replace(tzinfo=None)
                 + timedelta(hours=2),
-                trakt_access_token_enc="enc",
+                trakt_access_token="enc",
             ),
             False,
             id="naive-expiry-2hr-future-does-not-need-refresh",
@@ -55,7 +55,7 @@ SETTINGS = _make_settings()
         pytest.param(
             SimpleNamespace(
                 trakt_token_expires_at=datetime.now(timezone.utc) + timedelta(minutes=30),
-                trakt_access_token_enc="enc",
+                trakt_access_token="enc",
             ),
             True,
             id="aware-expiry-30min-future-needs-refresh",
@@ -63,7 +63,7 @@ SETTINGS = _make_settings()
         pytest.param(
             SimpleNamespace(
                 trakt_token_expires_at=datetime.now(timezone.utc) + timedelta(hours=2),
-                trakt_access_token_enc="enc",
+                trakt_access_token="enc",
             ),
             False,
             id="aware-expiry-2hr-future-does-not-need-refresh",
@@ -71,7 +71,7 @@ SETTINGS = _make_settings()
         pytest.param(
             SimpleNamespace(
                 trakt_token_expires_at=datetime.now(timezone.utc) + timedelta(minutes=30),
-                trakt_access_token_enc=None,
+                trakt_access_token=None,
             ),
             False,
             id="no-encrypted-token-does-not-need-refresh",
@@ -79,7 +79,7 @@ SETTINGS = _make_settings()
         pytest.param(
             SimpleNamespace(
                 trakt_token_expires_at=None,
-                trakt_access_token_enc="enc",
+                trakt_access_token="enc",
             ),
             False,
             id="no-expiry-does-not-need-refresh",
@@ -105,7 +105,7 @@ def _make_user(expires_soon: bool, refresh_token: str = "refresh-tok") -> MagicM
         user.trakt_token_expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
     else:
         user.trakt_token_expires_at = datetime.now(timezone.utc) + timedelta(hours=2)
-    user.trakt_access_token_enc = "enc"
+    user.trakt_access_token = "enc"
     user.trakt_refresh_token = refresh_token
     user.trakt_access_token = "old-access"
     return user

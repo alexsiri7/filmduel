@@ -32,7 +32,6 @@ class TestResolveUuid:
         user = types.SimpleNamespace(
             trakt_access_token="old-token",
             trakt_refresh_token="refresh-tok",
-            trakt_refresh_token_enc="enc",
         )
         settings = MagicMock()
 
@@ -53,7 +52,6 @@ class TestResolveUuid:
         user = types.SimpleNamespace(
             trakt_access_token="old-token",
             trakt_refresh_token="refresh-tok",
-            trakt_refresh_token_enc="enc",
         )
         settings = MagicMock()
 
@@ -88,8 +86,7 @@ class TestResolveUuid:
     async def test_returns_none_when_profile_fails_and_no_refresh_token(self):
         user = types.SimpleNamespace(
             trakt_access_token="old-token",
-            trakt_refresh_token="refresh-tok",
-            trakt_refresh_token_enc=None,
+            trakt_refresh_token="",
         )
         settings = MagicMock()
 
@@ -107,7 +104,6 @@ class TestResolveUuid:
         user = types.SimpleNamespace(
             trakt_access_token="old-token",
             trakt_refresh_token="refresh-tok",
-            trakt_refresh_token_enc="enc",
         )
         settings = MagicMock()
 
@@ -131,16 +127,18 @@ class TestMain:
     @pytest.mark.asyncio
     async def test_classifies_rows_into_resolved_cleared_and_skipped(self, caplog):
         row1 = types.SimpleNamespace(
-            trakt_user_id="user-1", trakt_uuid=None, trakt_access_token_enc=None
+            trakt_user_id="user-1", trakt_uuid=None, trakt_access_token=None
         )
         row2 = types.SimpleNamespace(
-            trakt_user_id="user-2", trakt_uuid=None, trakt_access_token_enc="enc"
+            trakt_user_id="user-2", trakt_uuid=None, trakt_access_token="enc"
         )
         row3 = types.SimpleNamespace(
-            trakt_user_id="user-3", trakt_uuid=None, trakt_access_token_enc="enc"
+            trakt_user_id="user-3", trakt_uuid=None, trakt_access_token="enc"
         )
+        # An undecryptable token reads as "" (EncryptedToken), so it is cleared
+        # without a Trakt lookup.
         row4 = types.SimpleNamespace(
-            trakt_user_id="user-4", trakt_uuid=None, trakt_access_token_enc="enc"
+            trakt_user_id="user-4", trakt_uuid=None, trakt_access_token=""
         )
 
         db = AsyncMock()
@@ -156,7 +154,7 @@ class TestMain:
             patch(
                 "backend.scripts.backfill_trakt_uuid._resolve_uuid",
                 new=AsyncMock(
-                    side_effect=["uuid-2", None, RuntimeError("undecryptable")]
+                    side_effect=["uuid-2", None]
                 ),
             ) as resolve_uuid,
             caplog.at_level(logging.INFO, logger="backfill_trakt_uuid"),
@@ -175,9 +173,9 @@ class TestMain:
         assert row4.trakt_user_id is None
         assert row4.trakt_uuid is None
 
-        assert resolve_uuid.await_count == 3
-        # row1 hits `continue` before reaching `await db.flush()`, so flush
-        # only runs for rows 2-4 (3 times), not once per row overall.
-        assert db.flush.await_count == 3
+        assert resolve_uuid.await_count == 2
+        # rows 1 and 4 hit `continue` before reaching `await db.flush()`, so
+        # flush only runs for rows 2-3, not once per row overall.
+        assert db.flush.await_count == 2
         db.commit.assert_awaited_once()
         assert "resolved=1 cleared=3" in caplog.text

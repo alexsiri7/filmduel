@@ -33,13 +33,13 @@ class TestForcePoolSync:
     @pytest.mark.asyncio
     async def test_trakt_only_user_refreshes_trakt_token_only(self):
         user = MagicMock()
-        user.trakt_access_token_enc = "enc"
-        user.simkl_access_token_enc = None
+        user.trakt_access_token = "enc"
+        user.simkl_access_token = None
         refreshed = MagicMock()
-        # _force_pool_sync re-checks simkl_access_token_enc on the *returned*
+        # _force_pool_sync re-checks simkl_access_token on the *returned*
         # user (which becomes `refreshed` after the trakt refresh), so this
         # must be falsy too or the simkl branch would spuriously fire.
-        refreshed.simkl_access_token_enc = None
+        refreshed.simkl_access_token = None
         db = MagicMock()
 
         with (
@@ -66,8 +66,8 @@ class TestForcePoolSync:
     @pytest.mark.asyncio
     async def test_simkl_only_user_refreshes_simkl_token_only(self):
         user = MagicMock()
-        user.trakt_access_token_enc = None
-        user.simkl_access_token_enc = "enc"
+        user.trakt_access_token = None
+        user.simkl_access_token = "enc"
         db = MagicMock()
 
         with (
@@ -94,8 +94,8 @@ class TestForcePoolSync:
     @pytest.mark.asyncio
     async def test_user_without_provider_tokens_skips_both_refreshes(self):
         user = MagicMock()
-        user.trakt_access_token_enc = None
-        user.simkl_access_token_enc = None
+        user.trakt_access_token = None
+        user.simkl_access_token = None
         db = MagicMock()
 
         with (
