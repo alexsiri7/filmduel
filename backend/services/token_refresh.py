@@ -20,7 +20,7 @@ TRAKT_TOKEN_DEFAULT_TTL_SECONDS = 7776000
 
 def trakt_token_needs_refresh(user: User) -> bool:
     """True when the user has a Trakt token that expires within 1 hour."""
-    if not user.trakt_token_expires_at or not user.trakt_access_token_enc:
+    if not user.trakt_token_expires_at or not user.trakt_access_token:
         return False  # no Trakt token to refresh
 
     expires_at = user.trakt_token_expires_at

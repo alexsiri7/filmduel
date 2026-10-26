@@ -116,9 +116,9 @@ async def _force_pool_sync(user: User, db: AsyncSession) -> tuple[User, bool]:
 
     The bool is False when some provider fetch failed after retries.
     """
-    if user.trakt_access_token_enc:
+    if user.trakt_access_token:
         user = await ensure_fresh_token(user, db)
-    if user.simkl_access_token_enc:
+    if user.simkl_access_token:
         user = await ensure_fresh_simkl_token(user, db)
 
     complete = await populate_movie_pool(user, db, force=True)
@@ -240,13 +240,13 @@ async def delete_account(
     cascade-deletes the User row (and all dependent rows via ON DELETE CASCADE).
     """
     settings = get_settings()
-    if current_user.trakt_access_token_enc:
+    if current_user.trakt_access_token:
         trakt_client = TraktClient(client_id=settings.TRAKT_CLIENT_ID)
         await trakt_client.revoke_token(
             current_user.trakt_access_token,
             client_secret=settings.TRAKT_CLIENT_SECRET,
         )
-    if current_user.simkl_access_token_enc:
+    if current_user.simkl_access_token:
         simkl_client = SimklClient(client_id=settings.SIMKL_CLIENT_ID)
         await simkl_client.revoke_token(
             current_user.simkl_access_token,

@@ -298,7 +298,7 @@ def require_ai_consent(user: User = Depends(get_current_user)) -> User:
 
 async def ensure_fresh_simkl_token(user: User, db: AsyncSession) -> User:
     """Check SIMKL token expiry. SIMKL may not support refresh — log warning."""
-    if not user.simkl_token_expires_at or not user.simkl_access_token_enc:
+    if not user.simkl_token_expires_at or not user.simkl_access_token:
         return user
     now = datetime.now(timezone.utc)
     expires_at = user.simkl_token_expires_at
@@ -484,7 +484,7 @@ async def _legacy_row_belongs_to(
             "legacy_adoption_refused_admin legacy_user_id=%s", legacy.id
         )
         return False
-    if not legacy.trakt_access_token_enc:
+    if not legacy.trakt_access_token:
         return False
 
     async def _uuid_for(access_token: str) -> str | None:
@@ -503,12 +503,9 @@ async def _legacy_row_belongs_to(
         except (KeyError, TypeError):
             return None
 
-    try:
-        found = await _uuid_for(legacy.trakt_access_token)
-    except RuntimeError:  # TOKEN_ENC_KEY rotated; stored token undecryptable
-        return False
+    found = await _uuid_for(legacy.trakt_access_token)
 
-    if found is None and legacy.trakt_refresh_token_enc:
+    if found is None and legacy.trakt_refresh_token:
         client = TraktClient(client_id=settings.TRAKT_CLIENT_ID)
         try:
             tokens = await client.refresh_token(
@@ -517,7 +514,7 @@ async def _legacy_row_belongs_to(
                 redirect_uri=settings.TRAKT_REDIRECT_URI,
             )
             found = await _uuid_for(tokens["access_token"])
-        except (httpx.HTTPError, KeyError, RuntimeError) as exc:
+        except (httpx.HTTPError, KeyError) as exc:
             logger.info(
                 "legacy_adoption_refresh_failed legacy_user_id=%s error=%s",
                 legacy.id,
