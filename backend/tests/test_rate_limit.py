@@ -131,11 +131,11 @@ def test_rate_limit_key_on_railway_uses_x_real_ip(monkeypatch):
     assert _rate_limit_key(request) == "ip:203.0.113.9"
 
 
-def test_rate_limit_key_on_railway_without_x_real_ip_falls_back_to_client(monkeypatch, caplog):
+def test_rate_limit_key_on_railway_without_x_real_ip_uses_unknown_bucket(monkeypatch, caplog):
     monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
     request = _make_request(client_ip="6.6.6.6")
     with caplog.at_level(logging.WARNING, logger="backend.rate_limit"):
-        assert _rate_limit_key(request) == "ip:6.6.6.6"
+        assert _rate_limit_key(request) == "ip:unknown"
     assert "X-Real-IP" in caplog.text
 
 
@@ -143,7 +143,7 @@ def test_rate_limit_key_on_railway_ignores_malformed_x_real_ip(monkeypatch, capl
     monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
     request = _make_request(client_ip="6.6.6.6", headers={"x-real-ip": "not-an-ip"})
     with caplog.at_level(logging.WARNING, logger="backend.rate_limit"):
-        assert _rate_limit_key(request) == "ip:6.6.6.6"
+        assert _rate_limit_key(request) == "ip:unknown"
     assert "X-Real-IP" in caplog.text
 
 
@@ -228,6 +228,43 @@ def test_spoofed_x_forwarded_for_does_not_reset_anonymous_limit_on_railway(monke
 
     other = client.get("/limited", headers={"X-Real-IP": "203.0.113.10"})
     assert other.status_code == 200
+
+
+def test_forged_x_forwarded_for_without_x_real_ip_shares_one_bucket_on_railway(monkeypatch):
+    """Without X-Real-IP, a forged X-Forwarded-For must not mint fresh buckets either."""
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+    lim = _build_limiter(SimpleNamespace(RATE_LIMIT_STORAGE_URI=""))
+    app = FastAPI()
+    app.state.limiter = lim
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+    @app.get("/limited")
+    @lim.limit("2/minute")
+    async def limited(request: Request):
+        return {"ok": True}
+
+    client = TestClient(ProxyHeadersMiddleware(app, trusted_hosts="*"))
+    statuses = [
+        client.get("/limited", headers={"X-Forwarded-For": f"198.51.100.{i}"}).status_code
+        for i in range(3)
+    ]
+    assert statuses == [200, 200, 429]
+
+
+def test_health_without_x_real_ip_does_not_warn_on_railway(monkeypatch, caplog):
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+    lim = _build_limiter(SimpleNamespace(RATE_LIMIT_STORAGE_URI=""))
+    app = FastAPI()
+    app.state.limiter = lim
+
+    @app.get("/health")
+    @lim.limit("1000/minute")
+    async def health(request: Request):
+        return {"status": "ok"}
+
+    with caplog.at_level(logging.WARNING, logger="backend.rate_limit"):
+        assert TestClient(app).get("/health").status_code == 200
+    assert "X-Real-IP" not in caplog.text
 
 
 def test_ai_curation_attempt_fails_open_when_storage_unreachable(caplog):

@@ -45,7 +45,8 @@ echo "Python imports: OK"
 # apply its X-Forwarded-Proto. Under '*' uvicorn adopts the leftmost,
 # client-controlled X-Forwarded-For entry, so request.client must not drive
 # security decisions there; rate limiting keys on Railway's edge-set X-Real-IP
-# instead (see backend/rate_limit.py).
+# instead, and requests without a valid one share a single bucket
+# (see backend/rate_limit.py).
 # On other deployments the operator should set FORWARDED_ALLOW_IPS explicitly.
 if [ -z "$FORWARDED_ALLOW_IPS" ]; then
     if [ -n "$RAILWAY_ENVIRONMENT" ]; then

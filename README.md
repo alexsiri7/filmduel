@@ -61,7 +61,8 @@ Alembic migrations run automatically on container start.
 
 > **Reverse proxy deployments** (Railway, nginx, etc.): set `FORWARDED_ALLOW_IPS` and
 > `SECURE_COOKIES=true` in your `.env` — see `.env.example` for details. On Railway, rate
-> limiting keys anonymous requests on the edge-set `X-Real-IP` header; on other proxies
+> limiting keys anonymous requests on the edge-set `X-Real-IP` header (requests without a
+> valid one share a single bucket, never the spoofable `X-Forwarded-For` address); on other proxies
 > (nginx etc.) set `FORWARDED_ALLOW_IPS` to the proxy's IP/CIDR or rate limiting will key
 > on the proxy IP. On Railway,
 > Render, Fly.io, Heroku and Cloud Run the app refuses to start when `SECURE_COOKIES` is
