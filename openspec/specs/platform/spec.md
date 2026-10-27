@@ -53,7 +53,7 @@ The content security policy SHALL ask browsers to report violations to the app, 
 
 ### Requirement: Rate limits follow the user and hold under concurrency
 
-Rate limits SHALL be counted per signed-in user, falling back to the real client address for anonymous requests, or to a single shared bucket when no real address is available, so changing networks does not reset them and a forged address cannot mint a fresh bucket. When shared storage is configured, counters SHALL live there and survive deploys and replicas; without it on a hosted platform, the service SHALL warn at startup that limits are per process. Every quota that counts existing records SHALL hold under concurrent requests, so two simultaneous requests cannot both pass the cap.
+Rate limits SHALL be counted per signed-in user, so changing networks does not reset them. When shared storage is configured, counters SHALL live there and survive deploys and replicas; without it on a hosted platform, the service SHALL warn at startup that limits are per process. Every quota that counts existing records SHALL hold under concurrent requests, so two simultaneous requests cannot both pass the cap.
 
 #### Scenario: Two sessions
 - GIVEN a user signed in on two devices
@@ -65,10 +65,19 @@ Rate limits SHALL be counted per signed-in user, falling back to the real client
 - WHEN they send two create requests at the same instant
 - THEN exactly one tournament is created
 
+### Requirement: Anonymous rate limits cannot be reset by a forged address
+
+Anonymous requests SHALL be counted against the real client address, or against one shared bucket when no real address is available, so a forged forwarding header can neither reset a limit nor mint a fresh one.
+
 #### Scenario: Forged forwarding header
 - GIVEN an anonymous client that has reached a rate limit
 - WHEN it retries with a forged X-Forwarded-For header
 - THEN the request is still counted against its real address and rejected
+
+#### Scenario: No real client address
+- GIVEN anonymous requests that arrive without a real client address
+- WHEN each carries a different forged X-Forwarded-For header
+- THEN they all count against one shared limit
 
 ### Requirement: Provider requests cannot be redirected
 
