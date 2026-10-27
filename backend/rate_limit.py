@@ -25,25 +25,33 @@ logger = logging.getLogger(__name__)
 logging.getLogger("slowapi").addHandler(logging.StreamHandler())
 
 
+_UNKNOWN_CLIENT = "unknown"
+HEALTH_PATH = "/health"
+
+
 def _client_ip(request: Request) -> str:
     """Client address for anonymous rate-limit buckets.
 
     On Railway, uvicorn runs with ``--forwarded-allow-ips='*'``, which makes
     ``request.client`` the leftmost, client-controlled X-Forwarded-For entry.
     Railway's edge overwrites X-Real-IP with the connecting address, so that
-    header is used there instead. Off Railway, X-Real-IP is client-controlled
-    and ignored.
+    header is used there instead; requests without a valid one share a single
+    ``unknown`` bucket rather than trusting ``request.client``. Off Railway,
+    X-Real-IP is client-controlled and ignored.
     """
-    if os.environ.get("RAILWAY_ENVIRONMENT"):
-        real_ip = request.headers.get("x-real-ip", "").strip()
-        try:
-            return str(ipaddress.ip_address(real_ip))
-        except ValueError:
+    if not os.environ.get("RAILWAY_ENVIRONMENT"):
+        return get_remote_address(request)
+    real_ip = request.headers.get("x-real-ip", "").strip()
+    try:
+        return str(ipaddress.ip_address(real_ip))
+    except ValueError:
+        # The readiness probe in entrypoint.sh calls /health directly, bypassing the edge.
+        if request.url.path != HEALTH_PATH:
             logger.warning(
-                "Missing or invalid X-Real-IP on Railway; rate limiting falls back "
-                "to the spoofable request.client address"
+                "Missing or invalid X-Real-IP on Railway; rate limiting this request "
+                "in the shared unknown-client bucket"
             )
-    return get_remote_address(request)
+        return _UNKNOWN_CLIENT
 
 
 def _rate_limit_key(request: Request) -> str:

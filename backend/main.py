@@ -25,7 +25,7 @@ from backend.config import (
     is_cleartext_public_redis_uri,
 )
 from backend.middleware.body_limit import BodyLimitMiddleware
-from backend.rate_limit import limiter
+from backend.rate_limit import HEALTH_PATH, limiter
 from backend.scheduler import build_scheduler
 from backend.services.duel_rejections import record_duel_rejection
 from backend.services.tmdb import is_read_access_token
@@ -370,7 +370,7 @@ app.include_router(feedback.router)
 app.include_router(csp_report.router)
 
 
-@app.get("/health")
+@app.get(HEALTH_PATH)
 @limiter.limit("1000/minute")
 async def health(request: Request):
     return {"status": "ok"}
