@@ -53,7 +53,7 @@ The content security policy SHALL ask browsers to report violations to the app, 
 
 ### Requirement: Rate limits follow the user and hold under concurrency
 
-Rate limits SHALL be counted per signed-in user, falling back to the real client address for anonymous requests, so changing networks does not reset them. When shared storage is configured, counters SHALL live there and survive deploys and replicas; without it on a hosted platform, the service SHALL warn at startup that limits are per process. Every quota that counts existing records SHALL hold under concurrent requests, so two simultaneous requests cannot both pass the cap.
+Rate limits SHALL be counted per signed-in user, falling back to the real client address for anonymous requests, or to a single shared bucket when no real address is available, so changing networks does not reset them and a forged address cannot mint a fresh bucket. When shared storage is configured, counters SHALL live there and survive deploys and replicas; without it on a hosted platform, the service SHALL warn at startup that limits are per process. Every quota that counts existing records SHALL hold under concurrent requests, so two simultaneous requests cannot both pass the cap.
 
 #### Scenario: Two sessions
 - GIVEN a user signed in on two devices

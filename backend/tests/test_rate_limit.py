@@ -22,6 +22,7 @@ from starlette.requests import Request
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from backend.rate_limit import (
+    HEALTH_PATH,
     _build_limiter,
     _rate_limit_key,
     count_ai_curation_attempt,
@@ -251,19 +252,28 @@ def test_forged_x_forwarded_for_without_x_real_ip_shares_one_bucket_on_railway(m
     assert statuses == [200, 200, 429]
 
 
-def test_health_without_x_real_ip_does_not_warn_on_railway(monkeypatch, caplog):
+def test_health_without_x_real_ip_shares_one_bucket_without_warning_on_railway(
+    monkeypatch, caplog
+):
+    """The /health warning exemption must not exempt it from the shared unknown bucket."""
     monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
     lim = _build_limiter(SimpleNamespace(RATE_LIMIT_STORAGE_URI=""))
     app = FastAPI()
     app.state.limiter = lim
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-    @app.get("/health")
-    @lim.limit("1000/minute")
+    @app.get(HEALTH_PATH)
+    @lim.limit("2/minute")
     async def health(request: Request):
         return {"status": "ok"}
 
+    client = TestClient(ProxyHeadersMiddleware(app, trusted_hosts="*"))
     with caplog.at_level(logging.WARNING, logger="backend.rate_limit"):
-        assert TestClient(app).get("/health").status_code == 200
+        statuses = [
+            client.get(HEALTH_PATH, headers={"X-Forwarded-For": f"198.51.100.{i}"}).status_code
+            for i in range(3)
+        ]
+    assert statuses == [200, 200, 429]
     assert "X-Real-IP" not in caplog.text
 
 

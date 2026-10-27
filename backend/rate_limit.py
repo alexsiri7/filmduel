@@ -26,6 +26,7 @@ logging.getLogger("slowapi").addHandler(logging.StreamHandler())
 
 
 _UNKNOWN_CLIENT = "unknown"
+HEALTH_PATH = "/health"
 
 
 def _client_ip(request: Request) -> str:
@@ -45,7 +46,7 @@ def _client_ip(request: Request) -> str:
         return str(ipaddress.ip_address(real_ip))
     except ValueError:
         # The readiness probe in entrypoint.sh calls /health directly, bypassing the edge.
-        if request.url.path != "/health":
+        if request.url.path != HEALTH_PATH:
             logger.warning(
                 "Missing or invalid X-Real-IP on Railway; rate limiting this request "
                 "in the shared unknown-client bucket"
