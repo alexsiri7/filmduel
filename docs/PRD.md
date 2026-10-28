@@ -373,7 +373,7 @@ def update_elo(winner_elo: float, loser_elo: float,
 
 ### ELO → Trakt rating
 
-A film's 1–10 rating is its percentile among the user's ranked films of the same media type, so every user's ratings span the whole scale. `elo_to_rating` (in `backend/services/elo.py`) uses the mid-rank percentile, so tied ELOs share a rating:
+A film's 1–10 rating is its percentile among the user's ranked films of the same media type, so every user's ratings span the whole scale. `get_elo_ratings` (in `backend/services/rankings.py`) counts the ranked ELOs below and tied with it in SQL, and `percentile_rating` (in `backend/services/elo.py`) maps those counts by the mid-rank percentile, so tied ELOs share a rating:
 
 ```python
 rating = max(1, min(10, ceil(10 * (below + ties / 2) / n)))
