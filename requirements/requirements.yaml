@@ -441,7 +441,7 @@ requirements:
 
   - id: FD-035
     title: AI watchlist suggestions
-    statement: "When an eligible user (>=20 ranked films of the media_type, AI consent per FD-009) requests GET /api/suggestions, the system shall return current non-dismissed suggestions if generated within 24 hours, otherwise generate up to 6 new picks by sending an LLM a taste profile plus up to 50 unseen candidates and persisting each pick with its one-line reason."
+    statement: "When an eligible user (>=20 ranked films of the media_type, AI consent per FD-009) requests GET /api/suggestions, the system shall treat the newest batch (dismissed rows included) as fresh if generated within 24 hours and return its non-dismissed suggestions, or status 'all_dismissed' if every suggestion in it is dismissed; when no fresh batch exists it shall, if another generation for that user is in progress, return the user's existing non-dismissed suggestions or 429 when there are none, status 'no_candidates' without calling the LLM if an LLM attempt came back with no usable picks within the last hour, and otherwise generate up to 6 new picks by sending an LLM a taste profile plus up to 50 unseen candidates and persisting each pick with its one-line reason."
     category: functional
     priority: should
     status: active
@@ -450,6 +450,10 @@ requirements:
       - "With < 20 ranked films the response is {suggestions: [], status: 'not_enough_films'}"
       - "The LLM may only select from the provided candidate list; malformed ids are skipped, not surfaced"
       - "With no candidates available the status is 'no_candidates'"
+      - "A fresh batch whose suggestions are all dismissed returns {suggestions: [], status: 'all_dismissed'} without generating"
+      - "Within an hour of an LLM attempt with no usable picks the status is 'no_candidates' and the LLM is not called"
+      - "With no fresh batch, a generation already in progress for the user and no existing non-dismissed suggestions the endpoint returns 429"
+      - "With no fresh batch, a generation already in progress and existing non-dismissed suggestions the endpoint returns them as 'ready' instead of 429"
       - "With LLM_API_KEY unconfigured the endpoint returns 503"
     notes: "LLM is an OpenAI-compatible gateway (Requesty/OpenRouter via LLM_BASE_URL/LLM_MODEL), not a hardcoded provider — the older spec docs naming a specific Anthropic model are outdated."
 
