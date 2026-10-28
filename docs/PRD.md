@@ -34,7 +34,7 @@ The experience should feel like a game — fast, opinionated, oddly compelling.
 | Database | Supabase PostgreSQL (direct connection via asyncpg, NOT supabase-py SDK) |
 | Auth | Trakt OAuth2, SIMKL OAuth2 (Authorization Code flow), JWT httpOnly cookies |
 | Frontend | React 18, Vite, Tailwind CSS, shadcn/ui components |
-| Deployment | Railway (single service, auto-deploy from `main` branch) |
+| Deployment | Railway (single service, commits on `main` deploy to staging, then production after smoke tests) |
 | DNS | Cloudflare (filmduel.interstellarai.net → Railway) |
 | Error tracking | Sentry (FastAPI integration) |
 | Movie data | Trakt API + TMDB API (poster images) |
@@ -43,7 +43,7 @@ The experience should feel like a game — fast, opinionated, oddly compelling.
 - No separate frontend deployment. FastAPI serves the React build from `/static` and catches all non-API routes with a wildcard returning `index.html`.
 - No supabase-py SDK — connect directly via `DATABASE_URL` using SQLAlchemy + asyncpg.
 - Supabase Postgres is reached through the session pooler (port 5432) as role `filmduel`, whose `search_path` is `filmduel, extensions` — unqualified table names resolve to the `filmduel` schema. asyncpg still sets `statement_cache_size=0`, so the transaction pooler (port 6543) keeps working too.
-- Branch protection on `main` — all changes via PR. Railway auto-deploys on merge.
+- Branch protection on `main` — all changes via PR. A merge deploys to staging and, once smoke tests pass there, the same commit to production (`.github/workflows/staging-pipeline.yml`).
 
 ### Design Decisions
 
