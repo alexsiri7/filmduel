@@ -709,6 +709,22 @@ requirements:
       - "GET requests are never limited; /api/feedback/<id> takes the feedback limit and /api/feedbackx the default"
     notes: "Pinned by backend/tests/test_body_limit.py (test_middleware_is_registered, test_limit_for_prefers_longest_prefix, test_oversized_json_is_rejected_before_auth, test_oversized_multipart_is_rejected_before_auth, test_chunked_body_is_cut_off_at_limit, test_small_body_passes_through_to_auth, test_get_is_never_limited). Implemented in backend/middleware/body_limit.py (BodyLimitMiddleware, DEFAULT_MAX_BODY_BYTES, FEEDBACK_MAX_BODY_BYTES, PATH_LIMITS); a non-integer Content-Length is rejected with 400. It runs before authentication because FastAPI reads the body before resolving get_current_user, and neither uvicorn/h11 nor Starlette caps body size, so without it an anonymous client could spool an unbounded upload. It must stay the innermost middleware (added first in backend/main.py): the BaseHTTPMiddleware-based csrf_origin_check and add_security_headers wrap receive() in a task group, which would turn the streamed-cutoff HTTPException into an ExceptionGroup instead of a 413. Because the CSRF check (FD-044) wraps it, a request failing that check gets 403 before its size is examined. The 6 MiB feedback ceiling is transport-level headroom over FD-042's 5 MB screenshot limit, which the route enforces itself."
 
+  - id: FD-066
+    title: CSP violation reporting endpoint
+    statement: "When a browser posts a CSP violation report to POST /api/csp-report, in either the legacy report-uri format or the Reporting API format, the system shall accept it without requiring a session or CSRF headers, log at most 10 violations per request with the blocked URL reduced to its origin and the document URL to its path, and respond 204, including for non-JSON, non-UTF-8 or unrecognised bodies."
+    category: non-functional
+    priority: should
+    status: active
+    source: "PR #834 (SEC-27, #799); issue #857 (req-gap orphan)"
+    acceptance:
+      - "A legacy application/csp-report body posted with a foreign Origin and no X-Requested-With returns 204 and logs the effective directive, the blocked URL's origin and the document URL's path, with no query string"
+      - "An application/reports+json body logs only its csp-violation entries, ignoring other report types"
+      - "A keyword blocked-uri such as 'inline' is logged verbatim"
+      - "A body carrying 50 violations logs exactly 10"
+      - "A non-JSON, non-UTF-8 or unrecognised body returns 204 and logs nothing; an unparseable URL is logged as an empty string"
+      - "Every CSP header carries report-uri /api/csp-report and report-to csp-endpoint, and every response carries Reporting-Endpoints: csp-endpoint=\"/api/csp-report\""
+    notes: "Pinned by backend/tests/test_csp_report.py (test_legacy_report_is_logged_without_query_strings, test_reporting_api_report_is_logged, test_inline_violation_keeps_keyword, test_logs_at_most_ten_reports_per_request, test_malformed_body_is_accepted_silently, test_unparseable_url_is_logged_empty, test_csrf_exemption_is_limited_to_the_report_path) and backend/tests/test_security_headers.py (test_csp_reports_violations, test_reporting_endpoints_names_csp_endpoint). Implemented in backend/routers/csp_report.py (CSP_REPORT_PATH, _MAX_REPORTS, _scrub_blocked, _scrub_document); the CSRF exemption is in backend/main.py::csrf_origin_check (FD-044) and the report-uri/report-to/Reporting-Endpoints wiring in backend/main.py::add_security_headers (FD-045). Document URLs are cut to their path because query strings can carry OAuth code/state and pair tokens; each logged field is also truncated to 200 characters. The handler reads the raw body rather than declaring a model because browsers never send application/json, and answers 204 to non-JSON, non-UTF-8 or unrecognised bodies so probers learn nothing. The 204 is the handler's own response, and it catches only ValueError from request.json(): JSON nested deeply enough to exhaust the parser raises RecursionError and returns 500. The endpoint is rate-limited to 30/minute (429 beyond, FD-046's limiter), and the pre-auth body ceiling (FD-065) still applies."
+
   # ── Deployment & platform constraints ───────────────────────────────────
 
   - id: FD-050
