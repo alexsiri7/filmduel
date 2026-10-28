@@ -283,7 +283,7 @@ requirements:
 
   - id: FD-023
     title: ELO to 1-10 percentile rating mapping
-    statement: "When exporting, syncing or displaying ratings, the system shall map a film's ELO to a 1-10 scale by its mid-rank percentile among the user's ranked films of the same media_type (seen, battles>0), as ceil(10*(below + ties/2)/N) clamped to [1,10], via a single function elo_to_rating."
+    statement: "When exporting, syncing or displaying ratings, the system shall map a film's ELO to a 1-10 scale by its mid-rank percentile among the user's ranked films of the same media_type (seen, battles>0), as ceil(10*(below + ties/2)/N) clamped to [1,10]. percentile_rating (backend/services/elo.py) is the single mapping from those counts to a rating, and get_elo_ratings (backend/services/rankings.py) is the single source of the below/ties/N counts, computed in SQL."
     category: functional
     priority: must
     status: active
@@ -291,7 +291,7 @@ requirements:
     acceptance:
       - "Ten films with distinct ELOs rate 1 through 10 in ELO order"
       - "Tied ELOs receive the same rating; a single ranked film rates 5"
-      - "The same function (elo_to_rating) and population is used for Trakt sync, Letterboxd CSV Rating10, and rankings display; genre/decade filters do not change a film's rating"
+      - "The same functions (get_elo_ratings and percentile_rating) and population are used for Trakt sync, Letterboxd CSV Rating10, and rankings display; genre/decade filters do not change a film's rating"
     notes: "#652 replaced the fixed linear mapping round((elo-600)*9/800)+1, which clumped 76% of films at 5-6 because real ELOs span a much narrower range than 600-1400."
 
   # ── Duels ───────────────────────────────────────────────────────────────
@@ -422,7 +422,7 @@ requirements:
       - "Response has Content-Disposition attachment; filename=filmduel_rankings.csv"
       - "A title beginning with '=' is emitted as \"'=...\" (CSV formula-injection guard)"
       - "A title containing ';=', ';\"=' or a line break followed by '=' has the quote prefix inserted before the '=', so a semicolon-locale spreadsheet re-splitting the row never starts a field with a formula"
-      - "Rating10 equals elo_to_rating(elo, the user's ranked ELOs of that media_type)"
+      - "Rating10 equals the get_elo_ratings rating of the film's ELO among the user's ranked ELOs of that media_type"
 
   # ── TV show support ─────────────────────────────────────────────────────
 
