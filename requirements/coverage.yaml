@@ -1,359 +1,368 @@
 # REGENERATED on every audit run — do not hand-edit.
 meta:
-  generated: 2026-10-12
+  generated: 2026-10-28
   workflow: archon-requirements-audit
   totals:
-    covered: 29
-    partial: 24
+    covered: 18
+    partial: 34
     uncovered: 0
-    stale: 5
-    orphans: 19
+    stale: 6
+    orphans: 22
 coverage:
   - id: FD-001
-    status: covered
-    code_paths: ["backend/routers/auth.py:282-333", "backend/routers/auth.py:452-461", "backend/utils/cookies.py"]
-    test_paths: ["backend/tests/test_auth.py:1273-1330", "backend/tests/test_auth.py:1120-1240", "backend/tests/test_auth.py:1836", "backend/tests/test_auth.py:1347"]
-    notes: "Redirect carries client_id/redirect_uri/state/S256 challenge; state and PKCE cookies httpOnly/lax/300s; state mismatch is 400; tests assert Max-Age=300, S256 derivation, compare_digest and non-ASCII state rejection."
+    status: partial
+    code_paths: ["backend/routers/auth.py:313-364", "backend/routers/auth.py:543-554", "backend/utils/cookies.py"]
+    test_paths: ["backend/tests/test_auth.py:1375-1460", "backend/tests/test_auth.py:1988", "backend/tests/test_auth.py:1325"]
+    notes: "S256, PKCE cookie HttpOnly/Max-Age=300 and state mismatch rejection are asserted; no test pins the trakt.tv host, client_id, redirect_uri or state in the redirect, nor SameSite=lax on either OAuth cookie."
   - id: FD-002
     status: partial
-    code_paths: ["backend/routers/auth.py:417-437", "backend/routers/auth.py:575-616", "backend/routers/auth.py:268-279"]
-    test_paths: ["backend/tests/test_auth.py:933-1065", "backend/tests/test_auth.py:1148-1225", "backend/tests/test_auth.py:1312", "backend/tests/test_auth.py:1364", "backend/tests/test_auth.py:1678"]
-    notes: "Login redirect, PKCE/state cookies and callback rejection tested; no test asserts a SIMKL-only user row has trakt_user_id NULL and simkl_user_id set (callback test uses a MagicMock existing user)."
+    code_paths: ["backend/routers/auth.py:448-468", "backend/routers/auth.py:602-643", "backend/routers/auth.py:674-715", "backend/routers/auth.py:299-310", "backend/services/simkl.py:32-59"]
+    test_paths: ["backend/tests/test_auth.py:1034-1085", "backend/tests/test_auth.py:1411-1463", "backend/tests/test_auth.py:1247-1313", "backend/tests/test_simkl_client.py:75"]
+    notes: "Login redirect, PKCE/state cookies and callback rejections tested; no test drives a new SIMKL signup and checks trakt_user_id NULL with simkl_user_id set; the SIMKL_CLIENT_ID precondition is not enforced server-side."
   - id: FD-003
     status: partial
-    code_paths: ["backend/routers/auth.py:65-117", "backend/routers/auth.py:440-556"]
-    test_paths: ["backend/tests/test_auth.py:128-210", "backend/tests/test_auth.py:1382", "backend/tests/test_auth.py:1432", "backend/tests/test_auth.py:1726-1835"]
-    notes: "JWT claim set (sub, jti, iss, aud, exp, iat, orig_iat) pinned; callback tests cover state/PKCE cookie expiry and error paths only, not the success-path session Set-Cookie attributes or redirect to BASE_URL."
+    code_paths: ["backend/routers/auth.py:58-87", "backend/routers/auth.py:119-147", "backend/routers/auth.py:533-655"]
+    test_paths: ["backend/tests/test_auth.py:134-204", "backend/tests/test_auth.py:1481-1557", "backend/tests/test_auth.py:1683-1779", "backend/tests/test_trakt_client.py:35"]
+    notes: "All seven JWT claims and the Secure/__Host- Set-Cookie on success are pinned; HttpOnly and SameSite asserted only on the refresh path, redirect target (BASE_URL, not a literal '/') untested."
   - id: FD-004
     status: covered
-    code_paths: ["backend/routers/auth.py:58-62", "backend/routers/auth.py:89-117", "backend/routers/auth.py:134-206"]
-    test_paths: ["backend/tests/test_auth.py:224-535"]
-    notes: "Refresh after 12h, 30-day hard cap via orig_iat, and max_age capping all directly asserted in TestGetCurrentUserId."
+    code_paths: ["backend/routers/auth.py:59-63", "backend/routers/auth.py:90-108", "backend/routers/auth.py:133-147", "backend/routers/auth.py:192-237"]
+    test_paths: ["backend/tests/test_auth.py:225-565"]
+    notes: "12h refresh, 30-day hard cap with cookie deletion, orig_iat carry-over and max_age never exceeding the remaining budget are all directly asserted in TestGetCurrentUserId."
   - id: FD-005
     status: partial
-    code_paths: ["backend/routers/auth.py:186-195", "backend/routers/auth.py:619-636"]
-    test_paths: ["backend/tests/test_auth.py:386", "backend/tests/test_auth.py:1243-1265"]
-    notes: "Revocation check and 204 + cookie deletion tested; no test asserts logout writes tokens_invalid_before=now (TestLogout passes an AsyncMock db and inspects only the cookie)."
+    code_paths: ["backend/routers/auth.py:718-735", "backend/routers/auth.py:217-226", "backend/db_models.py:178-182"]
+    test_paths: ["backend/tests/test_auth.py:1355-1362", "backend/tests/test_auth.py:418"]
+    notes: "204 plus cookie deletion and the 401 'Session revoked' branch are tested; TestLogout passes an AsyncMock db and never asserts that logout writes tokens_invalid_before=now."
   - id: FD-006
     status: covered
-    code_paths: ["backend/services/token_crypto.py", "backend/db_models.py:29-46", "backend/db_models.py:64-92", "backend/config.py:148-163"]
-    test_paths: ["backend/tests/test_token_crypto.py", "backend/tests/test_config.py:232-268"]
-    notes: "Fernet via HKDF-SHA256 from TOKEN_ENC_KEY into *_token_enc columns; roundtrip, wrong key, missing key, HKDF determinism and startup rejection with OAuth id + empty key all tested."
+    code_paths: ["backend/services/token_crypto.py:26-115", "backend/db_models.py:44-117", "backend/db_models.py:136-164", "backend/config.py:206-246"]
+    test_paths: ["backend/tests/test_token_crypto.py:55-221", "backend/tests/test_migration_028_rekey_per_purpose.py", "backend/tests/test_reencrypt_tokens.py", "backend/tests/test_config.py:294-340"]
+    notes: "Fernet over HKDF-SHA256 from TOKEN_ENC_KEY, ciphertext-only columns, wrong-key failure and startup rejection all tested; additive drift not in the statement: per-purpose keys (#812), TOKEN_ENC_KEY_PREVIOUS re-keying (#841), undecryptable token reads as disconnected."
   - id: FD-007
-    status: partial
-    code_paths: ["backend/services/token_refresh.py:21-60", "backend/services/sync.py:91-99"]
-    test_paths: ["backend/tests/test_auth.py:588-648"]
-    notes: "Both TestEnsureFreshToken cases force expires_soon=True; the <=1h threshold and the no-op path are not exercised directly, and FOR UPDATE serialization now lives in sync.py conditional on needing a refresh."
+    status: covered
+    code_paths: ["backend/services/token_refresh.py:18-60", "backend/services/sync.py:113-136", "backend/services/trakt.py:56-72"]
+    test_paths: ["backend/tests/test_token_refresh.py:89-167", "backend/tests/test_auth.py:703-726", "backend/tests/test_media_type_filtering.py:385", "backend/tests/test_suggestions_router.py:758"]
+    notes: "1h threshold (30min refreshes, 2h no-op), no-op path and 90-day default TTL directly asserted; FOR UPDATE is taken only when a refresh is needed, as the note allows."
   - id: FD-008
     status: covered
-    code_paths: ["backend/routers/auth.py:237-254", "backend/routers/users.py:57-69", "backend/routers/users.py:151-186"]
-    test_paths: ["backend/tests/test_consent.py:56-147", "backend/tests/test_auth.py:791-932", "backend/tests/test_users_router.py:143"]
-    notes: "400 on wrong version, consent fields set, /api/me exposure and frontend version pin all tested."
+    code_paths: ["backend/routers/auth.py:261-285", "backend/routers/users.py:73-92", "backend/routers/users.py:168-203", "frontend/src/constants.js:4", "frontend/src/App.jsx:30-66"]
+    test_paths: ["backend/tests/test_consent.py:56-134", "backend/tests/test_auth.py:911-953", "backend/tests/test_users_router.py:163-252", "frontend/src/__tests__/App.test.jsx:176-201", "frontend/src/__tests__/ConsentModal.test.jsx:47"]
+    notes: "400 on wrong version, the three stored fields, /api/me exposure and the frontend version pin are tested; the note's 'must match ConsentModal.jsx' is off, the constant lives in constants.js."
   - id: FD-009
-    status: covered
-    code_paths: ["backend/routers/auth.py:257-265", "backend/routers/suggestions.py:163", "backend/routers/suggestions.py:227", "backend/routers/tournaments.py:203-204", "backend/routers/tournaments.py:321", "backend/db_models.py:114-116"]
-    test_paths: ["backend/tests/test_consent_guard.py:502-633", "backend/tests/test_auth.py:729-790"]
-    notes: "Both 403 messages, use_ai_features default true, and PATCH toggling tested across suggestions and tournaments."
+    status: partial
+    code_paths: ["backend/routers/auth.py:278-296", "backend/routers/suggestions.py:163", "backend/routers/suggestions.py:230", "backend/routers/tournaments.py:196-204", "backend/routers/tournaments.py:303-325", "backend/db_models.py:186-188", "backend/routers/users.py:95-111"]
+    test_paths: ["backend/tests/test_consent_guard.py:75-109", "backend/tests/test_consent_guard.py:515-586", "backend/tests/test_auth.py:828-848", "backend/tests/test_schemas.py:411"]
+    notes: "Both 403 messages on suggestions and tournaments and the PATCH toggle are tested; the use_ai_features DB default is pinned only at the Pydantic schema and the tournament consent tests match a loose substring."
   - id: FD-010
     status: partial
-    code_paths: ["backend/routers/users.py:213-244", "backend/db_models.py", "backend/services/trakt.py:229-242"]
-    test_paths: ["backend/tests/test_users_router.py:64-136", "backend/tests/test_user_routes.py:83-115", "backend/tests/test_retention.py:84"]
-    notes: "204, both provider revocations and cookie clearing tested; CASCADE pinned only for duel_history, the 3/hour limit is untested, and no frontend caller or API-client function reaches DELETE /api/me."
+    code_paths: ["backend/routers/users.py:230-261", "backend/db_models.py", "backend/services/trakt.py:218-231", "backend/services/simkl.py:126-140", "frontend/src/api.js:77"]
+    test_paths: ["backend/tests/test_users_router.py:84-117", "backend/tests/test_user_routes.py:83-115", "backend/tests/test_retention.py:84", "frontend/src/__tests__/Nav.test.jsx:381-390"]
+    notes: "204, both provider revocations and cookie clearing tested; CASCADE pinned only for duel_history, no test inspects the users DELETE, and the 3/hour limit has no test."
   - id: FD-011
-    status: covered
-    code_paths: ["backend/scheduler.py", "backend/services/retention.py", "backend/config.py:213-220"]
-    test_paths: ["backend/tests/test_scheduler.py", "backend/tests/test_retention.py", "backend/tests/test_config.py"]
-    notes: "Job id, cron hour, independent commit/rollback, all six purges, duel_history minimal columns and retention defaults tested."
+    status: partial
+    code_paths: ["backend/scheduler.py:23-70", "backend/services/retention.py:44-165", "backend/config.py:374-380", "backend/main.py:160-200"]
+    test_paths: ["backend/tests/test_scheduler.py:31-101", "backend/tests/test_retention.py:47-173", "backend/tests/test_config.py:249-289"]
+    notes: "Job id, cron hour, independent commit/rollback, all six purges and the minimal duel_history shape are tested; misfire_grace_time is unasserted and only DUEL/SWIPE retention overrides are tested."
   - id: FD-012
-    status: stale
-    code_paths: ["backend/main.py:73-114", "backend/main.py:161-194"]
-    test_paths: ["backend/tests/test_sentry_scrub.py", "backend/tests/test_validation_handler.py"]
-    notes: "Statement's second acceptance criterion describes a frame-locals token/secret/code denylist that no longer exists; code now sets include_local_variables=False and max_request_body_size='never' and redacts URLs/query strings and /users/<id> in before_send (send_default_pii=False and Pydantic input stripping still hold and are tested)."
+    status: partial
+    code_paths: ["backend/main.py:50-156", "backend/main.py:211-243"]
+    test_paths: ["backend/tests/test_sentry_scrub.py:31-272", "backend/tests/test_validation_handler.py:31-71"]
+    notes: "Prior stale finding resolved; query-string drop, URL/span/breadcrumb redaction, /users/[Filtered] masking and Pydantic input stripping are tested, but send_default_pii=False is neither asserted nor exercised."
   - id: FD-013
     status: stale
-    code_paths: ["backend/services/pool.py:238-432", "backend/routers/auth.py:546-550", "backend/routers/users.py:97-186"]
-    test_paths: ["backend/tests/test_pool_service.py"]
-    notes: "Trigger drifted: login no longer ingests for new/unconsented users (import deferred to first consent, #571) and every production caller passes force=True, so the 1-hour cooldown never applies outside the unit test; SIMKL has no recommendations list. Upsert preservation and _safe_fetch isolation are implemented and tested."
+    code_paths: ["backend/services/pool.py:24", "backend/services/pool.py:160-348", "backend/routers/auth.py:645-649", "backend/routers/users.py:114-227", "backend/routers/users.py:414-458"]
+    test_paths: ["backend/tests/test_pool_service.py:39-116", "backend/tests/test_pool_service.py:232-262", "backend/tests/test_pool_service.py:369-412", "backend/tests/test_auth.py:1611-1638"]
+    notes: "Trigger drifted: login no longer ingests for new/unconsented users (import deferred to first consent), every production caller passes force=True so the 1-hour cooldown is dead, and SIMKL has no recommendations list; upsert preservation and per-source isolation are implemented and tested."
   - id: FD-014
     status: partial
-    code_paths: ["backend/services/pool.py:74-110", "backend/services/pool.py:327-334", "backend/services/elo.py:62-67"]
-    test_paths: ["backend/tests/test_elo.py:90-105", "backend/tests/test_pool_service.py:467-525"]
-    notes: "Rating-to-seeded_elo mapping endpoints tested; _upsert_user_movie writes elo=None/battles=0 but tests check only seen/seeded_elo/trakt_rating params, and the watched->seen=True mapping in _upsert_pool is not asserted."
+    code_paths: ["backend/services/elo.py:60-65", "backend/services/pool.py:77-113", "backend/services/pool.py:344-346", "backend/services/pool.py:427-429"]
+    test_paths: ["backend/tests/test_elo.py:91-101", "backend/tests/test_pool_service.py:532-543", "backend/tests/test_pool_service.py:582-666"]
+    notes: "The 1→600 / 10→1400 mapping and seen=true for watched ids are asserted; no test reads the elo=NULL / battles=0 values from the user_movies insert."
   - id: FD-015
     status: partial
-    code_paths: ["backend/services/tmdb.py:152-188", "backend/routers/swipe.py:96", "backend/services/suggest.py:102", "backend/routers/suggestions.py:93"]
-    test_paths: ["backend/tests/test_auth.py:876", "backend/tests/test_tmdb_client.py"]
-    notes: "Backfill-on-consent queueing and TMDB client tested; no test asserts the poster_url IS NOT NULL filter on swipe cards or suggestion candidates, nor backfill via BackgroundTasks on login/sync."
+    code_paths: ["backend/services/tmdb.py:152-187", "backend/routers/swipe.py:96", "backend/services/suggest.py:104", "backend/routers/suggestions.py:93", "backend/routers/auth.py:649", "backend/routers/users.py:201", "backend/routers/users.py:226", "backend/routers/users.py:446"]
+    test_paths: ["backend/tests/test_auth.py:975-999", "backend/tests/test_auth.py:1611-1623", "backend/tests/test_tmdb_client.py:77-115"]
+    notes: "Poster filters exist on swipe and suggestion queries but no test asserts them; background enqueue asserted for consent and login only, and backfill_posters has no unit test."
   - id: FD-016
     status: partial
-    code_paths: ["backend/routers/users.py:97-108", "backend/routers/users.py:267-311"]
-    test_paths: ["backend/tests/test_consent_guard.py:649", "backend/tests/test_consent_guard.py:792"]
-    notes: "Endpoint and force-sync call tested; the {new_movies,total_movies} body and the 3/hour 429 are not asserted."
+    code_paths: ["backend/routers/users.py:114-125", "backend/routers/users.py:414-458"]
+    test_paths: ["backend/tests/test_consent_guard.py:649-792", "backend/tests/test_pool_import_runner.py:34-95", "backend/tests/test_rate_limiting.py:968"]
+    notes: "Token refresh and force bypass tested; no test reads the {new_movies, total_movies} body or exercises the 3/hour limit and its 429."
   - id: FD-017
     status: partial
-    code_paths: ["backend/routers/swipe.py:266-285", "backend/services/expand.py"]
-    test_paths: ["backend/tests/test_expand_service.py", "backend/tests/test_swipe.py:342"]
-    notes: "Source order, 7-day cooldown, pool_expansions rows, advisory lock and on_conflict_do_nothing implemented and service-tested; no test triggers expansion from a <50 swipe submission and TARGET_ADDED early-stop is untested."
+    code_paths: ["backend/routers/swipe.py:266-285", "backend/services/expand.py:24-25", "backend/services/expand.py:59-121", "backend/services/expand.py:146-328", "backend/services/expand.py:362-456", "backend/db_models.py:449-466"]
+    test_paths: ["backend/tests/test_expand_service.py:36-264", "backend/tests/test_swipe.py:342"]
+    notes: "Source order, 50 threshold, 100 target, pages 2–5 and the 7-day guard match; untested: the trigger from /api/swipe/results, PoolExpansion row contents, early stop at 100 and inserted-row seen/elo/battles; TMDB-similar is movies-only, which the statement omits."
   - id: FD-018
     status: partial
-    code_paths: ["backend/routers/swipe.py:29-186"]
-    test_paths: ["backend/tests/test_swipe.py:28-130", "backend/tests/test_swipe.py:228-310", "backend/tests/test_consent_guard.py:837"]
-    notes: "Only band helpers and a mirror of the dedup block are tested; no request-level test asserts <=10 cards, no duplicates, or the 404 message."
+    code_paths: ["backend/routers/swipe.py:29-53", "backend/routers/swipe.py:56-186"]
+    test_paths: ["backend/tests/test_swipe.py:28-125", "backend/tests/test_swipe.py:228-303", "backend/tests/test_consent_guard.py:837"]
+    notes: "6/2/2 split, dedup, backfill, random no-median path and the 404 message are implemented, but no test executes the endpoint and asserts card count, uniqueness or the 404; the 'shared with pair selection' criterion is drifted since pair_selection.py no longer uses BANDS."
   - id: FD-019
     status: covered
-    code_paths: ["backend/routers/swipe.py:189-289", "backend/schemas.py:146-158"]
-    test_paths: ["backend/tests/test_swipe.py:372-469", "backend/tests/test_schemas.py:187"]
-    notes: "Response shape, skip-without-failing and UUID validation tested; code additionally skips already-resolved rows and enforces a 2000/day cap (SEC-21) not in the statement (see orphans)."
+    code_paths: ["backend/routers/swipe.py:189-289", "backend/schemas.py:38", "backend/schemas.py:146-158"]
+    test_paths: ["backend/tests/test_swipe.py:372-438", "backend/tests/test_schemas.py:173-189", "backend/tests/test_schemas.py:383-390"]
+    notes: "Response shape, UUID validation and tolerance of unknown movie ids are asserted; skip is logged at DEBUG and duplicate ids collapse to one row, minor wording drift only."
   - id: FD-020
     status: partial
-    code_paths: ["backend/routers/swipe.py:95", "backend/services/pair_selection.py:43"]
-    test_paths: ["backend/tests/test_pair_selection.py:43"]
-    notes: "Pair-selection seen IS true filter tested; the swipe-card seen IS NULL filter is not asserted by any test."
+    code_paths: ["backend/routers/swipe.py:95", "backend/services/pair_selection.py:49"]
+    test_paths: ["backend/tests/test_pair_selection.py:59-72"]
+    notes: "Both filters exist; the pair test asserts only the prefix 'user_movies.seen IS ' and nothing compiles the swipe card query."
   - id: FD-021
     status: covered
-    code_paths: ["backend/services/elo.py:13-59", "backend/routers/movies.py:42", "backend/routers/rankings.py:41"]
-    test_paths: ["backend/tests/test_elo.py:22-88", "backend/tests/test_elo.py:155-214"]
-    notes: "k_factor schedule, 75-point exchange at 3 battles, independent K per side and fractional storage all tested."
+    code_paths: ["backend/services/elo.py:11-57", "backend/services/duel.py:64-86", "backend/routers/movies.py:42"]
+    test_paths: ["backend/tests/test_elo.py:23-85", "backend/tests/test_duel_service.py:176-194", "backend/tests/test_movies_router.py:169-174"]
+    notes: "k_factor values, the 75-point exchange, independent K per side, unrounded storage and display rounding are all asserted."
   - id: FD-022
     status: partial
-    code_paths: ["backend/db_models.py:206", "backend/services/elo.py:88-94", "backend/services/duel.py:75-76", "backend/services/duel.py:177-181"]
-    test_paths: ["backend/tests/test_elo.py:141-149", "backend/tests/test_duel_service.py:405"]
-    notes: "get_initial_elo and seeded bootstrap tested; no test pins the DB/model default of NULL."
+    code_paths: ["backend/db_models.py:278", "backend/services/elo.py:84-90", "backend/services/duel.py:75-76", "backend/services/duel.py:177-181"]
+    test_paths: ["backend/tests/test_elo.py:149-154", "backend/tests/test_duel_service.py:405-424", "backend/tests/test_duel_service.py:575-590"]
+    notes: "get_initial_elo and seeded bootstrap are tested; no test inspects the column default being NULL rather than 1000."
   - id: FD-023
-    status: covered
-    code_paths: ["backend/services/elo.py:70-85", "backend/services/rankings.py:85-105", "backend/services/rankings.py:229", "backend/routers/rankings.py:35-44", "backend/services/sync.py:67-69"]
-    test_paths: ["backend/tests/test_elo.py:107-139", "backend/tests/test_rankings_router.py:147-200", "backend/tests/test_rankings_service.py:212-275", "backend/tests/test_sync.py:83"]
-    notes: "Percentile formula, clamp, single elo_to_rating function and genre filter not narrowing the population all tested."
+    status: stale
+    code_paths: ["backend/services/elo.py:68-81", "backend/services/rankings.py:96-161", "backend/services/rankings.py:282-298", "backend/routers/rankings.py:71-108", "backend/services/sync.py:145-147"]
+    test_paths: ["backend/tests/test_elo.py:114-143", "backend/tests/test_rankings_service.py:245-342", "backend/tests/test_rankings_router.py:189-229", "backend/tests/test_sync.py:83", "backend/tests/test_media_type_filtering.py:318"]
+    notes: "Formula, tie handling, single-film 5, shared population and filter independence all asserted, but no function named elo_to_rating exists; since #804 the mapping is percentile_rating plus get_elo_ratings computing counts in SQL, so the 'via a single function elo_to_rating' wording is wrong."
   - id: FD-024
     status: partial
-    code_paths: ["backend/services/pair_selection.py", "backend/routers/movies.py:52-93"]
-    test_paths: ["backend/tests/test_pair_selection.py:34-144", "backend/tests/test_movies_router.py:146-200", "frontend/src/__tests__/Duel.test.jsx:363-449"]
-    notes: "Selection rules, uncapped query, last-pair avoidance and frontend sequencing tested; the router's 404 for <2 films is only tested at the service ValueError level."
+    code_paths: ["backend/services/pair_selection.py:14-81", "backend/routers/movies.py:69-91", "frontend/src/pages/Duel.jsx:48-127"]
+    test_paths: ["backend/tests/test_pair_selection.py:48-157", "backend/tests/test_movies_router.py:185-199", "backend/tests/test_rate_limiting.py:162", "frontend/src/__tests__/Duel.test.jsx:363-427"]
+    notes: "Min-battles anchor, 5-nearest challenger, repeat avoidance, 404 and the frontend token hand-off are asserted; the seen=true filter is checked only as a prefix and no router test runs select_pair against real rows."
   - id: FD-025
     status: covered
-    code_paths: ["backend/utils/tokens.py", "backend/routers/duels.py:53-60", "backend/routers/movies.py:84-86", "backend/main.py:181-186"]
-    test_paths: ["backend/tests/test_duel_router.py:230-357", "backend/tests/test_movies_router.py:37-110"]
-    notes: "Invalid, mismatched, missing, other-user and expired tokens all tested; Fernet key shared with token_crypto."
+    code_paths: ["backend/utils/tokens.py:16-34", "backend/services/token_crypto.py:26-99", "backend/routers/duels.py:53-64", "backend/routers/movies.py:84-91", "backend/main.py:231-236"]
+    test_paths: ["backend/tests/test_duel_router.py:230-470", "backend/tests/test_movies_router.py:37-100", "backend/tests/test_movies_router.py:176", "backend/tests/test_token_crypto.py:108-128", "backend/tests/test_migration_025_duel_pair_token_digest.py:66"]
+    notes: "Missing, forged, mismatched, other-user and expired tokens all return 400 and are tested, plus a replay guard beyond the statement; the 'same Fernet key material as token_crypto' criterion is drifted since pair tokens now use a separate PAIR-purpose key."
   - id: FD-026
-    status: covered
-    code_paths: ["backend/services/duel.py:131-252"]
-    test_paths: ["backend/tests/test_duel_service.py:152-335", "backend/tests/test_duel_service.py:433-670"]
-    notes: "Wins, X_only with ranked other, neither on unranked, and history row with mode/pair_type all tested."
+    status: partial
+    code_paths: ["backend/services/duel.py:64-99", "backend/services/duel.py:159-227"]
+    test_paths: ["backend/tests/test_duel_service.py:152-335", "backend/tests/test_duel_service.py:433-613", "backend/tests/test_duel_service.py:622-662", "backend/tests/test_duel_service.py:719-734"]
+    notes: "Every branch is implemented and tested for seen/elo/battles; unasserted: winner/loser elo before/after on the duels row and mode/pair_type on the skip-outcome rows."
   - id: FD-027
     status: covered
-    code_paths: ["backend/schemas.py:99-113", "backend/main.py:176-180"]
-    test_paths: ["backend/tests/test_duel_router.py:180", "backend/tests/test_schemas.py:124"]
-    notes: "Self-duel rejected with 400 and friendly message, asserted at router and schema level."
+    code_paths: ["backend/schemas.py:99-113", "backend/main.py:224-230"]
+    test_paths: ["backend/tests/test_duel_router.py:180-212", "backend/tests/test_schemas.py:124-131"]
+    notes: "Equal ids yield 400 with the friendly message while other validation errors stay 422."
   - id: FD-028
     status: covered
-    code_paths: ["backend/services/duel.py:23-61"]
-    test_paths: ["backend/tests/test_duel_service.py:366-404", "backend/tests/test_duel_service.py:737-753", "backend/tests/test_swipe.py", "frontend/src/__tests__/Duel.test.jsx:276"]
-    notes: "next_action thresholds tested server-side and consumed by the frontend; no swipe-status endpoint exists in any router."
+    code_paths: ["backend/services/duel.py:23-61", "backend/services/duel.py:240-248", "backend/routers/swipe.py:254", "backend/routers/swipe.py:287-289", "frontend/src/pages/Duel.jsx:123-197"]
+    test_paths: ["backend/tests/test_duel_service.py:366-396", "backend/tests/test_duel_service.py:737-753", "backend/tests/test_swipe.py:133-153", "frontend/src/__tests__/Duel.test.jsx:276-361", "frontend/src/__tests__/Swipe.test.jsx:74"]
+    notes: "Thresholds 3 and 10 are asserted at the boundaries and the interstitial triggers only after submit; absence of a polling endpoint verified by inspection."
   - id: FD-029
     status: partial
-    code_paths: ["backend/services/duel.py:147-151", "backend/services/tournament.py:395-406"]
-    test_paths: ["backend/tests/test_duel_service.py:106", "backend/tests/test_duel_service.py:225", "backend/tests/test_tournament_service.py"]
-    notes: "FOR UPDATE tested and sorted lock order asserted for the tournament path; the discovery process_duel test checks winner mapping, not lock order."
+    code_paths: ["backend/services/duel.py:111-128", "backend/services/duel.py:147-151"]
+    test_paths: ["backend/tests/test_duel_service.py:106-127", "backend/tests/test_duel_service.py:225-249"]
+    notes: "Sorted ids and FOR UPDATE are implemented and the FOR UPDATE SQL is asserted, but no test captures the lock order of the two fetches in process_duel."
   - id: FD-030
-    status: covered
-    code_paths: ["backend/services/sync.py", "backend/routers/duels.py:83-96"]
-    test_paths: ["backend/tests/test_sync.py", "backend/tests/test_media_type_filtering.py:272-400"]
-    notes: "Retry-once on 5xx, no retry on 4xx, swallowed failures and skip when toggle is false all tested; the note's sync_post_duel_simkl no longer exists so sync_ratings_to_simkl is a dead toggle."
+    status: partial
+    code_paths: ["backend/services/sync.py:26-172", "backend/routers/duels.py:83-96", "backend/routers/tournaments.py:536-544", "backend/db_models.py:169-185"]
+    test_paths: ["backend/tests/test_sync.py:37-66", "backend/tests/test_media_type_filtering.py:101-658", "backend/tests/test_tournaments_router.py:983"]
+    notes: "Opt-out, SIMKL skipping, single retry on 5xx and swallowed failures are tested and SIMKL sync now exists (#802); the /api/duels background enqueue and its winner-only gate have no test."
   - id: FD-031
     status: partial
-    code_paths: ["backend/services/rankings.py:29-82", "backend/routers/rankings.py:47-79"]
-    test_paths: ["backend/tests/test_rankings_router.py:59-200", "backend/tests/test_rankings_service.py"]
-    notes: "Filters, 400 on bad decade and rating derivation tested; the le=200 cap and offset-adjusted rank numbers have no test."
+    code_paths: ["backend/services/rankings.py:29-93", "backend/routers/rankings.py:34-78"]
+    test_paths: ["backend/tests/test_rankings_router.py:59-122", "backend/tests/test_rankings_router.py:189-221", "backend/tests/test_rankings_service.py:117-158"]
+    notes: "Invalid decade 400 and percentile rating are tested; no test sends limit=201, asserts the seen/battles filters on the compiled query, or checks rank with a non-zero offset."
   - id: FD-032
     status: covered
-    code_paths: ["backend/services/rankings.py:108-187", "backend/routers/rankings.py:82-114"]
-    test_paths: ["backend/tests/test_rankings_service.py", "backend/tests/test_rankings_router.py:189"]
-    notes: "Aggregate counts and empty-library zero stats with omitted highest/lowest tested."
+    code_paths: ["backend/services/rankings.py:164-243", "backend/routers/rankings.py:81-118", "backend/schemas.py:161-167"]
+    test_paths: ["backend/tests/test_rankings_service.py:44-88", "backend/tests/test_rankings_router.py:231"]
+    notes: "Zero counts and None highest/lowest with no ranked films are asserted; the JSON carries the keys as null rather than dropping them."
   - id: FD-033
     status: covered
-    code_paths: ["backend/services/rankings.py:190-240", "backend/routers/rankings.py:117-133"]
-    test_paths: ["backend/tests/test_rankings_router.py:106", "backend/tests/test_rankings_service.py:173-325", "backend/tests/test_rankings_sanitize.py", "backend/tests/test_rate_limiting.py:52-70", "backend/tests/test_rate_limiting.py:263-313"]
-    notes: "Header, formula-injection guard, Rating10 percentile, 10000-row cap and 10/hour limit all tested."
+    code_paths: ["backend/services/rankings.py:252-302", "backend/routers/rankings.py:121-137"]
+    test_paths: ["backend/tests/test_rankings_service.py:176-285", "backend/tests/test_rankings_sanitize.py:43-63", "backend/tests/test_rankings_router.py:148", "backend/tests/test_rate_limiting.py:60", "backend/tests/test_rate_limiting.py:311"]
+    notes: "Header, attachment filename, formula guards, percentile rating, 10000 cap and 10/hour limit are all asserted; the Rating10 criterion names elo_to_rating, sharing FD-023's naming drift."
   - id: FD-034
     status: partial
-    code_paths: ["backend/schemas.py:36", "backend/services/duel.py:32-61"]
-    test_paths: ["backend/tests/test_media_type_filtering.py", "backend/tests/test_schemas.py:247", "backend/tests/test_schemas.py:269"]
-    notes: "Schema-level rejection and service pass-through tested; no request-level test sends an invalid media_type and asserts 422, and cross-type ranking isolation is not asserted end-to-end."
+    code_paths: ["backend/schemas.py:36", "backend/services/duel.py:32-61", "backend/services/duel.py:153-157", "backend/services/rankings.py:60-65", "backend/services/rankings.py:113-126", "backend/services/rankings.py:172-177", "backend/services/rankings.py:271-276", "frontend/src/components/Nav.jsx:122-143"]
+    test_paths: ["backend/tests/test_schemas.py:239-269", "backend/tests/test_media_type_filtering.py", "backend/tests/test_rankings_service.py:322", "backend/tests/test_rankings_router.py:189-231", "frontend/src/__tests__/App.test.jsx:99-123"]
+    notes: "Scoping is present on every path; no test sends an invalid media_type to an HTTP route for 422, no cross-ladder isolation test exists, and the Nav toggle has no test."
   - id: FD-035
-    status: partial
-    code_paths: ["backend/routers/suggestions.py:118-213", "backend/services/suggest.py"]
-    test_paths: ["backend/tests/test_suggestions_router.py:55", "backend/tests/test_suggestions_router.py:74", "backend/tests/test_suggestions_router.py:150-295", "backend/tests/test_suggest_service.py", "backend/tests/test_llm_disclosure.py:135"]
-    notes: "not_enough_films, 503 without key and 24h staleness tested; the no_candidates status and malformed-id skipping have no test."
+    status: stale
+    code_paths: ["backend/routers/suggestions.py:38-216", "backend/services/suggest.py:26-290", "backend/rate_limit.py:136-159", "backend/services/llm.py:39-97"]
+    test_paths: ["backend/tests/test_suggestions_router.py:55-138", "backend/tests/test_suggestions_router.py:242-266", "backend/tests/test_suggestions_router.py:406-443", "backend/tests/test_suggest_service.py:70-207", "backend/tests/test_llm_disclosure.py:135", "backend/tests/test_llm_service.py:54"]
+    notes: "All four criteria are tested but 'otherwise generate' is no longer true: staleness counts dismissed rows, a fresh fully-dismissed batch returns all_dismissed, a one-hour empty-reply cooldown returns no_candidates without an LLM call, and concurrent generation returns 429 (#806/#809)."
   - id: FD-036
     status: partial
-    code_paths: ["backend/routers/suggestions.py:42-61", "backend/routers/suggestions.py:283-368"]
-    test_paths: ["backend/tests/test_suggestions_router.py:196-251", "backend/tests/test_consent_guard.py:746"]
-    notes: "Dismissed exclusion and consent gating tested; ownership-scoped lookup returns 404 in code but no test exercises another user's suggestion id."
+    code_paths: ["backend/routers/suggestions.py:42-61", "backend/routers/suggestions.py:82-99", "backend/routers/suggestions.py:286-371", "backend/db_models.py:469-498"]
+    test_paths: ["backend/tests/test_rate_limiting.py:548", "backend/tests/test_suggestions_router.py:242", "backend/tests/test_suggestions_router.py:758", "backend/tests/test_consent_guard.py:746", "frontend/src/__tests__/Suggestions.test.jsx:144-159"]
+    notes: "All three actions are implemented; the 404 test only mocks a None row and no test asserts the user_id predicate or the dismissed_at IS NULL filter in SQL."
   - id: FD-037
     status: covered
-    code_paths: ["backend/routers/suggestions.py:216-280"]
-    test_paths: ["backend/tests/test_suggestions_router.py:327-454", "backend/tests/test_rate_limiting.py:316-358"]
-    notes: "DB count and slowapi 3/day both tested; the note's quota bug (distinct generated_at across all generations) and not_enough_films on empty regen remain as documented."
+    code_paths: ["backend/routers/suggestions.py:39", "backend/routers/suggestions.py:219-283", "backend/rate_limit.py:91-108"]
+    test_paths: ["backend/tests/test_suggestions_router.py:491-711", "backend/tests/test_rate_limiting.py:337-356", "frontend/src/__tests__/Suggestions.test.jsx:110"]
+    notes: "The 429 on the fourth regenerate is asserted via both the DB count and the slowapi 3/day limit; the quota leak and status/next_allowed_at mismatches in the note are still present and uncanonized."
   - id: FD-038
-    status: covered
-    code_paths: ["backend/services/curator.py:21-51", "backend/services/curator.py:98-111", "backend/services/curator.py:150", "backend/services/suggest.py:150-178"]
-    test_paths: ["backend/tests/test_curator.py", "backend/tests/test_llm_disclosure.py"]
-    notes: "Title sanitization, length-only logging, never-raw-ELO and no-account-id all tested."
+    status: partial
+    code_paths: ["backend/services/curator.py:21-51", "backend/services/curator.py:97-186", "backend/services/suggest.py:152-193", "backend/services/suggest.py:256", "backend/services/llm.py:80-84"]
+    test_paths: ["backend/tests/test_curator.py:21-144", "backend/tests/test_curator.py:181-315", "backend/tests/test_suggest_service.py:38", "backend/tests/test_llm_disclosure.py:74-222"]
+    notes: "Redaction, truncation and no-raw-ELO are asserted for both prompt builders; the no-reply-echo-in-logs criterion is tested for the curator only, not the suggestions path."
   - id: FD-039
     status: stale
-    code_paths: ["backend/services/tournament.py:83-94", "backend/services/tournament.py:181-290", "backend/routers/tournaments.py:86-100", "backend/routers/tournaments.py:192-296", "backend/routers/tournaments.py:455-480"]
-    test_paths: ["backend/tests/test_tournaments_router.py:106-135", "backend/tests/test_tournaments_router.py:719-848", "backend/tests/test_tournament_service.py:119-315", "backend/tests/test_schemas.py:273", "backend/tests/test_schemas.py:301"]
-    notes: "Statement says brackets larger than 4x the pool are rejected, but max_bracket_size (tournament.py:94) and the actual_films*2 < bracket_size check (tournament.py:193) reject anything above 2x, and tests pin 2x; min 4 films, byes, 100/24h cap and sizes match; 'next never returns a bye' is implemented but untested."
+    code_paths: ["backend/schemas.py:173-179", "backend/services/tournament.py:75", "backend/services/tournament.py:87-134", "backend/services/tournament.py:140-193", "backend/services/tournament.py:215-324", "backend/routers/tournaments.py:88-102", "backend/routers/tournaments.py:191-300"]
+    test_paths: ["backend/tests/test_schemas.py:273-301", "backend/tests/test_tournament_service.py:60-175", "backend/tests/test_tournament_service.py:215-291", "backend/tests/test_tournaments_router.py:114", "backend/tests/test_tournaments_router.py:866-959", "backend/tests/test_rate_limiting.py:625-655"]
+    notes: "Statement says brackets larger than 4x the pool are rejected; the code rejects anything above 2x (tournament.py:75, 227) and tests pin 2x; the under-4-films 400 is tested only at the service layer and no test calls GET /{id}/next."
   - id: FD-040
-    status: covered
-    code_paths: ["backend/services/tournament.py:327-420", "backend/routers/tournaments.py:487-570"]
-    test_paths: ["backend/tests/test_tournament_service.py:458-740", "backend/tests/test_tournaments_router.py:849-1046"]
-    notes: "ELO parity via shared calculation, duel_id stored, completion fields, abandon soft-delete and provider sync all tested."
+    status: partial
+    code_paths: ["backend/services/tournament.py:338-454", "backend/services/duel.py:64-100", "backend/routers/tournaments.py:494-580", "backend/db_models.py:362-364"]
+    test_paths: ["backend/tests/test_tournament_service.py:437-513", "backend/tests/test_tournament_service.py:554-780", "backend/tests/test_tournaments_router.py:983", "backend/tests/test_tournaments_router.py:1069-1146"]
+    notes: "ELO parity, stored duel_id, champion/status and abandon are asserted; completed_at is never asserted and 'auto-resolving any resulting bye' has no code in record_match_winner (byes exist only in round 1)."
   - id: FD-041
     status: partial
-    code_paths: ["backend/services/tournament.py:26-77", "backend/services/curator.py:78-188", "backend/routers/tournaments.py:247-272", "backend/routers/tournaments.py:299-398"]
-    test_paths: ["backend/tests/test_consent_guard.py:412-500", "backend/tests/test_schemas.py:289-295", "backend/tests/test_retention.py:125", "backend/tests/test_llm_disclosure.py:187-234", "backend/tests/test_tournaments_router.py:534-585", "backend/tests/test_tournaments_router.py:715-836"]
-    notes: "Curation failure 500, schema and disclosure tested; the bracket_size*3 candidate cap and ELO-sorted seeding of LLM picks are not asserted, and regeneration constraints (see orphans) are unspecified."
+    code_paths: ["backend/services/tournament.py:27-81", "backend/services/curator.py:54-188", "backend/routers/tournaments.py:202-295", "backend/routers/tournaments.py:303-405", "backend/rate_limit.py:111-133", "backend/schemas.py:209-215", "backend/services/retention.py:106-130"]
+    test_paths: ["backend/tests/test_consent_guard.py:412-465", "backend/tests/test_tournaments_router.py:542-802", "backend/tests/test_tournaments_router.py:900-932", "backend/tests/test_schemas.py:289-293", "backend/tests/test_retention.py:125-149", "backend/tests/test_curator.py:299-389", "backend/tests/test_llm_disclosure.py:213-229"]
+    notes: "500 on curation failure, max_length, purge SQL and shared budget mechanics are tested; unasserted: no partial row on failure, 180-day default, the literal 50/day, ELO-desc seeding of picks and llm_response persistence; regeneration re-queries the pool rather than reusing a stored one."
   - id: FD-042
     status: partial
-    code_paths: ["backend/routers/feedback.py:58-174"]
-    test_paths: ["backend/tests/test_feedback.py:91-265", "backend/tests/test_feedback.py:414-560", "backend/tests/test_rate_limiting.py:96"]
-    notes: "413, 415, encryption, 90-day purge_after, 20/day 429 and 5/hour registration tested; the 503 on encryption failure (feedback.py:140-150) has no test."
+    code_paths: ["backend/routers/feedback.py:58-175", "backend/routers/feedback.py:178-249", "backend/routers/users.py:341-409", "backend/services/token_crypto.py:26-68", "backend/middleware/body_limit.py:21-26"]
+    test_paths: ["backend/tests/test_feedback.py:158-230", "backend/tests/test_feedback.py:295-329", "backend/tests/test_feedback.py:444-464", "backend/tests/test_users_router.py:424", "backend/tests/test_rate_limiting.py:114"]
+    notes: "413, 415, ciphertext storage, 90-day purge_after and the daily cap are asserted; the 503 on encryption failure is untested, the 5/hour value is not pinned, and the admin-decrypt criterion is drifted (admin list never decrypts, owners decrypt their own since #811)."
   - id: FD-043
     status: covered
-    code_paths: ["backend/routers/auth.py:222-228", "backend/routers/feedback.py", "backend/routers/duels.py:101", "backend/routers/swipe.py:292"]
-    test_paths: ["backend/tests/test_feedback.py:378-384", "backend/tests/test_swipe.py:202", "backend/tests/test_duel_router.py:509", "backend/tests/test_rate_limiting.py:674-760"]
-    notes: "403 message and 10/minute limit tested on every admin route."
+    code_paths: ["backend/routers/auth.py:253-259", "backend/routers/feedback.py:178-280", "backend/routers/duels.py:102-105", "backend/routers/swipe.py:293-296"]
+    test_paths: ["backend/tests/test_feedback.py:378", "backend/tests/test_swipe.py:202", "backend/tests/test_duel_router.py:509", "backend/tests/test_rate_limiting.py:696-793", "backend/tests/test_rate_limiting.py:968"]
+    notes: "403 'Admin access required' and a 10/minute limiter on all six admin routes are asserted."
   - id: FD-044
-    status: covered
-    code_paths: ["backend/main.py:202-262"]
-    test_paths: ["backend/tests/test_csrf.py", "backend/tests/test_cors.py:31"]
-    notes: "All three rejection messages, csrf_no_origin_rejected log, Referer path stripping and X-Requested-With allow-header tested."
+    status: stale
+    code_paths: ["backend/main.py:261-327", "backend/routers/csp_report.py:16"]
+    test_paths: ["backend/tests/test_csrf.py:21-166", "backend/tests/test_cors.py:31", "backend/tests/test_csp_report.py:120"]
+    notes: "All three criteria are asserted with exact messages and the log event, but since #834 a POST to /api/csp-report with none of the headers is accepted (main.py:284-287), which the statement's 'rejected with 403' does not allow."
   - id: FD-045
     status: partial
-    code_paths: ["backend/main.py:265-287"]
-    test_paths: ["backend/tests/test_security_headers.py", "frontend/src/__tests__/font-cdn-guard.test.js"]
-    notes: "HSTS keyed to cookie_secure, CSP frame-ancestors/base-uri/form-action/object-src, Permissions-Policy and font guard tested; nosniff, X-Frame-Options, Referrer-Policy, img-src/connect-src entries and SPA responses (only /health checked) are not asserted."
+    code_paths: ["backend/main.py:330-357", "backend/config.py:460-467"]
+    test_paths: ["backend/tests/test_security_headers.py:31-120", "frontend/src/__tests__/font-cdn-guard.test.js"]
+    notes: "HSTS keyed to cookie_secure, frame-ancestors, COOP/CORP and reporting headers are asserted; nothing asserts nosniff, X-Frame-Options, Referrer-Policy, the img/script/style/connect-src values or any SPA response, and the statement predates base-uri/form-action/object-src/report directives."
   - id: FD-046
-    status: stale
-    code_paths: ["backend/rate_limit.py:20-66", "backend/main.py:197-199", "entrypoint.sh:43-65"]
-    test_paths: ["backend/tests/test_rate_limit.py:43-213", "backend/tests/test_rate_limiting.py:104-140"]
-    notes: "User-id keying and 429 handler match and are tested, but the Railway clause is inverted: under --forwarded-allow-ips='*' request.client becomes the client-controlled leftmost X-Forwarded-For, so anonymous keys on Railway are taken from the edge-set X-Real-IP header (rate_limit.py:24-37, spoofed-XFF test), not from X-Forwarded-For as stated."
+    status: partial
+    code_paths: ["backend/rate_limit.py:32-108", "backend/main.py:248-249", "entrypoint.sh:43-68", "backend/routers/users.py:88-90"]
+    test_paths: ["backend/tests/test_rate_limit.py:52-255", "backend/tests/test_rate_limiting.py:122-154", "backend/tests/test_rate_limiting.py:948-999"]
+    notes: "User-id keying, slowapi handler, Railway X-Real-IP use, spoofed XFF resistance and the all-routes invariant are asserted; #846's shared 'unknown' bucket is undescribed but not contradictory, and the entrypoint.sh forwarded-allow-ips criterion has no test."
   - id: FD-047
     status: partial
-    code_paths: ["backend/config.py:132-211", "entrypoint.sh:4-31"]
-    test_paths: ["backend/tests/test_config.py"]
-    notes: "Python-side SECRET_KEY/CORS/TOKEN_ENC_KEY/DATABASE_URL validation fully tested; entrypoint.sh fail-fasts on missing vars and short SECRET_KEY but does not check the localhost or weak-placeholder strings, and nothing tests the shell script."
+    code_paths: ["backend/config.py:38-102", "backend/config.py:215-246", "backend/config.py:305-371", "backend/config.py:431-435", "entrypoint.sh:4-31"]
+    test_paths: ["backend/tests/test_config.py:42-123", "backend/tests/test_config.py:139-199", "backend/tests/test_config.py:293-340", "backend/tests/test_config.py:426-449", "backend/tests/test_config.py:798-884"]
+    notes: "Every Settings() rejection, loopback and platform rules, the 6-distinct-character floor and no-echo guarantee are asserted; #831's malformed/plain-http origin rejection is beyond the statement and the entrypoint.sh fail-fast criterion has no test."
   - id: FD-048
     status: covered
-    code_paths: ["backend/config.py:241-299", "backend/utils/cookies.py", "backend/routers/auth.py:109-131", "backend/routers/auth.py:146", "backend/routers/auth.py:453-459"]
-    test_paths: ["backend/tests/test_config.py", "backend/tests/test_auth.py:257-309", "backend/tests/test_auth.py:1120-1240", "backend/tests/test_auth.py:1432-1513", "backend/tests/test_cookies.py", "backend/tests/test_rate_limit.py:64-84"]
-    notes: "SECURE_COOKIES override, https inference, fail-closed on proxy platforms and __Host- prefixed issue/read/expire all tested."
+    code_paths: ["backend/config.py:44-47", "backend/config.py:164-166", "backend/config.py:404-427", "backend/config.py:456-467", "backend/utils/cookies.py:16-23", "backend/routers/auth.py:139-190", "backend/rate_limit.py:68"]
+    test_paths: ["backend/tests/test_config.py:407-420", "backend/tests/test_config.py:540-587", "backend/tests/test_cookies.py", "backend/tests/test_auth.py:1229-1334", "backend/tests/test_auth.py:258-308", "backend/tests/test_rate_limit.py:73-93"]
+    notes: "All five criteria are asserted, including fail-closed boot on a proxy platform and __Host- naming on issue, read, refresh, callback expiry and logout."
   - id: FD-049
-    status: covered
-    code_paths: ["backend/services/trakt.py:127", "backend/services/trakt.py:145"]
-    test_paths: ["backend/tests/test_trakt_client.py:173-244"]
-    notes: "quote(username, safe='') encodes / and ..; path-traversal and host-escape cases tested."
+    status: stale
+    code_paths: ["backend/services/trakt.py:113-140"]
+    test_paths: ["backend/tests/test_trakt_client.py:185-194"]
+    notes: "PR #801 removed the username parameter and the quote() call; both methods now hit fixed /users/me/... paths, so the hazard is eliminated by construction but the statement's URL-encoding mechanism no longer exists."
   - id: FD-050
     status: partial
-    code_paths: ["backend/main.py:116", "backend/main.py:151-158", "backend/main.py:308-338"]
-    test_paths: ["backend/tests/test_spa.py"]
-    notes: "503 without build, index fallback, static files, traversal/symlink blocking and log escaping tested; no test asserts /docs, /redoc and /openapi.json return 404 off localhost."
+    code_paths: ["backend/main.py:158", "backend/main.py:201-208", "backend/main.py:381-407"]
+    test_paths: ["backend/tests/test_spa.py:15-182"]
+    notes: "503 without a build, index.html fallback, traversal and symlink blocking with sanitized logging are asserted; the docs/redoc/openapi 404 off localhost is implemented but untested."
   - id: FD-051
     status: partial
-    code_paths: ["entrypoint.sh", "Dockerfile", "railway.toml", "backend/main.py:302-305"]
-    test_paths: ["backend/tests/test_health.py", "backend/tests/test_rate_limiting.py:585-600", "backend/tests/test_runtime_versions.py"]
-    notes: "Entrypoint sequence (env check, import check, uvicorn first, 60s health wait, 15 backoff retries capped at 60s, abort) matches; health endpoint and version pins tested, the shell flow itself is untested."
+    code_paths: ["entrypoint.sh:4-135", "backend/main.py:373-376", "railway.toml:5-8", "Dockerfile:14", ".github/workflows/ci.yml:25-69", ".github/workflows/staging-pipeline.yml"]
+    test_paths: ["backend/tests/test_health.py", "backend/tests/test_rate_limiting.py:606-617", "backend/tests/test_runtime_versions.py:37-49", "backend/tests/test_ci_triggers.py:86-90", "backend/tests/test_ci_supply_chain.py:28-39"]
+    notes: "Container start sequence matches the script line for line and python version parity is pinned; no test executes entrypoint.sh, and the 'Railway auto-deploys on merge' criterion is drifted since production is now reached via staging-pipeline.yml (AGENTS.md also describes the old flow)."
   - id: FD-052
-    status: covered
-    code_paths: ["backend/db.py:21-31", "backend/config.py:93-109", "backend/requirements.in", "backend/migrations/versions/"]
-    test_paths: ["backend/tests/test_config.py:317-358", "backend/tests/test_db.py:71-100"]
-    notes: "Shared connect args with statement_cache_size=0 for app and Alembic engines tested; no supabase client dependency; 27 Alembic revisions present."
+    status: partial
+    code_paths: ["backend/db.py:21-37", "backend/config.py:169-185", "backend/requirements.in:14-16", "backend/migrations/versions/"]
+    test_paths: ["backend/tests/test_config.py:464-473", "backend/tests/test_db.py:71-100"]
+    notes: "statement_cache_size=0 is asserted for both the app and Alembic engines; the no-supabase-py and migrations-only criteria are verified by inspection only."
   - id: FD-053
     status: covered
-    code_paths: ["backend/services/pool.py:339-419"]
-    test_paths: ["backend/tests/test_pool_service.py:374-466", "backend/tests/test_pool_service.py:175-230"]
-    notes: "No movies INSERT on imdb match, UPDATE setting simkl_id, user_movies pointing at existing id, and dual-column insert otherwise all tested; the note's one-directional gap (_upsert_pool never reads imdb_id) still holds."
+    code_paths: ["backend/services/pool.py:29-74", "backend/services/pool.py:351-431", "backend/db_models.py:216-231"]
+    test_paths: ["backend/tests/test_pool_service.py:439-495", "backend/tests/test_pool_service.py:194-203"]
+    notes: "No-INSERT-only-UPDATE on match, user_movies pointing at the existing id and trakt_id==simkl_id for unmatched titles are all asserted; the one-directional gap in the note still holds."
   - id: FD-054
-    status: covered
-    code_paths: ["frontend/src/App.jsx", "frontend/src/components/ConsentModal.jsx", "backend/services/suggest.py", "backend/services/curator.py"]
-    test_paths: ["frontend/src/__tests__/App.test.jsx:226-275", "frontend/src/__tests__/Login.test.jsx:44", "frontend/src/__tests__/Nav.test.jsx:343", "frontend/src/__tests__/ConsentModal.test.jsx:23", "backend/tests/test_llm_disclosure.py"]
-    notes: "Public /privacy route, links from login/nav/consent modal, and itemized LLM disclosure matching what is actually sent all tested on both sides."
+    status: partial
+    code_paths: ["frontend/src/App.jsx:91-99", "frontend/src/pages/PrivacyPolicy.jsx:21-131", "frontend/src/components/ConsentModal.jsx:36-47", "frontend/src/pages/Login.jsx:163-170", "frontend/src/components/Nav.jsx:184-189", "backend/services/suggest.py:28-55", "backend/services/curator.py:43-52"]
+    test_paths: ["frontend/src/__tests__/App.test.jsx:226-250", "frontend/src/__tests__/Login.test.jsx:44", "frontend/src/__tests__/Nav.test.jsx:352", "frontend/src/__tests__/PrivacyPolicy.test.jsx:8-86", "frontend/src/__tests__/ConsentModal.test.jsx:23", "backend/tests/test_llm_disclosure.py:74-237"]
+    notes: "Gate-free /privacy, both links, consent-modal itemization and tier substitution are tested; the policy test does not pin the AI gateway's name, the administrator wording or the watchlist write-back (frontend tests read, not executed)."
   - id: FD-055
     status: covered
-    code_paths: ["frontend/src/components/ScreenshotEditor.jsx", "frontend/src/components/ReportIssueModal.jsx"]
-    test_paths: ["frontend/src/__tests__/ScreenshotEditor.test.jsx:95-160", "frontend/src/__tests__/ReportIssueModal.test.jsx:138-170"]
-    notes: "Tools, flattening via toDataURL('image/jpeg', 0.85), undo, flattened-only handback and edited-path submission tested."
+    code_paths: ["frontend/src/components/ScreenshotEditor.jsx:4-9", "frontend/src/components/ScreenshotEditor.jsx:41-107", "frontend/src/components/ScreenshotEditor.jsx:249-271", "frontend/src/components/ReportIssueModal.jsx:17-62"]
+    test_paths: ["frontend/src/__tests__/ScreenshotEditor.test.jsx:95-154", "frontend/src/__tests__/ReportIssueModal.test.jsx:138-155"]
+    notes: "Tool set, undo, flatten order with opaque black fillRect, JPEG 0.85 export, flattened-only onSave and submission of the edited image are all asserted; the opt-in and re-edit caveats remain true and untested."
   - id: FD-056
-    status: covered
-    code_paths: ["backend/routers/tournaments.py:67-83", "backend/routers/tournaments.py:103-139", "backend/routers/tournaments.py:401-452"]
-    test_paths: ["backend/tests/test_tournaments_router.py:310-533", "backend/tests/test_rate_limiting.py:201-262"]
-    notes: "Owner scoping, newest-first ordering, LIMIT 100, progress strings, (round, position) sort and 404 for a foreign id all tested."
+    status: partial
+    code_paths: ["backend/routers/tournaments.py:69-141", "backend/routers/tournaments.py:408-459"]
+    test_paths: ["backend/tests/test_tournaments_router.py:318-368", "backend/tests/test_tournaments_router.py:429-521", "backend/tests/test_rate_limiting.py:219-254"]
+    notes: "SQL scoping, ordering, LIMIT 100, progress strings and (round, position) sorting are asserted; the other-user 404 test only mocks a None row so the owner predicate in _load_tournament is never confirmed."
   - id: FD-057
-    status: stale
-    code_paths: ["backend/routers/users.py:57-69", "backend/schemas.py:13-23"]
-    test_paths: ["backend/tests/test_users_router.py:171-182", "backend/tests/test_users_router.py:222-268"]
-    notes: "Statement says exactly nine fields, but UserResponse and _build_user_response now emit ten (pool_import_status added) and the PROFILE_FIELDS allow-list test already pins the ten-field set; token exclusion by construction still holds and is tested."
+    status: covered
+    code_paths: ["backend/routers/users.py:73-92", "backend/schemas.py:13-23"]
+    test_paths: ["backend/tests/test_users_router.py:242-270"]
+    notes: "Ten-field allow-list set equality and the no-sentinel-anywhere check run against a real User row carrying both providers' tokens and expiries; the note's line references are drifted but the behavior is intact."
   - id: FD-058
     status: covered
-    code_paths: ["backend/services/tmdb.py:18-37", "backend/main.py:138-145"]
-    test_paths: ["backend/tests/test_tmdb_client.py:52-162", "backend/tests/test_config.py:540-566"]
-    notes: "Bearer header with empty query for v4 tokens, api_key query plus tmdb_v3_api_key startup warning (never the value) for v3 keys, both tested."
+    code_paths: ["backend/services/tmdb.py:18-37", "backend/main.py:188-195"]
+    test_paths: ["backend/tests/test_tmdb_client.py:53-150", "backend/tests/test_config.py:763-779"]
+    notes: "Bearer-with-empty-query for JWT-shaped keys, api_key param for v3 keys, and the startup warning without the value are all asserted."
 orphans:
-  - behavior: "GET /api/me/export returns a JSON download of every user-scoped record (profile, library, duels, duel_history, tournaments, suggestions, swipe_results, feedback_reports, pool_expansions) from explicit field allow-lists that exclude OAuth tokens, capped at 10,000 rows per section with truncated_sections named, auth-gated only (not consent), 10/hour, linked from the settings sidebar."
-    code_paths: ["backend/routers/users.py:247-264", "backend/services/data_export.py", "frontend/src/components/Nav.jsx:176", "backend/tests/test_data_export.py"]
-    suggested_requirement: "When an authenticated user requests GET /api/me/export, the system shall return a JSON attachment containing every personal-data record held for them across all user-scoped tables, assembled from explicit field allow-lists that exclude OAuth tokens and expiries, capped at 10,000 rows per section with capped sections named in truncated_sections, available regardless of consent state and limited to 10 exports per hour."
-  - behavior: "Initial provider import is started by the first POST /api/me/consent (never the OAuth callback), tracked via pool_import_status (importing/complete/failed, with an import older than 20 minutes reported as failed), retried via POST /api/me/pool-import (3/hour, no-op while importing), and surfaced by a blocking PoolImportScreen that polls /api/me every 3s with Retry / Continue anyway."
-    code_paths: ["backend/routers/auth.py:546-550", "backend/routers/users.py:38-55", "backend/routers/users.py:111-210", "backend/schemas.py:23", "frontend/src/App.jsx:68-70", "frontend/src/components/PoolImportScreen.jsx", "backend/tests/test_migration_026_add_pool_import_status.py"]
-    suggested_requirement: "When a user accepts the privacy policy for the first time, the system shall start the initial provider import in the background only then (never from the OAuth callback), expose its state via pool_import_status on /api/me (importing / complete / failed, with an import older than 20 minutes reported as failed), and allow POST /api/me/pool-import to retry a failed import at most 3 times per hour."
-  - behavior: "Each served pair token's SHA-256 digest is stored on the duels row under a unique index; resubmitting the same token hits IntegrityError and returns 409 'Duel already recorded', which the frontend treats as success on retry."
-    code_paths: ["backend/routers/duels.py:62-81", "backend/services/duel.py:227", "backend/db_models.py:311", "backend/db_models.py:337", "frontend/src/pages/Duel.jsx:108-112", "backend/tests/test_migration_025_duel_pair_token_digest.py"]
-    suggested_requirement: "When a duel is submitted with a pair token whose digest has already been recorded on a duels row, the system shall reject it with 409 'Duel already recorded' without applying ELO changes a second time, so a client retry after a lost response is safe."
-  - behavior: "Swipe submission accepts at most 50 items per request, collapses duplicate movie_ids, updates only rows with seen IS NULL (already-resolved rows are skipped), and returns 429 once 2,000 swipe_results rows exist for the user in a rolling 24h window."
-    code_paths: ["backend/routers/swipe.py:37-39", "backend/routers/swipe.py:203-243", "backend/schemas.py:151-152"]
-    suggested_requirement: "When a user submits swipe results, the system shall accept at most 50 items per request, collapse repeated movie ids, only update rows still unclassified (seen IS NULL), and reject the submission with 429 once 2,000 swipe results have been recorded for that user in the preceding 24 hours."
-  - behavior: "Every count-then-act quota check (swipe daily, feedback daily, tournament daily, suggestion regen, tournament regen/submit/abandon, pool expansion) takes a transaction-scoped pg_advisory_xact_lock keyed on (scope, user or tournament id); handlers that go on to call the LLM use the non-blocking variant and return 429 with Retry-After: 5 when another request of that kind is in flight (SEC-02 / AUD-01)."
-    code_paths: ["backend/db.py:51-100", "backend/routers/swipe.py:204", "backend/routers/feedback.py:104", "backend/routers/tournaments.py:210", "backend/routers/tournaments.py:316", "backend/routers/tournaments.py:504", "backend/routers/tournaments.py:554", "backend/routers/suggestions.py:174", "backend/routers/suggestions.py:234", "backend/services/expand.py:59"]
-    suggested_requirement: "When a request performs a count-then-act quota check, the system shall serialize it per user (or per tournament) with a transaction-scoped Postgres advisory lock so concurrent requests cannot both pass the cap; and when the request would go on to await an LLM call, the system shall refuse rather than queue, returning 429 with Retry-After if the lock is held."
-  - behavior: "Process-wide LLM semaphore of LLM_MAX_CONCURRENT (default 2) with fail-fast LLMBusyError mapped to 503 + Retry-After: 15 on suggestions, regenerate, tournament create and regenerate; per-call LLM_TIMEOUT_SECONDS (<=120s, no retries); startup refuses to boot if the cap is not below DB pool capacity (3 + 2 overflow)."
-    code_paths: ["backend/services/llm.py:13-57", "backend/config.py:174-190", "backend/routers/suggestions.py:198-203", "backend/routers/suggestions.py:265-270", "backend/routers/tournaments.py:257-261", "backend/routers/tournaments.py:368-373"]
-    suggested_requirement: "While LLM_MAX_CONCURRENT chat completions are already in flight, the system shall reject a new AI request immediately with 503 and Retry-After: 15 rather than queue it, and at startup shall refuse to boot if LLM_MAX_CONCURRENT is not below the database connection pool capacity."
-  - behavior: "Suggestion freshness is measured from the newest generated_at including dismissed rows so dismissing cannot force a new LLM generation; status 'all_dismissed' is returned when a fresh batch is fully dismissed; generation per user is single-flight via try_acquire_xact_lock."
-    code_paths: ["backend/routers/suggestions.py:102-115", "backend/routers/suggestions.py:169-190", "backend/schemas.py:40", "frontend/src/pages/Suggestions.jsx:94"]
-    suggested_requirement: "When GET /api/suggestions decides whether to regenerate, the system shall measure staleness from the newest generated_at for that user and media type including dismissed suggestions, return status 'all_dismissed' when a fresh batch is fully dismissed, and run at most one generation per user at a time."
-  - behavior: "GET /api/tournaments/genres returns the distinct genres across the user's ranked films (also used by the Rankings filter pills) and GET /api/tournaments/pool-count returns the matching film count plus max_bracket_size, which the create form uses to clamp the bracket selector."
-    code_paths: ["backend/routers/tournaments.py:145-189", "frontend/src/pages/Tournaments.jsx:48-53", "frontend/src/pages/Rankings.jsx:20-30"]
-    suggested_requirement: "When a user requests GET /api/tournaments/genres or /pool-count, the system shall return respectively the distinct genres among their ranked films for the media type, and the number of ranked films matching an optional genre/decade filter together with the largest bracket size that pool can fill."
-  - behavior: "AI tournament regeneration requires active status, is_ai_curated=true, no played non-bye matches and fewer than 3 prior regenerations (tracked as _regen_count inside llm_response); it deletes and rebuilds all matches with the original theme hint and is serialized against submit/abandon via the tournament_status lock."
-    code_paths: ["backend/routers/tournaments.py:299-398"]
-    suggested_requirement: "When a user regenerates an AI-curated tournament, the system shall allow it only while the tournament is active, no non-bye match has been played and fewer than 3 regenerations have occurred, rebuilding the full bracket from a fresh LLM curation with the original theme hint and rejecting the request with 400 otherwise."
-  - behavior: "DELETE /api/tournaments/{id} returns 400 for an already-abandoned or completed tournament, 404 for another user's, and is serialized against match submission so a just-completed final is seen."
-    code_paths: ["backend/routers/tournaments.py:541-570"]
-    suggested_requirement: "When a user abandons a tournament, the system shall reject the request with 400 if the tournament is already abandoned or completed, and shall serialize the status change against concurrent match submissions for the same tournament."
-  - behavior: "Trakt users are identified by immutable trakt_uuid (from /users/settings, unique column); a legacy row keyed only by slug is adopted once, and any other row still holding that slug has it nulled so a renamed account cannot attach to someone else's history."
-    code_paths: ["backend/routers/auth.py:344-349", "backend/routers/auth.py:509-542", "backend/services/trakt.py:75-84", "backend/db_models.py:60", "backend/tests/test_migration_027_add_trakt_uuid.py"]
-    suggested_requirement: "When a Trakt login completes, the system shall identify the user by Trakt's immutable account uuid, adopt at most once a pre-existing row keyed only by the username slug, and clear that slug from any other user row so a renamed Trakt account can never attach to another user's data."
-  - behavior: "Admin feedback listing omits screenshot ciphertext and reports has_screenshot; GET /api/feedback/admin/{id}/screenshot decrypts one screenshot on demand, returns 404 on missing or undecryptable data, sets Cache-Control: no-store, and logs the view."
-    code_paths: ["backend/routers/feedback.py:177-248"]
-    suggested_requirement: "When an admin lists feedback, the system shall return metadata only with a has_screenshot flag, and shall decrypt a screenshot only on an explicit per-report request served with Cache-Control: no-store, reporting a corrupted or key-mismatched screenshot as 404 rather than a server error."
-  - behavior: "Any log line pairing a user id with preference data (movie ids, outcome, next_action, taste profile) must be DEBUG, pinned by an AST test; duel rejections are logged at WARNING without movie ids, and a sliding-window monitor raises ERROR (Sentry alert) when 10 rejections occur within 5 minutes (SEC-15)."
-    code_paths: ["backend/tests/test_log_levels.py", "backend/services/duel_rejections.py", "backend/routers/duels.py:43-51"]
-    suggested_requirement: "The system shall emit any log record that pairs a user identifier with preference data at DEBUG level only, shall log rejected duel submissions at WARNING without movie ids or outcome, and shall escalate to ERROR when 10 or more rejections occur within a 5-minute window, at most once per window."
-  - behavior: "uvicorn access-log lines have the query string stripped so OAuth codes never reach logs, and the React Sentry client mirrors the backend scrubbing (query stripped, Referer dropped, console/DOM breadcrumbs disabled). Backend Sentry scrubbing itself maps to FD-012."
-    code_paths: ["backend/main.py:44-72", "frontend/src/lib/sentry.js", "backend/tests/test_access_log_redaction.py"]
-    suggested_requirement: "When a request is written to the access log or reported from the browser client, the system shall strip query strings and fragments, drop the Referer, and disable console and DOM breadcrumbs so OAuth codes, tokens and user input never reach logs or telemetry."
-  - behavior: "Rate-limit counters live in Redis when RATE_LIMIT_STORAGE_URI is set (scheme-validated, 1s socket timeouts, in-memory fallback during outage), otherwise per-process with a startup warning on hosted platforms. The Railway X-Real-IP keying maps to the FD-046 stale fix."
-    code_paths: ["backend/rate_limit.py", "backend/config.py:225-239", "backend/main.py:127-137", "entrypoint.sh:46-56"]
-    suggested_requirement: "While RATE_LIMIT_STORAGE_URI is configured, the system shall keep rate-limit counters in Redis with bounded socket timeouts and degrade to per-process counters during an outage; otherwise it shall use per-process counters and warn at startup when running on a hosted platform."
-  - behavior: "On any detected proxy platform the app and Alembic engines connect with TLS verified against a vendored Supabase root CA (strict X.509 relaxed for the intermediate's missing keyUsage); off-platform the driver default is kept; pool is fixed at 3 + 2 overflow."
-    code_paths: ["backend/config.py:49-55", "backend/config.py:93-109", "backend/db.py:21-31", "backend/certs/"]
-    suggested_requirement: "While running on a detected hosted platform, the system shall connect to Postgres only over TLS verified against the bundled Supabase root CA, and shall never fall back to cleartext."
-  - behavior: "Each provider list fetch during pool ingestion retries transient errors (transport, 5xx, 429) with 1s and 2s backoff; failures are collected, populate_movie_pool returns False for an incomplete sync (recorded as import failed), and the session is committed before every provider HTTP call so no lock or pooled connection spans the network."
-    code_paths: ["backend/services/pool.py:25-26", "backend/services/pool.py:113-146", "backend/services/pool.py:238-295"]
-    suggested_requirement: "When a provider list fetch fails with a transient error during pool ingestion, the system shall retry it up to two more times with backoff, continue with the remaining lists, and report the sync as incomplete so the import status reflects the failure."
-  - behavior: "Every rendered poster passes through sanitizePosterUrl, which drops anything not https://image.tmdb.org so data: URIs or foreign origins stored in the DB never reach an img src."
-    code_paths: ["frontend/src/lib/utils.js:16-36", "frontend/src/pages/Rankings.jsx", "frontend/src/components/MovieCard.jsx", "frontend/src/components/SwipeCard.jsx"]
-    suggested_requirement: "When the SPA renders a poster, the system shall display only HTTPS URLs whose host is image.tmdb.org and shall render a placeholder for any other value."
-  - behavior: "The selected media type persists in localStorage (filmduel_media_type) across sessions and toggles a body class for show-mode styling."
-    code_paths: ["frontend/src/App.jsx:78-89"]
-    suggested_requirement: "When a user switches between movies and shows, the system shall persist the selection in browser local storage and restore it on the next visit."
+  - behavior: "GET /api/me/export returns every user-scoped table as one JSON download built from explicit field allow-lists (never OAuth tokens), capped at 10,000 rows per section with capped sections named in truncated_sections, available without consent, 10/hour."
+    code_paths: ["backend/routers/users.py:264-281", "backend/services/data_export.py", "frontend/src/components/Nav.jsx", "backend/tests/test_data_export.py"]
+    suggested_requirement: "When an authenticated user requests GET /api/me/export, the system shall return a JSON attachment containing their profile, library, duels, duel history, tournaments, suggestions, swipe results, feedback metadata and pool expansions, built from explicit field allow-lists that exclude all OAuth tokens and expiries, capping each section at 10,000 rows and naming capped sections in truncated_sections, regardless of privacy-policy consent and limited to 10 exports per hour."
+  - behavior: "Users can list their own feedback reports (metadata only), fetch one of their screenshots with Cache-Control: no-store, and delete a report, but deletion is refused with 409 inside the 24-hour submission-cap window; foreign reports return 404."
+    code_paths: ["backend/routers/users.py:288-411"]
+    suggested_requirement: "When an authenticated user calls GET /api/me/feedback, GET /api/me/feedback/{id}/screenshot or DELETE /api/me/feedback/{id}, the system shall operate only on reports they own (404 otherwise), serve screenshots with Cache-Control: no-store, and refuse deletion with 409 until 24 hours after submission so a deleted report cannot free a slot under the daily cap."
+  - behavior: "Initial provider import starts on the first consent acceptance (never the OAuth callback), is tracked via pool_import_status with imports older than 20 minutes reported as failed, can be retried via POST /api/me/pool-import (no-op while running, 3/hour), provider fetches retry transient errors twice, and the SPA blocks on a polling PoolImportScreen until complete; supersedes FD-013's login trigger for first login."
+    code_paths: ["backend/routers/users.py:54-227", "backend/routers/auth.py:645-649", "backend/services/pool.py:116-157", "backend/services/pool.py:250-307", "frontend/src/components/PoolImportScreen.jsx", "frontend/src/App.jsx"]
+    suggested_requirement: "When a user accepts the privacy policy for the first time, the system shall start the initial provider import as a background task only then (never from the OAuth callback), expose its outcome as pool_import_status (importing/complete/failed, with an import older than 20 minutes reported as failed), allow a manual retry via POST /api/me/pool-import at most 3 times per hour, and the SPA shall hold the user on an import screen until the status is complete."
+  - behavior: "require_consent guards every endpoint that records new behavioral data (duels, swipe cards/results, feedback, tournament create/match/abandon, suggestion actions, manual sync), while profile, rankings, export, logout and delete deliberately stay available without consent; FD-009 covers only the AI subset."
+    code_paths: ["backend/routers/auth.py:278-285", "backend/routers/duels.py", "backend/routers/swipe.py", "backend/routers/feedback.py", "backend/routers/tournaments.py", "backend/routers/suggestions.py", "backend/routers/users.py", "backend/tests/test_consent_guard.py"]
+    suggested_requirement: "When a request would record new behavioral data (duel, swipe, tournament, feedback, suggestion action, manual sync), the system shall return 403 'Privacy policy consent required' unless the user has accepted the current policy version, while profile, rankings, data export, logout and account deletion remain available without consent."
+  - behavior: "Trakt users are identified by the immutable account uuid from /users/settings; a legacy slug-only row is adopted only after its stored token proves the same uuid (never an admin row), any other row holding the incoming slug has it released, and a backfill script migrates old rows."
+    code_paths: ["backend/routers/auth.py:367-631", "backend/services/trakt.py:74-83", "backend/db_models.py:126-132", "backend/scripts/backfill_trakt_uuid.py"]
+    suggested_requirement: "When a Trakt OAuth callback completes, the system shall identify the user by Trakt's immutable account uuid, adopt a uuid-less legacy row only after that row's stored token proves the same uuid (never by slug match alone, never an admin row), and clear the slug from any other row so a renamed account's handle cannot route another user's data."
+  - behavior: "A session JWT signed with SMOKE_SESSION_KEY is accepted only when sub equals SMOKE_USER_ID; both must be set together and the key must differ from SECRET_KEY; the deploy pipeline uses it for a duel round-trip."
+    code_paths: ["backend/routers/auth.py:90-116", "backend/config.py", "backend/duel_smoke.py", ".github/workflows/staging-pipeline.yml"]
+    suggested_requirement: "While SMOKE_SESSION_KEY and SMOKE_USER_ID are both configured, the system shall accept session JWTs signed with the smoke key for that one user only, and shall reject the pairing at startup if either is set alone or the smoke key equals SECRET_KEY, so the deploy pipeline can exercise a duel without holding SECRET_KEY."
+  - behavior: "The SHA-256 of each consumed pair token is stored on the duels row under a unique index; a retried submission returns 409 'Duel already recorded' instead of applying the duel twice (noted as beyond FD-025's statement)."
+    code_paths: ["backend/routers/duels.py:62-81", "backend/db_models.py:383", "backend/db_models.py:409", "backend/tests/test_migration_025_duel_pair_token_digest.py"]
+    suggested_requirement: "When POST /api/duels is called with a pair token that has already been consumed, the system shall reject it with 409 'Duel already recorded' without applying ELO changes a second time, so a client retry after a lost response is safe."
+  - behavior: "Every duel rejection path logs a WARNING without movie ids or outcome, and a sliding-window monitor emits one ERROR (Sentry alert) when 10 rejections land within 5 minutes."
+    code_paths: ["backend/services/duel_rejections.py", "backend/main.py:231-236", "backend/routers/duels.py:57-78"]
+    suggested_requirement: "When a duel submission is rejected, the system shall log the reason at WARNING without movie ids or outcome, and shall raise an ERROR-level alert at most once per 5-minute window when 10 or more rejections occur within it."
+  - behavior: "Swipe submission accepts at most 50 items per batch, collapses duplicate ids, caps a user at 2,000 swipe rows per rolling 24h (429), and updates only rows with seen IS NULL so a batch cannot flip a film already resolved by a duel."
+    code_paths: ["backend/routers/swipe.py:36-39", "backend/routers/swipe.py:203-241", "backend/schemas.py:151-152"]
+    suggested_requirement: "When swipe results are submitted, the system shall accept at most 50 items per batch, record at most 2,000 swipe results per user per rolling 24 hours (429 beyond), and update only user_movies rows whose seen is still NULL, silently skipping rows already resolved."
+  - behavior: "Non-safe requests are capped at 64 KiB (6 MiB under /api/feedback) by Content-Length check and a wrapped receive, returning 413 before authentication runs; FD-042 covers only the feedback 413."
+    code_paths: ["backend/middleware/body_limit.py", "backend/main.py:251-258", "backend/tests/test_body_limit.py"]
+    suggested_requirement: "When a request with a body arrives, the system shall reject it with 413 before authentication once the body exceeds 64 KiB, or 6 MiB for /api/feedback, whether declared by Content-Length or streamed."
+  - behavior: "The CSP carries report-uri/report-to plus a Reporting-Endpoints header, and POST /api/csp-report accepts both report formats unauthenticated and CSRF-exempt, logs at most 10 violations per body with blocked URLs reduced to origin and document URLs to path, and always answers 204."
+    code_paths: ["backend/routers/csp_report.py", "backend/main.py:284-287", "backend/main.py:350-353", "backend/tests/test_csp_report.py"]
+    suggested_requirement: "When a browser posts a CSP violation to /api/csp-report, the system shall accept it without a session or CSRF headers, log up to 10 violations with the blocked URL reduced to its origin and the document URL to its path, and return 204 even for malformed bodies."
+  - behavior: "RATE_LIMIT_STORAGE_URI enables Redis-backed rate-limit counters (scheme validated, 1s socket timeouts, in-memory fallback during outages); startup warns when unset on a hosted platform or when a cleartext redis:// URI points at a public host."
+    code_paths: ["backend/rate_limit.py:85-108", "backend/config.py", "backend/main.py:170-187"]
+    suggested_requirement: "While RATE_LIMIT_STORAGE_URI is set, the system shall store rate-limit counters in that Redis instance with bounded socket timeouts and degrade to per-process counters during an outage; at startup it shall warn when the URI is unset on a hosted platform or is a cleartext redis:// to a non-private host."
+  - behavior: "A process-wide semaphore of LLM_MAX_CONCURRENT (default 2) fails fast with 503 + Retry-After: 15 instead of queueing, completions time out at LLM_TIMEOUT_SECONDS with no retries, and startup rejects a cap at or above DB pool capacity."
+    code_paths: ["backend/services/llm.py", "backend/config.py:281-299", "backend/routers/suggestions.py", "backend/routers/tournaments.py"]
+    suggested_requirement: "When an LLM call is requested while LLM_MAX_CONCURRENT calls are already in flight, the system shall return 503 with Retry-After rather than queue; each call shall be bounded by LLM_TIMEOUT_SECONDS without retry; and startup shall refuse a concurrency cap that is not below the database pool capacity."
+  - behavior: "Feedback and swipe caps take a blocking transaction-scoped advisory lock; tournament create/regenerate/match/abandon and suggestion regenerate use a non-blocking variant returning 429 'Another request of this kind is already in progress'; suggestion generation and pool expansion skip when a run is in flight."
+    code_paths: ["backend/db.py:51-100", "backend/routers/feedback.py", "backend/routers/swipe.py", "backend/routers/tournaments.py", "backend/routers/suggestions.py", "backend/services/expand.py:60-69"]
+    suggested_requirement: "When a request performs a count-then-act quota check or a per-tournament state change, the system shall serialize it per user (or per tournament) with a transaction-scoped advisory lock, returning 429 immediately on paths that go on to call the LLM rather than holding a pooled connection in a queue."
+  - behavior: "Tournament regeneration is allowed only for active, AI-curated tournaments with no played non-bye match, at most 3 times per tournament (counter kept in llm_response), re-checks pool fillability and spends the daily curation budget; FD-041 only says regeneration is supported."
+    code_paths: ["backend/routers/tournaments.py:303-405"]
+    suggested_requirement: "When POST /api/tournaments/{id}/regenerate is called, the system shall reject it with 400 unless the tournament is active, AI-curated, has no played match and has been regenerated fewer than 3 times, and shall otherwise replace all matches with a fresh curation."
+  - behavior: "GET /api/tournaments/genres lists the distinct genres among the user's ranked films (also used by the Rankings filter chips) and GET /api/tournaments/pool-count returns the filtered ranked count plus the largest bracket it can fill."
+    code_paths: ["backend/routers/tournaments.py:147-188", "frontend/src/pages/Rankings.jsx:19-24"]
+    suggested_requirement: "When a user requests GET /api/tournaments/genres or GET /api/tournaments/pool-count, the system shall return the distinct genres of their ranked films for the media type, and the count of ranked films matching an optional genre/decade filter together with the largest bracket size that count can fill."
+  - behavior: "Encryption keys derive per purpose (OAuth, screenshot, pair token); TOKEN_ENC_KEY_PREVIOUS keys decrypt only; a value read under a previous key is re-encrypted on commit (guarded against concurrent overwrite); an undecryptable token reads as disconnected; a script re-keys everything. FD-006 notes this as additive drift."
+    code_paths: ["backend/services/token_crypto.py", "backend/db_models.py:44-117", "backend/scripts/reencrypt_tokens.py", "backend/tests/test_migration_028_rekey_per_purpose.py", "backend/tests/test_reencrypt_tokens.py"]
+    suggested_requirement: "While TOKEN_ENC_KEY_PREVIOUS lists prior keys, the system shall decrypt stored secrets with the current key first and prior keys as fallback, re-encrypt any prior-key value under the current key when its session commits, derive a distinct key per secret purpose, and treat an undecryptable OAuth token as a disconnected provider."
+  - behavior: "Any log line pairing a user id with preference data must be DEBUG (enforced by an AST test) and uvicorn access logs drop query strings; the Sentry-side redaction is already covered by FD-012."
+    code_paths: ["backend/tests/test_log_levels.py", "backend/main.py:66-141"]
+    suggested_requirement: "When the application logs, it shall emit any line that pairs a user identifier with preference data at DEBUG only and shall strip query strings from access-log lines so OAuth codes and filters never reach log storage."
+  - behavior: "Sentry in the SPA is enabled only when VITE_SENTRY_DSN is set at build time, with PII off, console and DOM breadcrumbs disabled, query strings stripped from request/navigation URLs and Referer removed."
+    code_paths: ["frontend/src/lib/sentry.js", "Dockerfile", "frontend/src/__tests__/sentry.test.js"]
+    suggested_requirement: "While VITE_SENTRY_DSN is provided at build time, the SPA shall report errors to Sentry with default PII disabled, console and DOM breadcrumbs off, and query strings and Referer removed from every reported URL."
+  - behavior: "On a detected hosting platform the asyncpg connection uses an SSL context pinned to the bundled Supabase root CA (strict X.509 relaxed for the intermediate), shared by the app engine and Alembic; FD-052 says nothing about TLS."
+    code_paths: ["backend/config.py", "backend/certs/supabase-root-2021-ca.crt", "backend/db.py:21-31"]
+    suggested_requirement: "While running on a detected hosting platform, the system shall connect to Postgres only over TLS verified against the bundled Supabase root CA, for both the application engine and Alembic, and shall never fall back to cleartext."
+  - behavior: "Every CORS_ORIGINS entry must be a bare scheme://host[:port] (no path or userinfo) and on a hosted platform must be https; violations refuse startup with userinfo redacted (#831, beyond FD-047's statement)."
+    code_paths: ["backend/config.py"]
+    suggested_requirement: "When the application starts, it shall refuse to boot if any CORS_ORIGINS entry is not a bare scheme://host[:port] origin, or, on a detected hosting platform, is not https, without echoing credentials embedded in the rejected value."
+  - behavior: "Merges to main deploy to staging via railway up from GitHub Actions, wait for health, run smoke tests (health, SPA, rankings, duel round-trip), then promote the same SHA to production; actions are SHA-pinned, the Railway CLI checksum-verified, Python deps hash-locked, pip-audit/npm audit gate CI, runtime majors checked for parity and OpenSpec specs validated. FD-051's 'Railway auto-deploys on merge' describes the old flow."
+    code_paths: [".github/workflows/staging-pipeline.yml", ".github/workflows/ci.yml", ".github/workflows/openspec.yml", ".github/workflows/unsafe-change.yml", "backend/tests/test_ci_supply_chain.py", "backend/tests/test_ci_triggers.py", "backend/tests/test_runtime_versions.py"]
+    suggested_requirement: "When a commit lands on main, the system shall deploy it to staging, verify health and a smoke duel, and only then deploy the identical SHA to production; every workflow action shall be pinned to a full commit SHA, the Railway CLI checksum-verified, and dependencies installed from hash-locked files that pass vulnerability audit."
