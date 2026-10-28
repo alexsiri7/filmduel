@@ -37,9 +37,10 @@ railway status
 
 ### Deploy Flow
 
-1. PR merged to `main`
-2. Railway auto-deploys from GitHub (connected repo)
-3. Dockerfile builds → health check at `/health` → traffic switches
+1. PR merged to `main`; CI runs on the push
+2. When CI succeeds, `.github/workflows/staging-pipeline.yml` deploys that commit to the `staging` environment with `railway up` and waits for `/health`
+3. Smoke tests run against staging (health, SPA, `/api/rankings`, duel round-trip)
+4. The same commit deploys to `production` and is smoke-tested there
 
 ### Troubleshooting Deploys
 

@@ -823,7 +823,7 @@ requirements:
     acceptance:
       - "GET /health returns {status:'ok'} (limit 1000/minute) and is Railway's healthcheckPath"
       - "entrypoint.sh waits up to 60s for /health before running alembic upgrade head"
-      - "Deploys go through PRs to main; Railway auto-deploys on merge (branch protection)"
+      - "Deploys go through PRs to main (branch protection) and reach production through the staged pipeline of FD-072"
     notes: "Docker image is python:3.14-slim, matching ci.yml python-version and the --python-version of the hash-locked requirements; Dependabot ignores major/minor base-image bumps so the three move together (#574)."
 
   - id: FD-052
@@ -838,6 +838,21 @@ requirements:
       - "No supabase-py dependency exists in backend/requirements.in"
       - "Every schema change ships as an Alembic revision (backend/migrations)"
     notes: "The filmduel role's search_path is (filmduel, extensions), so unqualified table names resolve to the filmduel schema without startup search_path parameters. statement_cache_size=0 is kept so the engine also works behind the transaction pooler (port 6543)."
+
+  - id: FD-072
+    title: Staged deploy pipeline with supply-chain pinning
+    statement: "When CI succeeds on a push to main, the system shall deploy that exact commit to staging, gate on a staging health check and smoke tests (health, SPA, rankings API and a duel round-trip as the smoke user), then deploy the identical commit to production; CI workflows shall pin every GitHub Action by full commit SHA, verify the Railway CLI's sha256 checksum before use, and install dependencies from hash-locked lockfiles audited by pip-audit and npm audit."
+    category: constraint
+    priority: must
+    status: active
+    source: "issues #795, #648, #794; issue #863 (req-gap orphan)"
+    acceptance:
+      - "staging-pipeline.yml runs on a successful CI workflow_run for a push to main in this repository (or a manual dispatch on main), and every job is gated so a pull_request CI completion deploys nothing"
+      - "deploy-production needs deploy-staging and smoke-tests, and checks out the deploy_sha that deploy-staging resolved"
+      - "Every uses: reference in .github/workflows is pinned to a 40-hex commit SHA"
+      - "Both deploy jobs install the Railway CLI from the release tarball and run sha256sum -c against the shared RAILWAY_CLI_SHA256 before using it, and neither job overrides the shared pin"
+      - "backend/requirements.txt is generated with uv pip compile --generate-hashes and installed with pip install --require-hashes in CI and the Dockerfile; ci.yml's security-scan job runs pip-audit on it and npm audit --audit-level=moderate on the frontend"
+    notes: "Pinned by backend/tests/test_ci_supply_chain.py (test_every_action_is_sha_pinned, test_railway_cli_is_verified_before_use), backend/tests/test_ci_triggers.py (test_ci_completion_consumers_deploy_only_pushes, test_push_guard_must_be_conjoined) and backend/tests/test_duel_smoke.py, which pins the duel round-trip script (backend/duel_smoke.py) against the backend's session decoding. The job ordering and deploy_sha threading are not pinned by test. Implemented in .github/workflows/staging-pipeline.yml and the security-scan job of .github/workflows/ci.yml. The duel round-trip step is skipped with a workflow warning, not failed, while the environment's SMOKE_USER_ID or SMOKE_SESSION_KEY secret is unset; the health, SPA and rankings checks always gate. Production gets the same health, SPA, rankings and duel checks after its deploy, but a failure there only fails the run and records a failed GitHub deployment — it does not roll back. The frontend installs with npm ci from frontend/package-lock.json, whose integrity hashes npm verifies. Supersedes FD-051's earlier 'Railway auto-deploys on merge' wording."
 
   # ── Cross-provider catalog integrity ────────────────────────────────────
 
