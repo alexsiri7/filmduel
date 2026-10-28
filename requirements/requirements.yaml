@@ -651,6 +651,21 @@ requirements:
     acceptance:
       - "A username containing '/' or '..' cannot change the Trakt API path requested"
 
+  - id: FD-062
+    title: Smoke-test session key scoped to one user
+    statement: "While SMOKE_SESSION_KEY and SMOKE_USER_ID are both configured, the system shall accept a session JWT whose signature fails against SECRET_KEY but verifies against the smoke key only when its sub is SMOKE_USER_ID, rejecting it with 401 for any other subject; the system shall refuse to start if exactly one of the pair is set, if the smoke key equals SECRET_KEY, if the smoke key fails the key-strength rules applied to SECRET_KEY, or if SMOKE_USER_ID is not a UUID."
+    category: non-functional
+    priority: must
+    status: active
+    source: "issue #853 (req-gap orphan)"
+    acceptance:
+      - "A JWT signed with SMOKE_SESSION_KEY whose sub is SMOKE_USER_ID authenticates, in any letter case of the UUID"
+      - "A JWT signed with SMOKE_SESSION_KEY whose sub is another user, or not a UUID, is rejected with 401 'Invalid session'"
+      - "With the smoke settings unset, a JWT signed with the would-be smoke key is rejected with 401 'Invalid session'"
+      - "An expired smoke-key JWT is rejected with 401 'Session expired'; a SECRET_KEY-signed JWT still authenticates any user while the smoke settings are configured"
+      - "Settings with only one of SMOKE_SESSION_KEY / SMOKE_USER_ID set fail with 'must be set together'; a smoke key equal to SECRET_KEY fails with 'must differ from SECRET_KEY'; a weak or placeholder smoke key, or a non-UUID SMOKE_USER_ID, fails validation; neither set is accepted and SMOKE_USER_ID is stored lower-cased"
+    notes: "Pinned by backend/tests/test_config.py::TestSmokeSessionSettings and backend/tests/test_auth.py::TestSmokeSessionKey; implemented in backend/config.py (SMOKE_SESSION_KEY, SMOKE_USER_ID and their validators) and backend/routers/auth.py::decode_session_jwt / _is_smoke_user. The key exists so the post-deploy duel smoke test (backend/duel_smoke.py, run by .github/workflows/staging-pipeline.yml; #648, #794) can sign a session without CI ever holding SECRET_KEY. The smoke key is tried only after a SECRET_KEY signature failure, and a smoke-key JWT then passes through the same issuer, audience, expiry, revocation and 30-day-cap checks as any session; a sliding refresh re-issues the cookie signed with SECRET_KEY, as for any session. Issue #853 suggested placing this beside deployment requirements; it sits here because it widens what the session check accepts."
+
   # ── Deployment & platform constraints ───────────────────────────────────
 
   - id: FD-050
