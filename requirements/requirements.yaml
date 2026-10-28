@@ -159,6 +159,21 @@ requirements:
       - "Pydantic validation-error 'input' values are stripped before logging"
     notes: "Sentry is enabled only when SENTRY_DSN is set; traces_sample_rate=0.1."
 
+  - id: FD-064
+    title: Duel-rejection logging and spike alerting
+    statement: "When a duel submission is rejected (missing, invalid or mismatched pair token, or a submission process_duel refuses), the system shall log the rejection at WARNING with its reason and user id but without movie ids or the outcome, and shall emit at most one ERROR-level spike alert per rolling 5-minute window once the rejections in that window reach 10."
+    category: non-functional
+    priority: should
+    status: active
+    source: "issue #855 (req-gap orphan)"
+    acceptance:
+      - "Each rejection path (missing_pair_token, invalid_pair_token, pair_mismatch, invalid_submission) logs 'duel_rejected reason=<reason> user_id=<id>' at WARNING"
+      - "No log record at INFO or above for a rejected duel contains either movie id"
+      - "The spike monitor reports when the count of rejections within the window reaches the threshold, and older rejections fall out of the window"
+      - "After an alert, no further alert is emitted until the window length has elapsed; a continuing burst then alerts again"
+      - "A burst of rejections past the threshold produces exactly one 'duel_rejection_spike' ERROR record"
+    notes: "Pinned by backend/tests/test_duel_rejections.py (TestRejectionSpikeMonitor::test_alerts_when_threshold_reached, test_cooldown_suppresses_then_realerts, test_old_rejections_fall_out_of_window; TestRecordDuelRejection::test_logs_warning_with_reason, test_spike_logs_one_error) and the rejection tests in backend/tests/test_duel_router.py via _assert_rejection_logged. Implemented in backend/services/duel_rejections.py (record_duel_rejection, RejectionSpikeMonitor, SPIKE_THRESHOLD=10, SPIKE_WINDOW_SECONDS=300, which is also the alert cooldown), called from backend/routers/duels.py::submit_duel and the RequestValidationError handler in backend/main.py (missing_pair_token). The ERROR reaches Sentry through the SDK's default logging integration and is what drives the alert. Movie ids stay out because a user id paired with preference data must stay at DEBUG (SEC-15). The window lives in process memory (the app runs as a single uvicorn process), so it resets on restart. Introduced in #648 after every duel was silently rejected for three months (#647)."
+
   # ── Pool ingestion & expansion ──────────────────────────────────────────
 
   - id: FD-013
