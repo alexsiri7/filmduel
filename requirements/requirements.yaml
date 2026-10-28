@@ -786,6 +786,19 @@ requirements:
       - "The app engine and the Alembic migration engine both take their connect_args from database_connect_args()"
     notes: "Pinned by backend/tests/test_config.py::TestDatabaseConnectArgs (test_no_tls_override_off_platform, test_verified_tls_on_each_known_platform, test_strict_x509_disabled_for_supabase_chain, test_pinned_ca_fingerprint) and backend/tests/test_db.py (test_app_engine_uses_shared_connect_args, test_migration_engine_uses_shared_connect_args). Implemented in backend/config.py (_PROXY_PLATFORM_ENV_VARS, _SUPABASE_ROOT_CA = backend/certs/supabase-root-2021-ca.crt, detected_proxy_platform, database_connect_args), used by backend/db.py and backend/migrations/env.py::run_async_migrations. Passing an SSLContext makes asyncpg require TLS rather than treat it as advisory, which closes the default sslmode=prefer fallback to cleartext as well as server impersonation. The context relaxes only VERIFY_X509_STRICT, because Supabase's intermediate CA has no keyUsage extension, which Python 3.13+ rejects under strict mode. Platform detection is the same env-var list that drives FD-048's Secure-cookie check and FD-047's localhost-CORS refusal; an env var set to an empty string does not count. Off-platform the connection keeps asyncpg's default. Offline migrations (alembic --sql) only emit SQL and open no connection."
 
+  - id: FD-071
+    title: CORS origin shape and https enforcement at startup
+    statement: "When the application starts, the system shall reject any CORS_ORIGINS entry that is not a bare scheme://host[:port] (including entries with embedded userinfo, without echoing the credentials in error output), and shall reject any entry that is not https when a hosting platform is detected."
+    category: constraint
+    priority: must
+    status: active
+    source: "PR #831 (SEC-25, #797); issue #862 (req-gap orphan)"
+    acceptance:
+      - "A CORS_ORIGINS entry with a trailing slash, path, query, fragment, userinfo, no scheme or no host makes Settings() raise naming scheme://host[:port], on or off a hosting platform"
+      - "A rejected entry carrying userinfo appears in the error with everything between the scheme and its last '@' replaced by ***, so no part of the credential is printed"
+      - "With any of RAILWAY_ENVIRONMENT, RENDER, FLY_APP_NAME, HEROKU_APP_NAME or K_SERVICE set, a plain-http CORS_ORIGINS entry makes Settings() raise cors_origins_insecure naming the detected env var; off-platform the same entry boots"
+    notes: "Pinned by backend/tests/test_config.py::TestCorsOriginsValidation (test_non_bare_origin_rejected, test_rejected_userinfo_not_echoed) and TestCorsLoopbackFailClosed (test_plain_http_public_origin_raises_on_each_platform, test_plain_http_public_origin_allowed_off_platform, test_localhost_default_allowed_off_platform). Implemented in backend/config.py (_is_bare_origin, _redact_userinfo, Settings.validate_cors_origins, Settings.require_https_cors_origins_on_proxy_platform). Extends FD-047, which covers the '*' and loopback-on-platform refusals of the same list. The CSRF origin check trusts every CORS_ORIGINS entry, and a browser's Origin header is always exactly scheme://host[:port], so a non-bare entry can never match a real request and only hides a misconfiguration. Platform detection is the same env-var list that drives FD-047's loopback refusal, FD-048's Secure-cookie check and FD-070's database TLS; an env var set to an empty string does not count. Off-platform the localhost http defaults still boot."
+
   # ── Deployment & platform constraints ───────────────────────────────────
 
   - id: FD-050
