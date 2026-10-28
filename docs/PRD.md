@@ -379,7 +379,7 @@ A film's 1–10 rating is its percentile among the user's ranked films of the sa
 rating = max(1, min(10, ceil(10 * (below + ties / 2) / n)))
 ```
 
-Trakt sync, the Letterboxd CSV `Rating10` column and the rankings display all use this function and population. Genre/decade filters do not change a film's rating.
+Trakt sync, the Letterboxd CSV `Rating10` column and the rankings display all use these functions and population. Genre/decade filters do not change a film's rating.
 
 ---
 
