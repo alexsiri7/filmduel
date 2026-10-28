@@ -159,6 +159,20 @@ requirements:
       - "Pydantic validation-error 'input' values are stripped before logging"
     notes: "Sentry is enabled only when SENTRY_DSN is set; traces_sample_rate=0.1."
 
+  - id: FD-069
+    title: Sensitive-data scrubbing in frontend error tracking
+    statement: "When VITE_SENTRY_DSN is configured, the SPA shall initialize Sentry with sendDefaultPii disabled and console and DOM breadcrumbs disabled, and shall strip query strings and fragments from reported event request URLs and from breadcrumb url/from/to fields, and remove the query data and Referer header from reported event requests."
+    category: non-functional
+    priority: must
+    status: active
+    source: "PR #723 (#648); issue #860 (req-gap orphan)"
+    acceptance:
+      - "initSentry with an empty DSN returns false and does not call Sentry.init"
+      - "With a DSN, Sentry.init receives sendDefaultPii=false, beforeSend=scrubEvent, beforeBreadcrumb=scrubBreadcrumb, and breadcrumbsIntegration({console: false, dom: false})"
+      - "scrubEvent cuts request.url at the first '?' or '#', deletes request.query_string and the Referer/referer header, keeps other headers, and leaves events without a request unchanged"
+      - "scrubBreadcrumb cuts the url, from and to breadcrumb data fields at the first '?' or '#' and keeps other fields"
+    notes: "Pinned by frontend/src/__tests__/sentry.test.js (initSentry: does nothing without a DSN, initialises with PII off, scrubbing, and no DOM/console breadcrumbs; scrubEvent; scrubBreadcrumb). Implemented in frontend/src/lib/sentry.js (stripQuery, scrubEvent, scrubBreadcrumb, initSentry), called from frontend/src/main.jsx, which also routes React's uncaught, caught and recoverable errors to Sentry.reactErrorHandler only when initSentry returns true. The frontend counterpart of FD-012: query strings carry OAuth code/state and pair tokens, and DOM/console text can contain film titles, which are preference data. VITE_SENTRY_DSN is baked in at build time (Dockerfile ARG, empty by default, which disables frontend Sentry). Unlike FD-012 it does not mask /users/<id> paths, and no tracing sample rate is set, so no transactions are sent."
+
   - id: FD-064
     title: Duel-rejection logging and spike alerting
     statement: "When a duel submission is rejected (missing, invalid or mismatched pair token, or a submission process_duel refuses), the system shall log the rejection at WARNING with its reason and user id but without movie ids or the outcome, and shall emit at most one ERROR-level spike alert per rolling 5-minute window once the rejections in that window reach 10."
