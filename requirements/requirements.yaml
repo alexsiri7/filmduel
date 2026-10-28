@@ -557,6 +557,20 @@ requirements:
       - "A non-admin authenticated user receives 403 'Admin access required'"
       - "Every /admin route carries a limiter decorator"
 
+  - id: FD-059
+    title: Owner-side feedback management
+    statement: "When an authenticated user calls GET /api/me/feedback, GET /api/me/feedback/{id}/screenshot or DELETE /api/me/feedback/{id}, the system shall operate only on reports they own (404 for any other caller's report, never 403), list report metadata only (newest first, at most 100 per page), serve screenshots as the raw image with Cache-Control: no-store, and refuse deletion with 409 until 24 hours after submission so a deleted report cannot free a slot under FD-042's daily cap; the routes are rate-limited at 30/minute, 10/minute and 30/hour respectively."
+    category: functional
+    priority: should
+    status: active
+    source: "issue #850 (req-gap orphan)"
+    acceptance:
+      - "GET /api/me/feedback returns only the caller's reports, with has_screenshot but no screenshot ciphertext; limit above 100 returns 422"
+      - "GET /api/me/feedback/{id}/screenshot for the owner returns the decoded image with Cache-Control: no-store; a missing or foreign report, or an absent or unreadable screenshot, returns 404"
+      - "DELETE /api/me/feedback/{id} returns 204 for the caller's report older than 24 hours, 409 for one inside the window, and 404 for a missing or foreign report"
+      - "All three routes work without current privacy consent"
+    notes: "Pinned by backend/tests/test_users_router.py::TestListMyFeedback, TestViewMyScreenshot and TestDeleteMyFeedback. The routes depend on get_current_user rather than require_consent, like the data export, because access and erasure do not depend on consent (users.py). The 24-hour window is FEEDBACK_CAP_WINDOW from backend/routers/feedback.py, shared with the submission cap."
+
   # ── Security (cross-cutting) ────────────────────────────────────────────
 
   - id: FD-044
