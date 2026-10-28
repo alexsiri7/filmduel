@@ -694,6 +694,21 @@ requirements:
       - "Settings with only one of SMOKE_SESSION_KEY / SMOKE_USER_ID set fail with 'must be set together'; a smoke key equal to SECRET_KEY fails with 'must differ from SECRET_KEY'; a weak or placeholder smoke key, or a non-UUID SMOKE_USER_ID, fails validation; neither set is accepted and SMOKE_USER_ID is stored lower-cased"
     notes: "Pinned by backend/tests/test_config.py::TestSmokeSessionSettings and backend/tests/test_auth.py::TestSmokeSessionKey; implemented in backend/config.py (SMOKE_SESSION_KEY, SMOKE_USER_ID and their validators) and backend/routers/auth.py::decode_session_jwt / _is_smoke_user. The key exists so the post-deploy duel smoke test (backend/duel_smoke.py, run by .github/workflows/staging-pipeline.yml; #648, #794) can sign a session without CI ever holding SECRET_KEY. The smoke key is tried only after a SECRET_KEY signature failure, and a smoke-key JWT then passes through the same issuer, audience, expiry, revocation and 30-day-cap checks as any session; a sliding refresh re-issues the cookie signed with SECRET_KEY, as for any session. Issue #853 suggested placing this beside deployment requirements; it sits here because it widens what the session check accepts."
 
+  - id: FD-065
+    title: Request-body size ceiling enforced before authentication
+    statement: "When a request other than GET, HEAD or OPTIONS carries a body larger than 64 KiB (6 MiB under /api/feedback and its sub-paths), the system shall reject it with 413 before any authentication check runs, whether the oversize is declared via Content-Length or discovered while streaming the body."
+    category: non-functional
+    priority: must
+    status: active
+    source: "PR #776 (SEC-03); issue #856 (req-gap orphan)"
+    acceptance:
+      - "A POST to /api/duels with no session cookie and a JSON body whose Content-Length exceeds 64 KiB returns 413, not the route's 401"
+      - "A multipart POST to /api/feedback whose body exceeds 6 MiB returns 413 with no session cookie"
+      - "A chunked POST to /api/duels whose streamed body crosses 64 KiB is cut off with 413"
+      - "A body under the limit reaches the route, which rejects the unauthenticated request with 401 as before"
+      - "GET requests are never limited; /api/feedback/<id> takes the feedback limit and /api/feedbackx the default"
+    notes: "Pinned by backend/tests/test_body_limit.py (test_middleware_is_registered, test_limit_for_prefers_longest_prefix, test_oversized_json_is_rejected_before_auth, test_oversized_multipart_is_rejected_before_auth, test_chunked_body_is_cut_off_at_limit, test_small_body_passes_through_to_auth, test_get_is_never_limited). Implemented in backend/middleware/body_limit.py (BodyLimitMiddleware, DEFAULT_MAX_BODY_BYTES, FEEDBACK_MAX_BODY_BYTES, PATH_LIMITS); a non-integer Content-Length is rejected with 400. It runs before authentication because FastAPI reads the body before resolving get_current_user, and neither uvicorn/h11 nor Starlette caps body size, so without it an anonymous client could spool an unbounded upload. It must stay the innermost middleware (added first in backend/main.py): the BaseHTTPMiddleware-based csrf_origin_check and add_security_headers wrap receive() in a task group, which would turn the streamed-cutoff HTTPException into an ExceptionGroup instead of a 413. Because the CSRF check (FD-044) wraps it, a request failing that check gets 403 before its size is examined. The 6 MiB feedback ceiling is transport-level headroom over FD-042's 5 MB screenshot limit, which the route enforces itself."
+
   # ── Deployment & platform constraints ───────────────────────────────────
 
   - id: FD-050
