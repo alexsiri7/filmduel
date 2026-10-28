@@ -326,6 +326,19 @@ requirements:
       - "Tokens are encrypted with the same Fernet key material as token_crypto (not merely encoded)"
     notes: "Prevents clients from submitting duels for arbitrary pairs the server never offered."
 
+  - id: FD-063
+    title: Duel submission idempotent on pair-token reuse
+    statement: "When a duel is submitted with a pair token that has already been consumed, the system shall reject the request with 409 'Duel already recorded' and shall not apply ELO changes a second time for that token."
+    category: functional
+    priority: must
+    status: active
+    source: "issue #854 (req-gap orphan)"
+    acceptance:
+      - "Re-submitting the same valid pair_token after a successful duel returns 409 'Duel already recorded'"
+      - "Both submissions reach process_duel with the same SHA-256 digest of the pair token"
+      - "The duels table rejects a second row carrying an already-recorded pair_token_digest; rows without a digest do not collide"
+    notes: "Pinned by backend/tests/test_duel_router.py::test_replayed_pair_token_is_rejected_not_applied_twice, backend/tests/test_migration_025_duel_pair_token_digest.py and backend/tests/test_duel_service.py::test_process_duel_records_the_consumed_pair_token; implemented in backend/routers/duels.py::submit_duel (IntegrityError -> rollback -> 409) and the unique index uq_duels_pair_token_digest (backend/db_models.py, migration 025). The ELO update and the duels row are flushed in one transaction, so the rollback discards the replay's ELO change. Introduced in #660 so a client retry after a lost response cannot apply a duel twice."
+
   - id: FD-026
     title: Duel outcome state machine
     statement: "When POST /api/duels is submitted with one of the outcomes a_wins/b_wins/a_only/b_only/neither, the system shall: for wins, mark both films seen, update ELO for both and increment battles; for X_only, mark the seen film seen=true (if previously unknown) and mark the other seen=false only if it has battles=0; for neither, mark each film seen=false only if it has battles=0."
