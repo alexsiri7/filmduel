@@ -782,3 +782,20 @@ requirements:
       - "With a JWT-shaped (eyJ…, two dots) TMDB_API_KEY, requests to api.themoviedb.org carry Authorization: Bearer and an empty query string (test_tmdb_client.py)"
       - "With a 32-hex TMDB_API_KEY, requests carry ?api_key= and lifespan() logs a WARNING containing tmdb_v3_api_key but not the key value (test_config.py)"
     notes: "The credential's shape selects the transport (backend/services/tmdb.py::is_read_access_token) so the single TMDB_API_KEY setting needs no rename; closing the leak in a deployment is an operator action — replacing the value with the Read Access Token — not a code change. Dropping the v3 query-parameter path is deferred until production has migrated."
+
+  # ── Initial pool import ─────────────────────────────────────────────────
+
+  - id: FD-060
+    title: Consent-deferred initial pool import with status and retry
+    statement: "When a user first accepts the privacy policy via POST /api/me/consent, the system shall start the provider pool import as a background task and report its progress as pool_import_status (importing, then complete, or failed when a provider fetch fails after retries or the import raises), reporting an import still importing after 20 minutes as failed; POST /api/me/pool-import shall restart a non-running import, rate-limited at 3/hour, and return the current status unchanged while an import is running; and while the status is importing the SPA shall show a full-screen import screen in place of the page, polling GET /api/me until it leaves importing, and when it is failed shall offer Retry import and a Continue anyway exit that dismisses the screen without the import completing."
+    category: functional
+    priority: must
+    status: active
+    source: "issue #851 (req-gap orphan)"
+    acceptance:
+      - "The first consent sets pool_import_status to importing with a start timestamp and queues _run_pool_import and the poster backfill; re-accepting after a policy version bump queues nothing"
+      - "_run_pool_import records complete when every provider fetch succeeds and failed when one fails or the sync raises, and only on the row whose pool_import_started_at still matches its run"
+      - "GET /api/me reports an importing status started more than 20 minutes ago as failed"
+      - "POST /api/me/pool-import restarts a failed import (status importing, new start timestamp, job queued) and leaves a running import untouched with no commit"
+      - "On load with pool_import_status importing or failed the SPA renders the import screen instead of the route; on failed it offers Retry import and Continue anyway, and Continue anyway calls onDone"
+    notes: "Pinned by backend/tests/test_auth.py::test_first_consent_queues_background_import_and_backfill and test_reconsent_does_not_resync, backend/tests/test_consent.py::test_accept_consent_idempotent, backend/tests/test_users_router.py::TestRunPoolImport, TestRecordPoolImportOutcome, TestEffectivePoolImportStatus and TestRetryPoolImport, frontend/src/__tests__/PoolImportScreen.test.jsx and the import-screen cases in frontend/src/__tests__/App.test.jsx. The import moved from the OAuth callback to first consent so no provider data is ingested before consent is recorded (#571); FD-013's login-triggered wording predates that and is tracked by issue #627. The 20-minute POOL_IMPORT_STALE_AFTER (users.py) must exceed the worst case of every provider fetch exhausting its retries (~13 minutes) and is computed on read: the stored status stays importing. A retry restamps pool_import_started_at so a superseded run's outcome matches no row. The retry route depends on require_consent, unlike the consent route. Issue #851's 'holds the user on an import screen until it completes' wording is not adopted: the hold is unconditional only while importing, and Continue anyway leaves on failed. Continue anyway only clears ProtectedRoute's local state; the stored status stays failed, so the screen returns the next time ProtectedRoute reads GET /api/me."
