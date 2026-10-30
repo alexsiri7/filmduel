@@ -288,6 +288,14 @@ class Settings(BaseSettings):
     # Process-wide cap on concurrent LLM calls; see llm_slots_below_pool_capacity.
     LLM_MAX_CONCURRENT: Annotated[int, Field(ge=1)] = 2
 
+    @field_validator("LLM_BASE_URL")
+    @classmethod
+    def require_https_llm_base_url(cls, v: str) -> str:
+        """Every LLM call sends LLM_API_KEY as a bearer token to this URL."""
+        if urlparse(v).scheme != "https":
+            raise ValueError("LLM_BASE_URL must use https://")
+        return v
+
     @model_validator(mode="after")
     def llm_slots_below_pool_capacity(self) -> "Settings":
         """Each in-flight LLM call pins a pooled DB connection (AUD-01), so the

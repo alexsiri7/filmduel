@@ -245,6 +245,24 @@ class TestLlmConcurrencyBound:
             _make_settings(LLM_MAX_CONCURRENT=backend.config.DB_POOL_SIZE)
 
 
+class TestLlmBaseUrl:
+    """LLM_BASE_URL receives LLM_API_KEY as a bearer token, so it must be https."""
+
+    def test_default_accepted(self):
+        assert _make_settings().LLM_BASE_URL.startswith("https://")
+
+    def test_https_override_accepted(self):
+        s = _make_settings(LLM_BASE_URL="https://openrouter.ai/api/v1")
+        assert s.LLM_BASE_URL == "https://openrouter.ai/api/v1"
+
+    @pytest.mark.parametrize(
+        "url", ["http://router.requesty.ai/v1", "router.requesty.ai/v1", ""]
+    )
+    def test_non_https_rejected(self, url):
+        with pytest.raises(ValidationError, match="LLM_BASE_URL must use https"):
+            _make_settings(LLM_BASE_URL=url)
+
+
 class TestRetentionDefaults:
     def test_duel_retention_days_default(self):
         """DUEL_RETENTION_DAYS defaults to 180 (compliance window)."""
