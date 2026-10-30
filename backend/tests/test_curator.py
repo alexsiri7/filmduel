@@ -203,20 +203,22 @@ class TestCurateTournamentLogging:
     @pytest.mark.asyncio
     async def test_null_content_reply_raises_curation_error(self, monkeypatch, caplog):
         """A reply with no text (content=null) is reported as invalid JSON, not a crash."""
-        from unittest.mock import MagicMock
+        import functools
+
+        import httpx
 
         from backend.config import get_settings
         from backend.services.curator import curate_tournament
 
-        async def fake_acompletion(**kwargs):
-            msg = MagicMock()
-            msg.message.content = None
-            resp = MagicMock()
-            resp.choices = [msg]
-            resp.usage = None
-            return resp
+        def null_content_reply(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200, json={"choices": [{"message": {"role": "assistant", "content": None}}]}
+            )
 
-        monkeypatch.setattr("litellm.acompletion", fake_acompletion)
+        transport = httpx.MockTransport(null_content_reply)
+        monkeypatch.setattr(
+            "httpx.AsyncClient", functools.partial(httpx.AsyncClient, transport=transport)
+        )
         monkeypatch.setattr(get_settings(), "LLM_API_KEY", "x")
 
         with caplog.at_level(logging.ERROR, logger="backend.services.curator"):
