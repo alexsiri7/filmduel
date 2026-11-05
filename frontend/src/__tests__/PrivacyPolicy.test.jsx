@@ -96,4 +96,20 @@ describe("PrivacyPolicy", () => {
     expect(screen.getByText(/Apart from the ratings you choose to sync/)).toBeInTheDocument();
     expect(screen.queryByText(/does not currently write anything to SIMKL/)).toBeNull();
   });
+
+  it("names a private email for data requests and describes full consent withdrawal (#778)", () => {
+    render(
+      <MemoryRouter>
+        <PrivacyPolicy />
+      </MemoryRouter>
+    );
+    expect(screen.getByRole("link", { name: "alexsiri7@gmail.com" })).toHaveAttribute(
+      "href",
+      "mailto:alexsiri7@gmail.com"
+    );
+    const withdrawal = screen.getByText(/Withdrawal is complete/);
+    expect(withdrawal).toHaveTextContent(/locked behind the consent screen until you accept again/);
+    expect(withdrawal).toHaveTextContent(/still download it or delete your account/);
+    expect(screen.queryByText(/contacting us via GitHub/)).toBeNull();
+  });
 });

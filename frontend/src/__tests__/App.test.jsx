@@ -155,7 +155,7 @@ describe("App", () => {
           json: () => Promise.resolve({
             sync_ratings_to_trakt: false,
             privacy_policy_accepted: true,
-            privacy_policy_version: "2.1",
+            privacy_policy_version: "2.2",
           }),
         });
       }
@@ -283,7 +283,7 @@ describe("App", () => {
           json: () =>
             Promise.resolve({
               privacy_policy_accepted: true,
-              privacy_policy_version: "2.1",
+              privacy_policy_version: "2.2",
               pool_import_status: "importing",
             }),
         })
@@ -312,7 +312,7 @@ describe("App", () => {
           json: () =>
             Promise.resolve({
               privacy_policy_accepted: true,
-              privacy_policy_version: "2.1",
+              privacy_policy_version: "2.2",
               pool_import_status: "failed",
             }),
         })
@@ -333,7 +333,7 @@ describe("App", () => {
       "fetch",
       vi.fn((url) => {
         if (url === "/api/me") {
-          return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ sync_ratings_to_trakt: false, privacy_policy_accepted: true, privacy_policy_version: "2.1" }) });
+          return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ sync_ratings_to_trakt: false, privacy_policy_accepted: true, privacy_policy_version: "2.2" }) });
         }
         if (url.includes("/api/rankings") && !url.includes("stats")) {
           return Promise.resolve({

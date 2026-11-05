@@ -10,7 +10,7 @@ export default function PrivacyPolicy() {
           PRIVACY POLICY
         </h1>
         <p className="text-[#6B6760] text-sm font-body mb-12">
-          Version {CURRENT_PRIVACY_POLICY_VERSION} · October 2026
+          Version {CURRENT_PRIVACY_POLICY_VERSION} · November 2026
         </p>
 
         <section className="mb-10">
@@ -125,8 +125,7 @@ export default function PrivacyPolicy() {
             the settings panel of the desktop navigation at any time. While it is off, nothing is
             sent to Requesty.ai: Watch Suggestions and AI-Curated Tournaments are unavailable, and
             every other FilmDuel feature keeps working. You can turn it back on whenever you like.
-            Withdrawing your consent to this policy — by deleting your account or contacting us via
-            GitHub — also stops all AI processing.
+            Withdrawing your consent to this policy (see Your Rights) also stops all AI processing.
           </p>
         </section>
 
@@ -166,7 +165,11 @@ export default function PrivacyPolicy() {
             <li>• <strong className="text-[#F5F0E8]">Rectification</strong> — Request correction of inaccurate data</li>
             <li>• <strong className="text-[#F5F0E8]">Erasure</strong> — Delete your account and all associated data, except error reports already sent to Sentry (see Data Retention)</li>
             <li>• <strong className="text-[#F5F0E8]">Portability</strong> — The same download is a machine-readable JSON file you can take to another service</li>
+            <li>• <strong className="text-[#F5F0E8]">Withdraw consent</strong> — Use "Withdraw Consent" in the desktop navigation at any time. Withdrawal is complete: it revokes your consent to this whole policy, FilmDuel stops recording or processing anything new about you, including AI requests, and the app stays locked behind the consent screen until you accept again. Your existing data is kept, and you can still download it or delete your account from the consent screen</li>
           </ul>
+          <p className="text-[#d6c4ae] text-sm font-body leading-relaxed mt-4">
+            You can also make any of these requests privately by email (see Contact).
+          </p>
         </section>
 
         <Divider />
@@ -176,7 +179,16 @@ export default function PrivacyPolicy() {
             Contact
           </h2>
           <p className="text-[#d6c4ae] text-sm font-body leading-relaxed">
-            For data requests or privacy concerns, please open an issue on our{" "}
+            For access, export, deletion or consent-withdrawal requests, and any other privacy
+            concern, email{" "}
+            <a
+              href="mailto:alexsiri7@gmail.com"
+              className="text-[#E8A020] hover:text-[#E8A020]/80 transition-colors"
+            >
+              alexsiri7@gmail.com
+            </a>
+            . Requests sent there stay private. For questions that need no personal details, you can
+            also open an issue on our{" "}
             <a
               href="https://github.com/alexsiri7/filmduel/issues"
               target="_blank"
@@ -185,14 +197,14 @@ export default function PrivacyPolicy() {
             >
               GitHub repository
             </a>
-            .
+            , which is public.
           </p>
         </section>
 
         <Divider />
 
         <p className="text-[#6B6760] text-xs font-body">
-          Last updated: October 2026
+          Last updated: November 2026
         </p>
       </div>
     </div>

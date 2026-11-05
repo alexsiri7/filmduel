@@ -10,6 +10,7 @@ import {
   submitFeedback,
   updateSettings,
   acceptConsent,
+  withdrawConsent,
   getTournament,
   getNextMatch,
   submitTournamentMatch,
@@ -242,6 +243,17 @@ describe("api", () => {
       expect(feedbackCall).toBeDefined();
       const body = feedbackCall[1].body;
       expect(body.get("screenshot")).toBeInstanceOf(Blob);
+    });
+  });
+
+  describe("withdrawConsent", () => {
+    it("sends DELETE to /api/me/consent", async () => {
+      mockFetchOk({ privacy_policy_accepted: false });
+      await withdrawConsent();
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/me/consent",
+        expect.objectContaining({ method: "DELETE" })
+      );
     });
   });
 

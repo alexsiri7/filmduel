@@ -145,3 +145,61 @@ def test_frontend_pins_the_same_policy_version():
 
     assert match, f"CURRENT_PRIVACY_POLICY_VERSION not found in {constants}"
     assert match.group(1) == CURRENT_PRIVACY_POLICY_VERSION
+
+
+# ---------------------------------------------------------------------------
+# DELETE /api/me/consent — withdrawal (#778)
+# ---------------------------------------------------------------------------
+
+
+def _consented_user():
+    user = _make_user()
+    user.privacy_policy_accepted = True
+    user.privacy_policy_version = CURRENT_PRIVACY_POLICY_VERSION
+    user.privacy_policy_accepted_at = "2026-01-01T00:00:00+00:00"
+    return user
+
+
+def test_withdraw_consent_reverts_to_never_consented():
+    """Withdrawal clears every consent field, so the user is gated like a new one."""
+    fake_user = _consented_user()
+    mock_db = AsyncMock()
+
+    app.dependency_overrides[get_current_user] = lambda: fake_user
+    app.dependency_overrides[get_db] = lambda: mock_db
+
+    with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+        resp = client.delete("/api/me/consent")
+        gated = client.post("/api/sync")
+
+    assert resp.status_code == 200
+    assert resp.json()["privacy_policy_accepted"] is False
+    assert fake_user.privacy_policy_accepted is False
+    assert fake_user.privacy_policy_accepted_at is None
+    assert fake_user.privacy_policy_version is None
+    mock_db.commit.assert_awaited_once()
+    assert gated.status_code == 403
+
+
+def test_export_and_deletion_stay_reachable_after_withdrawal():
+    """The owner's invariant for #778: access and erasure never depend on consent."""
+    fake_user = _consented_user()
+    fake_user.trakt_access_token = None
+    fake_user.simkl_access_token = None
+    mock_db = AsyncMock()
+
+    app.dependency_overrides[get_current_user] = lambda: fake_user
+    app.dependency_overrides[get_db] = lambda: mock_db
+
+    with patch(
+        "backend.routers.users.export_user_data",
+        new_callable=AsyncMock,
+        return_value={"user": {}},
+    ):
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+            assert client.delete("/api/me/consent").status_code == 200
+            export = client.get("/api/me/export")
+            deletion = client.delete("/api/me")
+
+    assert export.status_code == 200
+    assert deletion.status_code == 204

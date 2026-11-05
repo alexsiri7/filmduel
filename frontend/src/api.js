@@ -93,6 +93,12 @@ export function acceptConsent(version) {
   });
 }
 
+// DELETE /api/me/consent — GDPR Art. 7(3). Revokes consent entirely; the app is
+// gated behind the consent screen again until the user re-accepts.
+export function withdrawConsent() {
+  return request("/api/me/consent", { method: "DELETE" });
+}
+
 export function retryPoolImport() {
   return request("/api/me/pool-import", { method: "POST" });
 }

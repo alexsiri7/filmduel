@@ -35,6 +35,30 @@ Accepting the privacy policy SHALL record the version and time. Consent to an un
 - WHEN it is submitted
 - THEN it is refused
 
+### Requirement: Users can withdraw consent
+
+A signed-in user SHALL be able to withdraw consent from the settings panel. Withdrawal SHALL revoke consent entirely, leaving the user as one who never consented: requests that need consent are refused, sign-in does not re-sync their provider library, and the app shows the consent screen until they accept again. The consent screen SHALL still offer the data export and account deletion.
+
+#### Scenario: Consent withdrawn
+- GIVEN a user who has accepted the current policy
+- WHEN they withdraw consent
+- THEN their next duel is refused with "Privacy policy consent required"
+- AND they are asked to accept the privacy policy before continuing
+
+#### Scenario: Erasure after withdrawal
+- GIVEN a user who has withdrawn consent
+- WHEN they delete their account from the consent screen
+- THEN their account is deleted
+
+### Requirement: The policy names a private contact for data requests
+
+The privacy policy SHALL name a private email address for access, export, deletion and consent-withdrawal requests, so that no data request has to be made in public.
+
+#### Scenario: Private request channel
+- GIVEN a user who wants to make a data request
+- WHEN they read the privacy policy
+- THEN it gives an email address for the request
+
 ### Requirement: The policy is public and complete
 
 The privacy policy SHALL be readable at /privacy without a session and without consent, and SHALL be linked from the sign-in page and the settings panel. It SHALL disclose the retention period of each kind of data the system keeps, and the consent prompt SHALL itemise, per AI feature, the film fields sent to the AI gateway, the candidate cap and the vendor, stating that raw ELO scores and account identifiers are never sent.
