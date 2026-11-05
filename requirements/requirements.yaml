@@ -108,7 +108,7 @@ requirements:
       - "POST /api/me/consent with version != CURRENT_PRIVACY_POLICY_VERSION returns 400"
       - "Successful consent sets privacy_policy_accepted=true, privacy_policy_version, and an acceptance timestamp"
       - "GET /api/me exposes privacy_policy_accepted and privacy_policy_version so the SPA can gate access"
-    notes: "Current version constant is '2.1' in backend/routers/users.py and must match ConsentModal.jsx."
+    notes: "Current version constant is '2.2' in backend/routers/auth.py and must match frontend/src/constants.js (pinned by backend/tests/test_consent.py). DELETE /api/me/consent withdraws consent by clearing all three fields (#778)."
 
   - id: FD-009
     title: AI features are consent- and toggle-gated

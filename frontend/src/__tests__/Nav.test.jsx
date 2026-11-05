@@ -12,10 +12,11 @@ vi.mock("../api", async (importOriginal) => {
     getMe: vi.fn(),
     updateSettings: vi.fn(() => Promise.resolve()),
     deleteAccount: vi.fn(() => Promise.resolve(null)),
+    withdrawConsent: vi.fn(() => Promise.resolve(null)),
   };
 });
 
-import { getMe, updateSettings, deleteAccount } from "../api";
+import { getMe, updateSettings, deleteAccount, withdrawConsent } from "../api";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -26,6 +27,7 @@ beforeEach(() => {
   getMe.mockResolvedValue(null);
   updateSettings.mockResolvedValue(null);
   deleteAccount.mockResolvedValue(null);
+  withdrawConsent.mockResolvedValue(null);
 });
 
 describe("Nav — Sync to Trakt toggle", () => {
@@ -393,5 +395,41 @@ describe("Nav — Delete My Account", () => {
     fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
     expect(deleteAccount).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: /delete my account/i })).toBeInTheDocument();
+  });
+});
+
+describe("Nav — Withdraw Consent (#778)", () => {
+  const renderNav = () =>
+    render(
+      <MemoryRouter>
+        <Nav />
+      </MemoryRouter>
+    );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal("location", { href: "" });
+  });
+
+  it("withdraws only after confirmation, then reloads into the consent screen", async () => {
+    renderNav();
+    fireEvent.click(screen.getByRole("button", { name: /withdraw consent/i }));
+    expect(withdrawConsent).not.toHaveBeenCalled();
+    const dialog = screen.getByRole("alertdialog", { name: /confirm consent withdrawal/i });
+    expect(dialog).toHaveTextContent(/still download your data or delete your account/i);
+    expect(dialog).toHaveTextContent(/library import already running may still finish/i);
+    fireEvent.click(screen.getByRole("button", { name: /yes, withdraw consent/i }));
+    await waitFor(() => expect(window.location.href).toBe("/"));
+    expect(withdrawConsent).toHaveBeenCalledTimes(1);
+    expect(deleteAccount).not.toHaveBeenCalled();
+  });
+
+  it("resets the control when withdrawal fails", async () => {
+    withdrawConsent.mockRejectedValueOnce(new Error("boom"));
+    renderNav();
+    fireEvent.click(screen.getByRole("button", { name: /withdraw consent/i }));
+    fireEvent.click(screen.getByRole("button", { name: /yes, withdraw consent/i }));
+    expect(await screen.findByRole("button", { name: /withdraw consent/i })).toBeInTheDocument();
+    expect(window.location.href).toBe("");
   });
 });

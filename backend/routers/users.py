@@ -203,6 +203,26 @@ async def accept_consent(
     return _build_user_response(current_user)
 
 
+@router.delete("/api/me/consent", response_model=UserResponse)
+@limiter.limit("10/minute")
+async def withdraw_consent(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Withdraw privacy policy consent (GDPR Art. 7(3)).
+
+    Leaves the user exactly as one who never consented: require_consent rejects
+    them and the next sign-in skips the provider re-sync until they accept again.
+    Export and account deletion stay available because they use get_current_user.
+    """
+    current_user.privacy_policy_accepted = False
+    current_user.privacy_policy_accepted_at = None
+    current_user.privacy_policy_version = None
+    await db.commit()
+    return _build_user_response(current_user)
+
+
 @router.post("/api/me/pool-import", response_model=UserResponse)
 @limiter.limit("3/hour")
 async def retry_pool_import(

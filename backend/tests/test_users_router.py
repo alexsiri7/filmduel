@@ -228,7 +228,7 @@ def _user_row_with_tokens() -> User:
         sync_ratings_to_simkl=True,
         use_ai_features=False,
         privacy_policy_accepted=True,
-        privacy_policy_version="2.1",
+        privacy_policy_version="2.2",
     )
 
 
@@ -265,7 +265,7 @@ class TestProfileResponseContract:
         assert body["sync_ratings_to_simkl"] is True
         assert body["use_ai_features"] is False
         assert body["privacy_policy_accepted"] is True
-        assert body["privacy_policy_version"] == "2.1"
+        assert body["privacy_policy_version"] == "2.2"
 
     def test_no_token_or_expiry_value_reaches_the_body(self):
         """Catches a leak re-keyed under a name the allow-list would not flag."""

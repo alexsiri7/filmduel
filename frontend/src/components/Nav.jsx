@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { logout, getMe, updateSettings, deleteAccount } from "../api";
+import { logout, getMe, updateSettings } from "../api";
+import { DeleteAccountControl, DownloadDataLink, WithdrawConsentControl } from "./AccountActions";
 import ReportIssueModal from "./ReportIssueModal";
 
 function ToggleRow({ label, checked, onToggle }) {
@@ -88,20 +89,6 @@ export default function Nav({ mediaType, setMediaType }) {
     window.location.href = "/login";
   };
 
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-
-  const handleDeleteAccount = async () => {
-    setDeleting(true);
-    try {
-      await deleteAccount();
-      window.location.href = "/login";
-    } catch {
-      setDeleting(false);
-      setConfirmDelete(false);
-    }
-  };
-
   return (
     <aside className="fixed left-0 top-0 h-full w-64 z-40 bg-[#141312] shadow-[10px_0_30px_rgba(0,0,0,0.3)] hidden md:flex flex-col py-8 px-4 gap-8">
       {/* Logo */}
@@ -187,41 +174,9 @@ export default function Nav({ mediaType, setMediaType }) {
         >
           Privacy Policy
         </Link>
-        <a
-          href="/api/me/export"
-          download
-          className="block w-full text-center text-[#F5F0E8]/30 hover:text-primary-container/70 font-headline font-bold uppercase text-xs tracking-widest py-2 transition-colors"
-        >
-          Download My Data
-        </a>
-        {!confirmDelete ? (
-          <button
-            onClick={() => setConfirmDelete(true)}
-            className="block w-full text-center text-[#F5F0E8]/30 hover:text-red-400/80 font-headline font-bold uppercase text-xs tracking-widest py-2 transition-colors"
-          >
-            Delete My Account
-          </button>
-        ) : (
-          <div role="alertdialog" aria-label="Confirm account deletion" className="space-y-2 px-1">
-            <p className="text-[#F5F0E8]/60 text-xs font-body">
-              This permanently deletes your account, rankings, tournaments and history. It cannot be undone.
-            </p>
-            <button
-              onClick={handleDeleteAccount}
-              disabled={deleting}
-              className="block w-full text-center bg-red-900/60 text-[#F5F0E8] font-headline font-bold uppercase text-xs tracking-widest py-2 disabled:opacity-50"
-            >
-              {deleting ? "Deleting…" : "Yes, delete everything"}
-            </button>
-            <button
-              onClick={() => setConfirmDelete(false)}
-              disabled={deleting}
-              className="block w-full text-center text-[#F5F0E8]/30 hover:text-[#F5F0E8]/60 font-headline font-bold uppercase text-xs tracking-widest py-2"
-            >
-              Cancel
-            </button>
-          </div>
-        )}
+        <DownloadDataLink />
+        <WithdrawConsentControl />
+        <DeleteAccountControl />
         {hasTrakt && (
           <ToggleRow label="Sync to Trakt" checked={syncRatings} onToggle={handleSyncToggle} />
         )}

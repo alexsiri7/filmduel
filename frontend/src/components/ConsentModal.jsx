@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { acceptConsent } from "../api";
+import { DeleteAccountControl, DownloadDataLink } from "./AccountActions";
 import { CURRENT_PRIVACY_POLICY_VERSION } from "../constants";
 
 export default function ConsentModal({ onAccepted }) {
@@ -54,6 +55,13 @@ export default function ConsentModal({ onAccepted }) {
         >
           {loading ? "Saving..." : "I Accept"}
         </button>
+        <div className="mt-6 pt-4 border-t border-[#514534]/30">
+          <p className="text-[#6B6760] text-xs font-body mb-2">
+            Without consent you can still take your data out or erase it.
+          </p>
+          <DownloadDataLink />
+          <DeleteAccountControl />
+        </div>
       </div>
     </div>
   );

@@ -4,9 +4,11 @@ import ConsentModal from "../components/ConsentModal";
 
 vi.mock("../api", () => ({
   acceptConsent: vi.fn(),
+  deleteAccount: vi.fn(),
+  withdrawConsent: vi.fn(),
 }));
 
-import { acceptConsent } from "../api";
+import { acceptConsent, deleteAccount } from "../api";
 
 describe("ConsentModal", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -44,14 +46,14 @@ describe("ConsentModal", () => {
     ).toBeInTheDocument();
   });
 
-  it("calls acceptConsent('2.1') and passes the updated user to onAccepted", async () => {
+  it("calls acceptConsent('2.2') and passes the updated user to onAccepted", async () => {
     const user = { pool_import_status: "importing" };
     acceptConsent.mockResolvedValueOnce(user);
     const onAccepted = vi.fn();
     render(<ConsentModal onAccepted={onAccepted} />);
     fireEvent.click(screen.getByRole("button", { name: /i accept/i }));
     await waitFor(() => {
-      expect(acceptConsent).toHaveBeenCalledWith("2.1");
+      expect(acceptConsent).toHaveBeenCalledWith("2.2");
       expect(onAccepted).toHaveBeenCalledOnce();
       expect(onAccepted).toHaveBeenCalledWith(user);
     });
@@ -93,5 +95,23 @@ describe("ConsentModal", () => {
       expect(screen.queryByText("Network error")).not.toBeInTheDocument();
       expect(onAccepted).toHaveBeenCalledOnce();
     });
+  });
+
+  // Withdrawn consent re-shows this screen; access and erasure must stay reachable (#778).
+  it("offers the data export and account deletion without accepting", async () => {
+    vi.stubGlobal("location", { href: "" });
+    deleteAccount.mockResolvedValueOnce(null);
+    render(<ConsentModal onAccepted={vi.fn()} />);
+
+    expect(screen.getByRole("link", { name: /download my data/i })).toHaveAttribute(
+      "href",
+      "/api/me/export"
+    );
+    fireEvent.click(screen.getByRole("button", { name: /delete my account/i }));
+    fireEvent.click(screen.getByRole("button", { name: /yes, delete everything/i }));
+    await waitFor(() => expect(window.location.href).toBe("/login"));
+    expect(deleteAccount).toHaveBeenCalledOnce();
+    expect(acceptConsent).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 });
