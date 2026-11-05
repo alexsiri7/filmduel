@@ -165,7 +165,7 @@ export default function PrivacyPolicy() {
             <li>• <strong className="text-[#F5F0E8]">Rectification</strong> — Request correction of inaccurate data</li>
             <li>• <strong className="text-[#F5F0E8]">Erasure</strong> — Delete your account and all associated data, except error reports already sent to Sentry (see Data Retention)</li>
             <li>• <strong className="text-[#F5F0E8]">Portability</strong> — The same download is a machine-readable JSON file you can take to another service</li>
-            <li>• <strong className="text-[#F5F0E8]">Withdraw consent</strong> — Use "Withdraw Consent" in the desktop navigation at any time. Withdrawal is complete: it revokes your consent to this whole policy, FilmDuel stops recording or processing anything new about you, including AI requests, and the app stays locked behind the consent screen until you accept again. Your existing data is kept, and you can still download it or delete your account from the consent screen</li>
+            <li>• <strong className="text-[#F5F0E8]">Withdraw consent</strong> — Use "Withdraw Consent" in the desktop navigation at any time. Withdrawal is complete: it revokes your consent to this whole policy, FilmDuel starts no new recording or processing about you, including AI requests, and the app stays locked behind the consent screen until you accept again. A library import already running when you withdraw may still finish. Your existing data is kept, and you can still download it or delete your account from the consent screen</li>
           </ul>
           <p className="text-[#d6c4ae] text-sm font-body leading-relaxed mt-4">
             You can also make any of these requests privately by email (see Contact).

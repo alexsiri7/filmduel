@@ -110,6 +110,7 @@ describe("PrivacyPolicy", () => {
     const withdrawal = screen.getByText(/Withdrawal is complete/);
     expect(withdrawal).toHaveTextContent(/locked behind the consent screen until you accept again/);
     expect(withdrawal).toHaveTextContent(/still download it or delete your account/);
+    expect(withdrawal).toHaveTextContent(/import already running when you withdraw may still finish/);
     expect(screen.queryByText(/contacting us via GitHub/)).toBeNull();
   });
 });

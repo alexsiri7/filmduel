@@ -85,7 +85,7 @@ export function WithdrawConsentControl() {
     <ConfirmAction
       label="Withdraw Consent"
       dialogLabel="Confirm consent withdrawal"
-      warning="FilmDuel locks behind the consent screen until you accept the privacy policy again, and records nothing new about you in the meantime. You can still download your data or delete your account."
+      warning="FilmDuel locks behind the consent screen until you accept the privacy policy again, and starts no new recording about you in the meantime, though a library import already running may still finish. You can still download your data or delete your account."
       confirmLabel="Yes, withdraw consent"
       pendingLabel="Withdrawing…"
       onConfirm={async () => {
