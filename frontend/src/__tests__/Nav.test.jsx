@@ -415,9 +415,9 @@ describe("Nav — Withdraw Consent (#778)", () => {
     renderNav();
     fireEvent.click(screen.getByRole("button", { name: /withdraw consent/i }));
     expect(withdrawConsent).not.toHaveBeenCalled();
-    expect(screen.getByRole("alertdialog", { name: /confirm consent withdrawal/i })).toHaveTextContent(
-      /still download your data or delete your account/i
-    );
+    const dialog = screen.getByRole("alertdialog", { name: /confirm consent withdrawal/i });
+    expect(dialog).toHaveTextContent(/still download your data or delete your account/i);
+    expect(dialog).toHaveTextContent(/library import already running may still finish/i);
     fireEvent.click(screen.getByRole("button", { name: /yes, withdraw consent/i }));
     await waitFor(() => expect(window.location.href).toBe("/"));
     expect(withdrawConsent).toHaveBeenCalledTimes(1);
