@@ -4,20 +4,24 @@ from __future__ import annotations
 
 import re
 import uuid
-from unittest.mock import AsyncMock, MagicMock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from sqlalchemy.dialects import postgresql
 
-from backend.db_models import DuelHistory, TournamentMatch
+from backend.db_models import Base, DuelHistory, TournamentMatch, User
 from backend.services.retention import (
+    purge_dormant_provider_tokens,
     purge_expired_screenshots,
     purge_old_duels,
     purge_old_feedback_reports,
     purge_old_suggestions,
     purge_old_swipe_results,
     purge_old_tournament_llm_responses,
+    purge_unconsented_accounts,
 )
+from backend.services.token_crypto import TokenDecryptError
 
 
 def _make_db(row_ids=None):
@@ -193,3 +197,133 @@ class TestPurgeOldFeedbackReports:
         db = _make_db([])
         count = await purge_old_feedback_reports(db)
         assert count == 0
+
+
+def _token_row(trakt="trakt-ct", simkl=None):
+    return SimpleNamespace(
+        id=uuid.uuid4(), trakt_access_token_enc=trakt, simkl_access_token_enc=simkl
+    )
+
+
+def _compiled(db, call=0):
+    return str(
+        db.execute.call_args_list[call][0][0].compile(dialect=postgresql.dialect())
+    )
+
+
+@pytest.fixture
+def providers():
+    """Patch the provider clients and decrypt each ciphertext to ``plain:<ct>``."""
+    trakt, simkl = MagicMock(), MagicMock()
+    trakt.return_value.revoke_token = AsyncMock()
+    simkl.return_value.revoke_token = AsyncMock()
+
+    def decrypt(ciphertext, *, purpose):
+        if ciphertext == "bad-ct":
+            raise TokenDecryptError("no key")
+        return f"plain:{ciphertext}"
+
+    with patch("backend.services.retention.TraktClient", trakt), \
+         patch("backend.services.retention.SimklClient", simkl), \
+         patch("backend.services.retention.decrypt_token", side_effect=decrypt):
+        yield SimpleNamespace(
+            trakt=trakt.return_value.revoke_token, simkl=simkl.return_value.revoke_token
+        )
+
+
+class TestPurgeUnconsentedAccounts:
+    @pytest.mark.asyncio
+    async def test_deletes_only_never_consented_dataless_idle_accounts(self, providers):
+        db = _make_db([])
+        await purge_unconsented_accounts(db)
+        db.execute.assert_awaited_once()
+        compiled = _compiled(db)
+        assert compiled.startswith("DELETE FROM users")
+        for clause in (
+            "users.privacy_policy_accepted IS false",
+            "users.privacy_policy_accepted_at IS NULL",
+            "users.privacy_policy_version IS NULL",
+            "users.pool_import_status IS NULL",
+            "users.is_admin IS false",
+            "users.created_at <",
+            "users.last_seen_at <",
+        ):
+            assert clause in compiled
+
+    @pytest.mark.asyncio
+    async def test_keeps_accounts_with_rows_in_any_user_owned_table(self, providers):
+        db = _make_db([])
+        await purge_unconsented_accounts(db)
+        compiled = _compiled(db)
+        referencing = {
+            fk.parent.table.name
+            for table in Base.metadata.sorted_tables
+            for fk in table.foreign_keys
+            if fk.column is User.__table__.c.id
+        }
+        assert referencing
+        for table in referencing:
+            assert re.search(rf"NOT \(EXISTS \(SELECT \*\s+FROM {table}\b", compiled), table
+
+    @pytest.mark.asyncio
+    async def test_revokes_each_deleted_accounts_tokens(self, providers):
+        db = AsyncMock()
+        rows = [_token_row("t1"), _token_row(None, "s2"), _token_row("bad-ct")]
+        db.execute = AsyncMock(return_value=MagicMock(fetchall=MagicMock(return_value=rows)))
+        count = await purge_unconsented_accounts(db)
+        assert count == 3
+        providers.trakt.assert_awaited_once()
+        assert providers.trakt.await_args.args == ("plain:t1",)
+        providers.simkl.assert_awaited_once()
+        assert providers.simkl.await_args.args == ("plain:s2",)
+
+    @pytest.mark.asyncio
+    async def test_returns_zero_when_nothing_to_delete(self, providers):
+        assert await purge_unconsented_accounts(_make_db([])) == 0
+        providers.trakt.assert_not_awaited()
+
+
+class TestPurgeDormantProviderTokens:
+    @pytest.mark.asyncio
+    async def test_selects_idle_accounts_with_tokens_skipping_unadopted_legacy_rows(
+        self, providers
+    ):
+        db = _make_db([])
+        await purge_dormant_provider_tokens(db)
+        compiled = _compiled(db)
+        assert "users.last_seen_at <" in compiled
+        assert "FOR UPDATE" in compiled
+        assert "users.trakt_uuid IS NOT NULL OR users.trakt_user_id IS NULL" in compiled
+        assert "users.trakt_access_token IS NOT NULL" in compiled
+
+    @pytest.mark.asyncio
+    async def test_no_update_when_nothing_dormant(self, providers):
+        db = _make_db([])
+        assert await purge_dormant_provider_tokens(db) == 0
+        db.execute.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_clears_only_token_columns_and_revokes(self, providers):
+        rows = [_token_row("t1", "s1"), _token_row("t2")]
+        db = AsyncMock()
+        db.execute = AsyncMock(return_value=MagicMock(fetchall=MagicMock(return_value=rows)))
+        count = await purge_dormant_provider_tokens(db)
+        assert count == 2
+        assert db.execute.await_count == 2
+        update_sql = _compiled(db, 1)
+        assert update_sql.startswith("UPDATE users SET")
+        set_clause = update_sql.split(" WHERE ")[0]
+        assigned = set(re.findall(r"(\w+)=", set_clause))
+        assert assigned == {
+            "trakt_access_token",
+            "trakt_refresh_token",
+            "trakt_token_expires_at",
+            "simkl_access_token",
+            "simkl_refresh_token",
+            "simkl_token_expires_at",
+        }
+        assert [c.args for c in providers.trakt.await_args_list] == [
+            ("plain:t1",),
+            ("plain:t2",),
+        ]
+        assert [c.args for c in providers.simkl.await_args_list] == [("plain:s1",)]

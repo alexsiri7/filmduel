@@ -307,6 +307,12 @@ class TestRetentionDefaults:
         with pytest.raises(ValidationError):
             _make_settings(PURGE_SCHEDULE_HOUR=24)
 
+    def test_dormant_token_window_must_outlast_sessions(self):
+        """A window within the 30-day session cap would clear a live session's tokens."""
+        with pytest.raises(ValidationError):
+            _make_settings(DORMANT_TOKEN_RETENTION_DAYS=30)
+        assert _make_settings(DORMANT_TOKEN_RETENTION_DAYS=31).DORMANT_TOKEN_RETENTION_DAYS == 31
+
 
 class TestTokenEncKeyValidation:
     def test_empty_string_accepted_without_oauth(self):

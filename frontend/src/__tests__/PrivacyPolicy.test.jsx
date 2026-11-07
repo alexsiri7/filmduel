@@ -40,6 +40,19 @@ describe("PrivacyPolicy", () => {
     );
   });
 
+  it("discloses when unconsented accounts and dormant sign-in tokens are deleted (#698)", () => {
+    render(
+      <MemoryRouter>
+        <PrivacyPolicy />
+      </MemoryRouter>
+    );
+    expect(screen.getByText(/if you sign in but never accept this policy/)).toHaveTextContent(
+      /deleted 7 days after your last sign-in/
+    );
+    const tokens = screen.getByText(/deleted after 90 days without a sign-in/);
+    expect(tokens).toHaveTextContent(/Your account and data are kept/);
+  });
+
   it("discloses that Sentry error reports outlive account deletion (#789)", () => {
     render(
       <MemoryRouter>

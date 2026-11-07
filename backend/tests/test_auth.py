@@ -1623,6 +1623,20 @@ class TestPKCE:
         assert backfill_posters_background in funcs
 
     @pytest.mark.asyncio
+    async def test_callback_stamps_sign_in_time_before_consent(self, monkeypatch):
+        """Sign-in refreshes last_seen_at, so the unconsented-account purge cannot
+        delete a returning user while they read the consent screen (#698)."""
+        existing_user = MagicMock()
+        existing_user.id = "00000000-0000-0000-0000-000000000001"
+        existing_user.privacy_policy_accepted = False
+        existing_user.last_seen_at = datetime(2020, 1, 1, tzinfo=timezone.utc)
+
+        before = datetime.now(timezone.utc)
+        await self._run_trakt_callback(monkeypatch, existing_user)
+
+        assert existing_user.last_seen_at >= before
+
+    @pytest.mark.asyncio
     async def test_callback_enqueues_pool_sync_when_consented(self, monkeypatch):
         """Returning consented users keep the login-time forced re-sync."""
         existing_user = MagicMock()
