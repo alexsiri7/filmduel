@@ -141,6 +141,8 @@ export default function PrivacyPolicy() {
             <li>• <strong className="text-[#F5F0E8]">AI tournament responses</strong> — the AI response stored with a tournament is removed after 180 days; the tournament itself is kept</li>
             <li>• <strong className="text-[#F5F0E8]">Feedback reports</strong> — deleted after 365 days; attached screenshots are deleted after 90 days</li>
             <li>• <strong className="text-[#F5F0E8]">Error reports</strong> — kept by Sentry for the retention period of its plan, not by FilmDuel, and not removed when you delete your account</li>
+            <li>• <strong className="text-[#F5F0E8]">Accounts that never accept this policy</strong> — if you sign in but never accept this policy, your account and the sign-in tokens stored with it are deleted 7 days after your last sign-in, and we ask Trakt or SIMKL to revoke the token</li>
+            <li>• <strong className="text-[#F5F0E8]">Trakt and SIMKL sign-in tokens</strong> — deleted after 90 days without a sign-in, and we ask Trakt or SIMKL to revoke them. Your account and data are kept, and signing in again reconnects it. Exception: the Trakt token of an account that has not signed in since 4 October 2026 is kept until its next sign-in, which needs it to match you to your account</li>
             <li>• <strong className="text-[#F5F0E8]">Everything else</strong> — your account, rankings, tournaments, and duel history are kept until you delete your account</li>
           </ul>
           <p className="text-[#d6c4ae] text-sm font-body leading-relaxed">

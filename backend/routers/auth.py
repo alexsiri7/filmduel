@@ -639,6 +639,7 @@ async def _handle_oauth_callback(
     else:
         user = User(**fields)
         db.add(user)
+    user.last_seen_at = datetime.now(timezone.utc)
 
     await db.flush()
 

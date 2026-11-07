@@ -123,6 +123,25 @@ A daily purge SHALL reduce duels older than their retention window (default 180 
 - WHEN the daily purge runs
 - THEN that swipe result no longer exists
 
+### Requirement: Idle sign-ins do not keep provider tokens
+
+The same daily purge SHALL delete accounts that never consented, recorded nothing and have not signed in for 7 days, and SHALL clear the provider tokens of any account with no sign-in for 90 days while keeping the account and its data. Both SHALL request upstream revocation of the tokens they remove (best effort). Each window SHALL be configurable, and the token window SHALL exceed the maximum session lifetime.
+
+#### Scenario: Abandoned sign-up purged
+- GIVEN a user who signed in 8 days ago, never consented and recorded nothing
+- WHEN the daily purge runs
+- THEN the account no longer exists and revocation of its provider token was requested
+
+#### Scenario: Dormant tokens cleared
+- GIVEN a consented user who last signed in 100 days ago
+- WHEN the daily purge runs
+- THEN their provider tokens are gone and their rankings remain
+
+#### Scenario: Unmatched legacy Trakt account keeps its token
+- GIVEN a Trakt account not yet matched to its immutable Trakt id, last signed in 100 days ago
+- WHEN the daily purge runs
+- THEN its Trakt token is kept, so its next sign-in can prove the account is theirs
+
 ### Requirement: Preference data stays out of logs and error reports
 
 Log lines that pair a user with preference data (film ids, duel or swipe outcomes, ratings, taste profiles) SHALL be emitted only at debug level. Error reports SHALL carry no default personal data, and variables whose names suggest tokens, secrets or codes SHALL be filtered from them.
