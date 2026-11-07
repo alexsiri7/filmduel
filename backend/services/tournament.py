@@ -390,7 +390,7 @@ async def record_match_winner(
     match_obj.winner_movie_id = winner_id
     match_obj.played_at = now
 
-    logger.info(
+    logger.debug(
         "match_result tournament_id=%s match_id=%s winner=%s round=%d",
         tournament_id,
         match_id,
@@ -421,7 +421,7 @@ async def record_match_winner(
         t.champion_movie_id = winner_id
         t.status = "completed"
         t.completed_at = now
-        logger.info(
+        logger.debug(
             "champion_crowned tournament_id=%s champion=%s", tournament_id, winner_id
         )
 

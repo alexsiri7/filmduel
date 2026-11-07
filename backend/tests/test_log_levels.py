@@ -15,6 +15,7 @@ SOURCE_FILES = [
     REPO_ROOT / "backend" / "services" / "duel.py",
     REPO_ROOT / "backend" / "routers" / "swipe.py",
     REPO_ROOT / "backend" / "services" / "suggest.py",
+    REPO_ROOT / "backend" / "services" / "tournament.py",
 ]
 BEHAVIORAL_EVENTS = {
     "duel_submitted",
@@ -23,6 +24,8 @@ BEHAVIORAL_EVENTS = {
     "swipe_band_selection",
     "swipe_submit",
     "suggest_taste_profile",
+    "match_result",
+    "champion_crowned",
 }
 
 
