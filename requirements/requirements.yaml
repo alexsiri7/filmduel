@@ -122,6 +122,19 @@ requirements:
       - "With use_ai_features=false the endpoint returns 403 with detail 'AI features are disabled. Enable them in settings to use this feature.'"
       - "use_ai_features defaults to true and is togglable via PATCH /api/me/settings"
 
+  - id: FD-073
+    title: Data-recording endpoints are consent-gated
+    statement: "When a user who has not accepted the current privacy policy version calls an endpoint that records data about them — GET /api/swipe/cards, POST /api/swipe/results, POST /api/duels, POST /api/sync, POST /api/me/pool-import, POST /api/tournaments, POST /api/tournaments/{id}/matches/{match_id}, DELETE /api/tournaments/{id}, POST /api/suggestions/{id}/dismiss, POST /api/suggestions/{id}/watchlist, POST /api/suggestions/{id}/seen or POST /api/feedback — the system shall reject the request with 403 'Privacy policy consent required' before doing any work."
+    category: functional
+    priority: must
+    status: active
+    source: "issue #633 (req-gap orphan)"
+    acceptance:
+      - "Each listed endpoint returns 403 with a detail mentioning consent for a user with privacy_policy_accepted=false"
+      - "With consent, swipe cards, swipe results, duel submission, manual sync and tournament match submission pass the gate"
+      - "GET /api/movies/pair and GET /api/rankings remain reachable with only a session: they read but record nothing"
+    notes: "Enforced by the require_consent dependency (backend/routers/auth.py), which checks privacy_policy_accepted and that privacy_policy_version equals CURRENT_PRIVACY_POLICY_VERSION; require_ai_consent (FD-009) calls it first, so AI endpoints are gated the same way. Pinned by backend/tests/test_consent_guard.py::TestDataCollectionConsentGuard. The version check is shared with FD-009 but tested only on an AI route (test_get_suggestions_requires_consent_to_current_policy_version). Issue #633 listed five endpoints and called tournament creation and suggestion actions ungated; that predates #724, which gated feedback, suggestion actions and tournament create/abandon. GET /api/me/export and the owner feedback routes deliberately use get_current_user (backend/routers/users.py) so a user can exercise data rights without consenting."
+
   - id: FD-010
     title: Account deletion (GDPR Art. 17)
     statement: "When a user calls DELETE /api/me, the system shall best-effort revoke Trakt/SIMKL tokens upstream, cascade-delete the user row and all dependent rows, delete the session cookie, and return 204."
