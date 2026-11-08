@@ -787,18 +787,22 @@ class TestRegeneratePreconditions:
         assert resp.json()["detail"] == "Cannot regenerate after matches have been played"
         mock_curate.assert_not_awaited()
 
-    def test_played_bye_does_not_block_regeneration(self):
-        bye = _mock_bracket_match(1, 0)
-        bye.winner_movie_id = uuid.uuid4()
-        bye.is_bye = True
-        tournament = _make_tournament(uuid.uuid4(), is_ai_curated=True, matches=[bye])
+    @pytest.mark.parametrize(
+        "played, is_bye", [(True, True), (False, False)], ids=["played-bye", "unplayed-match"]
+    )
+    def test_non_blocking_match_allows_regeneration(self, played, is_bye):
+        match = _mock_bracket_match(1, 0)
+        match.winner_movie_id = uuid.uuid4() if played else None
+        match.is_bye = is_bye
+        tournament = _make_tournament(uuid.uuid4(), is_ai_curated=True, matches=[match])
         tournament.llm_response = {"_regen_count": 0, "_theme_hint": ""}
 
-        resp, _ = self._regenerate(
+        resp, mock_curate = self._regenerate(
             tournament, {"name": "R", "tagline": None, "theme_description": None}
         )
 
         assert resp.status_code == 200
+        mock_curate.assert_awaited_once()
 
     def test_every_regeneration_reuses_the_original_theme_hint(self):
         """The hint must survive into the stored response, or the next regenerate loses it."""
