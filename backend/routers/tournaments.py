@@ -392,6 +392,7 @@ async def regenerate_tournament(
 
     # Update tournament metadata
     llm_result["_regen_count"] = regen_count + 1
+    llm_result["_theme_hint"] = original_hint
     tournament.name = llm_result["name"]
     tournament.tagline = llm_result.get("tagline")
     tournament.theme_description = llm_result.get("theme_description")
