@@ -542,7 +542,7 @@ requirements:
 
   - id: FD-039
     title: Tournament creation and seeding
-    statement: "When a user creates a tournament, the system shall accept bracket sizes of 8/16/32/64 over a filtered pool (optional genre or decade filter, media_type scoped) of ranked films, require at least 4 matching films, reject brackets larger than 4x the pool, seed by ELO (1 vs last), pre-generate all rounds, and auto-resolve first-round byes for top seeds when the pool is smaller than the bracket."
+    statement: "When a user creates a tournament, the system shall accept bracket sizes of 8/16/32/64 over a filtered pool (optional genre or decade filter, media_type scoped) of ranked films, require at least 4 matching films, reject brackets larger than 2x the pool, seed by ELO (1 vs last), pre-generate all rounds, and auto-resolve first-round byes for top seeds when the pool is smaller than the bracket."
     category: functional
     priority: should
     status: active

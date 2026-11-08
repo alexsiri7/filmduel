@@ -838,6 +838,50 @@ class TestAiCurationDailyCap:
         assert plain.status_code == 200
 
 
+class TestNextMatch:
+    def setup_method(self):
+        app.dependency_overrides.clear()
+
+    def teardown_method(self):
+        app.dependency_overrides.clear()
+
+    def test_next_skips_bye_matches(self):
+        """A bye is pre-resolved, so /next goes straight to the first real pairing (FD-039)."""
+        user = _make_user()
+        tournament_id = uuid.uuid4()
+
+        bye = _mock_bracket_match(1, 0)
+        bye.movie_a_id = bye.movie_a.id
+        bye.movie_b = None
+        bye.movie_b_id = None
+        bye.winner_movie_id = bye.movie_a.id
+        bye.is_bye = True
+
+        real = _mock_bracket_match(1, 1)
+        real.movie_a_id = real.movie_a.id
+        real.movie_b_id = real.movie_b.id
+
+        tournament = _make_tournament(
+            user.id, id=tournament_id, matches=[real, bye]
+        )
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+
+        with patch(
+            "backend.routers.tournaments._load_tournament",
+            new_callable=AsyncMock,
+            return_value=tournament,
+        ):
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.get(f"/api/tournaments/{tournament_id}/next")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["id"] == str(real.id)
+        assert body["is_bye"] is False
+
+
 # ---------------------------------------------------------------------------
 # FD-040: brackets the pool cannot half-fill, and provider sync after a match
 # ---------------------------------------------------------------------------
@@ -896,6 +940,19 @@ class TestBracketSizeCap:
                 )
 
         assert resp.status_code == 200
+
+    def test_create_rejects_a_pool_of_fewer_than_4_films(self):
+        user = _make_user()
+
+        with self._override(user, 3):
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.post(
+                    "/api/tournaments",
+                    json={"name": "Test", "bracket_size": 8, "ai_curated": False},
+                )
+
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "Need at least 4 ranked films"
 
     def test_regenerate_rejects_a_pool_that_shrank_below_half_the_bracket(self):
         """Regeneration must not rebuild an unplayable bracket after the pool shrinks."""
