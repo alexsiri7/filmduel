@@ -348,9 +348,9 @@ orphans:
   - behavior: "Encryption keys derive per purpose (OAuth, screenshot, pair token); TOKEN_ENC_KEY_PREVIOUS keys decrypt only; a value read under a previous key is re-encrypted on commit (guarded against concurrent overwrite); an undecryptable token reads as disconnected; a script re-keys everything. FD-006 notes this as additive drift."
     code_paths: ["backend/services/token_crypto.py", "backend/db_models.py:44-117", "backend/scripts/reencrypt_tokens.py", "backend/tests/test_migration_028_rekey_per_purpose.py", "backend/tests/test_reencrypt_tokens.py"]
     suggested_requirement: "While TOKEN_ENC_KEY_PREVIOUS lists prior keys, the system shall decrypt stored secrets with the current key first and prior keys as fallback, re-encrypt any prior-key value under the current key when its session commits, derive a distinct key per secret purpose, and treat an undecryptable OAuth token as a disconnected provider."
-  - behavior: "Any log line pairing a user id with preference data must be DEBUG (enforced by an AST test) and uvicorn access logs drop query strings; the Sentry-side redaction is already covered by FD-012."
-    code_paths: ["backend/tests/test_log_levels.py", "backend/main.py:66-141"]
-    suggested_requirement: "When the application logs, it shall emit any line that pairs a user identifier with preference data at DEBUG only and shall strip query strings from access-log lines so OAuth codes and filters never reach log storage."
+  - behavior: "uvicorn access logs drop query strings; the DEBUG-only rule for behavioral data is FD-078 and the Sentry-side redaction is FD-012."
+    code_paths: ["backend/main.py:76-90"]
+    suggested_requirement: "When the application logs, it shall strip query strings from access-log lines so OAuth codes and filters never reach log storage."
   - behavior: "Sentry in the SPA is enabled only when VITE_SENTRY_DSN is set at build time, with PII off, console and DOM breadcrumbs disabled, query strings stripped from request/navigation URLs and Referer removed."
     code_paths: ["frontend/src/lib/sentry.js", "Dockerfile", "frontend/src/__tests__/sentry.test.js"]
     suggested_requirement: "While VITE_SENTRY_DSN is provided at build time, the SPA shall report errors to Sentry with default PII disabled, console and DOM breadcrumbs off, and query strings and Referer removed from every reported URL."
