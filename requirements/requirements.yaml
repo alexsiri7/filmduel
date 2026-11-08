@@ -265,7 +265,7 @@ requirements:
 
   - id: FD-019
     title: Bulk swipe result submission
-    statement: "When a user submits POST /api/swipe/results, the system shall update user_movies.seen for each submitted movie, record a swipe_results history row per item, skip (and log) movies not in the user's pool, and return seen/unseen counts plus next_action."
+    statement: "When a user submits POST /api/swipe/results, the system shall reject the whole submission with HTTP 429 if the user already has 2000 or more swipe_results rows in the last 24 hours; otherwise, for each distinct submitted movie id, it shall set user_movies.seen and record one swipe_results history row only where the user's row is unresolved (seen IS NULL), skip ids with no unresolved row (counting skips in a single aggregate DEBUG log line), and return seen/unseen counts plus next_action."
     category: functional
     priority: must
     status: active
@@ -274,6 +274,10 @@ requirements:
       - "Response is {seen_count, unseen_count, next_action} with next_action in {'duel','swipe'}"
       - "movie_id values are validated as UUIDs at the schema layer (SEC-013)"
       - "A movie_id with no user_movies row does not fail the whole submission"
+      - "A movie_id whose user_movies row is already resolved (seen true or false) is skipped, not updated or rejected, and adds no swipe_results row"
+      - "A movie_id repeated within one submission is applied once and produces a single swipe_results row"
+      - "Once the user has MAX_SWIPES_PER_DAY (2000) swipe_results rows in the rolling 24-hour window, the next submission is rejected in full with 429 and nothing is written"
+      - "Skipped ids are logged as one aggregate DEBUG count per submission, not one log line per item"
 
   - id: FD-020
     title: Unseen titles never resurface
