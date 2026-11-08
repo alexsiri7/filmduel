@@ -595,7 +595,7 @@ requirements:
 
   - id: FD-041
     title: AI-curated tournaments
-    statement: "When a user creates a tournament with ai_curated=true (AI consent per FD-009), the system shall send the ELO-capped candidate list (top bracket_size*3, as preference tiers) to the LLM to select exactly bracket_size films and produce a name, tagline and theme description, seed the selected films by ELO (the LLM never controls matchups), store the raw LLM response on the tournament row, and support regeneration with the same candidate pool."
+    statement: "When a user creates a tournament with ai_curated=true (AI consent per FD-009), the system shall send the ELO-capped candidate list (top bracket_size*3, as preference tiers) to the LLM to select exactly bracket_size films and produce a name, tagline and theme description, seed the selected films by ELO (the LLM never controls matchups), store the raw LLM response on the tournament row, and support regeneration over the same filtered pool (FD-075)."
     category: functional
     priority: may
     status: active
@@ -605,6 +605,21 @@ requirements:
       - "filter_value carries a max_length constraint (SEC-012)"
       - "llm_response is nulled by retention after 180 days (FD-011)"
       - "Each AI curation attempt (create or regenerate, success or failure) spends one unit of a shared per-user 50/day budget, counted before the LLM call; beyond it returns 429 (SEC-10, #782)"
+
+  - id: FD-075
+    title: AI tournament regeneration preconditions and cap
+    statement: "When a user calls POST /api/tournaments/{id}/regenerate, the system shall reject with 400 if the tournament is not AI-curated, if any non-bye match has been played, or if 3 regenerations have already occurred; otherwise it shall re-run curation with the original theme hint over the same filtered pool, replace every match, and increment the per-tournament regeneration count."
+    category: functional
+    priority: may
+    status: active
+    source: "issue #635 (req-gap orphan)"
+    acceptance:
+      - "Regenerating a tournament with is_ai_curated=false returns 400 'Only AI-curated tournaments can be regenerated'"
+      - "Regenerating after a non-bye match has a winner returns 400 'Cannot regenerate after matches have been played'; played bye matches do not block it"
+      - "Regenerating a tournament whose stored _regen_count is 3 returns 400 'Maximum regeneration attempts (3) reached'"
+      - "Every regeneration, not only the first, passes the creation-time theme hint (the tournament name given at creation) to curation and keeps it in the stored llm_response"
+      - "A successful regeneration deletes every existing match, rebuilds the bracket from the newly selected films, replaces name, tagline, theme_description and llm_response, and stores _regen_count incremented by one"
+    notes: "Implemented in backend/routers/tournaments.py (regenerate_tournament). Checks run in order after the tournament lock and AI consent (FD-009): status must be 'active' (400 'Tournament is not active'), then the AI-curated, played-match and cap gates above, then the pool is re-queried with the tournament's own filter_type, filter_value and media_type, limited to bracket_size*3, and rejected if it can no longer half-fill the bracket (FD-039) — so 'same filtered pool' means the same filter, not a snapshot of the original candidates. _regen_count and _theme_hint are server bookkeeping keys in llm_response; the curator rejects an LLM reply carrying either (backend/services/curator.py). Once retention nulls llm_response (FD-011), the count and hint read as 0 and empty. The attempt spends the shared AI curation budget (FD-041). Pinned by backend/tests/test_tournaments_router.py::TestRegeneratePreconditions, TestRegenerateCandidatePool and TestBracketSizeCap."
 
   # ── Feedback ────────────────────────────────────────────────────────────
 
