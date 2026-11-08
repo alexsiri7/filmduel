@@ -201,6 +201,19 @@ requirements:
       - "A burst of rejections past the threshold produces exactly one 'duel_rejection_spike' ERROR record"
     notes: "Pinned by backend/tests/test_duel_rejections.py (TestRejectionSpikeMonitor::test_alerts_when_threshold_reached, test_cooldown_suppresses_then_realerts, test_old_rejections_fall_out_of_window; TestRecordDuelRejection::test_logs_warning_with_reason, test_spike_logs_one_error) and the rejection tests in backend/tests/test_duel_router.py via _assert_rejection_logged. Implemented in backend/services/duel_rejections.py (record_duel_rejection, RejectionSpikeMonitor, SPIKE_THRESHOLD=10, SPIKE_WINDOW_SECONDS=300, which is also the alert cooldown), called from backend/routers/duels.py::submit_duel and the RequestValidationError handler in backend/main.py (missing_pair_token). The ERROR reaches Sentry through the SDK's default logging integration and is what drives the alert. Movie ids stay out because a user id paired with preference data must stay at DEBUG (SEC-15). The window lives in process memory (the app runs as a single uvicorn process), so it resets on restart. Introduced in #648 after every duel was silently rejected for three months (#647)."
 
+  - id: FD-078
+    title: Behavioral personal data logged at DEBUG only
+    statement: "When the system logs a line that pairs a user (or a user-owned tournament) with preference data — movie ids, a duel, swipe or tournament-match outcome, ELO or taste-profile values, seen/unseen counts, or a ranking-derived next_action — it shall emit that line at DEBUG, never at INFO or above, so such data does not reach log sinks configured at INFO."
+    category: non-functional
+    priority: must
+    status: active
+    source: "PR #612 (SEC-15, #583); issue #638 (req-gap orphan)"
+    acceptance:
+      - "duel_submitted, duel_processed, duel_next_action, swipe_band_selection, swipe_submit, suggest_taste_profile, match_result and champion_crowned are each logged only via logger.debug, and every one of those events is still present in source"
+      - "A successful POST /api/duels emits duel_submitted at DEBUG, and no record at INFO or above from backend.routers.duels contains the user id or either movie id"
+      - "process_duel emits no record at INFO or above containing the user id"
+    notes: "Pinned by backend/tests/test_log_levels.py::test_behavioral_events_are_logged_at_debug (an AST scan of backend/routers/duels.py, backend/services/duel.py, backend/routers/swipe.py, backend/services/suggest.py and backend/services/tournament.py that also fails if an event is renamed away), backend/tests/test_duel_router.py::test_submission_is_not_logged_at_info and backend/tests/test_duel_service.py::test_process_duel_is_not_logged_at_info. Implemented at backend/routers/duels.py:44 (duel_submitted), backend/services/duel.py:230 and :241 (duel_processed, duel_next_action), backend/routers/swipe.py:103, :123 and :256 (swipe_band_selection, swipe_submit; swipe_submit_skipped at :264 is also DEBUG but not in the guard's event list), backend/services/suggest.py:218 (suggest_taste_profile) and backend/services/tournament.py:393 and :424 (match_result, champion_crowned). Lines that carry a user id without preference content (swipe_cards_requested, swipe_cards_result, pool-sync skips) stay at INFO. Issue #638 credited the guard to #583; #583 is the SEC-15 issue and #612 is the PR that closed it. FD-064 applies the same rule to duel rejections, which log at WARNING without movie ids."
+
   # ── Pool ingestion & expansion ──────────────────────────────────────────
 
   - id: FD-013
