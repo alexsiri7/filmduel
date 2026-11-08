@@ -715,6 +715,111 @@ class TestRegenerateCandidatePool:
 
 
 # ---------------------------------------------------------------------------
+# FD-075: regeneration preconditions, cap and theme hint
+# ---------------------------------------------------------------------------
+
+
+def _played_match(*, is_bye=False):
+    m = MagicMock()
+    m.id = uuid.uuid4()
+    m.round = 1
+    m.position = 0
+    m.movie_a = m.movie_b = None
+    m.winner_movie_id = uuid.uuid4()
+    m.is_bye = is_bye
+    m.played_at = None
+    return m
+
+
+class TestRegeneratePreconditions:
+    def setup_method(self):
+        app.dependency_overrides.clear()
+
+    def teardown_method(self):
+        app.dependency_overrides.clear()
+
+    def _regenerate(self, tournament, llm_result=None):
+        user = _make_user()
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+        films = [MagicMock() for _ in range(tournament.bracket_size)]
+
+        with patch(
+            "backend.routers.tournaments._load_tournament",
+            new_callable=AsyncMock,
+            return_value=tournament,
+        ), patch(
+            "backend.routers.tournaments.get_filtered_ranked_films",
+            new_callable=AsyncMock,
+            return_value=films,
+        ), patch(
+            "backend.routers.tournaments.curate_and_select_films",
+            new_callable=AsyncMock,
+            return_value=(films, llm_result),
+        ) as mock_curate, patch(
+            "backend.routers.tournaments.create_tournament_bracket",
+            new_callable=AsyncMock,
+        ):
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.post(f"/api/tournaments/{tournament.id}/regenerate")
+        return resp, mock_curate
+
+    @pytest.mark.parametrize(
+        "overrides, llm_response, detail",
+        [
+            (
+                {"is_ai_curated": False},
+                {"_regen_count": 0},
+                "Only AI-curated tournaments can be regenerated",
+            ),
+            (
+                {"matches": [_played_match()]},
+                {"_regen_count": 0},
+                "Cannot regenerate after matches have been played",
+            ),
+            ({}, {"_regen_count": 3}, "Maximum regeneration attempts (3) reached"),
+        ],
+    )
+    def test_regenerate_rejects_before_curating(self, overrides, llm_response, detail):
+        tournament = _make_tournament(
+            uuid.uuid4(), **{"is_ai_curated": True, "matches": [], **overrides}
+        )
+        tournament.llm_response = llm_response
+
+        resp, mock_curate = self._regenerate(tournament)
+
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == detail
+        mock_curate.assert_not_awaited()
+
+    def test_played_bye_does_not_block_regeneration(self):
+        tournament = _make_tournament(
+            uuid.uuid4(), is_ai_curated=True, matches=[_played_match(is_bye=True)]
+        )
+        tournament.llm_response = {"_regen_count": 0, "_theme_hint": ""}
+
+        resp, _ = self._regenerate(
+            tournament, {"name": "R", "tagline": None, "theme_description": None}
+        )
+
+        assert resp.status_code == 200
+
+    def test_every_regeneration_reuses_the_original_theme_hint(self):
+        """The hint must survive into the stored response, or the next regenerate loses it."""
+        tournament = _make_tournament(uuid.uuid4(), is_ai_curated=True, matches=[])
+        tournament.llm_response = {"_regen_count": 1, "_theme_hint": "Neo-noir"}
+
+        resp, mock_curate = self._regenerate(
+            tournament, {"name": "R", "tagline": None, "theme_description": None}
+        )
+
+        assert resp.status_code == 200
+        assert mock_curate.call_args.kwargs["theme_hint"] == "Neo-noir"
+        assert tournament.llm_response["_theme_hint"] == "Neo-noir"
+        assert tournament.llm_response["_regen_count"] == 2
+
+
+# ---------------------------------------------------------------------------
 # SEC-10 (#782): AI curation attempts, not successes, spend a daily budget
 # ---------------------------------------------------------------------------
 
