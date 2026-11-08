@@ -719,18 +719,6 @@ class TestRegenerateCandidatePool:
 # ---------------------------------------------------------------------------
 
 
-def _played_match(*, is_bye=False):
-    m = MagicMock()
-    m.id = uuid.uuid4()
-    m.round = 1
-    m.position = 0
-    m.movie_a = m.movie_b = None
-    m.winner_movie_id = uuid.uuid4()
-    m.is_bye = is_bye
-    m.played_at = None
-    return m
-
-
 class TestRegeneratePreconditions:
     def setup_method(self):
         app.dependency_overrides.clear()
@@ -772,11 +760,6 @@ class TestRegeneratePreconditions:
                 {"_regen_count": 0},
                 "Only AI-curated tournaments can be regenerated",
             ),
-            (
-                {"matches": [_played_match()]},
-                {"_regen_count": 0},
-                "Cannot regenerate after matches have been played",
-            ),
             ({}, {"_regen_count": 3}, "Maximum regeneration attempts (3) reached"),
         ],
     )
@@ -792,10 +775,23 @@ class TestRegeneratePreconditions:
         assert resp.json()["detail"] == detail
         mock_curate.assert_not_awaited()
 
+    def test_played_match_blocks_regeneration(self):
+        played = _mock_bracket_match(1, 0)
+        played.winner_movie_id = uuid.uuid4()
+        tournament = _make_tournament(uuid.uuid4(), is_ai_curated=True, matches=[played])
+        tournament.llm_response = {"_regen_count": 0}
+
+        resp, mock_curate = self._regenerate(tournament)
+
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "Cannot regenerate after matches have been played"
+        mock_curate.assert_not_awaited()
+
     def test_played_bye_does_not_block_regeneration(self):
-        tournament = _make_tournament(
-            uuid.uuid4(), is_ai_curated=True, matches=[_played_match(is_bye=True)]
-        )
+        bye = _mock_bracket_match(1, 0)
+        bye.winner_movie_id = uuid.uuid4()
+        bye.is_bye = True
+        tournament = _make_tournament(uuid.uuid4(), is_ai_curated=True, matches=[bye])
         tournament.llm_response = {"_regen_count": 0, "_theme_hint": ""}
 
         resp, _ = self._regenerate(
