@@ -566,6 +566,20 @@ requirements:
       - "Bye matches are created with is_bye=true and winner pre-filled; GET /{id}/next never returns a bye"
       - "Per-user creation is capped at 100 tournaments per 24h (429 beyond)"
 
+  - id: FD-074
+    title: Tournament setup helpers - genres and pool count
+    statement: "When a user calls GET /api/tournaments/genres, the system shall return the sorted distinct genres of their ranked films of the requested media_type; when a user calls GET /api/tournaments/pool-count with an optional genre or decade filter, the system shall return the count of their ranked films of that media_type matching the filter together with max_bracket_size, the largest bracket size (8/16/32/64) not exceeding twice that count, or null when fewer than 4 films match."
+    category: functional
+    priority: should
+    status: active
+    source: "issue #634 (req-gap orphan)"
+    acceptance:
+      - "A pool count of 9 returns {count: 9, max_bracket_size: 16}; a count of 0 returns max_bracket_size null"
+      - "max_bracket_size maps pool counts 3→null, 4→8, 7→8, 8→16, 16→32, 32→64, 64→64, and only ever returns a size TournamentCreate accepts"
+      - "filter_type outside {genre, decade} returns 422; filter_value longer than 200 characters returns 422; a decade filter_value that is not a year (e.g. 'abc') returns 400 'Invalid decade format'"
+      - "Both endpoints require a session and are rate-limited to 30/minute"
+    notes: "Implemented in backend/routers/tournaments.py (get_available_genres, get_pool_count) over backend/services/tournament.py (count_filtered_ranked_films, max_bracket_size, BRACKET_SIZES); 'ranked' is ranked_user_movies_stmt (backend/services/ranking.py): seen, at least one battle, elo set. media_type defaults to movie. The pool-count genre filter matches case-insensitively and a decade filter_value may carry a trailing 's' (1990s covers 1990-1999). max_bracket_size applies the same 2x-pool cap that FD-039 enforces at creation, so the creation form never offers a bracket the POST would reject. The genres list is distinct as stored, not case-folded. Pinned by backend/tests/test_tournament_service.py::TestMaxBracketSize, backend/tests/test_tournaments_router.py::test_pool_count_reports_the_largest_offerable_bracket, backend/tests/test_filter_type_validation.py and the rate-limit registration tests in backend/tests/test_rate_limiting.py. The genres endpoint's distinct/sorted output is not pinned by test: its only router test (test_get_available_genres_endpoint_reachable) checks the 200. Called by the frontend tournament creation form (Tournaments.jsx) and the rankings genre filter (Rankings.jsx)."
+
   - id: FD-040
     title: Tournament matches are real duels
     statement: "When a tournament match winner is submitted, the system shall process it through the standard duel pipeline (ELO update, duel history row with mode='tournament', optional provider sync), propagate the winner into the next round (auto-resolving any resulting bye), and mark the tournament completed with a champion when the final resolves."
