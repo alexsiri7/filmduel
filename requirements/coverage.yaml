@@ -7,7 +7,7 @@ meta:
     partial: 34
     uncovered: 0
     stale: 6
-    orphans: 22
+    orphans: 21
 coverage:
   - id: FD-001
     status: partial
@@ -333,9 +333,6 @@ orphans:
   - behavior: "The CSP carries report-uri/report-to plus a Reporting-Endpoints header, and POST /api/csp-report accepts both report formats unauthenticated and CSRF-exempt, logs at most 10 violations per body with blocked URLs reduced to origin and document URLs to path, and always answers 204."
     code_paths: ["backend/routers/csp_report.py", "backend/main.py:284-287", "backend/main.py:350-353", "backend/tests/test_csp_report.py"]
     suggested_requirement: "When a browser posts a CSP violation to /api/csp-report, the system shall accept it without a session or CSRF headers, log up to 10 violations with the blocked URL reduced to its origin and the document URL to its path, and return 204 even for malformed bodies."
-  - behavior: "RATE_LIMIT_STORAGE_URI enables Redis-backed rate-limit counters (scheme validated, 1s socket timeouts, in-memory fallback during outages); startup warns when unset on a hosted platform or when a cleartext redis:// URI points at a public host."
-    code_paths: ["backend/rate_limit.py:85-108", "backend/config.py", "backend/main.py:170-187"]
-    suggested_requirement: "While RATE_LIMIT_STORAGE_URI is set, the system shall store rate-limit counters in that Redis instance with bounded socket timeouts and degrade to per-process counters during an outage; at startup it shall warn when the URI is unset on a hosted platform or is a cleartext redis:// to a non-private host."
   - behavior: "A process-wide semaphore of LLM_MAX_CONCURRENT (default 2) fails fast with 503 + Retry-After: 15 instead of queueing, completions time out at LLM_TIMEOUT_SECONDS with no retries, and startup rejects a cap at or above DB pool capacity."
     code_paths: ["backend/services/llm.py", "backend/config.py:281-299", "backend/routers/suggestions.py", "backend/routers/tournaments.py"]
     suggested_requirement: "When an LLM call is requested while LLM_MAX_CONCURRENT calls are already in flight, the system shall return 503 with Retry-After rather than queue; each call shall be bounded by LLM_TIMEOUT_SECONDS without retry; and startup shall refuse a concurrency cap that is not below the database pool capacity."
