@@ -702,6 +702,21 @@ requirements:
       - "With RAILWAY_ENVIRONMENT set and FORWARDED_ALLOW_IPS unset, uvicorn runs with --forwarded-allow-ips='*'; elsewhere it defaults to loopback with a warning"
       - "Every route that resolves get_current_user carries a @limiter.limit decorator, GET /api/me included at 60/minute (AUD-26, #708; pinned by test_rate_limiting.py::test_every_authenticated_route_is_rate_limited)"
 
+  - id: FD-077
+    title: Shared rate-limit counter storage in Redis
+    statement: "While RATE_LIMIT_STORAGE_URI is configured, the system shall store rate-limit counters in that Redis instance (refusing to start when the URI is not redis://, rediss:// or redis+unix://) with 1-second socket connect and read timeouts, and shall fall back to per-process in-memory counters during a Redis outage rather than failing requests; while it is unset on a detected hosting platform, the system shall log a startup warning that counters are per-process, reset on every deploy and are not shared across replicas."
+    category: non-functional
+    priority: should
+    status: active
+    source: "PR #594 (SEC-04, #572); issue #637 (req-gap orphan)"
+    acceptance:
+      - "A RATE_LIMIT_STORAGE_URI of memcached://, memory:// or a bare host:port fails Settings validation; redis://, rediss:// and redis+unix:// URIs are accepted with surrounding whitespace stripped, and an empty value selects in-memory storage"
+      - "With the URI set, the limiter uses Redis storage with socket_connect_timeout=1, socket_timeout=1 and the in-memory fallback enabled; with it unset, it uses in-memory storage without the fallback"
+      - "Against an unreachable Redis, a 2/minute route answers 200, 200, 429 and slowapi logs a single 'falling back to in-memory storage' warning, with no 500"
+      - "At startup with the URI set, rate_limit_storage: redis is logged at INFO whether or not a platform is detected, and the URI itself is never logged"
+      - "At startup with the URI unset and a hosting-platform env var set, a rate_limit_storage_unset warning names that env var; off-platform nothing about rate-limit storage is logged"
+    notes: "Implemented in backend/config.py (_RATE_LIMIT_STORAGE_SCHEMES, RATE_LIMIT_STORAGE_URI, validate_rate_limit_storage_uri), backend/rate_limit.py (_REDIS_STORAGE_OPTIONS, _build_limiter) and backend/main.py::lifespan. Pinned by backend/tests/test_rate_limit.py (test_build_limiter_defaults_to_memory_storage, test_build_limiter_uses_redis_storage_with_fallback_and_timeouts, test_build_limiter_falls_back_to_memory_when_redis_unreachable) and backend/tests/test_config.py (TestRateLimitStorageUriValidation, TestRateLimitStorageStartupWarning). Covers where counters live; FD-046 covers how they are keyed. The bounded timeouts exist because an unreachable host would otherwise stall the first request for minutes before slowapi falls back; slowapi re-checks Redis with exponential backoff and returns to it on recovery. Platform detection is the same env-var list as FD-048 and FD-070. With the URI set, lifespan also warns (rate_limit_storage_cleartext, SEC-26 #798) when a plain redis:// URI points at a host that is not loopback, a private IP or an internal hostname, pinned by TestRateLimitStorageStartupWarning and TestCleartextPublicRedisUri."
+
   - id: FD-047
     title: Startup configuration validation
     statement: "When the application starts, the system shall refuse to boot if DATABASE_URL is missing or the localhost placeholder, if SECRET_KEY (or a set TOKEN_ENC_KEY) is under 32 chars, a known placeholder or built from fewer than 6 distinct characters, or if an OAuth client id is configured without a valid TOKEN_ENC_KEY; CORS_ORIGINS shall never contain '*', and on a detected hosting platform shall contain no localhost or loopback origin (AUD-23, #705)."
