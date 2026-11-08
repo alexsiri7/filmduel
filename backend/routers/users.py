@@ -388,7 +388,7 @@ async def view_my_screenshot(
         logger.error("screenshot_decode_failed report_id=%s", report_id)
         raise HTTPException(status_code=404, detail="Screenshot not found")
     mime, raw = decoded
-    return Response(content=raw, media_type=mime, headers={"Cache-Control": "no-store"})
+    return Response(content=raw, media_type=mime)
 
 
 @router.delete("/api/me/feedback/{report_id}", status_code=204)

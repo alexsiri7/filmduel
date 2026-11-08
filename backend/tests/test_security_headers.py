@@ -118,3 +118,16 @@ class TestHSTS:
         )
         r = client.get("/health")
         assert "strict-transport-security" not in r.headers
+
+
+class TestCacheControl:
+    def test_api_response_is_no_store(self):
+        r = client.get("/api/me")
+        assert r.headers["cache-control"] == "no-store"
+
+    def test_auth_response_is_no_store(self):
+        r = client.get("/auth/login", follow_redirects=False)
+        assert r.headers["cache-control"] == "no-store"
+
+    def test_non_api_response_is_not_no_store(self, response):
+        assert "cache-control" not in response.headers

@@ -327,6 +327,10 @@ async def csrf_origin_check(request: Request, call_next):
     )
 
 
+# API and auth responses carry personal data; static assets and the SPA shell stay cacheable.
+_NO_STORE_PREFIXES = ("/api/", "/auth/")
+
+
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
@@ -354,6 +358,8 @@ async def add_security_headers(request: Request, call_next):
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
     response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
     response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+    if request.url.path.startswith(_NO_STORE_PREFIXES):
+        response.headers["Cache-Control"] = "no-store"
     return response
 
 

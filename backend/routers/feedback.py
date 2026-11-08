@@ -15,7 +15,6 @@ from fastapi import (
     HTTPException,
     Query,
     Request,
-    Response,
     UploadFile,
 )
 from sqlalchemy import func, select, update
@@ -224,7 +223,6 @@ async def list_feedback(
 @limiter.limit("10/minute")
 async def view_screenshot(
     request: Request,
-    response: Response,
     report_id: uuid.UUID,
     current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
@@ -240,7 +238,6 @@ async def view_screenshot(
     plain = _safe_decrypt(str(report_id), row.screenshot_data_enc)
     if plain is None:
         raise HTTPException(status_code=404, detail="Screenshot not found")
-    response.headers["Cache-Control"] = "no-store"
     logger.info(
         "screenshot_viewed report_id=%s by user_id=%s",
         report_id,
