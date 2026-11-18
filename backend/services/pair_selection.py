@@ -9,14 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from backend.db_models import Movie, UserMovie
-from backend.services.elo import DEFAULT_ELO, get_initial_elo
+from backend.services.elo import DEFAULT_ELO, effective_elo
 
 CLOSEST_CANDIDATES = 5
-
-
-def _effective_elo(um: UserMovie) -> float:
-    """ELO the duel will be scored with: current ELO, else the seeded/default start."""
-    return um.elo if um.elo is not None else get_initial_elo(um.seeded_elo)
 
 
 async def select_pair(
@@ -63,8 +58,8 @@ async def select_pair(
     stale_ids: set[str] = set()
     if last_pair_ids and str(anchor.movie_id) in last_pair_ids:
         stale_ids = last_pair_ids - {str(anchor.movie_id)}
-    effective_elo = func.coalesce(UserMovie.elo, UserMovie.seeded_elo, DEFAULT_ELO)
-    order_by = [func.abs(effective_elo - _effective_elo(anchor))]
+    row_elo = func.coalesce(UserMovie.elo, UserMovie.seeded_elo, DEFAULT_ELO)
+    order_by = [func.abs(row_elo - effective_elo(anchor))]
     if stale_ids:
         order_by.insert(0, cast(UserMovie.movie_id, Text).in_(stale_ids))
     challenger_result = await db.execute(

@@ -68,8 +68,8 @@ async def submit_duel(
             uid,
             movie_a_id,
             movie_b_id,
-            outcome,
-            mode,
+            body.outcome,
+            body.mode,
             pair_token_digest=pair_token_digest,
         )
         await db.flush()

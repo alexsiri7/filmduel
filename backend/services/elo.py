@@ -7,6 +7,8 @@ Ratings are kept as unrounded floats. Default starting rating is 1000.
 
 import math
 
+from backend.db_models import UserMovie
+
 # Replaying real duels scored K0=200/300/400 within 0.008 log-loss; 300 was best (#649).
 K0 = 300
 DEFAULT_ELO = 1000
@@ -94,3 +96,8 @@ def get_initial_elo(seeded_elo: int | None) -> int:
     otherwise falls back to the default 1000.
     """
     return seeded_elo if seeded_elo is not None else DEFAULT_ELO
+
+
+def effective_elo(um: UserMovie) -> float:
+    """ELO a film is scored with: current ELO, else the seeded/default start."""
+    return um.elo if um.elo is not None else get_initial_elo(um.seeded_elo)

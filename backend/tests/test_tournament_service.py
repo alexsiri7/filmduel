@@ -612,7 +612,7 @@ class TestRecordMatchWinner:
                 return result
             movie_id = _locked_movie_id(stmt)
             if movie_id is not None:
-                result.scalar_one.return_value = user_movies[movie_id]
+                result.scalar_one_or_none.return_value = user_movies[movie_id]
                 return result
             result.scalar_one.return_value = MagicMock()
             return result
@@ -683,7 +683,7 @@ class TestRecordMatchWinner:
                 return result
             movie_id = _locked_movie_id(stmt)
             if movie_id is not None:
-                result.scalar_one.return_value = user_movies[movie_id]
+                result.scalar_one_or_none.return_value = user_movies[movie_id]
                 return result
             result.scalar_one.return_value = MagicMock()
             return result
@@ -748,9 +748,10 @@ class TestRecordMatchWinnerEloParity:
         async def fake_execute(stmt):
             result = MagicMock()
             movie_id = _locked_movie_id(stmt)
-            result.scalar_one.return_value = (
-                user_movies[movie_id] if movie_id is not None else lookups.pop(0)
-            )
+            if movie_id is None:
+                result.scalar_one.return_value = lookups.pop(0)
+            else:
+                result.scalar_one_or_none.return_value = user_movies[movie_id]
             return result
 
         async def assign_ids_like_a_real_flush():
@@ -823,7 +824,7 @@ class TestRecordMatchWinnerLockOrder:
                 result.scalar_one.return_value = lookups.pop(0)
             else:
                 locked.append(movie_id)
-                result.scalar_one.return_value = user_movies[movie_id]
+                result.scalar_one_or_none.return_value = user_movies[movie_id]
             return result
 
         db = AsyncMock()
