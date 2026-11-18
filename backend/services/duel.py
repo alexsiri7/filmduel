@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db_models import Duel, Movie, UserMovie
 from backend.schemas import DuelMode, DuelOutcome, DuelResult
-from backend.services.elo import get_initial_elo, update_elo
+from backend.services.elo import effective_elo, update_elo
 
 logger = logging.getLogger(__name__)
 
@@ -62,11 +62,6 @@ async def compute_next_action(
     return "swipe" if should_suggest_swipe(seen_unranked, total_seen) else "duel"
 
 
-def _effective_elo(um: UserMovie) -> float:
-    """ELO the duel is scored with: current ELO, else the seeded/default start."""
-    return um.elo if um.elo is not None else get_initial_elo(um.seeded_elo)
-
-
 async def apply_elo_result(
     db: AsyncSession,
     user_id: uuid.UUID,
@@ -78,8 +73,8 @@ async def apply_elo_result(
 ) -> Duel:
     """Compute ELO, mutate UserMovies, create+return Duel record."""
     now = datetime.now(timezone.utc)
-    w_elo = _effective_elo(um_w)
-    l_elo = _effective_elo(um_l)
+    w_elo = effective_elo(um_w)
+    l_elo = effective_elo(um_l)
     new_w, new_l = update_elo(w_elo, l_elo, um_w.battles, um_l.battles)
 
     um_w.elo = new_w
@@ -252,7 +247,7 @@ async def process_duel(
     um_a, um_b = await lock_user_movie_pair(db, user_id, movie_a_id, movie_b_id)
     # Ownership is confirmed by the lock above, so um_a.movie_id is trusted.
     media_type = await _media_type(db, um_a.movie_id)
-    elo_a_before, elo_b_before = _effective_elo(um_a), _effective_elo(um_b)
+    elo_a_before, elo_b_before = effective_elo(um_a), effective_elo(um_b)
 
     effect = apply_outcome(um_a, um_b, outcome, datetime.now(timezone.utc))
     duel = await _record_duel(db, user_id, effect, outcome, mode)
