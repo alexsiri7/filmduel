@@ -12,7 +12,7 @@ from backend.db_models import User, UserMovie
 from backend.rate_limit import limiter
 from backend.routers.auth import get_current_user
 from backend.schemas import MediaType, MovieWithStateSchema, MoviePairResponse
-from backend.services.pair_selection import select_pair
+from backend.services.pair_selection import NotEnoughSeenFilmsError, select_pair
 from backend.utils.tokens import decode_pair_token, encode_pair_token
 
 logger = logging.getLogger(__name__)
@@ -74,7 +74,7 @@ async def get_movie_pair(
 
     try:
         pair = await select_pair(db, uid, last_pair_ids, media_type)
-    except ValueError:
+    except NotEnoughSeenFilmsError:
         logger.info("No eligible pair for user %s media_type=%s", uid, media_type)
         raise HTTPException(status_code=404, detail="No eligible pair found")
 

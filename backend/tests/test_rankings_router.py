@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from backend.main import app
 from backend.db import get_db
 from backend.routers.auth import get_current_user
+from backend.services.ranking import InvalidFilterError
 
 
 def _make_user():
@@ -65,7 +66,7 @@ class TestRankingsRouter:
         with patch(
             "backend.routers.rankings.get_user_rankings",
             new_callable=AsyncMock,
-            side_effect=ValueError("Invalid decade format"),
+            side_effect=InvalidFilterError("Invalid decade format"),
         ):
             with TestClient(app, raise_server_exceptions=False) as client:
                 resp = client.get("/api/rankings?decade=abc")

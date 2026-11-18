@@ -27,6 +27,7 @@ from backend.observability import SENTRY_OPTIONS
 from backend.rate_limit import HEALTH_PATH, limiter
 from backend.scheduler import build_scheduler
 from backend.services.duel_rejections import record_duel_rejection
+from backend.services.llm import LLMBusyError, LLMNotConfiguredError
 from backend.services.quota import QuotaExceeded
 from backend.services.tmdb import is_read_access_token
 from backend.routers import (
@@ -142,6 +143,21 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 @app.exception_handler(QuotaExceeded)
 async def quota_exceeded_handler(request: Request, exc: QuotaExceeded):
     return JSONResponse(status_code=429, content={"detail": exc.quota.message})
+
+
+@app.exception_handler(LLMBusyError)
+async def llm_busy_handler(request: Request, exc: LLMBusyError):
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "AI features are busy. Please try again in a moment."},
+        headers={"Retry-After": "15"},
+    )
+
+
+@app.exception_handler(LLMNotConfiguredError)
+async def llm_not_configured_handler(request: Request, exc: LLMNotConfiguredError):
+    logger.warning("AI features unavailable (LLM_API_KEY not configured) path=%s", request.url.path)
+    return JSONResponse(status_code=503, content={"detail": "AI features are not available"})
 
 
 # Rate limiting

@@ -10,6 +10,7 @@ from unittest.mock import ANY, AsyncMock, MagicMock, patch
 os.environ.setdefault("TOKEN_ENC_KEY", "test-secret-key-for-unit-tests-32b")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -18,6 +19,7 @@ from backend.tests import SPA_HEADERS
 from backend.db import get_db
 from backend.routers.auth import CURRENT_PRIVACY_POLICY_VERSION, get_current_user
 from backend.schemas import MovieSchema, SuggestionSchema
+from backend.services.llm import LLMNotConfiguredError
 from backend.services.suggest import REGENERATION_DAILY_QUOTA
 
 
@@ -97,7 +99,7 @@ class TestGetSuggestions:
         ), patch(
             "backend.routers.suggestions._create_suggestions",
             new_callable=AsyncMock,
-            side_effect=ValueError("LLM_API_KEY not configured"),
+            side_effect=LLMNotConfiguredError("LLM_API_KEY not configured"),
         ):
             with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.get("/api/suggestions")
@@ -449,6 +451,21 @@ class TestGetSuggestionsEmptyCooldown:
         assert [r.status_code for r in responses] == [503, 503]
         assert mock_llm.await_count == 2
 
+    def test_unexpected_value_error_is_not_reported_as_unconfigured(self):
+        """Only LLMNotConfiguredError means a missing key; any other ValueError is a bug."""
+        responses, _ = self._get_twice(llm_error=ValueError("parsing bug"))
+
+        assert responses[0].status_code == 500
+        assert "AI features are not available" not in responses[0].text
+
+    def test_llm_request_failure_answers_500(self):
+        responses, _ = self._get_twice(llm_error=httpx.ConnectError("refused"))
+
+        assert responses[0].status_code == 500
+        assert responses[0].json()["detail"] == (
+            "Failed to generate suggestions. Please try again later."
+        )
+
     def test_insufficient_candidates_does_not_start_cooldown(self):
         """No LLM call was made, so "swipe more, then come back" must keep working."""
         from backend.rate_limit import empty_suggestions_recent
@@ -636,7 +653,7 @@ class TestRegenerateSuggestions:
         mock_db.execute.return_value = mock_count_result
 
         # Mock _get_active_suggestions to return empty (no existing to dismiss)
-        # Mock _create_suggestions to raise ValueError (LLM key missing)
+        # Mock _create_suggestions to raise LLMNotConfiguredError
 
         app.dependency_overrides[get_current_user] = lambda: user
         app.dependency_overrides[get_db] = lambda: mock_db
@@ -652,7 +669,7 @@ class TestRegenerateSuggestions:
         ), patch(
             "backend.routers.suggestions._create_suggestions",
             new_callable=AsyncMock,
-            side_effect=ValueError("LLM_API_KEY not configured"),
+            side_effect=LLMNotConfiguredError("LLM_API_KEY not configured"),
         ):
             with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post("/api/suggestions/regenerate")

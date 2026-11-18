@@ -16,6 +16,7 @@ from backend.schemas import DuelMode, DuelOutcome
 from backend.services.duel import (
     MIN_SEEN_UNRANKED,
     MIN_TOTAL_SEEN,
+    MovieNotInPoolError,
     apply_outcome,
     get_user_movie,
     lock_user_movie_pair,
@@ -225,7 +226,7 @@ async def test_get_user_movie_with_for_update():
 
 @pytest.mark.asyncio
 async def test_get_user_movie_not_found():
-    """Raises ValueError when UserMovie does not exist."""
+    """Raises MovieNotInPoolError when UserMovie does not exist."""
     uid = uuid.uuid4()
     mid = uuid.uuid4()
 
@@ -235,7 +236,7 @@ async def test_get_user_movie_not_found():
     db = AsyncMock()
     db.execute.return_value = mock_result
 
-    with pytest.raises(ValueError, match="Movie not in your pool"):
+    with pytest.raises(MovieNotInPoolError, match="Movie not in your pool"):
         await get_user_movie(db, uid, mid)
 
 

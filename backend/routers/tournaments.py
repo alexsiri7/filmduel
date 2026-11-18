@@ -27,9 +27,8 @@ from backend.schemas import (
     TournamentMatchSchema,
     TournamentSchema,
 )
-from backend.services.ranking import ranked_user_movies_stmt
+from backend.services.ranking import InvalidFilterError, ranked_user_movies_stmt
 from backend.services.curator import CurationError
-from backend.services.llm import LLMBusyError, llm_busy_exception
 from backend.services.quota import enforce_daily_quota
 from backend.services.tournament import (
     CANDIDATE_POOL_FACTOR,
@@ -127,7 +126,7 @@ async def _candidate_pool(
             media_type=media_type,
             limit=bracket_size * CANDIDATE_POOL_FACTOR,
         )
-    except ValueError:
+    except InvalidFilterError:
         raise HTTPException(status_code=400, detail="Invalid decade format")
     with _rule_errors_as_400():
         ensure_pool_fills_bracket(bracket_size, len(user_movies))
@@ -152,9 +151,7 @@ async def _curate(
             filter_value=filter_value,
             theme_hint=theme_hint,
         )
-    except LLMBusyError:
-        raise llm_busy_exception()
-    except (ValueError, CurationError) as e:
+    except CurationError as e:
         logger.error("AI curation failed: %s", e)
         raise HTTPException(
             status_code=500, detail="AI curation failed. Please try again."
@@ -225,7 +222,7 @@ async def get_pool_count(
             filter_value,
             media_type=media_type,
         )
-    except ValueError:
+    except InvalidFilterError:
         raise HTTPException(status_code=400, detail="Invalid decade format")
     return {"count": count, "max_bracket_size": max_bracket_size(count)}
 
@@ -437,10 +434,8 @@ async def submit_match_result_endpoint(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid winner_movie_id")
 
-    try:
+    with _rule_errors_as_400():
         loser_id = validate_match(tournament, match_id, winner_id)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
     new_winner_elo, new_loser_elo = await record_match_winner(
         db,

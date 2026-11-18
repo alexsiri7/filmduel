@@ -20,6 +20,7 @@ from fastapi.testclient import TestClient
 from backend.db import get_db
 from backend.main import app
 from backend.routers.auth import get_current_user
+from backend.services.ranking import InvalidFilterError
 
 client = TestClient(app)
 
@@ -96,7 +97,7 @@ class TestGetPoolCountDecadeValueValidation:
         with patch(
             "backend.routers.tournaments.count_filtered_ranked_films",
             new_callable=AsyncMock,
-            side_effect=ValueError("Invalid decade format"),
+            side_effect=InvalidFilterError("Invalid decade format"),
         ):
             resp = client.get(
                 "/api/tournaments/pool-count?filter_type=decade&filter_value=abc"

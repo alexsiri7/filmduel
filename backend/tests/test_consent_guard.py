@@ -26,6 +26,7 @@ from backend.main import app  # noqa: E402
 from backend.tests import SPA_HEADERS  # noqa: E402
 from backend.db import get_db  # noqa: E402
 from backend.routers.auth import CURRENT_PRIVACY_POLICY_VERSION, get_current_user  # noqa: E402
+from backend.services.curator import CurationError  # noqa: E402
 from backend.utils.tokens import encode_pair_token  # noqa: E402
 
 
@@ -410,7 +411,7 @@ class TestTournamentConsentGuard:
         assert resp.status_code == 200
 
     def test_regenerate_tournament_curation_error_does_not_leak_details(self):
-        """POST /api/tournaments/{id}/regenerate must not expose internal ValueError details."""
+        """POST /api/tournaments/{id}/regenerate must not expose internal CurationError details."""
         user = _make_user(privacy_policy_accepted=True)
         mock_db = AsyncMock()
 
@@ -442,7 +443,7 @@ class TestTournamentConsentGuard:
         ), patch(
             "backend.routers.tournaments.curate_and_select_films",
             new_callable=AsyncMock,
-            side_effect=ValueError(f"AI selected films not in candidate pool: {{{internal_uuid}}}"),
+            side_effect=CurationError(f"AI selected films not in candidate pool: {{{internal_uuid}}}"),
         ):
             with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post(f"/api/tournaments/{tournament_id}/regenerate")
@@ -451,7 +452,7 @@ class TestTournamentConsentGuard:
         assert internal_uuid not in resp.text
         assert "candidate pool" not in resp.text
         assert resp.json()["detail"] == "AI curation failed. Please try again."
-        # Guard against regressions where execution continues past the ValueError
+        # Guard against regressions where execution continues past the CurationError
         # and db writes (delete matches, flush, update metadata) are silently triggered.
         # The only statement allowed to reach the session is the tournament advisory lock.
         executed = [
@@ -463,7 +464,7 @@ class TestTournamentConsentGuard:
         mock_db.flush.assert_not_called()
 
     def test_create_ai_tournament_curation_error_does_not_leak_details(self):
-        """POST /api/tournaments must not expose internal ValueError details from AI curation."""
+        """POST /api/tournaments must not expose internal CurationError details from AI curation."""
         user = _make_user(privacy_policy_accepted=True)
         mock_db = AsyncMock()
         mock_db.execute = AsyncMock(side_effect=_db_execute_side_effect(daily_count=0))
@@ -480,7 +481,7 @@ class TestTournamentConsentGuard:
         ), patch(
             "backend.routers.tournaments.curate_and_select_films",
             new_callable=AsyncMock,
-            side_effect=ValueError(f"AI selected films not in candidate pool: {{{internal_uuid}}}"),
+            side_effect=CurationError(f"AI selected films not in candidate pool: {{{internal_uuid}}}"),
         ):
             with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post(

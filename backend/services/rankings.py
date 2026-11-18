@@ -25,6 +25,7 @@ from sqlalchemy.orm import joinedload
 
 from backend.db_models import Movie, UserMovie
 from backend.services.elo import percentile_rating
+from backend.services.ranking import InvalidFilterError
 
 _DECADE_RE = re.compile(r"[0-9]{4}s?")
 
@@ -32,7 +33,7 @@ _DECADE_RE = re.compile(r"[0-9]{4}s?")
 def parse_decade(decade: str) -> tuple[int, int]:
     """Parse a decade string like '1990s' into (start, end) years inclusive."""
     if not _DECADE_RE.fullmatch(decade):
-        raise ValueError(f"Invalid decade: {decade!r}")
+        raise InvalidFilterError(f"Invalid decade: {decade!r}")
     start = int(decade.rstrip("s"))
     return start, start + 9
 

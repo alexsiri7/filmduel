@@ -11,6 +11,7 @@ import uuid
 from collections import defaultdict
 from datetime import datetime
 
+import httpx
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -18,7 +19,7 @@ from sqlalchemy.orm import joinedload
 from backend.db_models import Movie, Suggestion, UserMovie
 from backend.rate_limit import record_empty_suggestions
 from backend.services.curator import elo_tier, sanitize_llm_input
-from backend.services.llm import chat_completion, parse_json_response
+from backend.services.llm import LLMResponseError, chat_completion, parse_json_response
 from backend.services.quota import DailyQuota
 from backend.services.ranking import ranked_user_movies_stmt
 
@@ -30,6 +31,10 @@ NUM_PICKS = 6
 CANDIDATE_LIMIT = 50
 DEFAULT_REASON = "Recommended for you."
 MAX_REGENERATIONS_PER_DAY = 3
+
+
+class SuggestionError(Exception):
+    """The LLM request failed, or its reply held no usable picks."""
 
 
 async def _count_regenerations_since(
@@ -202,7 +207,10 @@ async def _call_llm(taste_profile: dict, candidates: list[dict]) -> list | None:
         + "\n".join(_safe_candidate_line(c) for c in candidates)
     )
 
-    text_content = await chat_completion(system_prompt, user_message, max_tokens=1500)
+    try:
+        text_content = await chat_completion(system_prompt, user_message, max_tokens=1500)
+    except (httpx.HTTPError, LLMResponseError) as exc:
+        raise SuggestionError("LLM request failed") from exc
     return _reply_picks(text_content)
 
 
@@ -222,8 +230,9 @@ async def generate_suggestions(
     """Generate 6 personalized film suggestions.
 
     Returns list of {movie_id: str, reason: str}.
-    Raises ValueError if LLM_API_KEY is not set, RuntimeError if the LLM reply is not a
-    picks list or every pick in it is malformed.
+    Raises LLMNotConfiguredError if LLM_API_KEY is not set, LLMBusyError if the LLM is
+    at capacity, SuggestionError if the LLM request fails, its reply is not a picks list,
+    or every pick in it is malformed.
     Returns empty list if user has < MIN_RANKED films (caller should check taste_profile).
     An LLM reply with no usable pick starts the empty-suggestions cooldown.
     """
@@ -264,8 +273,7 @@ async def generate_suggestions(
     picks = await _call_llm(taste_profile, candidates)
     if picks is None:
         record_empty_suggestions(user_id, media_type)
-        # Not ValueError: the routers read that as "LLM_API_KEY not configured".
-        raise RuntimeError("LLM reply was not a JSON picks list")
+        raise SuggestionError("LLM reply was not a JSON picks list")
     logger.info(
         "suggest_llm_response user_id=%s picks_returned=%d", user_id, len(picks)
     )
@@ -297,7 +305,7 @@ async def generate_suggestions(
     if not results:
         record_empty_suggestions(user_id, media_type)
     if picks and not well_formed:
-        raise RuntimeError("LLM reply contained no well-formed picks")
+        raise SuggestionError("LLM reply contained no well-formed picks")
     return results
 
 

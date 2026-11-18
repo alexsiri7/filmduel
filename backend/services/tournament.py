@@ -15,10 +15,10 @@ from sqlalchemy.orm import joinedload
 
 from backend.db_models import Movie, Tournament, TournamentMatch, UserMovie
 from backend.schemas import FilterType
-from backend.services.curator import curate_tournament
+from backend.services.curator import CurationError, curate_tournament
 from backend.services.duel import apply_elo_result, lock_user_movie_pair
 from backend.services.quota import DailyQuota
-from backend.services.ranking import ranked_user_movies_stmt
+from backend.services.ranking import InvalidFilterError, ranked_user_movies_stmt
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +67,8 @@ async def curate_and_select_films(
     """Build candidates, call LLM curation, validate and return selected films.
 
     Returns (selected_user_movies_sorted_by_elo, llm_result_dict).
-    Raises ValueError if LLM returns IDs not in the candidate pool.
+    Raises CurationError if the LLM selects films outside the candidate pool or
+    too few to fill the bracket.
     """
     candidate_pool = user_movies[: bracket_size * CANDIDATE_POOL_FACTOR]
     candidates = [
@@ -96,14 +97,14 @@ async def curate_and_select_films(
     candidate_ids = {str(um.movie_id) for um in candidate_pool}
     invalid_ids = set(llm_result["film_ids"]) - candidate_ids
     if invalid_ids:
-        raise ValueError(f"AI selected films not in candidate pool: {invalid_ids}")
+        raise CurationError(f"AI selected films not in candidate pool: {invalid_ids}")
 
     film_id_set = set(llm_result["film_ids"])
     selected_ums = [um for um in candidate_pool if str(um.movie_id) in film_id_set]
     selected_ums.sort(key=lambda um: um.elo or 0, reverse=True)
 
     if len(selected_ums) * 2 < bracket_size:
-        raise ValueError(
+        raise CurationError(
             f"AI selected only {len(selected_ums)} usable films "
             f"for a {bracket_size} bracket"
         )
@@ -284,7 +285,7 @@ def _filtered_ranked_stmt(
 ) -> Select:
     """Ranked films of this media_type, narrowed by an optional genre/decade.
 
-    Genre matches case-insensitively. Raises ValueError for invalid decade format.
+    Genre matches case-insensitively. Raises InvalidFilterError for invalid decade format.
     """
     stmt = ranked_user_movies_stmt(user_id, media_type)
     if filter_type == "genre" and filter_value:
@@ -303,7 +304,7 @@ def _filtered_ranked_stmt(
         try:
             decade_start = int(decade_str)
         except ValueError:
-            raise ValueError("Invalid decade format")
+            raise InvalidFilterError("Invalid decade format")
         stmt = stmt.where(Movie.year.between(decade_start, decade_start + 9))
     return stmt
 
@@ -320,7 +321,7 @@ async def get_filtered_ranked_films(
     """Return the top ``limit`` ranked films matching an optional genre/decade.
 
     Returns UserMovie list with .movie eagerly loaded, sorted by ELO desc.
-    Raises ValueError for invalid decade format.
+    Raises InvalidFilterError for invalid decade format.
     """
     stmt = (
         _filtered_ranked_stmt(user_id, filter_type, filter_value, media_type)
@@ -342,7 +343,7 @@ async def count_filtered_ranked_films(
 ) -> int:
     """Count the ranked films matching an optional genre/decade.
 
-    Raises ValueError for invalid decade format.
+    Raises InvalidFilterError for invalid decade format.
     """
     stmt = _filtered_ranked_stmt(
         user_id, filter_type, filter_value, media_type
@@ -486,20 +487,20 @@ def validate_match(
 ) -> uuid.UUID:
     """Validate a match is playable. Returns the loser_id.
 
-    Raises ValueError on validation failure.
+    Raises TournamentRuleError on validation failure.
     """
     if tournament.status != "active":
-        raise ValueError("Tournament is not active")
+        raise TournamentRuleError("Tournament is not active")
 
     match = next((m for m in tournament.matches if m.id == match_id), None)
     if not match:
-        raise ValueError("Match not found")
+        raise TournamentRuleError("Match not found")
     if match.winner_movie_id is not None:
-        raise ValueError("Match already played")
+        raise TournamentRuleError("Match already played")
     if match.movie_a_id is None or match.movie_b_id is None:
-        raise ValueError("Match is not ready to play")
+        raise TournamentRuleError("Match is not ready to play")
     if winner_id not in (match.movie_a_id, match.movie_b_id):
-        raise ValueError("Winner must be one of the two movies")
+        raise TournamentRuleError("Winner must be one of the two movies")
 
     return match.movie_b_id if winner_id == match.movie_a_id else match.movie_a_id
 

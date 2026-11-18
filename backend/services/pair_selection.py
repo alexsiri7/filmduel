@@ -14,6 +14,10 @@ from backend.services.elo import DEFAULT_ELO, effective_elo
 CLOSEST_CANDIDATES = 5
 
 
+class NotEnoughSeenFilmsError(Exception):
+    """The user has fewer than two seen films of the media type to pair."""
+
+
 async def select_pair(
     db: AsyncSession,
     uid,
@@ -30,9 +34,9 @@ async def select_pair(
     Selection runs in SQL, so only the anchor and at most CLOSEST_CANDIDATES
     challengers are loaded (SEC-12, #784).
 
-    Raises ValueError if fewer than 2 seen films exist.
+    Raises NotEnoughSeenFilmsError if fewer than 2 seen films exist.
     """
-    not_enough = ValueError(
+    not_enough = NotEnoughSeenFilmsError(
         f"Need more seen {media_type}s to duel. Swipe to classify some {media_type}s first!"
     )
     seen_stmt = (

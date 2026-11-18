@@ -9,6 +9,10 @@ from sqlalchemy import Select, select
 from backend.db_models import Movie, UserMovie
 
 
+class InvalidFilterError(Exception):
+    """A genre/decade filter on the ranked films could not be parsed."""
+
+
 def ranked_user_movies_stmt(
     user_id: uuid.UUID, media_type: str | None = None
 ) -> Select:

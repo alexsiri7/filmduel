@@ -16,6 +16,7 @@ from backend.services.rankings import (
     get_user_stats,
     parse_decade,
 )
+from backend.services.ranking import InvalidFilterError
 
 
 # --- get_user_stats ---
@@ -131,21 +132,21 @@ def test_parse_decade_without_s():
     assert parse_decade("1980") == (1980, 1989)
 
 
-def test_parse_decade_invalid_raises_value_error():
-    """Non-numeric decade string must raise ValueError."""
-    with pytest.raises(ValueError):
+def test_parse_decade_invalid_raises_invalid_filter_error():
+    """Non-numeric decade string must raise InvalidFilterError."""
+    with pytest.raises(InvalidFilterError):
         parse_decade("invalid")
 
 
-def test_parse_decade_empty_string_raises_value_error():
-    """Empty string must raise ValueError."""
-    with pytest.raises(ValueError):
+def test_parse_decade_empty_string_raises_invalid_filter_error():
+    """Empty string must raise InvalidFilterError."""
+    with pytest.raises(InvalidFilterError):
         parse_decade("")
 
 
-def test_parse_decade_partial_numeric_raises_value_error():
-    """Partially numeric decade string must raise ValueError."""
-    with pytest.raises(ValueError):
+def test_parse_decade_partial_numeric_raises_invalid_filter_error():
+    """Partially numeric decade string must raise InvalidFilterError."""
+    with pytest.raises(InvalidFilterError):
         parse_decade("19x0s")
 
 
@@ -154,7 +155,7 @@ def test_parse_decade_partial_numeric_raises_value_error():
 )
 def test_parse_decade_rejects_non_four_digit_years(decade):
     """Anything int() would accept beyond a plain four-digit year is rejected."""
-    with pytest.raises(ValueError):
+    with pytest.raises(InvalidFilterError):
         parse_decade(decade)
 
 

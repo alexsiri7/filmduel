@@ -18,6 +18,7 @@ import pytest
 from backend.config import get_settings
 from backend.services.llm import (
     LLMBusyError,
+    LLMNotConfiguredError,
     LLMResponseError,
     chat_completion,
     parse_json_response,
@@ -77,12 +78,12 @@ def test_parse_json_response_invalid_raises():
 
 @pytest.mark.asyncio
 async def test_chat_completion_missing_api_key_raises():
-    """chat_completion raises ValueError when LLM_API_KEY is empty."""
+    """chat_completion raises LLMNotConfiguredError when LLM_API_KEY is empty."""
     mock_settings = MagicMock()
     mock_settings.LLM_API_KEY = ""
 
     with patch("backend.services.llm.get_settings", return_value=mock_settings):
-        with pytest.raises(ValueError, match="LLM_API_KEY is not configured"):
+        with pytest.raises(LLMNotConfiguredError, match="LLM_API_KEY is not configured"):
             await chat_completion(system="test", user_message="hello")
 
 
@@ -100,12 +101,11 @@ def _refuse_connection(request: httpx.Request) -> httpx.Response:
     ids=["transport", "http-status"],
 )
 async def test_chat_completion_api_error_propagates(monkeypatch, handler, expected):
-    """Transport and HTTP errors propagate, and never as the "not configured" ValueError."""
+    """Transport and HTTP errors propagate unchanged."""
     monkeypatch.setattr(get_settings(), "LLM_API_KEY", "x")
     _route_llm(monkeypatch, handler)
-    with pytest.raises(expected) as excinfo:
+    with pytest.raises(expected):
         await chat_completion(system="test", user_message="hello")
-    assert not isinstance(excinfo.value, ValueError)
 
 
 @pytest.mark.asyncio
@@ -135,13 +135,11 @@ async def test_chat_completion_wire_request(monkeypatch):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("body", [b"not json", b"{}", b'{"choices": []}'])
-async def test_chat_completion_unreadable_reply_is_not_value_error(monkeypatch, body):
-    """Callers read ValueError as "not configured"; an unreadable reply must not look like one."""
+async def test_chat_completion_unreadable_reply_raises_response_error(monkeypatch, body):
     monkeypatch.setattr(get_settings(), "LLM_API_KEY", "x")
     _route_llm(monkeypatch, lambda request: httpx.Response(200, content=body))
-    with pytest.raises(LLMResponseError) as excinfo:
+    with pytest.raises(LLMResponseError):
         await chat_completion("sys", "user")
-    assert not isinstance(excinfo.value, ValueError)
 
 
 # ---------------------------------------------------------------------------
