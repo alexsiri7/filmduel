@@ -60,11 +60,12 @@ def _override_db():
 
 
 def _assert_rejection_logged(caplog, reason, *movie_ids):
-    """The rejection is warned about (#648) without leaking movie IDs (SEC-15)."""
+    """The rejection is warned about with its user (#648, #943) without leaking movie IDs (SEC-15)."""
+    expected = f"duel_rejected reason={reason} user_id={FAKE_USER.id}"
     assert any(
         r.name == duel_rejections.__name__
         and r.levelno == logging.WARNING
-        and f"reason={reason} " in r.getMessage()
+        and r.getMessage() == expected
         for r in caplog.records
     ), [r.getMessage() for r in caplog.records]
     for record in caplog.records:
@@ -270,8 +271,13 @@ class TestSubmitDuel:
         assert "pair token" in response.json()["detail"].lower()
         _assert_rejection_logged(caplog, "pair_mismatch", mid_a, mid_b)
 
-    def test_missing_pair_token_returns_400(self, caplog):
-        """A duel with no pair_token at all should return 400, not a raw 422."""
+    @pytest.mark.parametrize(
+        "overrides",
+        [{}, {"pair_token": 123}, {"outcome": "bogus"}],
+        ids=["omitted", "wrong_type", "omitted_with_other_invalid_field"],
+    )
+    def test_missing_pair_token_returns_400(self, caplog, overrides):
+        """A duel without a usable pair_token should return 400, not a raw 422."""
         mid_a = str(uuid.uuid4())
         mid_b = str(uuid.uuid4())
         client = TestClient(app, headers=SPA_HEADERS)
@@ -282,7 +288,7 @@ class TestSubmitDuel:
                 "movie_b_id": mid_b,
                 "outcome": "a_wins",
                 "mode": "discovery",
-                # no pair_token
+                **overrides,
             },
         )
         assert response.status_code == 400
