@@ -383,7 +383,7 @@ class TestListMyFeedback(_OwnerFeedbackRoutes):
             has_screenshot=True,
         )
         db = self._db(rows=[row])
-        with patch("backend.routers.feedback.decrypt_token") as mock_decrypt:
+        with patch("backend.services.feedback.decrypt_token") as mock_decrypt:
             with self._client(user, db) as client:
                 resp = client.get("/api/me/feedback")
 

@@ -34,7 +34,6 @@ from backend.routers.auth import (
     has_current_consent,
     require_consent,
 )
-from backend.routers.feedback import FEEDBACK_CAP_WINDOW, _safe_decrypt
 from backend.schemas import (
     ConsentAccept,
     FeedbackOwnResponse,
@@ -42,6 +41,7 @@ from backend.schemas import (
     UserSettingsUpdate,
 )
 from backend.services.data_export import FEEDBACK_SCREENSHOT_PATH, export_user_data
+from backend.services.feedback import FEEDBACK_CAP_WINDOW, safe_decrypt_screenshot
 from backend.services.pool import populate_movie_pool
 from backend.services.tmdb import backfill_posters_background
 from backend.services.trakt import TraktClient
@@ -380,7 +380,7 @@ async def view_my_screenshot(
     row = result.one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="Report not found")
-    plain = _safe_decrypt(str(report_id), row.screenshot_data_enc)
+    plain = safe_decrypt_screenshot(str(report_id), row.screenshot_data_enc)
     if plain is None:
         raise HTTPException(status_code=404, detail="Screenshot not found")
     decoded = _decode_data_url(plain)

@@ -18,7 +18,7 @@ from sentry_sdk.transport import Transport  # noqa: E402
 from fastapi import FastAPI, Request  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from backend.main import (  # noqa: E402
+from backend.observability import (  # noqa: E402
     SENTRY_OPTIONS,
     _redact_text,
     _redact_url,

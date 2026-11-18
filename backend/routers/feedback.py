@@ -29,35 +29,18 @@ from backend.schemas import (
     FeedbackReportResponse,
     FeedbackScreenshotResponse,
 )
-from backend.services.token_crypto import TokenPurpose, decrypt_token, encrypt_token
+from backend.services.token_crypto import TokenPurpose, encrypt_token
 from backend.services.retention import purge_expired_screenshots as _purge_expired_screenshots
+from backend.services.feedback import FEEDBACK_CAP_WINDOW, safe_decrypt_screenshot
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/feedback", tags=["feedback"])
 
 
-def _safe_decrypt(report_id: str, ciphertext: str | None) -> str | None:
-    """Decrypt screenshot ciphertext, returning None and logging on failure.
-
-    A corrupted or key-mismatched record is reported as missing rather than as a 500.
-    """
-    if not ciphertext:
-        return None
-    try:
-        return decrypt_token(ciphertext, purpose=TokenPurpose.SCREENSHOT)
-    except RuntimeError:
-        logger.error(
-            "screenshot_decrypt_failed report_id=%s — returning null screenshot",
-            report_id,
-        )
-        return None
-
-
 MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024  # 5 MB
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 MAX_FEEDBACK_PER_DAY = 20  # per-user daily cap
-FEEDBACK_CAP_WINDOW = timedelta(hours=24)
 
 # Magic bytes for allowed image types
 _IMAGE_SIGNATURES = {
@@ -235,7 +218,7 @@ async def view_screenshot(
     row = result.one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="Report not found")
-    plain = _safe_decrypt(str(report_id), row.screenshot_data_enc)
+    plain = safe_decrypt_screenshot(str(report_id), row.screenshot_data_enc)
     if plain is None:
         raise HTTPException(status_code=404, detail="Screenshot not found")
     logger.info(
