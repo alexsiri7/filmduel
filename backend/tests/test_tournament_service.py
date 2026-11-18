@@ -6,14 +6,24 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from sqlalchemy.dialects import postgresql
 
+from backend.db_models import Tournament, TournamentMatch
 from backend.services.tournament import (
+    MAX_REGENERATIONS,
+    CurationBookkeeping,
+    TournamentRuleError,
     _num_rounds,
+    apply_curation,
     count_filtered_ranked_films,
     create_tournament_bracket,
     curate_and_select_films,
+    ensure_can_abandon,
+    ensure_can_regenerate,
+    ensure_pool_fills_bracket,
     generate_seeded_bracket,
     get_filtered_ranked_films,
     max_bracket_size,
+    next_playable_match,
+    progress_label,
     validate_match,
 )
 
@@ -832,3 +842,157 @@ class TestRecordMatchWinnerLockOrder:
         mock_elo.assert_awaited_once_with(
             db, user_id, winner_id, loser_id, um_w, um_l, "tournament"
         )
+
+
+# ---------------------------------------------------------------------------
+# Lifecycle rules: in-memory Tournament/TournamentMatch, no database
+# ---------------------------------------------------------------------------
+
+
+def _match(round_num, position=0, *, a=True, b=True, winner=False, bye=False):
+    movie_a_id = uuid.uuid4() if a else None
+    return TournamentMatch(
+        id=uuid.uuid4(),
+        round=round_num,
+        position=position,
+        movie_a_id=movie_a_id,
+        movie_b_id=uuid.uuid4() if b else None,
+        winner_movie_id=movie_a_id if winner else None,
+        is_bye=bye,
+    )
+
+
+def _tournament(*, status="active", matches=(), is_ai_curated=True, llm_response=None):
+    return Tournament(
+        id=uuid.uuid4(),
+        name="T",
+        bracket_size=8,
+        status=status,
+        is_ai_curated=is_ai_curated,
+        llm_response=llm_response,
+        matches=list(matches),
+    )
+
+
+class TestNextPlayableMatch:
+    def test_skips_byes_and_played_matches_in_bracket_order(self):
+        bye = _match(1, 0, b=False, winner=True, bye=True)
+        played = _match(1, 1, winner=True)
+        later = _match(2, 0)
+        first = _match(1, 2)
+
+        assert next_playable_match(_tournament(matches=[later, first, bye, played])) is first
+
+    def test_skips_matches_with_an_empty_slot(self):
+        waiting = _match(2, 0, b=False)
+
+        assert next_playable_match(_tournament(matches=[waiting])) is None
+
+
+class TestProgressLabel:
+    @pytest.mark.parametrize(
+        "status, label", [("completed", "Completed"), ("abandoned", "Abandoned")]
+    )
+    def test_terminal_statuses_get_fixed_labels(self, status, label):
+        assert progress_label(_tournament(status=status, matches=[_match(1)])) == label
+
+    def test_round_1_partially_played(self):
+        matches = [_match(1, 0, winner=True), _match(1, 1), _match(1, 2)]
+        assert progress_label(_tournament(matches=matches)) == (
+            "Round 1 — 1/3 matches played"
+        )
+
+    def test_round_1_complete_round_2_in_progress(self):
+        matches = [_match(1, 0, winner=True), _match(1, 1, winner=True), _match(2, 0)]
+        assert progress_label(_tournament(matches=matches)) == (
+            "Round 2 — 0/1 matches played"
+        )
+
+    def test_empty_matches_list(self):
+        assert progress_label(_tournament()) == "Round 1 — 0/0 matches played"
+
+    def test_all_rounds_complete(self):
+        matches = [_match(1, 0, winner=True), _match(2, 0, winner=True)]
+        assert "Round 2" in progress_label(_tournament(matches=matches))
+
+
+class TestEnsureCanAbandon:
+    def test_allows_an_active_tournament(self):
+        ensure_can_abandon(_tournament())
+
+    @pytest.mark.parametrize(
+        "status, message",
+        [
+            ("abandoned", "Tournament already abandoned"),
+            ("completed", "Cannot abandon a completed tournament"),
+        ],
+    )
+    def test_rejects_terminal_statuses(self, status, message):
+        with pytest.raises(TournamentRuleError, match=f"^{message}$"):
+            ensure_can_abandon(_tournament(status=status))
+
+
+class TestEnsureCanRegenerate:
+    def test_allows_a_fresh_ai_tournament_with_only_byes_played(self):
+        bye = _match(1, 0, b=False, winner=True, bye=True)
+        ensure_can_regenerate(
+            _tournament(
+                matches=[bye, _match(1, 1)],
+                llm_response={"_regen_count": MAX_REGENERATIONS - 1},
+            )
+        )
+
+    @pytest.mark.parametrize(
+        "kwargs, message",
+        [
+            ({"status": "completed"}, "Tournament is not active"),
+            ({"is_ai_curated": False}, "Only AI-curated tournaments can be regenerated"),
+            (
+                {"matches": [_match(1, winner=True)]},
+                "Cannot regenerate after matches have been played",
+            ),
+            (
+                {"llm_response": {"_regen_count": MAX_REGENERATIONS}},
+                r"Maximum regeneration attempts \(3\) reached",
+            ),
+        ],
+    )
+    def test_rejects(self, kwargs, message):
+        with pytest.raises(TournamentRuleError, match=f"^{message}$"):
+            ensure_can_regenerate(_tournament(**kwargs))
+
+
+class TestEnsurePoolFillsBracket:
+    def test_rejects_a_pool_too_small_for_any_bracket(self):
+        with pytest.raises(TournamentRuleError, match="^Need at least 4 ranked films$"):
+            ensure_pool_fills_bracket(8, 3)
+
+    def test_rejects_a_bracket_larger_than_twice_the_pool(self):
+        with pytest.raises(TournamentRuleError, match="^Bracket too large. Max 8 for 5 films$"):
+            ensure_pool_fills_bracket(16, 5)
+
+    def test_allows_a_half_filled_bracket(self):
+        ensure_pool_fills_bracket(16, 8)
+
+
+class TestCurationBookkeeping:
+    def test_reads_defaults_from_a_missing_response(self):
+        assert CurationBookkeeping.read(_tournament()) == CurationBookkeeping("", 0)
+
+    def test_regeneration_keeps_the_theme_hint_and_counts_up(self):
+        tournament = _tournament(llm_response={"_theme_hint": "Noir", "_regen_count": 1})
+        apply_curation(
+            tournament,
+            {"name": "New", "tagline": "t", "theme_description": "d"},
+            CurationBookkeeping.read(tournament).next_regeneration(),
+        )
+
+        assert tournament.name == "New"
+        assert tournament.llm_response["_theme_hint"] == "Noir"
+        assert tournament.llm_response["_regen_count"] == 2
+
+    def test_first_curation_stores_only_the_theme_hint(self):
+        assert CurationBookkeeping("Noir").stamp({"name": "N"}) == {
+            "name": "N",
+            "_theme_hint": "Noir",
+        }

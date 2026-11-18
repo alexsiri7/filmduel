@@ -5,10 +5,11 @@ from __future__ import annotations
 import logging
 import math
 import uuid
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import Select, exists, func, literal_column, select
+from sqlalchemy import Select, delete, exists, func, literal_column, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -19,6 +20,13 @@ from backend.services.duel import apply_elo_result
 from backend.services.ranking import ranked_user_movies_stmt
 
 logger = logging.getLogger(__name__)
+
+MAX_TOURNAMENTS_PER_DAY = 100
+MAX_REGENERATIONS = 3
+
+
+class TournamentRuleError(Exception):
+    """A tournament lifecycle rule refused the requested operation."""
 
 
 # ── AI curation orchestration ────────────────────────────────────────
@@ -81,6 +89,43 @@ async def curate_and_select_films(
     return selected_ums, llm_result
 
 
+@dataclass(frozen=True)
+class CurationBookkeeping:
+    """Server state stored beside the LLM reply in ``Tournament.llm_response``."""
+
+    theme_hint: str = ""
+    regen_count: int = 0
+
+    @classmethod
+    def read(cls, tournament: Tournament) -> CurationBookkeeping:
+        stored = (
+            tournament.llm_response if isinstance(tournament.llm_response, dict) else {}
+        )
+        return cls(
+            theme_hint=stored.get("_theme_hint", ""),
+            regen_count=stored.get("_regen_count", 0),
+        )
+
+    def next_regeneration(self) -> CurationBookkeeping:
+        return CurationBookkeeping(self.theme_hint, self.regen_count + 1)
+
+    def stamp(self, llm_result: dict) -> dict:
+        llm_result["_theme_hint"] = self.theme_hint
+        if self.regen_count:
+            llm_result["_regen_count"] = self.regen_count
+        return llm_result
+
+
+def apply_curation(
+    tournament: Tournament, llm_result: dict, bookkeeping: CurationBookkeeping
+) -> None:
+    """Copy the LLM's bracket metadata onto the tournament and store the reply."""
+    tournament.name = llm_result["name"]
+    tournament.tagline = llm_result.get("tagline")
+    tournament.theme_description = llm_result.get("theme_description")
+    tournament.llm_response = bookkeeping.stamp(llm_result)
+
+
 # ── Pure helpers ──────────────────────────────────────────────────────
 
 
@@ -96,6 +141,78 @@ def max_bracket_size(pool_count: int) -> int | None:
     real film on either side and can never be played.
     """
     return max((s for s in BRACKET_SIZES if s <= 2 * pool_count), default=None)
+
+
+def ensure_pool_fills_bracket(bracket_size: int, pool_size: int) -> None:
+    """Reject a bracket the pool cannot half-fill.
+
+    Below 2x the pool, standard seeding produces round-1 pairings with no real
+    film on either side — matches nothing can ever win, so the tournament can
+    never complete.
+    """
+    max_size = max_bracket_size(pool_size)
+    if max_size is None:
+        raise TournamentRuleError(
+            f"Need at least {BRACKET_SIZES[0] // 2} ranked films"
+        )
+    if bracket_size > max_size:
+        raise TournamentRuleError(
+            f"Bracket too large. Max {max_size} for {pool_size} films"
+        )
+
+
+def ensure_can_regenerate(tournament: Tournament) -> None:
+    if tournament.status != "active":
+        raise TournamentRuleError("Tournament is not active")
+    if not tournament.is_ai_curated:
+        raise TournamentRuleError("Only AI-curated tournaments can be regenerated")
+    if any(m.winner_movie_id is not None and not m.is_bye for m in tournament.matches):
+        raise TournamentRuleError("Cannot regenerate after matches have been played")
+    if CurationBookkeeping.read(tournament).regen_count >= MAX_REGENERATIONS:
+        raise TournamentRuleError(
+            f"Maximum regeneration attempts ({MAX_REGENERATIONS}) reached"
+        )
+
+
+def ensure_can_abandon(tournament: Tournament) -> None:
+    if tournament.status == "abandoned":
+        raise TournamentRuleError("Tournament already abandoned")
+    if tournament.status == "completed":
+        raise TournamentRuleError("Cannot abandon a completed tournament")
+
+
+def next_playable_match(tournament: Tournament) -> TournamentMatch | None:
+    """The earliest unplayed match with both slots filled, in bracket order."""
+    for match in sorted(tournament.matches, key=lambda m: (m.round, m.position)):
+        if (
+            match.movie_a_id is not None
+            and match.movie_b_id is not None
+            and match.winner_movie_id is None
+        ):
+            return match
+    return None
+
+
+def progress_label(tournament: Tournament) -> str:
+    """Human-readable progress for the tournament list."""
+    if tournament.status == "completed":
+        return "Completed"
+    if tournament.status == "abandoned":
+        return "Abandoned"
+
+    matches_by_round: dict[int, list[TournamentMatch]] = {}
+    for m in tournament.matches:
+        matches_by_round.setdefault(m.round, []).append(m)
+
+    for rnd in sorted(matches_by_round):
+        round_matches = matches_by_round[rnd]
+        played = sum(1 for m in round_matches if m.winner_movie_id is not None)
+        if played < len(round_matches):
+            return f"Round {rnd} \u2014 {played}/{len(round_matches)} matches played"
+
+    # All matches played (shouldn't normally reach here for active tournaments)
+    last_round = max(matches_by_round, default=1)
+    return f"Round {last_round} \u2014 0/0 matches played"
 
 
 def generate_seeded_bracket(n: int) -> list[tuple[int, int]]:
@@ -210,6 +327,25 @@ async def count_filtered_ranked_films(
     ).with_only_columns(func.count())
     result = await db.execute(stmt)
     return result.scalar() or 0
+
+
+async def daily_cap_reached(db: AsyncSession, user_id: uuid.UUID) -> bool:
+    """Whether the user has created MAX_TOURNAMENTS_PER_DAY in the last 24h."""
+    window_start = datetime.now(timezone.utc) - timedelta(hours=24)
+    result = await db.execute(
+        select(func.count()).where(
+            Tournament.user_id == user_id,
+            Tournament.created_at >= window_start,
+        )
+    )
+    return result.scalar_one() >= MAX_TOURNAMENTS_PER_DAY
+
+
+async def delete_bracket(db: AsyncSession, tournament_id: uuid.UUID) -> None:
+    await db.execute(
+        delete(TournamentMatch).where(TournamentMatch.tournament_id == tournament_id)
+    )
+    await db.flush()
 
 
 async def create_tournament_bracket(
