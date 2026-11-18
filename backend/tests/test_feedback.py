@@ -170,6 +170,18 @@ class TestSubmitFeedback:
         assert response.status_code == 415
         assert "image" in response.json()["detail"].lower()
 
+    def test_screenshot_encryption_failure_returns_503_and_stores_nothing(self, client):
+        jpeg_data = b"\xff\xd8\xff" + b"\x00" * 10
+        with patch(
+            "backend.routers.feedback.encrypt_token",
+            side_effect=RuntimeError("TOKEN_ENC_KEY missing"),
+        ):
+            response = self._post(client, screenshot=io.BytesIO(jpeg_data))
+        assert response.status_code == 503
+        assert "securely" in response.json()["detail"]
+        assert response._created_reports == []
+        response._db.add.assert_not_called()
+
     def test_screenshot_stored_encrypted(self, client):
         from backend.services.token_crypto import TokenPurpose, decrypt_token
 

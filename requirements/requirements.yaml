@@ -645,7 +645,7 @@ requirements:
     source: back-ported
     acceptance:
       - "A 5.1 MB upload returns 413; a PDF renamed .png returns 415"
-      - "screenshot_data_enc is Fernet ciphertext, decrypted only for admin listing"
+      - "screenshot_data_enc is Fernet ciphertext, decrypted only when a single report's screenshot is viewed (admin GET /api/feedback/admin/{id}/screenshot, owner GET /api/me/feedback/{id}/screenshot under FD-059); the admin and owner listings return metadata only and never decrypt"
       - "Screenshot encryption failure returns 503 rather than storing plaintext"
 
   - id: FD-043
