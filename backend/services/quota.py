@@ -29,10 +29,9 @@ class DailyQuota:
 
 
 class QuotaExceeded(Exception):
-    def __init__(self, quota: DailyQuota, count: int) -> None:
+    def __init__(self, quota: DailyQuota) -> None:
         super().__init__(quota.message)
         self.quota = quota
-        self.count = count
 
 
 async def enforce_daily_quota(
@@ -55,4 +54,4 @@ async def enforce_daily_quota(
     count = await quota.count_since(db, user_id, cutoff)
     if count >= quota.limit:
         logger.warning("%s_hit user_id=%s count=%d", quota.name, user_id, count)
-        raise QuotaExceeded(quota, count)
+        raise QuotaExceeded(quota)

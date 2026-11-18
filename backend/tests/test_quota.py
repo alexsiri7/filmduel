@@ -62,5 +62,4 @@ async def test_at_limit_raises_with_the_quota_message():
     nowait_lock.assert_awaited_once_with(db, "test_daily_cap", user_id)
     lock.assert_not_awaited()
     assert excinfo.value.quota is quota
-    assert excinfo.value.count == LIMIT
     assert str(excinfo.value) == quota.message
