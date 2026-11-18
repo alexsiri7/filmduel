@@ -7,7 +7,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from backend.services.suggest import MIN_RANKED, _build_taste_profile, elo_tier, generate_suggestions, has_enough_ranked
+from backend.services.suggest import (
+    MIN_RANKED,
+    SuggestionError,
+    _build_taste_profile,
+    elo_tier,
+    generate_suggestions,
+    has_enough_ranked,
+)
 
 
 _FAKE_PROFILE = {
@@ -174,7 +181,7 @@ class TestReasonTruncation:
             patch("backend.services.suggest._build_taste_profile", AsyncMock(return_value=_FAKE_PROFILE)),
             patch("backend.services.suggest._get_candidates", AsyncMock(return_value=_FAKE_CANDIDATES)),
             patch("backend.services.suggest._call_llm", AsyncMock(return_value=fake_picks)),
-            pytest.raises(RuntimeError),
+            pytest.raises(SuggestionError),
         ):
             await generate_suggestions(uuid.uuid4(), AsyncMock())
 

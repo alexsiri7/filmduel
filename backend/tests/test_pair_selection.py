@@ -7,7 +7,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from sqlalchemy.dialects import postgresql
 
-from backend.services.pair_selection import CLOSEST_CANDIDATES, select_pair
+from backend.services.pair_selection import (
+    CLOSEST_CANDIDATES,
+    NotEnoughSeenFilmsError,
+    select_pair,
+)
 
 
 def _make_user_movie(elo=None, battles=0, seeded_elo=None, movie_id=None, seen=True):
@@ -46,13 +50,13 @@ def _sql(db, call):
 class TestSelectPair:
     @pytest.mark.asyncio
     async def test_raises_when_no_seen_films(self):
-        with pytest.raises(ValueError, match="Need more seen movies to duel"):
+        with pytest.raises(NotEnoughSeenFilmsError, match="Need more seen movies to duel"):
             await select_pair(_mock_db(None, []), uuid.uuid4(), None)
 
     @pytest.mark.asyncio
     async def test_raises_when_only_one_seen_film(self):
         db = _mock_db(_make_user_movie(), [])
-        with pytest.raises(ValueError, match="Need more seen movies to duel"):
+        with pytest.raises(NotEnoughSeenFilmsError, match="Need more seen movies to duel"):
             await select_pair(db, uuid.uuid4(), None)
 
     @pytest.mark.asyncio

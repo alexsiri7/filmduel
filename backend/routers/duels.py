@@ -14,7 +14,7 @@ from backend.rate_limit import limiter
 from backend.db_models import User
 from backend.schemas import DuelSubmit, DuelResult
 from backend.routers.auth import get_admin_user, require_consent
-from backend.services.duel import process_duel
+from backend.services.duel import MovieNotInPoolError, process_duel
 from backend.services.duel_rejections import record_duel_rejection
 from backend.utils.tokens import decode_pair_token
 from backend.services.retention import purge_old_duels as _purge_old_duels
@@ -73,7 +73,7 @@ async def submit_duel(
             pair_token_digest=pair_token_digest,
         )
         await db.flush()
-    except ValueError:
+    except MovieNotInPoolError:
         record_duel_rejection("invalid_submission", uid)
         raise HTTPException(status_code=400, detail="Invalid duel submission")
     except IntegrityError:

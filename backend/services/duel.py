@@ -21,6 +21,11 @@ from backend.services.elo import effective_elo, update_elo
 
 logger = logging.getLogger(__name__)
 
+
+class MovieNotInPoolError(Exception):
+    """A duel named a film the user has no UserMovie row for."""
+
+
 MIN_SEEN_UNRANKED = 3
 MIN_TOTAL_SEEN = 10
 
@@ -178,7 +183,7 @@ async def get_user_movie(
     result = await db.execute(stmt)
     um = result.scalar_one_or_none()
     if not um:
-        raise ValueError("Movie not in your pool")
+        raise MovieNotInPoolError("Movie not in your pool")
     return um
 
 

@@ -10,7 +10,12 @@ from pydantic import ValidationError
 
 from backend.schemas import TournamentPreview
 from backend.services.elo import ELITE_ELO, MID_ELO, STRONG_ELO
-from backend.services.llm import LLMBusyError, chat_completion, parse_json_response
+from backend.services.llm import (
+    LLMBusyError,
+    LLMNotConfiguredError,
+    chat_completion,
+    parse_json_response,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -129,9 +134,8 @@ async def curate_tournament(
             system_prompt, user_prompt, max_tokens=2000
         )
     except LLMBusyError:
-        raise  # let the router answer 503
-    except ValueError as exc:
-        # LLM_API_KEY not configured
+        raise  # let the app answer 503
+    except LLMNotConfiguredError as exc:
         raise CurationError(f"AI curation is not configured ({exc})")
     except Exception as exc:
         logger.error("LLM request failed during tournament curation: %s", exc)

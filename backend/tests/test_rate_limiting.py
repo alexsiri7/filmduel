@@ -20,6 +20,7 @@ from backend.tests import SPA_HEADERS
 from backend.db import get_db
 from backend.rate_limit import limiter
 from backend.routers.auth import CURRENT_PRIVACY_POLICY_VERSION, get_admin_user, get_current_user
+from backend.services.pair_selection import NotEnoughSeenFilmsError
 from slowapi.errors import RateLimitExceeded
 
 
@@ -168,7 +169,7 @@ def test_get_movie_pair_endpoint_reachable():
     with patch(
         "backend.routers.movies.select_pair", new_callable=AsyncMock
     ) as mock_pair:
-        mock_pair.side_effect = ValueError("not enough films")
+        mock_pair.side_effect = NotEnoughSeenFilmsError("not enough films")
         with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
             resp = client.get("/api/movies/pair")
 

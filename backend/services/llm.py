@@ -9,7 +9,6 @@ import logging
 import time
 
 import httpx
-from fastapi import HTTPException
 
 from backend.config import get_settings
 
@@ -19,22 +18,18 @@ logger = logging.getLogger(__name__)
 class LLMBusyError(Exception):
     """Raised when LLM_MAX_CONCURRENT calls are already in flight (AUD-01).
 
-    Callers must map this to HTTP 503 and must not retry inside the same
-    request: the whole point is to release the pooled DB connection quickly.
+    Callers must let it propagate to the app's 503 handler and must not retry
+    inside the same request: the whole point is to release the pooled DB
+    connection quickly.
     """
+
+
+class LLMNotConfiguredError(Exception):
+    """LLM_API_KEY is not set, so AI features are unavailable."""
 
 
 class LLMResponseError(Exception):
     """The provider replied, but not with a readable chat completion."""
-
-
-def llm_busy_exception() -> HTTPException:
-    """The HTTP 503 callers must raise in response to an LLMBusyError."""
-    return HTTPException(
-        status_code=503,
-        detail="AI features are busy. Please try again in a moment.",
-        headers={"Retry-After": "15"},
-    )
 
 
 _llm_slots: asyncio.Semaphore | None = None
@@ -63,7 +58,7 @@ async def chat_completion(
     """Call the configured chat-completions endpoint. Returns the text response."""
     settings = get_settings()
     if not settings.LLM_API_KEY:
-        raise ValueError(
+        raise LLMNotConfiguredError(
             "LLM_API_KEY is not configured. "
             "Set it in your environment or .env file to enable AI features."
         )
@@ -106,8 +101,6 @@ async def chat_completion(
             data = response.json()
             content = data["choices"][0]["message"].get("content")
         except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
-            # Callers read ValueError as "LLM_API_KEY not configured", so an
-            # unreadable reply (json.JSONDecodeError is a ValueError) must not be one.
             logger.error(
                 "llm_error model=%s elapsed=%.2fs", model_name, time.monotonic() - t0
             )

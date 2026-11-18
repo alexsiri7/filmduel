@@ -4,6 +4,7 @@ import logging
 import pytest
 
 from backend.services.curator import CurationError, elo_tier, sanitize_llm_input
+from backend.services.llm import LLMNotConfiguredError
 
 
 class TestEloTier:
@@ -408,7 +409,7 @@ class TestCurateTournamentFilmIds:
     @pytest.mark.parametrize(
         "side_effect,match",
         [
-            (ValueError("LLM_API_KEY"), "not configured"),
+            (LLMNotConfiguredError("LLM_API_KEY"), "not configured"),
             (RuntimeError("x"), "request failed"),
         ],
     )

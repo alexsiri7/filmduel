@@ -21,6 +21,7 @@ from backend.schemas import (
     RankingsResponse,
     StatsResponse,
 )
+from backend.services.ranking import InvalidFilterError
 from backend.services.rankings import (
     export_rankings_csv,
     get_elo_ratings,
@@ -66,7 +67,7 @@ async def get_rankings(
             offset=offset,
             media_type=media_type,
         )
-    except ValueError:
+    except InvalidFilterError:
         raise HTTPException(status_code=400, detail="Invalid decade format")
     ratings = await get_elo_ratings(
         db, current_user.id, [um.elo for um in user_movies], media_type

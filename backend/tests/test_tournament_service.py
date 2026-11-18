@@ -7,6 +7,8 @@ import pytest
 from sqlalchemy.dialects import postgresql
 
 from backend.db_models import Tournament, TournamentMatch
+from backend.services.curator import CurationError
+from backend.services.ranking import InvalidFilterError
 from backend.services.tournament import (
     MAX_REGENERATIONS,
     CurationBookkeeping,
@@ -114,7 +116,7 @@ class TestGetFilteredRankedFilmsQuery:
     async def test_invalid_decade_raises_before_querying(self):
         db = _db_returning()
 
-        with pytest.raises(ValueError, match="Invalid decade format"):
+        with pytest.raises(InvalidFilterError, match="Invalid decade format"):
             await get_filtered_ranked_films(
                 db, uuid.uuid4(), "decade", "abc", media_type="movie", limit=24
             )
@@ -434,7 +436,7 @@ class TestCurateAndSelectFilmsRejectsThinSelections:
             new_callable=AsyncMock,
             return_value={"name": "T", "film_ids": chosen * 3},
         ):
-            with pytest.raises(ValueError, match="only 3 usable films"):
+            with pytest.raises(CurationError, match="only 3 usable films"):
                 await curate_and_select_films(films, 8, None, None, "")
 
 
@@ -445,7 +447,7 @@ class TestCurateAndSelectFilmsRejectsThinSelections:
 
 class TestValidateMatch:
     def test_rejects_already_played_match(self):
-        """Should raise ValueError for a match that already has a winner."""
+        """Should raise TournamentRuleError for a match that already has a winner."""
         match_id = uuid.uuid4()
         winner_id = uuid.uuid4()
         loser_id = uuid.uuid4()
@@ -460,11 +462,11 @@ class TestValidateMatch:
         tournament.status = "active"
         tournament.matches = [match]
 
-        with pytest.raises(ValueError, match="already played"):
+        with pytest.raises(TournamentRuleError, match="already played"):
             validate_match(tournament, match_id, winner_id)
 
     def test_rejects_winner_not_in_match(self):
-        """Should raise ValueError if winner_id is not movie_a or movie_b."""
+        """Should raise TournamentRuleError if winner_id is not movie_a or movie_b."""
         match_id = uuid.uuid4()
         movie_a = uuid.uuid4()
         movie_b = uuid.uuid4()
@@ -480,7 +482,7 @@ class TestValidateMatch:
         tournament.status = "active"
         tournament.matches = [match]
 
-        with pytest.raises(ValueError, match="must be one of"):
+        with pytest.raises(TournamentRuleError, match="must be one of"):
             validate_match(tournament, match_id, wrong_winner)
 
     def test_returns_loser_id(self):
@@ -517,16 +519,16 @@ class TestValidateMatch:
         tournament.status = "active"
         tournament.matches = [match]
 
-        with pytest.raises(ValueError, match="not ready to play"):
+        with pytest.raises(TournamentRuleError, match="not ready to play"):
             validate_match(tournament, match_id, movie_a)
 
     def test_rejects_inactive_tournament(self):
-        """Should raise ValueError for a non-active tournament."""
+        """Should raise TournamentRuleError for a non-active tournament."""
         tournament = MagicMock()
         tournament.status = "completed"
         tournament.matches = []
 
-        with pytest.raises(ValueError, match="not active"):
+        with pytest.raises(TournamentRuleError, match="not active"):
             validate_match(tournament, uuid.uuid4(), uuid.uuid4())
 
 
@@ -560,6 +562,20 @@ def _locked_movie_id(stmt):
 
 
 class TestRecordMatchWinner:
+    @pytest.mark.asyncio
+    async def test_already_played_match_is_a_rule_error(self):
+        """The locked re-check rejects a double submit with the same error as validate_match."""
+        from backend.services.tournament import record_match_winner
+
+        match_obj = MagicMock(winner_movie_id=uuid.uuid4())
+        db = AsyncMock()
+        db.execute.return_value = MagicMock(scalar_one=MagicMock(return_value=match_obj))
+
+        with pytest.raises(TournamentRuleError, match="^Match already played$"):
+            await record_match_winner(
+                db, uuid.uuid4(), 4, uuid.uuid4(), uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+            )
+
     @pytest.mark.asyncio
     async def test_propagates_winner_to_next_round(self):
         """record_match_winner should propagate the winner into the next round match."""

@@ -31,7 +31,7 @@ from backend.db import get_db  # noqa: E402
 from backend.routers.auth import CURRENT_PRIVACY_POLICY_VERSION, get_current_user  # noqa: E402
 from backend.schemas import DuelOutcome, DuelResult  # noqa: E402
 from backend.services import duel_rejections  # noqa: E402
-from backend.services.duel import ProcessDuelResult  # noqa: E402
+from backend.services.duel import MovieNotInPoolError, ProcessDuelResult  # noqa: E402
 from backend.utils.tokens import PAIR_TOKEN_TTL_SECONDS, encode_pair_token  # noqa: E402
 
 
@@ -356,14 +356,14 @@ class TestSubmitDuel:
         mock_pd.assert_not_called()
 
     def test_process_duel_value_error_returns_generic_400(self, caplog):
-        """ValueError from process_duel must return 400 with generic detail — not str(e)."""
+        """MovieNotInPoolError from process_duel must return 400 with generic detail — not str(e)."""
         mid_a = str(uuid.uuid4())
         mid_b = str(uuid.uuid4())
         token = encode_pair_token(mid_a, mid_b, user_id=str(FAKE_USER.id))
         with patch(
             "backend.routers.duels.process_duel", new_callable=AsyncMock
         ) as mock_pd:
-            mock_pd.side_effect = ValueError("Movie not in your pool: some internal detail")
+            mock_pd.side_effect = MovieNotInPoolError("Movie not in your pool: some internal detail")
             client = TestClient(app, headers=SPA_HEADERS)
             response = client.post(
                 "/api/duels",
@@ -379,6 +379,30 @@ class TestSubmitDuel:
         assert response.json()["detail"] == "Invalid duel submission"
         assert "pool" not in response.json()["detail"]
         _assert_rejection_logged(caplog, "invalid_submission", mid_a, mid_b)
+
+    def test_unexpected_process_duel_error_is_not_a_rejected_submission(self, caplog):
+        """Only MovieNotInPoolError is a bad submission; any other error is a bug and a 500."""
+        mid_a = str(uuid.uuid4())
+        mid_b = str(uuid.uuid4())
+        token = encode_pair_token(mid_a, mid_b, user_id=str(FAKE_USER.id))
+        with patch(
+            "backend.routers.duels.process_duel",
+            new_callable=AsyncMock,
+            side_effect=ValueError("boom"),
+        ):
+            client = TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False)
+            response = client.post(
+                "/api/duels",
+                json={
+                    "movie_a_id": mid_a,
+                    "movie_b_id": mid_b,
+                    "outcome": "a_wins",
+                    "mode": "discovery",
+                    "pair_token": token,
+                },
+            )
+        assert response.status_code == 500
+        assert "invalid_submission" not in caplog.text
 
     def test_submitting_a_served_pair_is_accepted(self):
         """Contract with frontend/src/api.js submitDuel: the ids and next_pair_token
