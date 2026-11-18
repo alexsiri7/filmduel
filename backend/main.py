@@ -27,6 +27,7 @@ from backend.observability import SENTRY_OPTIONS
 from backend.rate_limit import HEALTH_PATH, limiter
 from backend.scheduler import build_scheduler
 from backend.services.duel_rejections import record_duel_rejection
+from backend.services.quota import QuotaExceeded
 from backend.services.tmdb import is_read_access_token
 from backend.routers import (
     auth,
@@ -136,6 +137,11 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(
         status_code=422, content={"detail": _scrub_validation_errors(exc.errors())}
     )
+
+
+@app.exception_handler(QuotaExceeded)
+async def quota_exceeded_handler(request: Request, exc: QuotaExceeded):
+    return JSONResponse(status_code=429, content={"detail": exc.quota.message})
 
 
 # Rate limiting

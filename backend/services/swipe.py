@@ -13,11 +13,34 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.db_models import Movie, SwipeResult, UserMovie
 from backend.schemas import MediaType, SwipeResultItem
 from backend.services.elo import ELITE_ELO, MID_ELO, STRONG_ELO, WEAK_ELO
+from backend.services.quota import DailyQuota
 
 logger = logging.getLogger(__name__)
 
 SESSION_SIZE = 10
 POOL_EXPANSION_THRESHOLD = 50
+
+# Per-user daily cap on swipe_results rows (SEC-21, #589). A session is at most
+# 10 cards, so this allows ~200 sessions/day while bounding 180-day retention growth.
+MAX_SWIPES_PER_DAY = 2000
+
+
+async def _count_swipes_since(
+    db: AsyncSession, user_id: uuid.UUID, cutoff: datetime
+) -> int:
+    stmt = select(func.count()).where(
+        SwipeResult.user_id == user_id,
+        SwipeResult.created_at >= cutoff,
+    )
+    return (await db.execute(stmt)).scalar_one()
+
+
+SWIPE_DAILY_QUOTA = DailyQuota(
+    name="swipe_daily_cap",
+    limit=MAX_SWIPES_PER_DAY,
+    count_since=_count_swipes_since,
+    message=f"Daily swipe limit reached ({MAX_SWIPES_PER_DAY} per 24 hours). Please try again later.",
+)
 
 RatingRange = tuple[float, float]
 

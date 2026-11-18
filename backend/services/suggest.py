@@ -9,15 +9,17 @@ from __future__ import annotations
 import logging
 import uuid
 from collections import defaultdict
+from datetime import datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from backend.db_models import Movie, UserMovie
+from backend.db_models import Movie, Suggestion, UserMovie
 from backend.rate_limit import record_empty_suggestions
 from backend.services.curator import elo_tier, sanitize_llm_input
 from backend.services.llm import chat_completion, parse_json_response
+from backend.services.quota import DailyQuota
 from backend.services.ranking import ranked_user_movies_stmt
 
 logger = logging.getLogger(__name__)
@@ -27,6 +29,27 @@ MIN_RANKED = 20
 NUM_PICKS = 6
 CANDIDATE_LIMIT = 50
 DEFAULT_REASON = "Recommended for you."
+MAX_REGENERATIONS_PER_DAY = 3
+
+
+async def _count_regenerations_since(
+    db: AsyncSession, user_id: uuid.UUID, cutoff: datetime
+) -> int:
+    # One regeneration writes a batch sharing one generated_at.
+    count_stmt = select(func.count(func.distinct(Suggestion.generated_at))).where(
+        Suggestion.user_id == user_id,
+        Suggestion.generated_at > cutoff,
+    )
+    result = await db.execute(count_stmt)
+    return result.scalar() or 0
+
+
+REGENERATION_DAILY_QUOTA = DailyQuota(
+    name="suggestions_regen",
+    limit=MAX_REGENERATIONS_PER_DAY,
+    count_since=_count_regenerations_since,
+    message=f"You can regenerate suggestions up to {MAX_REGENERATIONS_PER_DAY} times per day.",
+)
 
 
 async def _build_taste_profile(

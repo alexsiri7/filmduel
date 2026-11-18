@@ -30,16 +30,16 @@ from backend.schemas import (
 from backend.services.ranking import ranked_user_movies_stmt
 from backend.services.curator import CurationError
 from backend.services.llm import LLMBusyError, llm_busy_exception
+from backend.services.quota import enforce_daily_quota
 from backend.services.tournament import (
     CANDIDATE_POOL_FACTOR,
-    MAX_TOURNAMENTS_PER_DAY,
+    TOURNAMENT_DAILY_QUOTA,
     CurationBookkeeping,
     TournamentRuleError,
     apply_curation,
     count_filtered_ranked_films,
     create_tournament_bracket,
     curate_and_select_films,
-    daily_cap_reached,
     delete_bracket,
     ensure_can_abandon,
     ensure_can_regenerate,
@@ -95,20 +95,6 @@ def _tournament_schema(t: Tournament) -> TournamentSchema:
         completed_at=t.completed_at,
         matches=[_match_schema(m) for m in sorted_matches],
     )
-
-
-async def _enforce_daily_cap(db: AsyncSession, user_id: uuid.UUID) -> None:
-    """Per-user daily creation cap: prevents database bloat DoS (SEC-03)."""
-    # Serialize the cap check per user (SEC-02, #570); held until get_db commits,
-    # so a concurrent request re-counts and 429s instead of also curating.
-    # Non-blocking (AUD-01): a queued waiter would hold a pooled connection
-    # through the LLM call.
-    await acquire_quota_lock_nowait(db, "tournament_daily_cap", user_id)
-    if await daily_cap_reached(db, user_id):
-        raise HTTPException(
-            status_code=429,
-            detail=f"Daily tournament creation limit reached ({MAX_TOURNAMENTS_PER_DAY} per 24 hours). Please try again later.",
-        )
 
 
 @contextmanager
@@ -258,7 +244,8 @@ async def create_tournament(
     if body.ai_curated:
         require_ai_consent(current_user)
 
-    await _enforce_daily_cap(db, uid)
+    # Non-blocking (AUD-01): the request goes on to an LLM call.
+    await enforce_daily_quota(db, TOURNAMENT_DAILY_QUOTA, uid, nowait=True)
     user_movies = await _candidate_pool(
         db, uid, body.filter_type, body.filter_value, body.media_type, body.bracket_size
     )

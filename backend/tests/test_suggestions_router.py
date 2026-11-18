@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 os.environ.setdefault("TOKEN_ENC_KEY", "test-secret-key-for-unit-tests-32b")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
@@ -18,6 +18,7 @@ from backend.tests import SPA_HEADERS
 from backend.db import get_db
 from backend.routers.auth import CURRENT_PRIVACY_POLICY_VERSION, get_current_user
 from backend.schemas import MovieSchema, SuggestionSchema
+from backend.services.suggest import REGENERATION_DAILY_QUOTA
 
 
 def _make_user(*, privacy_policy_accepted: bool = True):
@@ -227,7 +228,7 @@ class TestGetSuggestionsGeneration:
             "backend.routers.suggestions.try_acquire_xact_lock",
             new_callable=AsyncMock,
             return_value=lock,
-        ), patch(
+        ) as self.mock_lock, patch(
             "backend.routers.suggestions._create_suggestions",
             new_callable=AsyncMock,
             return_value=created if created is not None else [MagicMock()],
@@ -262,6 +263,14 @@ class TestGetSuggestionsGeneration:
         assert resp.status_code == 200
         assert resp.json()["status"] == "ready"
         mock_create.assert_awaited_once()
+
+    def test_generation_shares_the_regenerate_quota_lock(self):
+        """GET and POST /regenerate must contend for one advisory lock (AUD-08)."""
+        self._get(active=[], latest=None)
+
+        self.mock_lock.assert_awaited_once_with(
+            ANY, REGENERATION_DAILY_QUOTA.name, self.user.id
+        )
 
     def test_stale_batch_regenerates(self):
         now = datetime.now(timezone.utc)

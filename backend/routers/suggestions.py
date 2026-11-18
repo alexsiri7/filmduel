@@ -13,7 +13,6 @@ from sqlalchemy.orm import joinedload
 
 from backend.config import get_settings
 from backend.db import (
-    acquire_quota_lock_nowait,
     async_session_factory,
     get_db,
     try_acquire_xact_lock,
@@ -28,7 +27,12 @@ from backend.schemas import (
     SuggestionsResponse,
 )
 from backend.services.llm import LLMBusyError, llm_busy_exception
-from backend.services.suggest import generate_suggestions, has_enough_ranked
+from backend.services.quota import enforce_daily_quota
+from backend.services.suggest import (
+    REGENERATION_DAILY_QUOTA,
+    generate_suggestions,
+    has_enough_ranked,
+)
 from backend.services.trakt import TraktClient
 
 logger = logging.getLogger(__name__)
@@ -36,7 +40,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/suggestions", tags=["suggestions"])
 
 STALE_HOURS = 24
-MAX_REGENERATIONS_PER_DAY = 3
 
 
 async def _get_user_suggestion(
@@ -171,7 +174,7 @@ async def get_suggestions(
 
     if latest is None or latest <= cutoff:
         # One generation per user at a time (AUD-08, #690).
-        if not await try_acquire_xact_lock(db, "suggestions_regen", uid):
+        if not await try_acquire_xact_lock(db, REGENERATION_DAILY_QUOTA.name, uid):
             active = await _get_active_suggestions(uid, db, media_type)
             if active:
                 return _ready_response(active)
@@ -228,24 +231,8 @@ async def regenerate_suggestions(
     if not await has_enough_ranked(uid, db, media_type=media_type):
         return SuggestionsResponse(suggestions=[], status="not_enough_films")
 
-    # Serialize the cap check per user (SEC-02, #570). Non-blocking (AUD-01):
-    # a queued waiter would hold a pooled connection through the LLM call.
-    await acquire_quota_lock_nowait(db, "suggestions_regen", uid)
-
-    # Count regenerations in last 24h (by counting distinct generated_at timestamps)
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
-    count_stmt = select(func.count(func.distinct(Suggestion.generated_at))).where(
-        Suggestion.user_id == uid,
-        Suggestion.generated_at > cutoff,
-    )
-    result = await db.execute(count_stmt)
-    regen_count = result.scalar() or 0
-
-    if regen_count >= MAX_REGENERATIONS_PER_DAY:
-        raise HTTPException(
-            status_code=429,
-            detail="You can regenerate suggestions up to 3 times per day.",
-        )
+    # Non-blocking (AUD-01): the request goes on to an LLM call.
+    await enforce_daily_quota(db, REGENERATION_DAILY_QUOTA, uid, nowait=True)
 
     # Dismiss all existing suggestions
     active = await _get_active_suggestions(uid, db, media_type)

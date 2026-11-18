@@ -733,14 +733,14 @@ class TestDataCollectionConsentGuard:
         self._install(user)
 
         with patch(
-            "backend.routers.feedback.acquire_quota_lock", new_callable=AsyncMock
-        ) as mock_lock:
+            "backend.routers.feedback.enforce_daily_quota", new_callable=AsyncMock
+        ) as mock_quota:
             with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post("/api/feedback", data={"title": "t", "description": "d"})
 
         assert resp.status_code == 403
         assert "consent" in resp.json()["detail"].lower()
-        mock_lock.assert_not_awaited()
+        mock_quota.assert_not_awaited()
 
     @pytest.mark.parametrize("action", ["dismiss", "watchlist", "seen"])
     def test_suggestion_actions_require_consent(self, action):
@@ -762,8 +762,8 @@ class TestDataCollectionConsentGuard:
         self._install(user)
 
         with patch(
-            "backend.routers.tournaments.acquire_quota_lock_nowait", new_callable=AsyncMock
-        ) as mock_lock:
+            "backend.routers.tournaments.enforce_daily_quota", new_callable=AsyncMock
+        ) as mock_quota:
             with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.post(
                     "/api/tournaments", json={"ai_curated": False, "bracket_size": 8}
@@ -771,7 +771,7 @@ class TestDataCollectionConsentGuard:
 
         assert resp.status_code == 403
         assert "consent" in resp.json()["detail"].lower()
-        mock_lock.assert_not_awaited()
+        mock_quota.assert_not_awaited()
 
     def test_abandon_tournament_requires_consent(self):
         user = _make_user(privacy_policy_accepted=False)
