@@ -104,7 +104,7 @@ class DuelSubmit(BaseModel):
     movie_b_id: UUID
     outcome: DuelOutcome
     mode: DuelMode = DuelMode.discovery
-    pair_token: Optional[str] = None
+    pair_token: str
 
     @model_validator(mode="after")
     def movies_must_differ(self):

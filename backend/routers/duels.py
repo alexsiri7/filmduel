@@ -25,13 +25,20 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/duels", tags=["duels"])
 
 
+def _submitting_user(request: Request, user: User = Depends(require_consent)) -> User:
+    # FastAPI resolves this before validating the body, so the
+    # RequestValidationError handler can attribute a missing pair token (#943).
+    request.state.user_id = user.id
+    return user
+
+
 @router.post("", response_model=DuelResult)
 @limiter.limit("60/minute")
 async def submit_duel(
     request: Request,
     body: DuelSubmit,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(require_consent),
+    current_user: User = Depends(_submitting_user),
     db: AsyncSession = Depends(get_db),
 ):
     uid = current_user.id
@@ -51,9 +58,6 @@ async def submit_duel(
     )
 
     # Validate pair token before anything else
-    if body.pair_token is None:
-        record_duel_rejection("missing_pair_token", uid)
-        raise HTTPException(status_code=400, detail="Invalid pair token")
     token_ids = decode_pair_token(body.pair_token, user_id=str(uid))
     submitted_ids = {str(movie_a_id), str(movie_b_id)}
     if token_ids is None or token_ids != submitted_ids:

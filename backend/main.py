@@ -26,6 +26,7 @@ from backend.middleware.body_limit import BodyLimitMiddleware
 from backend.observability import SENTRY_OPTIONS
 from backend.rate_limit import HEALTH_PATH, limiter
 from backend.scheduler import build_scheduler
+from backend.services.duel_rejections import record_duel_rejection
 from backend.services.llm import LLMBusyError, LLMNotConfiguredError
 from backend.services.quota import QuotaExceeded
 from backend.services.tmdb import is_read_access_token
@@ -122,6 +123,12 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         return JSONResponse(
             status_code=400,
             content={"detail": "A movie cannot duel against itself"},
+        )
+    if any(e.get("loc", ())[-1:] == ("pair_token",) for e in exc.errors()):
+        record_duel_rejection("missing_pair_token", request.state.user_id)
+        return JSONResponse(
+            status_code=400,
+            content={"detail": "Invalid pair token"},
         )
     logger.warning(
         "validation_error path=%s errors=%s",
