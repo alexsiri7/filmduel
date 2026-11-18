@@ -11,8 +11,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 os.environ.setdefault("TOKEN_ENC_KEY", "test-secret-key-for-unit-tests-32b")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests!!")
 
-from backend.routers.tournaments import _active_progress
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -45,6 +43,14 @@ def _db_execute_side_effect(*, count: int = 0):
         return result
 
     return _execute
+
+
+def _mock_match(round_num: int, winner_id=None):
+    """Create a lightweight mock TournamentMatch."""
+    m = MagicMock()
+    m.round = round_num
+    m.winner_movie_id = winner_id
+    return m
 
 
 def _make_tournament(user_id, **overrides):
@@ -476,55 +482,6 @@ class TestListTournaments:
         assert progress["Done"] == "Completed"
         assert progress["Gone"] == "Abandoned"
         assert progress["Live"] == "Round 1 \u2014 1/2 matches played"
-
-
-# ---------------------------------------------------------------------------
-# _active_progress unit tests
-# ---------------------------------------------------------------------------
-
-
-def _mock_match(round_num: int, winner_id=None):
-    """Create a lightweight mock TournamentMatch."""
-    m = MagicMock()
-    m.round = round_num
-    m.winner_movie_id = winner_id
-    return m
-
-
-class TestActiveProgress:
-    def test_round_1_partially_played(self):
-        matches = [
-            _mock_match(1, winner_id="w1"),
-            _mock_match(1, winner_id=None),
-            _mock_match(1, winner_id=None),
-        ]
-        assert _active_progress(matches) == "Round 1 \u2014 1/3 matches played"
-
-    def test_round_1_complete_round_2_in_progress(self):
-        matches = [
-            _mock_match(1, winner_id="w1"),
-            _mock_match(1, winner_id="w2"),
-            _mock_match(2, winner_id=None),
-        ]
-        assert _active_progress(matches) == "Round 2 \u2014 0/1 matches played"
-
-    def test_no_matches_played(self):
-        matches = [
-            _mock_match(1, winner_id=None),
-            _mock_match(1, winner_id=None),
-        ]
-        assert _active_progress(matches) == "Round 1 \u2014 0/2 matches played"
-
-    def test_empty_matches_list(self):
-        assert _active_progress([]) == "Round 1 \u2014 0/0 matches played"
-
-    def test_all_rounds_complete(self):
-        matches = [
-            _mock_match(1, winner_id="w1"),
-            _mock_match(2, winner_id="w2"),
-        ]
-        result = _active_progress(matches)
-        assert "Round 2" in result
 
 
 # ---------------------------------------------------------------------------

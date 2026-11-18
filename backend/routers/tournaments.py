@@ -4,17 +4,18 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from contextlib import contextmanager
+from typing import Iterator, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from backend.db import acquire_quota_lock_nowait, get_db
 from backend.rate_limit import count_ai_curation_attempt, limiter
-from backend.db_models import Movie, Tournament, TournamentMatch, User
+from backend.db_models import Movie, Tournament, TournamentMatch, User, UserMovie
 from backend.routers.auth import get_current_user, require_ai_consent, require_consent
 from backend.services.sync import sync_ratings_background
 from backend.schemas import (
@@ -31,11 +32,22 @@ from backend.services.curator import CurationError
 from backend.services.llm import LLMBusyError, llm_busy_exception
 from backend.services.tournament import (
     CANDIDATE_POOL_FACTOR,
+    MAX_TOURNAMENTS_PER_DAY,
+    CurationBookkeeping,
+    TournamentRuleError,
+    apply_curation,
     count_filtered_ranked_films,
     create_tournament_bracket,
     curate_and_select_films,
+    daily_cap_reached,
+    delete_bracket,
+    ensure_can_abandon,
+    ensure_can_regenerate,
+    ensure_pool_fills_bracket,
     get_filtered_ranked_films,
     max_bracket_size,
+    next_playable_match,
+    progress_label,
     record_match_winner,
     validate_match,
 )
@@ -85,20 +97,81 @@ def _tournament_schema(t: Tournament) -> TournamentSchema:
     )
 
 
-def _reject_unfillable_bracket(bracket_size: int, pool_size: int) -> None:
-    """Reject a bracket the pool cannot half-fill.
-
-    Below 2x the pool, standard seeding produces round-1 pairings with no real
-    film on either side — matches nothing can ever win, so the tournament can
-    never complete.
-    """
-    max_size = max_bracket_size(pool_size)
-    if max_size is None:
-        raise HTTPException(status_code=400, detail="Need at least 4 ranked films")
-    if bracket_size > max_size:
+async def _enforce_daily_cap(db: AsyncSession, user_id: uuid.UUID) -> None:
+    """Per-user daily creation cap: prevents database bloat DoS (SEC-03)."""
+    # Serialize the cap check per user (SEC-02, #570); held until get_db commits,
+    # so a concurrent request re-counts and 429s instead of also curating.
+    # Non-blocking (AUD-01): a queued waiter would hold a pooled connection
+    # through the LLM call.
+    await acquire_quota_lock_nowait(db, "tournament_daily_cap", user_id)
+    if await daily_cap_reached(db, user_id):
         raise HTTPException(
-            status_code=400,
-            detail=f"Bracket too large. Max {max_size} for {pool_size} films",
+            status_code=429,
+            detail=f"Daily tournament creation limit reached ({MAX_TOURNAMENTS_PER_DAY} per 24 hours). Please try again later.",
+        )
+
+
+@contextmanager
+def _rule_errors_as_400() -> Iterator[None]:
+    try:
+        yield
+    except TournamentRuleError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+async def _candidate_pool(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    filter_type: Optional[FilterType],
+    filter_value: Optional[str],
+    media_type: str,
+    bracket_size: int,
+) -> list[UserMovie]:
+    """The films a bracket of ``bracket_size`` is seeded or curated from.
+
+    The capped length answers the pool-size rule exactly as the full count
+    would: it is at least 24, and a pool of 3x the bracket fills it.
+    """
+    try:
+        user_movies = await get_filtered_ranked_films(
+            db,
+            user_id,
+            filter_type,
+            filter_value,
+            media_type=media_type,
+            limit=bracket_size * CANDIDATE_POOL_FACTOR,
+        )
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid decade format")
+    with _rule_errors_as_400():
+        ensure_pool_fills_bracket(bracket_size, len(user_movies))
+    return user_movies
+
+
+async def _curate(
+    request: Request,
+    user_movies: list[UserMovie],
+    bracket_size: int,
+    filter_type: Optional[FilterType],
+    filter_value: Optional[str],
+    theme_hint: str,
+) -> tuple[list[UserMovie], dict]:
+    # Spend the attempt before the LLM call so failures count (SEC-10, #782).
+    count_ai_curation_attempt(request)
+    try:
+        return await curate_and_select_films(
+            user_movies=user_movies,
+            bracket_size=bracket_size,
+            filter_type=filter_type,
+            filter_value=filter_value,
+            theme_hint=theme_hint,
+        )
+    except LLMBusyError:
+        raise llm_busy_exception()
+    except (ValueError, CurationError) as e:
+        logger.error("AI curation failed: %s", e)
+        raise HTTPException(
+            status_code=500, detail="AI curation failed. Please try again."
         )
 
 
@@ -122,23 +195,6 @@ async def _load_tournament(
     if not tournament:
         raise HTTPException(status_code=404, detail="Tournament not found")
     return tournament
-
-
-def _active_progress(matches: list[TournamentMatch]) -> str:
-    """Return a human-readable progress string for an in-progress tournament."""
-    matches_by_round: dict[int, list[TournamentMatch]] = {}
-    for m in matches:
-        matches_by_round.setdefault(m.round, []).append(m)
-
-    for rnd in sorted(matches_by_round):
-        round_matches = matches_by_round[rnd]
-        played = sum(1 for m in round_matches if m.winner_movie_id is not None)
-        if played < len(round_matches):
-            return f"Round {rnd} \u2014 {played}/{len(round_matches)} matches played"
-
-    # All matches played (shouldn't normally reach here for active tournaments)
-    last_round = max(matches_by_round, default=1)
-    return f"Round {last_round} \u2014 0/0 matches played"
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────
@@ -202,91 +258,36 @@ async def create_tournament(
     if body.ai_curated:
         require_ai_consent(current_user)
 
-    # Serialize the cap check per user (SEC-02, #570); held until get_db commits,
-    # so a concurrent request re-counts and 429s instead of also curating.
-    # Non-blocking (AUD-01): a queued waiter would hold a pooled connection
-    # through the LLM call.
-    await acquire_quota_lock_nowait(db, "tournament_daily_cap", uid)
-
-    # Per-user daily cap: prevent database bloat DoS (SEC-03)
-    window_start = datetime.now(timezone.utc) - timedelta(hours=24)
-    count_stmt = select(func.count()).where(
-        Tournament.user_id == uid,
-        Tournament.created_at >= window_start,
+    await _enforce_daily_cap(db, uid)
+    user_movies = await _candidate_pool(
+        db, uid, body.filter_type, body.filter_value, body.media_type, body.bracket_size
     )
-    result = await db.execute(count_stmt)
-    daily_count = result.scalar_one()
-    if daily_count >= 100:
-        raise HTTPException(
-            status_code=429,
-            detail="Daily tournament creation limit reached (100 per 24 hours). Please try again later.",
-        )
 
-    # The capped length answers both pool checks below exactly as the full
-    # count would: it is at least 24, and a pool of 3x the bracket fills it.
-    try:
-        user_movies = await get_filtered_ranked_films(
-            db,
-            uid,
-            body.filter_type,
-            body.filter_value,
-            media_type=body.media_type,
-            limit=body.bracket_size * CANDIDATE_POOL_FACTOR,
-        )
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid decade format")
-
-    if len(user_movies) < 4:
-        raise HTTPException(status_code=400, detail="Need at least 4 ranked films")
-    _reject_unfillable_bracket(body.bracket_size, len(user_movies))
-
-    # AI curation or standard selection
-    ai_name = None
-    ai_tagline = None
-    ai_theme_description = None
-    ai_llm_response = None
-
-    if body.ai_curated:
-        # Spend the attempt before the LLM call so failures count (SEC-10, #782).
-        count_ai_curation_attempt(request)
-        try:
-            seeded_films, llm_result = await curate_and_select_films(
-                user_movies=user_movies,
-                bracket_size=body.bracket_size,
-                filter_type=body.filter_type,
-                filter_value=body.filter_value,
-                theme_hint=body.name.strip() if body.name else "",
-            )
-        except LLMBusyError:
-            raise llm_busy_exception()
-        except (ValueError, CurationError) as e:
-            logger.error("AI curation failed: %s", e)
-            raise HTTPException(
-                status_code=500, detail="AI curation failed. Please try again."
-            )
-
-        ai_name = llm_result["name"]
-        ai_tagline = llm_result.get("tagline")
-        ai_theme_description = llm_result.get("theme_description")
-        llm_result["_theme_hint"] = body.name.strip() if body.name else ""
-        ai_llm_response = llm_result
-    else:
-        seeded_films = user_movies[: body.bracket_size]
-
-    # Create tournament record
     tournament = Tournament(
         user_id=uid,
-        name=ai_name or body.name,
+        name=body.name,
         filter_type=body.filter_type,
         filter_value=body.filter_value,
         media_type=body.media_type,
         bracket_size=body.bracket_size,
         status="active",
-        tagline=ai_tagline,
-        theme_description=ai_theme_description,
         is_ai_curated=body.ai_curated,
-        llm_response=ai_llm_response,
     )
+    if body.ai_curated:
+        theme_hint = body.name.strip() if body.name else ""
+        seeded_films, llm_result = await _curate(
+            request,
+            user_movies,
+            body.bracket_size,
+            body.filter_type,
+            body.filter_value,
+            theme_hint,
+        )
+        apply_curation(tournament, llm_result, CurationBookkeeping(theme_hint))
+        # An empty AI name falls back to the one the user typed.
+        tournament.name = tournament.name or body.name
+    else:
+        seeded_films = user_movies[: body.bracket_size]
     db.add(tournament)
     await db.flush()
 
@@ -304,7 +305,7 @@ async def regenerate_tournament(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Re-run LLM curation with same candidates. Max 3 regenerations."""
+    """Re-run LLM curation with same candidates, up to MAX_REGENERATIONS times."""
     uid = current_user.id
 
     # Lock this tournament before reading _regen_count so a parallel regenerate
@@ -320,76 +321,30 @@ async def regenerate_tournament(
     # Enforce consent before revealing any business-logic details
     require_ai_consent(current_user)
 
-    if tournament.status != "active":
-        raise HTTPException(status_code=400, detail="Tournament is not active")
+    with _rule_errors_as_400():
+        ensure_can_regenerate(tournament)
 
-    if not tournament.is_ai_curated:
-        raise HTTPException(
-            status_code=400, detail="Only AI-curated tournaments can be regenerated"
-        )
-
-    played_matches = [
-        m for m in tournament.matches if m.winner_movie_id is not None and not m.is_bye
-    ]
-    if played_matches:
-        raise HTTPException(
-            status_code=400, detail="Cannot regenerate after matches have been played"
-        )
-
-    llm_response = tournament.llm_response if isinstance(tournament.llm_response, dict) else {}
-    regen_count = llm_response.get("_regen_count", 0)
-    if regen_count >= 3:
-        raise HTTPException(
-            status_code=400, detail="Maximum regeneration attempts (3) reached"
-        )
-
-    try:
-        user_movies = await get_filtered_ranked_films(
-            db,
-            uid,
-            tournament.filter_type,
-            tournament.filter_value,
-            media_type=tournament.media_type,
-            limit=tournament.bracket_size * CANDIDATE_POOL_FACTOR,
-        )
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid decade format")
-
-    _reject_unfillable_bracket(tournament.bracket_size, len(user_movies))
-
-    original_hint = llm_response.get("_theme_hint", "")
-    # Spend the attempt before the LLM call so failures count (SEC-10, #782).
-    count_ai_curation_attempt(request)
-    try:
-        selected_ums, llm_result = await curate_and_select_films(
-            user_movies=user_movies,
-            bracket_size=tournament.bracket_size,
-            filter_type=tournament.filter_type,
-            filter_value=tournament.filter_value,
-            theme_hint=original_hint,
-        )
-    except LLMBusyError:
-        raise llm_busy_exception()
-    except (ValueError, CurationError) as e:
-        logger.error("AI curation failed during regeneration: %s", e)
-        raise HTTPException(
-            status_code=500, detail="AI curation failed. Please try again."
-        )
-
-    # Delete existing matches
-    await db.execute(
-        delete(TournamentMatch).where(TournamentMatch.tournament_id == tournament_id)
+    user_movies = await _candidate_pool(
+        db,
+        uid,
+        tournament.filter_type,
+        tournament.filter_value,
+        tournament.media_type,
+        tournament.bracket_size,
     )
-    await db.flush()
 
-    # Update tournament metadata
-    llm_result["_regen_count"] = regen_count + 1
-    llm_result["_theme_hint"] = original_hint
-    tournament.name = llm_result["name"]
-    tournament.tagline = llm_result.get("tagline")
-    tournament.theme_description = llm_result.get("theme_description")
-    tournament.llm_response = llm_result
+    bookkeeping = CurationBookkeeping.read(tournament)
+    selected_ums, llm_result = await _curate(
+        request,
+        user_movies,
+        tournament.bracket_size,
+        tournament.filter_type,
+        tournament.filter_value,
+        bookkeeping.theme_hint,
+    )
 
+    await delete_bracket(db, tournament_id)
+    apply_curation(tournament, llm_result, bookkeeping.next_regeneration())
     await create_tournament_bracket(
         db, tournament_id, tournament.bracket_size, selected_ums
     )
@@ -416,27 +371,17 @@ async def list_tournaments(
     result = await db.execute(stmt)
     tournaments = result.unique().scalars().all()
 
-    items = []
-    for t in tournaments:
-        if t.status == "completed":
-            progress = "Completed"
-        elif t.status == "abandoned":
-            progress = "Abandoned"
-        else:
-            progress = _active_progress(t.matches)
-
-        items.append(
-            TournamentListItem(
-                id=str(t.id),
-                name=t.name,
-                bracket_size=t.bracket_size,
-                status=t.status,
-                created_at=t.created_at,
-                progress=progress,
-            )
+    return [
+        TournamentListItem(
+            id=str(t.id),
+            name=t.name,
+            bracket_size=t.bracket_size,
+            status=t.status,
+            created_at=t.created_at,
+            progress=progress_label(t),
         )
-
-    return items
+        for t in tournaments
+    ]
 
 
 @router.get("/{tournament_id}", response_model=TournamentSchema)
@@ -468,16 +413,10 @@ async def get_next_match(
     if tournament.status == "abandoned":
         raise HTTPException(status_code=404, detail="Tournament is abandoned")
 
-    sorted_matches = sorted(tournament.matches, key=lambda m: (m.round, m.position))
-    for match in sorted_matches:
-        if (
-            match.movie_a_id is not None
-            and match.movie_b_id is not None
-            and match.winner_movie_id is None
-        ):
-            return _match_schema(match)
-
-    raise HTTPException(status_code=404, detail="No playable matches found")
+    match = next_playable_match(tournament)
+    if match is None:
+        raise HTTPException(status_code=404, detail="No playable matches found")
+    return _match_schema(match)
 
 
 class MatchResult(BaseModel):
@@ -562,12 +501,8 @@ async def abandon_tournament(
     if not tournament or tournament.user_id != uid:
         raise HTTPException(status_code=404, detail="Tournament not found")
 
-    if tournament.status == "abandoned":
-        raise HTTPException(status_code=400, detail="Tournament already abandoned")
-    if tournament.status == "completed":
-        raise HTTPException(
-            status_code=400, detail="Cannot abandon a completed tournament"
-        )
+    with _rule_errors_as_400():
+        ensure_can_abandon(tournament)
 
     tournament.status = "abandoned"
     return {"status": "abandoned"}
