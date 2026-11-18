@@ -60,11 +60,12 @@ def _override_db():
 
 
 def _assert_rejection_logged(caplog, reason, *movie_ids):
-    """The rejection is warned about (#648) without leaking movie IDs (SEC-15)."""
+    """The rejection is warned about with its user (#648, #943) without leaking movie IDs (SEC-15)."""
+    expected = f"duel_rejected reason={reason} user_id={FAKE_USER.id}"
     assert any(
         r.name == duel_rejections.__name__
         and r.levelno == logging.WARNING
-        and f"reason={reason} " in r.getMessage()
+        and r.getMessage() == expected
         for r in caplog.records
     ), [r.getMessage() for r in caplog.records]
     for record in caplog.records:
