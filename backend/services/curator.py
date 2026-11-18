@@ -9,6 +9,7 @@ import re
 from pydantic import ValidationError
 
 from backend.schemas import TournamentPreview
+from backend.services.elo import ELITE_ELO, MID_ELO, STRONG_ELO
 from backend.services.llm import LLMBusyError, chat_completion, parse_json_response
 
 logger = logging.getLogger(__name__)
@@ -42,11 +43,11 @@ def sanitize_llm_input(text: str, max_len: int = 200) -> str:
 
 def elo_tier(elo: float) -> str:
     """Convert raw ELO to a preference tier for privacy-preserving LLM prompts."""
-    if elo >= 1300:
+    if elo >= ELITE_ELO:
         return "highly preferred"
-    if elo >= 1100:
+    if elo >= STRONG_ELO:
         return "preferred"
-    if elo >= 900:
+    if elo >= MID_ELO:
         return "neutral"
     return "less preferred"
 

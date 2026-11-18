@@ -4,21 +4,23 @@ import logging
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.dialects import postgresql
 
 from backend.db import get_db
 from backend.main import app
-from backend.tests import SPA_HEADERS
 from backend.routers.auth import CURRENT_PRIVACY_POLICY_VERSION, get_current_user
-from backend.routers.swipe import (
+from backend.routers.swipe import MAX_SWIPES_PER_DAY
+from backend.services.duel import should_suggest_swipe
+from backend.services.swipe import (
     BANDS,
-    MAX_SWIPES_PER_DAY,
     _community_rating_range,
     _elo_to_band_index,
+    plan_card_mix,
+    select_swipe_cards,
 )
-from backend.services.duel import should_suggest_swipe
-
+from backend.tests import SPA_HEADERS
 
 # ---------------------------------------------------------------------------
 # _elo_to_band_index
@@ -221,86 +223,94 @@ class TestPurgeSwipeResults:
 
 
 # ---------------------------------------------------------------------------
-# Band-boundary deduplication (SEC-018)
+# plan_card_mix
 # ---------------------------------------------------------------------------
 
 
-class TestBandBoundaryIndexClamping:
-    """Verify that boundary bands produce clamped adjacent indices equal to target."""
+class TestPlanCardMix:
+    def test_no_ranked_films_draws_any_rated_film(self):
+        assert plan_card_mix(None) == [(None, 10)]
 
-    def test_elite_above_clamped_to_self(self):
-        # band_idx=0: max(0, -1) == 0
-        band_idx = 0
-        above_idx = max(0, band_idx - 1)
-        assert above_idx == band_idx, "above_idx should equal target at elite band"
+    def test_mid_band_takes_neighbours_above_and_below(self):
+        assert plan_card_mix(1000) == [
+            ((45.0, 64.9), 6),
+            ((65.0, 79.9), 2),
+            ((25.0, 44.9), 2),
+        ]
 
-    def test_poor_below_clamped_to_self(self):
-        # band_idx=4: min(4, 5) == 4
-        band_idx = 4
-        below_idx = min(len(BANDS) - 1, band_idx + 1)
-        assert below_idx == band_idx, "below_idx should equal target at poor band"
+    def test_out_of_range_elo_defaults_to_mid(self):
+        assert plan_card_mix(-100) == plan_card_mix(1000)
 
-    def test_clamped_ranges_are_identical(self):
-        # When indices are equal, ranges are identical — the source of the duplicate risk
-        band_idx = 0
-        above_idx = max(0, band_idx - 1)
-        assert _community_rating_range(band_idx) == _community_rating_range(above_idx)
+    def test_elite_clamps_above_to_target(self):
+        # SEC-018: the clamped part repeats the target range, so its rows can duplicate.
+        assert plan_card_mix(1300) == [
+            ((80.0, 100.0), 6),
+            ((80.0, 100.0), 2),
+            ((65.0, 79.9), 2),
+        ]
 
-    def test_mid_band_ranges_are_distinct(self):
-        # Middle bands should have distinct adjacent ranges
-        band_idx = 2
-        above_idx = max(0, band_idx - 1)
-        below_idx = min(len(BANDS) - 1, band_idx + 1)
-        assert _community_rating_range(band_idx) != _community_rating_range(above_idx)
-        assert _community_rating_range(band_idx) != _community_rating_range(below_idx)
+    def test_poor_clamps_below_to_target(self):
+        assert plan_card_mix(699) == [
+            ((0.0, 24.9), 6),
+            ((25.0, 44.9), 2),
+            ((0.0, 24.9), 2),
+        ]
 
-    def test_poor_clamped_ranges_are_identical(self):
-        # When below_idx is clamped at poor band (band_idx=4), ranges are identical
-        band_idx = 4
-        below_idx = min(len(BANDS) - 1, band_idx + 1)
-        assert _community_rating_range(band_idx) == _community_rating_range(below_idx)
+    def test_fractional_median_uses_band_of_truncated_elo(self):
+        assert plan_card_mix(1299.9)[0] == ((65.0, 79.9), 6)
 
-
-# ---------------------------------------------------------------------------
-# Deduplication logic (SEC-018 fix)
-# ---------------------------------------------------------------------------
+    def test_counts_fill_the_session(self):
+        assert sum(n for _, n in plan_card_mix(1000, session_size=20)) == 20
+        assert [n for _, n in plan_card_mix(1000, session_size=20)] == [12, 4, 4]
 
 
-class TestDeduplicateRows:
-    """Unit-tests for the seen_ids_set deduplication logic (SEC-018 fix)."""
+class TestSelectSwipeCards:
+    @staticmethod
+    def _db(median_elo, part_results):
+        """Fake db: the first query is the median ELO, the rest return `part_results` in order."""
+        results = iter(part_results)
+        statements: list[str] = []
 
-    def _dedup(self, rows):
-        """Mirror of the dedup block in get_swipe_cards."""
-        return list({row.id: row for row in rows}.values())
+        async def fake_execute(stmt, *args, **kwargs):
+            statements.append(str(stmt.compile(dialect=postgresql.dialect())).lower())
+            result = MagicMock()
+            if len(statements) == 1:
+                result.scalar_one_or_none.return_value = median_elo
+            else:
+                result.all.return_value = next(results)
+            return result
 
-    def _row(self, id_val):
-        r = MagicMock()
-        r.id = id_val
-        return r
+        db = AsyncMock()
+        db.execute = AsyncMock(side_effect=fake_execute)
+        return db, statements
 
-    def test_removes_duplicate_ids(self):
-        rows = [self._row(1), self._row(2), self._row(1)]  # id=1 appears twice
-        result = self._dedup(rows)
-        assert [r.id for r in result] == [1, 2]
+    @staticmethod
+    def _rows(*ids):
+        return [MagicMock(id=i) for i in ids]
 
-    def test_preserves_order_of_first_occurrence(self):
-        rows = [self._row(3), self._row(1), self._row(3), self._row(2)]
-        result = self._dedup(rows)
-        assert [r.id for r in result] == [3, 1, 2]
+    @pytest.mark.asyncio
+    async def test_elite_dedups_clamped_part_and_backfills_once(self):
+        db, statements = self._db(
+            1400, [self._rows(1, 2, 3), self._rows(2, 3), self._rows(4), self._rows(5)]
+        )
 
-    def test_no_duplicates_returns_all(self):
-        rows = [self._row(i) for i in range(10)]
-        result = self._dedup(rows)
-        assert len(result) == 10
+        rows = await select_swipe_cards(db, uuid.uuid4(), "movie")
 
-    def test_empty_input_returns_empty(self):
-        assert self._dedup([]) == []
+        assert [r.id for r in rows] == [1, 2, 3, 4, 5]
+        parts, backfill = statements[1:4], statements[4:]
+        assert all("community_rating between" in sql for sql in parts)
+        assert len(backfill) == 1
+        assert "not in" in backfill[0] and "community_rating" not in backfill[0].split("where")[1]
 
-    def test_all_same_id_returns_one(self):
-        rows = [self._row(42)] * 6
-        result = self._dedup(rows)
-        assert len(result) == 1
-        assert result[0].id == 42
+    @pytest.mark.asyncio
+    async def test_no_ranked_films_draws_rated_films_without_backfill_when_full(self):
+        db, statements = self._db(None, [self._rows(*range(10))])
+
+        rows = await select_swipe_cards(db, uuid.uuid4(), "movie")
+
+        assert len(rows) == 10
+        assert len(statements) == 2
+        assert "community_rating is not null" in statements[1]
 
 
 # ---------------------------------------------------------------------------

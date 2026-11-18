@@ -11,6 +11,12 @@ import math
 K0 = 300
 DEFAULT_ELO = 1000
 
+# Lower bounds of the taste bands shared by swipe card selection and curator tiers.
+ELITE_ELO = 1300
+STRONG_ELO = 1100
+MID_ELO = 900
+WEAK_ELO = 700
+
 
 def k_factor(battles: int) -> float:
     """Return the K factor for a film that has played ``battles`` duels.

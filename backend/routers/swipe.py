@@ -6,51 +6,32 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db import acquire_quota_lock, get_db
-from backend.db_models import Movie, SwipeResult, User, UserMovie
+from backend.db_models import SwipeResult, User
 from backend.rate_limit import limiter
-from backend.config import get_settings
 from backend.routers.auth import get_admin_user, require_consent
 from backend.schemas import MediaType, SwipeCardSchema, SwipeResponse, SwipeSubmit
 from backend.services.duel import compute_next_action
 from backend.services.expand import expand_pool
-from backend.services.retention import purge_old_swipe_results as _purge_old_swipe_results
+from backend.services.retention import (
+    purge_old_swipe_results as _purge_old_swipe_results,
+)
+from backend.services.swipe import (
+    pool_needs_expansion,
+    record_swipes,
+    select_swipe_cards,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/swipe", tags=["swipe"])
 
-# (name, elo_low, elo_high, community_rating_low, community_rating_high)
-# Movie.community_rating is Numeric(4,1), so the upper bounds carry a .9 tenth to
-# reach the next band's lower bound without leaving a value unclassified.
-BANDS = [
-    ("elite", 1300, 9999, 80, 100),
-    ("strong", 1100, 1299, 65, 79.9),
-    ("mid", 900, 1099, 45, 64.9),
-    ("weak", 700, 899, 25, 44.9),
-    ("poor", 0, 699, 0, 24.9),
-]
-
 # Per-user daily cap on swipe_results rows (SEC-21, #589). A session is at most
 # 10 cards, so this allows ~200 sessions/day while bounding 180-day retention growth.
 MAX_SWIPES_PER_DAY = 2000
-
-
-def _elo_to_band_index(elo: int) -> int:
-    """Map an ELO value to a band index (0=elite .. 4=poor)."""
-    for i, (_, low, high, _, _) in enumerate(BANDS):
-        if low <= elo <= high:
-            return i
-    return 2  # default to mid
-
-
-def _community_rating_range(band_index: int) -> tuple[float, float]:
-    """Return (low, high) community rating for a band index."""
-    _, _, _, cr_low, cr_high = BANDS[band_index]
-    return float(cr_low), float(cr_high)
 
 
 @router.get("/cards", response_model=list[SwipeCardSchema])
@@ -65,104 +46,7 @@ async def get_swipe_cards(
     uid = current_user.id
     logger.info("swipe_cards_requested user_id=%s", uid)
 
-    # Find user's median ELO to determine taste band (scoped to media_type)
-    median_stmt = (
-        select(func.percentile_cont(0.5).within_group(UserMovie.elo))
-        .join(Movie, UserMovie.movie_id == Movie.id)
-        .where(
-            UserMovie.user_id == uid,
-            UserMovie.elo.is_not(None),
-            Movie.media_type == media_type,
-        )
-    )
-    result = await db.execute(median_stmt)
-    median_elo = result.scalar_one_or_none()
-
-    # Base query: unknown films for this user (must have poster), filtered by media_type
-    base = (
-        select(
-            Movie.id,
-            Movie.trakt_id,
-            Movie.title,
-            Movie.year,
-            Movie.genres,
-            Movie.poster_url,
-            Movie.community_rating,
-        )
-        .join(UserMovie, UserMovie.movie_id == Movie.id)
-        .where(
-            UserMovie.user_id == uid,
-            UserMovie.seen.is_(None),
-            Movie.poster_url.isnot(None),
-            Movie.media_type == media_type,
-        )
-    )
-
-    if median_elo is None:
-        # DEBUG, not INFO: user_id + preference data is behavioral personal data (SEC-15, #583).
-        logger.debug("swipe_band_selection user_id=%s band=none (no ranked films)", uid)
-        # No ranked films yet — pick randomly from rated films
-        stmt = (
-            base.where(Movie.community_rating.isnot(None))
-            .order_by(func.random())
-            .limit(10)
-        )
-        result = await db.execute(stmt)
-        rows = result.all()
-        # Backfill with random if not enough rated films
-        if len(rows) < 10:
-            seen_ids = [r.id for r in rows]
-            backfill = base.order_by(func.random()).limit(10 - len(rows))
-            if seen_ids:
-                backfill = backfill.where(Movie.id.notin_(seen_ids))
-            result = await db.execute(backfill)
-            rows.extend(result.all())
-    else:
-        # Band-weighted selection: 60% target, 20% above, 20% below
-        band_idx = _elo_to_band_index(int(median_elo))
-        logger.debug(
-            "swipe_band_selection user_id=%s median_elo=%s band=%s",
-            uid,
-            median_elo,
-            BANDS[band_idx][0],
-        )
-
-        target_range = _community_rating_range(band_idx)
-        above_idx = max(0, band_idx - 1)
-        below_idx = min(len(BANDS) - 1, band_idx + 1)
-        above_range = _community_rating_range(above_idx)
-        below_range = _community_rating_range(below_idx)
-
-        rows = []
-        for cr_range, limit in [
-            (target_range, 6),
-            (above_range, 2),
-            (below_range, 2),
-        ]:
-            stmt = (
-                base.where(
-                    Movie.community_rating >= cr_range[0],
-                    Movie.community_rating <= cr_range[1],
-                )
-                .order_by(func.random())
-                .limit(limit)
-            )
-            result = await db.execute(stmt)
-            rows.extend(result.all())
-
-        # Deduplicate: boundary bands (elite/poor) clamp above/below index to target,
-        # so two queries can return the same movies.
-        rows = list({row.id: row for row in rows}.values())
-
-        # If we didn't get enough from banded selection, backfill randomly
-        if len(rows) < 10:
-            seen_ids = [r.id for r in rows]
-            backfill_stmt = base.order_by(func.random()).limit(10 - len(rows))
-            if seen_ids:
-                backfill_stmt = backfill_stmt.where(Movie.id.notin_(seen_ids))
-            result = await db.execute(backfill_stmt)
-            rows.extend(result.all())
-
+    rows = await select_swipe_cards(db, uid, media_type)
     logger.info("swipe_cards_result user_id=%s cards_returned=%d", uid, len(rows))
 
     if not rows:
@@ -217,75 +101,24 @@ async def submit_swipe_results(
             detail=f"Daily swipe limit reached ({MAX_SWIPES_PER_DAY} per 24 hours). Please try again later.",
         )
 
-    seen_count = 0
-    unseen_count = 0
-    skipped = 0
-
-    # Collapse repeated movie_ids so one batch writes at most one row per movie.
-    seen_by_movie = {item.movie_id: item.seen for item in body.results}
-
-    for movie_id, seen in seen_by_movie.items():
-        # Only unresolved rows are accepted (SEC-21, #589): a resolved movie is
-        # skipped rather than rejected, because a duel or mark-seen in another tab
-        # can legitimately resolve a served card before this batch lands, and the
-        # counts in the response already make partial application visible.
-        stmt = select(UserMovie).where(
-            UserMovie.user_id == uid,
-            UserMovie.movie_id == movie_id,
-            UserMovie.seen.is_(None),
-        )
-        result = await db.execute(stmt)
-        um = result.scalar_one_or_none()
-        if um is None:
-            skipped += 1
-            continue
-        um.seen = seen
-        um.updated_at = now
-
-        # Insert swipe_results record
-        sr = SwipeResult(user_id=uid, movie_id=movie_id, seen=seen)
-        db.add(sr)
-
-        if seen:
-            seen_count += 1
-        else:
-            unseen_count += 1
-
+    tally = await record_swipes(db, uid, body.results)
     next_action = await compute_next_action(db, uid, media_type)
 
     logger.debug(
         "swipe_submit user_id=%s seen_count=%d unseen_count=%d next_action=%s",
         uid,
-        seen_count,
-        unseen_count,
+        tally.seen,
+        tally.unseen,
         next_action,
     )
-    if skipped:
-        logger.debug("swipe_submit_skipped user_id=%s skipped=%d", uid, skipped)
+    if tally.skipped:
+        logger.debug("swipe_submit_skipped user_id=%s skipped=%d", uid, tally.skipped)
 
-    # Check if pool needs expansion (scoped by media_type)
-    unknown_stmt = (
-        select(func.count())
-        .select_from(UserMovie)
-        .join(Movie, UserMovie.movie_id == Movie.id)
-        .where(
-            UserMovie.user_id == uid,
-            UserMovie.seen.is_(None),
-            Movie.media_type == media_type,
-        )
-    )
-    unknown_count = (await db.execute(unknown_stmt)).scalar() or 0
-
-    if unknown_count < 50:
-        logger.info(
-            "swipe_pool_low user_id=%s unknown_count=%d triggering_expansion",
-            uid,
-            unknown_count,
-        )
+    if await pool_needs_expansion(db, uid, media_type):
         background_tasks.add_task(expand_pool, uid, media_type)
 
     return SwipeResponse(
-        seen_count=seen_count, unseen_count=unseen_count, next_action=next_action
+        seen_count=tally.seen, unseen_count=tally.unseen, next_action=next_action
     )
 
 
