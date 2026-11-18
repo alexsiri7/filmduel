@@ -443,7 +443,7 @@ class TestSubmitFeedbackRateLimit:
 
     def test_submit_feedback_daily_cap_returns_429(self, client):
         """submit_feedback returns 429 when user has hit the daily cap."""
-        from backend.routers.feedback import MAX_FEEDBACK_PER_DAY
+        from backend.services.feedback import MAX_FEEDBACK_PER_DAY
 
         fake_user = _make_user()
         mock_db = _make_db()

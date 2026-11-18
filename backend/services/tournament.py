@@ -6,7 +6,7 @@ import logging
 import math
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import Select, delete, exists, func, literal_column, select
@@ -17,12 +17,34 @@ from backend.db_models import Movie, Tournament, TournamentMatch, UserMovie
 from backend.schemas import FilterType
 from backend.services.curator import curate_tournament
 from backend.services.duel import apply_elo_result, lock_user_movie_pair
+from backend.services.quota import DailyQuota
 from backend.services.ranking import ranked_user_movies_stmt
 
 logger = logging.getLogger(__name__)
 
 MAX_TOURNAMENTS_PER_DAY = 100
 MAX_REGENERATIONS = 3
+
+
+async def _count_tournaments_since(
+    db: AsyncSession, user_id: uuid.UUID, cutoff: datetime
+) -> int:
+    result = await db.execute(
+        select(func.count()).where(
+            Tournament.user_id == user_id,
+            Tournament.created_at >= cutoff,
+        )
+    )
+    return result.scalar_one()
+
+
+# Per-user daily creation cap: prevents database bloat DoS (SEC-03).
+TOURNAMENT_DAILY_QUOTA = DailyQuota(
+    name="tournament_daily_cap",
+    limit=MAX_TOURNAMENTS_PER_DAY,
+    count_since=_count_tournaments_since,
+    message=f"Daily tournament creation limit reached ({MAX_TOURNAMENTS_PER_DAY} per 24 hours). Please try again later.",
+)
 
 
 class TournamentRuleError(Exception):
@@ -327,18 +349,6 @@ async def count_filtered_ranked_films(
     ).with_only_columns(func.count())
     result = await db.execute(stmt)
     return result.scalar() or 0
-
-
-async def daily_cap_reached(db: AsyncSession, user_id: uuid.UUID) -> bool:
-    """Whether the user has created MAX_TOURNAMENTS_PER_DAY in the last 24h."""
-    window_start = datetime.now(timezone.utc) - timedelta(hours=24)
-    result = await db.execute(
-        select(func.count()).where(
-            Tournament.user_id == user_id,
-            Tournament.created_at >= window_start,
-        )
-    )
-    return result.scalar_one() >= MAX_TOURNAMENTS_PER_DAY
 
 
 async def delete_bracket(db: AsyncSession, tournament_id: uuid.UUID) -> None:

@@ -11,7 +11,7 @@ from sqlalchemy.dialects import postgresql
 from backend.db import get_db
 from backend.main import app
 from backend.routers.auth import CURRENT_PRIVACY_POLICY_VERSION, get_current_user
-from backend.routers.swipe import MAX_SWIPES_PER_DAY
+from backend.services.swipe import MAX_SWIPES_PER_DAY
 from backend.services.duel import should_suggest_swipe
 from backend.services.swipe import (
     BANDS,

@@ -17,10 +17,10 @@ from fastapi import (
     Request,
     UploadFile,
 )
-from sqlalchemy import func, select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.db import acquire_quota_lock, get_db
+from backend.db import get_db
 from backend.db_models import FeedbackReport, User
 from backend.rate_limit import limiter
 from backend.routers.auth import get_admin_user, require_consent
@@ -31,7 +31,8 @@ from backend.schemas import (
 )
 from backend.services.token_crypto import TokenPurpose, encrypt_token
 from backend.services.retention import purge_expired_screenshots as _purge_expired_screenshots
-from backend.services.feedback import FEEDBACK_CAP_WINDOW, safe_decrypt_screenshot
+from backend.services.feedback import FEEDBACK_DAILY_QUOTA, safe_decrypt_screenshot
+from backend.services.quota import enforce_daily_quota
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,6 @@ router = APIRouter(prefix="/api/feedback", tags=["feedback"])
 
 MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024  # 5 MB
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
-MAX_FEEDBACK_PER_DAY = 20  # per-user daily cap
 
 # Magic bytes for allowed image types
 _IMAGE_SIGNATURES = {
@@ -78,33 +78,10 @@ async def submit_feedback(
     - slowapi: 5 requests/hour (by IP/user via @limiter.limit; storage per RATE_LIMIT_STORAGE_URI)
     - DB guard: MAX_FEEDBACK_PER_DAY (20) submissions per user in any rolling 24-hour window
 
-    Both limits return HTTP 429. The DB guard uses `or 0` to handle None
-    returned by db.scalar() on drivers that return NULL for an empty count.
-    The DB guard is serialized per user with a transaction-scoped advisory lock.
+    Both limits return HTTP 429. The DB guard is FEEDBACK_DAILY_QUOTA, enforced
+    through enforce_daily_quota.
     """
-    # Serialize the count-then-insert per user so parallel requests cannot all
-    # read the same count and bypass the cap (SEC-02, #570).
-    await acquire_quota_lock(db, "feedback_daily_cap", current_user.id)
-
-    cutoff = datetime.now(timezone.utc) - FEEDBACK_CAP_WINDOW
-    daily_count: int = (
-        await db.scalar(
-            select(func.count()).where(
-                FeedbackReport.user_id == current_user.id,
-                FeedbackReport.created_at >= cutoff,
-            )
-        )
-    ) or 0
-    if daily_count >= MAX_FEEDBACK_PER_DAY:
-        logger.warning(
-            "feedback_daily_cap_hit user_id=%s count=%d",
-            current_user.id,
-            daily_count,
-        )
-        raise HTTPException(
-            status_code=429,
-            detail=f"Feedback limit reached. You may submit up to {MAX_FEEDBACK_PER_DAY} reports per day.",
-        )
+    await enforce_daily_quota(db, FEEDBACK_DAILY_QUOTA, current_user.id, nowait=False)
 
     screenshot_data_enc = None
     if screenshot and screenshot.filename:
