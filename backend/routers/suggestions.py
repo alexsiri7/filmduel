@@ -174,7 +174,7 @@ async def get_suggestions(
 
     if latest is None or latest <= cutoff:
         # One generation per user at a time (AUD-08, #690).
-        if not await try_acquire_xact_lock(db, "suggestions_regen", uid):
+        if not await try_acquire_xact_lock(db, REGENERATION_DAILY_QUOTA.name, uid):
             active = await _get_active_suggestions(uid, db, media_type)
             if active:
                 return _ready_response(active)
