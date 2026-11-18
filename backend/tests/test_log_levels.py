@@ -14,6 +14,7 @@ SOURCE_FILES = [
     REPO_ROOT / "backend" / "routers" / "duels.py",
     REPO_ROOT / "backend" / "services" / "duel.py",
     REPO_ROOT / "backend" / "routers" / "swipe.py",
+    REPO_ROOT / "backend" / "services" / "swipe.py",
     REPO_ROOT / "backend" / "services" / "suggest.py",
     REPO_ROOT / "backend" / "services" / "tournament.py",
 ]
