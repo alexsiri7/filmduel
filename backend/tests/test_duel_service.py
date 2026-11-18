@@ -11,11 +11,14 @@ import pytest
 
 from sqlalchemy.dialects import postgresql
 
-from backend.db_models import Duel
+from backend.db_models import Duel, UserMovie
+from backend.schemas import DuelMode, DuelOutcome
 from backend.services.duel import (
     MIN_SEEN_UNRANKED,
     MIN_TOTAL_SEEN,
+    apply_outcome,
     get_user_movie,
+    lock_user_movie_pair,
     process_duel,
     should_suggest_swipe,
 )
@@ -78,6 +81,99 @@ def _make_fake_execute(
         )
 
     return fake_execute
+
+
+# ---------------------------------------------------------------------------
+# apply_outcome — the five-outcome rules on plain UserMovie rows, no database
+# ---------------------------------------------------------------------------
+
+NOW = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+
+def _pair(*, a_battles=0, b_battles=0, a_seen=None, b_seen=None):
+    return (
+        UserMovie(movie_id=uuid.uuid4(), battles=a_battles, seen=a_seen),
+        UserMovie(movie_id=uuid.uuid4(), battles=b_battles, seen=b_seen),
+    )
+
+
+@pytest.mark.parametrize(
+    ("outcome", "winner_is_a"), [(DuelOutcome.a_wins, True), (DuelOutcome.b_wins, False)]
+)
+def test_apply_outcome_decisive_ranks_both_and_names_the_winner(outcome, winner_is_a):
+    um_a, um_b = _pair(a_battles=2)
+
+    effect = apply_outcome(um_a, um_b, outcome, NOW)
+
+    assert (um_a.seen, um_b.seen) == (True, True)
+    assert effect.winner_and_loser == ((um_a, um_b) if winner_is_a else (um_b, um_a))
+    assert effect.pair_type == "ranked_vs_unranked"
+
+
+@pytest.mark.parametrize("seen_is_a", [True, False])
+def test_apply_outcome_only_one_seen_marks_the_other_unseen(seen_is_a):
+    um_a, um_b = _pair()
+    outcome = DuelOutcome.a_only if seen_is_a else DuelOutcome.b_only
+
+    effect = apply_outcome(um_a, um_b, outcome, NOW)
+
+    assert (um_a.seen, um_b.seen) == ((True, False) if seen_is_a else (False, True))
+    assert effect.winner_and_loser is None
+    assert um_a.updated_at == um_b.updated_at == NOW
+
+
+@pytest.mark.parametrize("seen_is_a", [True, False])
+def test_apply_outcome_only_one_seen_keeps_a_ranked_other_seen(seen_is_a):
+    um_a, um_b = _pair(a_battles=3, b_battles=3, a_seen=True, b_seen=True)
+    outcome = DuelOutcome.a_only if seen_is_a else DuelOutcome.b_only
+
+    effect = apply_outcome(um_a, um_b, outcome, NOW)
+
+    assert (um_a.seen, um_b.seen) == (True, True)
+    assert effect.pair_type == "ranked_vs_ranked"
+
+
+def test_apply_outcome_neither_marks_only_unranked_films_unseen():
+    um_a, um_b = _pair(a_battles=4, a_seen=True, b_seen=None)
+
+    effect = apply_outcome(um_a, um_b, DuelOutcome.neither, NOW)
+
+    assert (um_a.seen, um_b.seen) == (True, False)
+    assert effect.winner_and_loser is None
+    assert um_a.updated_at == um_b.updated_at == NOW
+
+
+# ---------------------------------------------------------------------------
+# lock_user_movie_pair
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("a_is_lower_id", [True, False])
+async def test_lock_user_movie_pair_locks_in_uuid_order_and_returns_in_argument_order(
+    a_is_lower_id,
+):
+    uid = uuid.uuid4()
+    low_id, high_id = sorted([uuid.uuid4(), uuid.uuid4()])
+    mid_a, mid_b = (low_id, high_id) if a_is_lower_id else (high_id, low_id)
+    um_a = _make_user_movie(uid, mid_a)
+    um_b = _make_user_movie(uid, mid_b)
+    by_id = {mid_a: um_a, mid_b: um_b}
+    locked = []
+
+    async def fake_execute(stmt):
+        assert "FOR UPDATE" in str(stmt.compile(dialect=postgresql.dialect())).upper()
+        movie_id = stmt.compile().params["movie_id_1"]
+        locked.append(movie_id)
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = by_id[movie_id]
+        return result
+
+    db = AsyncMock()
+    db.execute = fake_execute
+
+    assert await lock_user_movie_pair(db, uid, mid_a, mid_b) == (um_a, um_b)
+    assert locked == [low_id, high_id]
 
 
 # ---------------------------------------------------------------------------
@@ -161,7 +257,9 @@ async def test_process_duel_a_wins_elo():
     db = AsyncMock()
     db.execute = _make_fake_execute(um_a, um_b)
 
-    result = await process_duel(db, uid, mid_a, mid_b, "a_wins", "discovery")
+    result = await process_duel(
+        db, uid, mid_a, mid_b, DuelOutcome.a_wins, DuelMode.discovery
+    )
 
     # Equal ratings, K = 300/sqrt(6) each: +-61.24, shown rounded.
     assert result.api_result.movie_a_elo_delta == 61
@@ -185,7 +283,9 @@ async def test_process_duel_delta_matches_the_displayed_ratings():
     db = AsyncMock()
     db.execute = _make_fake_execute(um_a, um_b)
 
-    result = await process_duel(db, uid, mid_a, mid_b, "a_wins", "discovery")
+    result = await process_duel(
+        db, uid, mid_a, mid_b, DuelOutcome.a_wins, DuelMode.discovery
+    )
 
     assert um_a.elo == pytest.approx(1045.63, abs=0.01)
     assert um_b.elo == pytest.approx(955.17, abs=0.01)
@@ -208,7 +308,9 @@ async def test_process_duel_is_not_logged_at_info(caplog):
     db.execute = _make_fake_execute(um_a, um_b)
 
     with caplog.at_level(logging.DEBUG, logger="backend.services.duel"):
-        await process_duel(db, uid, mid_a, mid_b, "a_wins", "discovery")
+        await process_duel(
+        db, uid, mid_a, mid_b, DuelOutcome.a_wins, DuelMode.discovery
+    )
 
     for record in caplog.records:
         if record.levelno >= logging.INFO:
@@ -238,7 +340,9 @@ async def test_process_duel_a_wins_reversed_sort_order():
     db = AsyncMock()
     db.execute = _make_fake_execute(um_a, um_b)
 
-    result = await process_duel(db, uid, mid_a, mid_b, "a_wins", "discovery")
+    result = await process_duel(
+        db, uid, mid_a, mid_b, DuelOutcome.a_wins, DuelMode.discovery
+    )
 
     # A is the winner — must gain ELO regardless of UUID sort order
     assert result.api_result.movie_a_elo_delta > 0, "A (winner) should gain ELO"
@@ -267,7 +371,9 @@ async def test_process_duel_b_wins_elo():
     db = AsyncMock()
     db.execute = _make_fake_execute(um_a, um_b)
 
-    result = await process_duel(db, uid, mid_a, mid_b, "b_wins", "discovery")
+    result = await process_duel(
+        db, uid, mid_a, mid_b, DuelOutcome.b_wins, DuelMode.discovery
+    )
 
     assert result.api_result.movie_b_elo_delta > 0, "Winner B should gain ELO"
     assert result.api_result.movie_a_elo_delta < 0, "Loser A should lose ELO"
@@ -293,7 +399,9 @@ async def test_process_duel_creates_duel_record():
     db = AsyncMock()
     db.execute = _make_fake_execute(um_a, um_b)
 
-    await process_duel(db, uid, mid_a, mid_b, "a_wins", "ranked")
+    await process_duel(
+        db, uid, mid_a, mid_b, DuelOutcome.a_wins, DuelMode.discovery
+    )
 
     # db.add is called for the Duel record
     assert db.add.called
@@ -306,12 +414,14 @@ async def test_process_duel_creates_duel_record():
     assert duel.user_id == uid
     assert duel.winner_movie_id == mid_a
     assert duel.loser_movie_id == mid_b
-    assert duel.mode == "ranked"
+    assert duel.mode == "discovery"
     assert duel.outcome is None
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("outcome", ["a_only", "b_only", "neither"])
+@pytest.mark.parametrize(
+    "outcome", [DuelOutcome.a_only, DuelOutcome.b_only, DuelOutcome.neither]
+)
 async def test_process_duel_records_skip_outcome(outcome):
     """Skip duels carry no movie ids, so the outcome is the only record of them."""
     uid = uuid.uuid4()
@@ -324,7 +434,7 @@ async def test_process_duel_records_skip_outcome(outcome):
     db = AsyncMock()
     db.execute = _make_fake_execute(um_a, um_b)
 
-    await process_duel(db, uid, mid_a, mid_b, outcome, "ranked")
+    await process_duel(db, uid, mid_a, mid_b, outcome, DuelMode.discovery)
 
     duel_adds = [
         call.args[0] for call in db.add.call_args_list if isinstance(call.args[0], Duel)
@@ -336,7 +446,7 @@ async def test_process_duel_records_skip_outcome(outcome):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("outcome", ["a_wins", "b_wins", "a_only", "b_only", "neither"])
+@pytest.mark.parametrize("outcome", list(DuelOutcome))
 async def test_process_duel_records_the_consumed_pair_token(outcome):
     uid = uuid.uuid4()
     mid_a = uuid.uuid4()
@@ -349,7 +459,7 @@ async def test_process_duel_records_the_consumed_pair_token(outcome):
     db.execute = _make_fake_execute(um_a, um_b)
 
     await process_duel(
-        db, uid, mid_a, mid_b, outcome, "discovery", pair_token_digest="digest"
+        db, uid, mid_a, mid_b, outcome, DuelMode.discovery, pair_token_digest="digest"
     )
 
     (duel,) = [
@@ -375,7 +485,9 @@ async def test_next_action_swipe_when_few_seen_unranked():
     db = AsyncMock()
     db.execute = _make_fake_execute(um_a, um_b, seen_unranked=2, total_seen=20)
 
-    result = await process_duel(db, uid, mid_a, mid_b, "a_wins", "discovery")
+    result = await process_duel(
+        db, uid, mid_a, mid_b, DuelOutcome.a_wins, DuelMode.discovery
+    )
     assert result.api_result.next_action == "swipe"
 
 
@@ -392,7 +504,9 @@ async def test_next_action_duel_when_enough_seen_unranked():
     db = AsyncMock()
     db.execute = _make_fake_execute(um_a, um_b, seen_unranked=10, total_seen=20)
 
-    result = await process_duel(db, uid, mid_a, mid_b, "a_wins", "discovery")
+    result = await process_duel(
+        db, uid, mid_a, mid_b, DuelOutcome.a_wins, DuelMode.discovery
+    )
     assert result.api_result.next_action == "duel"
 
 
@@ -414,7 +528,9 @@ async def test_process_duel_uses_seeded_elo_when_no_elo():
     db = AsyncMock()
     db.execute = _make_fake_execute(um_a, um_b)
 
-    result = await process_duel(db, uid, mid_a, mid_b, "a_wins", "discovery")
+    result = await process_duel(
+        db, uid, mid_a, mid_b, DuelOutcome.a_wins, DuelMode.discovery
+    )
 
     # A (1200) beats B (800) — A should gain less since heavily favored
     assert result.api_result.movie_a_elo_delta > 0
@@ -442,7 +558,9 @@ async def test_process_duel_a_only_skips_elo():
     db = AsyncMock()
     db.execute = _make_fake_execute(um_a, um_b)
 
-    result = await process_duel(db, uid, mid_a, mid_b, "a_only", "discovery")
+    result = await process_duel(
+        db, uid, mid_a, mid_b, DuelOutcome.a_only, DuelMode.discovery
+    )
 
     assert result.api_result.movie_a_elo_delta == 0
     assert result.api_result.movie_b_elo_delta == 0
@@ -471,7 +589,9 @@ async def test_process_duel_b_only_skips_elo():
     db = AsyncMock()
     db.execute = _make_fake_execute(um_a, um_b)
 
-    result = await process_duel(db, uid, mid_a, mid_b, "b_only", "discovery")
+    result = await process_duel(
+        db, uid, mid_a, mid_b, DuelOutcome.b_only, DuelMode.discovery
+    )
 
     assert result.api_result.movie_a_elo_delta == 0
     assert result.api_result.movie_b_elo_delta == 0
@@ -499,7 +619,9 @@ async def test_process_duel_neither_skips_elo():
     db = AsyncMock()
     db.execute = _make_fake_execute(um_a, um_b)
 
-    result = await process_duel(db, uid, mid_a, mid_b, "neither", "discovery")
+    result = await process_duel(
+        db, uid, mid_a, mid_b, DuelOutcome.neither, DuelMode.discovery
+    )
 
     assert result.api_result.movie_a_elo_delta == 0
     assert result.api_result.movie_b_elo_delta == 0
@@ -528,7 +650,9 @@ async def test_process_duel_a_only_preserves_seen_for_ranked_b():
     db = AsyncMock()
     db.execute = _make_fake_execute(um_a, um_b)
 
-    await process_duel(db, uid, mid_a, mid_b, "a_only", "discovery")
+    await process_duel(
+        db, uid, mid_a, mid_b, DuelOutcome.a_only, DuelMode.discovery
+    )
 
     # B is already ranked — seen must not be overridden
     assert um_b.seen is True
@@ -547,7 +671,9 @@ async def test_process_duel_b_only_preserves_seen_for_ranked_a():
     db = AsyncMock()
     db.execute = _make_fake_execute(um_a, um_b)
 
-    await process_duel(db, uid, mid_a, mid_b, "b_only", "discovery")
+    await process_duel(
+        db, uid, mid_a, mid_b, DuelOutcome.b_only, DuelMode.discovery
+    )
 
     assert um_a.seen is True
 
@@ -565,7 +691,9 @@ async def test_process_duel_neither_preserves_seen_for_ranked_films():
     db = AsyncMock()
     db.execute = _make_fake_execute(um_a, um_b)
 
-    await process_duel(db, uid, mid_a, mid_b, "neither", "discovery")
+    await process_duel(
+        db, uid, mid_a, mid_b, DuelOutcome.neither, DuelMode.discovery
+    )
 
     assert um_a.seen is True
     assert um_b.seen is True
@@ -584,7 +712,9 @@ async def test_process_duel_neither_marks_unseen_for_unranked_films():
     db = AsyncMock()
     db.execute = _make_fake_execute(um_a, um_b)
 
-    await process_duel(db, uid, mid_a, mid_b, "neither", "discovery")
+    await process_duel(
+        db, uid, mid_a, mid_b, DuelOutcome.neither, DuelMode.discovery
+    )
 
     assert um_a.seen is False
     assert um_b.seen is False
@@ -605,7 +735,9 @@ async def test_process_duel_neither_preserves_ranked_but_marks_unranked():
     db = AsyncMock()
     db.execute = _make_fake_execute(um_a, um_b)
 
-    await process_duel(db, uid, mid_a, mid_b, "neither", "discovery")
+    await process_duel(
+        db, uid, mid_a, mid_b, DuelOutcome.neither, DuelMode.discovery
+    )
 
     # Ranked film must NOT have seen reset
     assert um_a.seen is True
@@ -631,7 +763,9 @@ async def test_pair_type_ranked_vs_ranked():
     db = AsyncMock()
     db.execute = _make_fake_execute(um_a, um_b)
 
-    await process_duel(db, uid, mid_a, mid_b, "a_wins", "ranked")
+    await process_duel(
+        db, uid, mid_a, mid_b, DuelOutcome.a_wins, DuelMode.discovery
+    )
 
     duel_adds = [
         call.args[0] for call in db.add.call_args_list if isinstance(call.args[0], Duel)
@@ -653,35 +787,15 @@ async def test_pair_type_ranked_vs_unranked():
     db = AsyncMock()
     db.execute = _make_fake_execute(um_a, um_b)
 
-    await process_duel(db, uid, mid_a, mid_b, "a_wins", "discovery")
+    await process_duel(
+        db, uid, mid_a, mid_b, DuelOutcome.a_wins, DuelMode.discovery
+    )
 
     duel_adds = [
         call.args[0] for call in db.add.call_args_list if isinstance(call.args[0], Duel)
     ]
     assert len(duel_adds) == 1
     assert duel_adds[0].pair_type == "ranked_vs_unranked"
-
-
-# ---------------------------------------------------------------------------
-# process_duel — invalid outcome value
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_process_duel_invalid_outcome_raises():
-    """An invalid outcome string should raise ValueError (via DuelOutcome enum)."""
-    uid = uuid.uuid4()
-    mid_a = uuid.uuid4()
-    mid_b = uuid.uuid4()
-
-    um_a = _make_user_movie(uid, mid_a, elo=1000, battles=5)
-    um_b = _make_user_movie(uid, mid_b, elo=1000, battles=5)
-
-    db = AsyncMock()
-    db.execute = _make_fake_execute(um_a, um_b)
-
-    with pytest.raises(ValueError):
-        await process_duel(db, uid, mid_a, mid_b, "invalid_value", "discovery")
 
 
 # ---------------------------------------------------------------------------
@@ -703,7 +817,9 @@ async def test_process_duel_a_wins_updates_timestamps():
     db = AsyncMock()
     db.execute = _make_fake_execute(um_a, um_b)
 
-    await process_duel(db, uid, mid_a, mid_b, "a_wins", "discovery")
+    await process_duel(
+        db, uid, mid_a, mid_b, DuelOutcome.a_wins, DuelMode.discovery
+    )
 
     assert um_a.last_dueled_at is not None
     assert um_b.last_dueled_at is not None
@@ -728,7 +844,9 @@ async def test_process_duel_a_only_already_seen_stays_true():
     db = AsyncMock()
     db.execute = _make_fake_execute(um_a, um_b)
 
-    await process_duel(db, uid, mid_a, mid_b, "a_only", "discovery")
+    await process_duel(
+        db, uid, mid_a, mid_b, DuelOutcome.a_only, DuelMode.discovery
+    )
 
     assert um_a.seen is True
     assert um_b.seen is False

@@ -10,12 +10,13 @@ import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import assert_never
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db_models import Duel, Movie, UserMovie
-from backend.schemas import DuelOutcome, DuelResult
+from backend.schemas import DuelMode, DuelOutcome, DuelResult
 from backend.services.elo import get_initial_elo, update_elo
 
 logger = logging.getLogger(__name__)
@@ -61,6 +62,11 @@ async def compute_next_action(
     return "swipe" if should_suggest_swipe(seen_unranked, total_seen) else "duel"
 
 
+def _effective_elo(um: UserMovie) -> float:
+    """ELO the duel is scored with: current ELO, else the seeded/default start."""
+    return um.elo if um.elo is not None else get_initial_elo(um.seeded_elo)
+
+
 async def apply_elo_result(
     db: AsyncSession,
     user_id: uuid.UUID,
@@ -72,8 +78,8 @@ async def apply_elo_result(
 ) -> Duel:
     """Compute ELO, mutate UserMovies, create+return Duel record."""
     now = datetime.now(timezone.utc)
-    w_elo = um_w.elo if um_w.elo is not None else get_initial_elo(um_w.seeded_elo)
-    l_elo = um_l.elo if um_l.elo is not None else get_initial_elo(um_l.seeded_elo)
+    w_elo = _effective_elo(um_w)
+    l_elo = _effective_elo(um_l)
     new_w, new_l = update_elo(w_elo, l_elo, um_w.battles, um_l.battles)
 
     um_w.elo = new_w
@@ -108,6 +114,59 @@ class ProcessDuelResult:
     new_elo_b: float | None
 
 
+@dataclass(frozen=True)
+class OutcomeEffect:
+    """What a duel outcome decided beyond the seen flags it already applied."""
+
+    pair_type: str
+    winner_and_loser: tuple[UserMovie, UserMovie] | None = None
+
+
+def apply_outcome(
+    um_a: UserMovie, um_b: UserMovie, outcome: DuelOutcome, now: datetime
+) -> OutcomeEffect:
+    """Apply an outcome's seen-flag rules to the pair and classify the duel.
+
+    A decisive outcome names the winner and loser for the caller to rate;
+    the others only touch seen flags. Films with battles are never marked
+    unseen, so a skip cannot hide a ranked film.
+    """
+    ranked = um_a.battles >= 1 and um_b.battles >= 1
+    pair_type = "ranked_vs_ranked" if ranked else "ranked_vs_unranked"
+
+    match outcome:
+        case DuelOutcome.a_wins | DuelOutcome.b_wins:
+            um_a.seen = True
+            um_b.seen = True
+            if outcome == DuelOutcome.a_wins:
+                return OutcomeEffect(pair_type, (um_a, um_b))
+            return OutcomeEffect(pair_type, (um_b, um_a))
+        case DuelOutcome.a_only:
+            _mark_only_one_seen(seen=um_a, other=um_b)
+        case DuelOutcome.b_only:
+            _mark_only_one_seen(seen=um_b, other=um_a)
+        case DuelOutcome.neither:
+            _mark_unseen_unless_ranked(um_a)
+            _mark_unseen_unless_ranked(um_b)
+        case _:
+            assert_never(outcome)
+
+    um_a.updated_at = now
+    um_b.updated_at = now
+    return OutcomeEffect(pair_type)
+
+
+def _mark_only_one_seen(*, seen: UserMovie, other: UserMovie) -> None:
+    if seen.seen is None:
+        seen.seen = True
+    _mark_unseen_unless_ranked(other)
+
+
+def _mark_unseen_unless_ranked(um: UserMovie) -> None:
+    if um.battles == 0:
+        um.seen = False
+
+
 async def get_user_movie(
     db: AsyncSession,
     user_id: uuid.UUID,
@@ -128,13 +187,60 @@ async def get_user_movie(
     return um
 
 
+async def lock_user_movie_pair(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    movie_a_id: uuid.UUID,
+    movie_b_id: uuid.UUID,
+) -> tuple[UserMovie, UserMovie]:
+    """Lock both UserMovie rows FOR UPDATE, returned in argument order.
+
+    The rows are always locked in UUID order, so concurrent writers over the
+    same pair cannot deadlock whichever way round they name it.
+    """
+    first_id, second_id = sorted([movie_a_id, movie_b_id])
+    um_first = await get_user_movie(db, user_id, first_id, for_update=True)
+    um_second = await get_user_movie(db, user_id, second_id, for_update=True)
+    return (um_first, um_second) if first_id == movie_a_id else (um_second, um_first)
+
+
+async def _media_type(db: AsyncSession, movie_id: uuid.UUID) -> str:
+    row = await db.execute(select(Movie.media_type).where(Movie.id == movie_id))
+    return row.scalar_one_or_none() or "movie"
+
+
+async def _record_duel(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    effect: OutcomeEffect,
+    outcome: DuelOutcome,
+    mode: DuelMode,
+) -> Duel:
+    """Rate a decided duel, or record a skip by its outcome alone."""
+    if effect.winner_and_loser is None:
+        duel = Duel(user_id=user_id, mode=mode.value, outcome=outcome.value)
+        db.add(duel)
+    else:
+        um_w, um_l = effect.winner_and_loser
+        duel = await apply_elo_result(
+            db, user_id, um_w.movie_id, um_l.movie_id, um_w, um_l, mode.value
+        )
+    duel.pair_type = effect.pair_type
+    return duel
+
+
+def _elo_delta(before: float, after: float | None) -> int:
+    """Rating change as the client displays it; a never-rated film did not move."""
+    return 0 if after is None else round(after) - round(before)
+
+
 async def process_duel(
     db: AsyncSession,
     user_id: uuid.UUID,
     movie_a_id: uuid.UUID,
     movie_b_id: uuid.UUID,
-    outcome: str,
-    mode: str,
+    outcome: DuelOutcome,
+    mode: DuelMode,
     *,
     pair_token_digest: str | None = None,
 ) -> ProcessDuelResult:
@@ -143,110 +249,37 @@ async def process_duel(
     All writes happen on the provided session (committed by the caller /
     FastAPI dependency).  Returns a ``DuelResult`` ready to send to the client.
     """
-    # ── Fetch / create user_movies ──────────────────────────────────
-    # Acquire row locks in deterministic UUID order to prevent deadlocks
-    first_id, second_id = sorted([movie_a_id, movie_b_id])
-    um_first = await get_user_movie(db, user_id, first_id, for_update=True)
-    um_second = await get_user_movie(db, user_id, second_id, for_update=True)
-    um_a, um_b = (um_first, um_second) if first_id == movie_a_id else (um_second, um_first)
+    um_a, um_b = await lock_user_movie_pair(db, user_id, movie_a_id, movie_b_id)
+    # Ownership is confirmed by the lock above, so um_a.movie_id is trusted.
+    media_type = await _media_type(db, um_a.movie_id)
+    elo_a_before, elo_b_before = _effective_elo(um_a), _effective_elo(um_b)
 
-    # Query media_type AFTER ownership confirmed — um_a.movie_id is trusted
-    media_type_row = await db.execute(
-        select(Movie.media_type).where(Movie.id == um_a.movie_id)
-    )
-    media_type = media_type_row.scalar_one_or_none() or "movie"
-
-    um_a_seen_was_none = um_a.seen is None
-    um_b_seen_was_none = um_b.seen is None
-
-    # ── Pair type (before battles are incremented) ──────────────────
-    if um_a.battles >= 1 and um_b.battles >= 1:
-        pair_type = "ranked_vs_ranked"
-    else:
-        pair_type = "ranked_vs_unranked"
-
-    # ── ELO math + duel record ───────────────────────────────────────
-    new_elo_a: float | None = um_a.elo
-    new_elo_b: float | None = um_b.elo
-    delta_a = 0
-    delta_b = 0
-
-    now = datetime.now(timezone.utc)
-
-    if outcome in ("a_wins", "b_wins"):
-        elo_a_before = (
-            um_a.elo if um_a.elo is not None else get_initial_elo(um_a.seeded_elo)
-        )
-        elo_b_before = (
-            um_b.elo if um_b.elo is not None else get_initial_elo(um_b.seeded_elo)
-        )
-
-        if outcome == "a_wins":
-            winner_id, loser_id = movie_a_id, movie_b_id
-            um_w, um_l = um_a, um_b
-        else:
-            winner_id, loser_id = movie_b_id, movie_a_id
-            um_w, um_l = um_b, um_a
-
-        um_a.seen = True
-        um_b.seen = True
-        duel = await apply_elo_result(
-            db, user_id, winner_id, loser_id, um_w, um_l, mode
-        )
-        duel.pair_type = pair_type
-
-        new_elo_a = um_a.elo
-        new_elo_b = um_b.elo
-        delta_a = round(new_elo_a) - round(elo_a_before)
-        delta_b = round(new_elo_b) - round(elo_b_before)
-    elif outcome == "a_only":
-        if um_a_seen_was_none:
-            um_a.seen = True
-        if um_b.battles == 0:
-            um_b.seen = False
-        um_a.updated_at = now
-        um_b.updated_at = now
-    elif outcome == "b_only":
-        if um_b_seen_was_none:
-            um_b.seen = True
-        if um_a.battles == 0:
-            um_a.seen = False
-        um_a.updated_at = now
-        um_b.updated_at = now
-    elif outcome == "neither":
-        if um_a.battles == 0:
-            um_a.seen = False
-        if um_b.battles == 0:
-            um_b.seen = False
-        um_a.updated_at = now
-        um_b.updated_at = now
-
-    if outcome not in ("a_wins", "b_wins"):
-        duel = Duel(user_id=user_id, mode=mode, pair_type=pair_type, outcome=outcome)
-        db.add(duel)
+    effect = apply_outcome(um_a, um_b, outcome, datetime.now(timezone.utc))
+    duel = await _record_duel(db, user_id, effect, outcome, mode)
     duel.pair_token_digest = pair_token_digest
+    delta_a = _elo_delta(elo_a_before, um_a.elo)
+    delta_b = _elo_delta(elo_b_before, um_b.elo)
 
     # DEBUG, not INFO: user_id + preference data is behavioral personal data (SEC-15, #583).
     logger.debug(
         "duel_processed user_id=%s outcome=%s pair_type=%s elo_delta_a=%+d elo_delta_b=%+d",
         user_id,
-        outcome,
-        pair_type,
+        outcome.value,
+        effect.pair_type,
         delta_a,
         delta_b,
     )
 
-    # ── next_action ─────────────────────────────────────────────────
     next_action = await compute_next_action(db, user_id, media_type)
     logger.debug("duel_next_action user_id=%s next_action=%s", user_id, next_action)
 
     return ProcessDuelResult(
         api_result=DuelResult(
-            outcome=DuelOutcome(outcome),
+            outcome=outcome,
             movie_a_elo_delta=delta_a,
             movie_b_elo_delta=delta_b,
             next_action=next_action,
         ),
-        new_elo_a=new_elo_a,
-        new_elo_b=new_elo_b,
+        new_elo_a=um_a.elo,
+        new_elo_b=um_b.elo,
     )

@@ -16,7 +16,7 @@ from sqlalchemy.orm import joinedload
 from backend.db_models import Movie, Tournament, TournamentMatch, UserMovie
 from backend.schemas import FilterType
 from backend.services.curator import curate_tournament
-from backend.services.duel import apply_elo_result
+from backend.services.duel import apply_elo_result, lock_user_movie_pair
 from backend.services.ranking import ranked_user_movies_stmt
 
 logger = logging.getLogger(__name__)
@@ -562,21 +562,7 @@ async def record_match_winner(
         )
 
     # ELO update + duel record (same session, 2 extra queries)
-    # Acquire row locks in deterministic UUID order to prevent deadlocks
-    first_id, second_id = sorted([winner_id, loser_id])
-    um_first, um_second = [
-        (
-            await db.execute(
-                select(UserMovie)
-                .where(UserMovie.user_id == user_id, UserMovie.movie_id == movie_id)
-                .with_for_update()
-            )
-        ).scalar_one()
-        for movie_id in (first_id, second_id)
-    ]
-    um_w, um_l = (
-        (um_first, um_second) if first_id == winner_id else (um_second, um_first)
-    )
+    um_w, um_l = await lock_user_movie_pair(db, user_id, winner_id, loser_id)
 
     duel = await apply_elo_result(
         db, user_id, winner_id, loser_id, um_w, um_l, "tournament"
