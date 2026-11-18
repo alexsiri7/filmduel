@@ -15,9 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.db import async_session_factory
 from backend.config import get_settings
 from backend.db_models import Movie, User, UserMovie
+from backend.services.clients import make_simkl_client, make_trakt_client
 from backend.services.elo import trakt_rating_to_seeded_elo
-from backend.services.trakt import TraktClient
-from backend.services.simkl import SimklClient
 
 logger = logging.getLogger(__name__)
 
@@ -161,10 +160,7 @@ async def _fetch_trakt_pool(
     user: User, settings, media_type: str, failures: list[str] | None = None
 ) -> tuple[dict[int, dict], set[int], dict[int, int]]:
     """Fetch pool data from Trakt for a given media type."""
-    client = TraktClient(
-        client_id=settings.TRAKT_CLIENT_ID,
-        access_token=user.trakt_access_token,
-    )
+    client = make_trakt_client(settings, access_token=user.trakt_access_token)
 
     popular = await _safe_fetch(
         client.get_popular, limit=100, media_type=media_type, failures=failures
@@ -207,10 +203,7 @@ async def _fetch_simkl_pool(
     user: User, settings, media_type: str, failures: list[str] | None = None
 ) -> tuple[dict[int, dict], set[int], dict[int, int]]:
     """Fetch pool data from SIMKL for a given media type."""
-    client = SimklClient(
-        client_id=settings.SIMKL_CLIENT_ID,
-        access_token=user.simkl_access_token,
-    )
+    client = make_simkl_client(settings, access_token=user.simkl_access_token)
 
     popular = await _safe_fetch(
         client.get_popular, limit=100, media_type=media_type, failures=failures

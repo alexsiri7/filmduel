@@ -88,7 +88,7 @@ class TestPopulateMoviePool:
         db.execute = fake_execute
 
         with (
-            patch("backend.services.pool.TraktClient", return_value=trakt_mock),
+            patch("backend.services.clients.TraktClient", return_value=trakt_mock),
             patch("backend.services.pool.get_settings") as mock_settings,
         ):
             mock_settings.return_value = MagicMock(TRAKT_CLIENT_ID="fake")
@@ -142,7 +142,7 @@ class TestPopulateMoviePool:
         trakt_mock.get_popular.side_effect = get_popular
 
         with (
-            patch("backend.services.pool.TraktClient", return_value=trakt_mock),
+            patch("backend.services.clients.TraktClient", return_value=trakt_mock),
             patch("backend.services.pool.get_settings") as mock_settings,
         ):
             mock_settings.return_value = MagicMock(TRAKT_CLIENT_ID="fake")
@@ -167,7 +167,7 @@ class TestPopulateMoviePool:
             method.return_value = []
 
         with (
-            patch("backend.services.pool.TraktClient", return_value=trakt_mock),
+            patch("backend.services.clients.TraktClient", return_value=trakt_mock),
             patch("backend.services.pool.get_settings") as mock_settings,
         ):
             mock_settings.return_value = MagicMock(TRAKT_CLIENT_ID="fake")
@@ -395,7 +395,7 @@ class TestSafeFetch:
         trakt_mock.get_user_ratings.return_value = []
 
         with (
-            patch("backend.services.pool.TraktClient", return_value=trakt_mock),
+            patch("backend.services.clients.TraktClient", return_value=trakt_mock),
             patch("backend.services.pool.get_settings") as mock_settings,
         ):
             mock_settings.return_value = MagicMock(TRAKT_CLIENT_ID="fake")
@@ -709,8 +709,8 @@ class TestPartialProviderFailureSimklDown:
         simkl_mock.get_user_ratings.side_effect = RuntimeError("SIMKL down")
 
         with (
-            patch("backend.services.pool.TraktClient", return_value=trakt_mock),
-            patch("backend.services.pool.SimklClient", return_value=simkl_mock),
+            patch("backend.services.clients.TraktClient", return_value=trakt_mock),
+            patch("backend.services.clients.SimklClient", return_value=simkl_mock),
             patch("backend.services.pool.get_settings") as mock_settings,
         ):
             mock_settings.return_value = MagicMock(TRAKT_CLIENT_ID="fake", SIMKL_CLIENT_ID="fake")

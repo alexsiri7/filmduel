@@ -28,7 +28,7 @@ from backend.schemas import (
 )
 from backend.services.ranking import ranked_user_movies_stmt
 from backend.services.curator import CurationError
-from backend.services.llm import LLMBusyError
+from backend.services.llm import LLMBusyError, llm_busy_exception
 from backend.services.tournament import (
     CANDIDATE_POOL_FACTOR,
     count_filtered_ranked_films,
@@ -258,11 +258,7 @@ async def create_tournament(
                 theme_hint=body.name.strip() if body.name else "",
             )
         except LLMBusyError:
-            raise HTTPException(
-                status_code=503,
-                detail="AI features are busy. Please try again in a moment.",
-                headers={"Retry-After": "15"},
-            )
+            raise llm_busy_exception()
         except (ValueError, CurationError) as e:
             logger.error("AI curation failed: %s", e)
             raise HTTPException(
@@ -373,11 +369,7 @@ async def regenerate_tournament(
             theme_hint=original_hint,
         )
     except LLMBusyError:
-        raise HTTPException(
-            status_code=503,
-            detail="AI features are busy. Please try again in a moment.",
-            headers={"Retry-After": "15"},
-        )
+        raise llm_busy_exception()
     except (ValueError, CurationError) as e:
         logger.error("AI curation failed during regeneration: %s", e)
         raise HTTPException(

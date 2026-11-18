@@ -293,7 +293,7 @@ class TestAdminListFeedback:
         assert "screenshot_data" not in data[0]
 
     def test_list_never_selects_or_decrypts_ciphertext(self, client):
-        with patch("backend.routers.feedback.decrypt_token") as mock_decrypt:
+        with patch("backend.services.feedback.decrypt_token") as mock_decrypt:
             _, db = self._get(client, rows=[_make_feedback_row(has_screenshot=True)])
         mock_decrypt.assert_not_called()
         stmt = db.execute.call_args.args[0]

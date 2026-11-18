@@ -9,6 +9,7 @@ import logging
 import time
 
 import httpx
+from fastapi import HTTPException
 
 from backend.config import get_settings
 
@@ -25,6 +26,15 @@ class LLMBusyError(Exception):
 
 class LLMResponseError(Exception):
     """The provider replied, but not with a readable chat completion."""
+
+
+def llm_busy_exception() -> HTTPException:
+    """The HTTP 503 callers must raise in response to an LLMBusyError."""
+    return HTTPException(
+        status_code=503,
+        detail="AI features are busy. Please try again in a moment.",
+        headers={"Retry-After": "15"},
+    )
 
 
 _llm_slots: asyncio.Semaphore | None = None

@@ -83,7 +83,7 @@ class TestExpandPoolInner:
                 new_callable=AsyncMock,
                 return_value=True,
             ),
-            patch("backend.services.expand.TraktClient", return_value=trakt_mock),
+            patch("backend.services.clients.TraktClient", return_value=trakt_mock),
             patch("backend.services.expand.get_settings") as mock_settings,
             patch("backend.services.expand.backfill_posters", new_callable=AsyncMock),
         ):
@@ -139,7 +139,7 @@ class TestExpandPoolInner:
                 new_callable=AsyncMock,
                 return_value=True,
             ),
-            patch("backend.services.expand.TraktClient", return_value=trakt_mock),
+            patch("backend.services.clients.TraktClient", return_value=trakt_mock),
             patch("backend.services.expand.get_settings") as mock_settings,
             patch("backend.services.expand.backfill_posters", new_callable=AsyncMock),
         ):
@@ -172,7 +172,7 @@ class TestExpandPoolInner:
                 new_callable=AsyncMock,
                 return_value=False,
             ),
-            patch("backend.services.expand.TraktClient", return_value=trakt_mock),
+            patch("backend.services.clients.TraktClient", return_value=trakt_mock),
             patch("backend.services.expand.get_settings") as mock_settings,
             patch("backend.services.expand.backfill_posters", new_callable=AsyncMock),
         ):
@@ -228,7 +228,7 @@ class TestExpandPoolInner:
                 new_callable=AsyncMock,
                 side_effect=fake_lock,
             ) as lock_mock,
-            patch("backend.services.expand.TraktClient", return_value=trakt_mock),
+            patch("backend.services.clients.TraktClient", return_value=trakt_mock),
             patch("backend.services.expand.get_settings") as mock_settings,
             patch("backend.services.expand.backfill_posters", new_callable=AsyncMock),
         ):

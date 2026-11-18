@@ -31,6 +31,7 @@ from backend.config import Settings, get_settings
 from backend.rate_limit import limiter
 from backend.db import get_db
 from backend.db_models import User
+from backend.services.clients import make_simkl_client, make_trakt_client
 from backend.services.pool import sync_pool_background
 from backend.services.tmdb import backfill_posters_background
 from backend.services.trakt import TraktClient
@@ -414,20 +415,12 @@ def _simkl_extract(tokens: dict, profile: dict) -> tuple[str, str, None]:
     return user_id, username, None
 
 
-def _make_trakt_client(settings: Settings, **kw) -> TraktClient:
-    return TraktClient(client_id=settings.TRAKT_CLIENT_ID, **kw)
-
-
-def _make_simkl_client(settings: Settings, **kw) -> SimklClient:
-    return SimklClient(client_id=settings.SIMKL_CLIENT_ID, **kw)
-
-
 _TRAKT_PROVIDER = _OAuthProvider(
     name="Trakt",
     state_cookie=OAUTH_STATE_COOKIE,
     pkce_cookie=OAUTH_PKCE_COOKIE,
     default_ttl=TRAKT_TOKEN_DEFAULT_TTL_SECONDS,
-    make_client=_make_trakt_client,
+    make_client=make_trakt_client,
     exchange_kwargs=lambda s: {
         "client_secret": s.TRAKT_CLIENT_SECRET,
         "redirect_uri": s.TRAKT_REDIRECT_URI,
@@ -450,7 +443,7 @@ _SIMKL_PROVIDER = _OAuthProvider(
     state_cookie=OAUTH_SIMKL_STATE_COOKIE,
     pkce_cookie=OAUTH_SIMKL_PKCE_COOKIE,
     default_ttl=_SIMKL_TOKEN_DEFAULT_TTL_SECONDS,
-    make_client=_make_simkl_client,
+    make_client=make_simkl_client,
     exchange_kwargs=lambda s: {
         "client_secret": s.SIMKL_CLIENT_SECRET,
         "redirect_uri": s.SIMKL_REDIRECT_URI,
@@ -488,7 +481,7 @@ async def _legacy_row_belongs_to(
         return False
 
     async def _uuid_for(access_token: str) -> str | None:
-        client = TraktClient(client_id=settings.TRAKT_CLIENT_ID, access_token=access_token)
+        client = make_trakt_client(settings, access_token=access_token)
         try:
             profile = await client.get_profile()
         except httpx.HTTPError as exc:
@@ -506,7 +499,7 @@ async def _legacy_row_belongs_to(
     found = await _uuid_for(legacy.trakt_access_token)
 
     if found is None and legacy.trakt_refresh_token:
-        client = TraktClient(client_id=settings.TRAKT_CLIENT_ID)
+        client = make_trakt_client(settings)
         try:
             tokens = await client.refresh_token(
                 legacy.trakt_refresh_token,

@@ -1097,7 +1097,7 @@ class TestSimklCallback:
         )
 
         monkeypatch.setattr("backend.routers.auth.SimklClient.exchange_code", mock_tokens)
-        monkeypatch.setattr("backend.routers.auth.SimklClient", lambda **kw: mock_client)
+        monkeypatch.setattr("backend.services.clients.SimklClient", lambda **kw: mock_client)
 
         request = _make_starlette_request(cookies={
             OAUTH_SIMKL_STATE_COOKIE: "state123",
@@ -1134,7 +1134,7 @@ class TestSimklCallback:
         mock_client.get_profile = AsyncMock(return_value=None)  # non-dict
 
         monkeypatch.setattr("backend.routers.auth.SimklClient.exchange_code", mock_tokens)
-        monkeypatch.setattr("backend.routers.auth.SimklClient", lambda **kw: mock_client)
+        monkeypatch.setattr("backend.services.clients.SimklClient", lambda **kw: mock_client)
 
         request = _make_starlette_request(cookies={
             OAUTH_SIMKL_STATE_COOKIE: "state123",
@@ -1495,7 +1495,7 @@ class TestPKCE:
         mock_client.exchange_code = mock_exchange
         mock_client.get_profile = mock_profile
 
-        monkeypatch.setattr("backend.routers.auth.TraktClient", lambda **kw: mock_client)
+        monkeypatch.setattr("backend.services.clients.TraktClient", lambda **kw: mock_client)
 
         state = "test-state"
         request = _make_starlette_request(cookies={
@@ -1585,7 +1585,7 @@ class TestPKCE:
             "username": "alice",
             "ids": {"slug": "alice", "uuid": "uuid-alice"},
         }})
-        monkeypatch.setattr("backend.routers.auth.TraktClient", lambda **kw: mock_client)
+        monkeypatch.setattr("backend.services.clients.TraktClient", lambda **kw: mock_client)
 
         state = "test-state"
         request = _make_starlette_request(cookies={
@@ -1783,7 +1783,7 @@ class TestPKCE:
         legacy.trakt_refresh_token = ""
         settings = MagicMock(TRAKT_CLIENT_ID="cid")
         profile = {"user": {"ids": {"uuid": "uuid-alice"}}}
-        with patch("backend.routers.auth.TraktClient") as client_cls:
+        with patch("backend.services.clients.TraktClient") as client_cls:
             client_cls.return_value.get_profile = AsyncMock(return_value=profile)
             from backend.routers.auth import _legacy_row_belongs_to
             assert await _legacy_row_belongs_to(legacy, "uuid-alice", settings) is True
@@ -1856,7 +1856,7 @@ class TestPKCE:
         mock_client.exchange_code = mock_exchange
         mock_client.get_profile = mock_profile
 
-        monkeypatch.setattr("backend.routers.auth.SimklClient", lambda **kw: mock_client)
+        monkeypatch.setattr("backend.services.clients.SimklClient", lambda **kw: mock_client)
 
         state = "test-state"
         request = _make_starlette_request(cookies={
@@ -1902,7 +1902,7 @@ class TestPKCE:
         mock_client.exchange_code.side_effect = _httpx.HTTPStatusError(
             "Bad Request", request=MagicMock(), response=mock_resp
         )
-        monkeypatch.setattr("backend.routers.auth.TraktClient", lambda **kw: mock_client)
+        monkeypatch.setattr("backend.services.clients.TraktClient", lambda **kw: mock_client)
 
         state = "test-state"
         request = _make_starlette_request(cookies={
@@ -1938,7 +1938,7 @@ class TestPKCE:
         mock_client.exchange_code.side_effect = _httpx.HTTPStatusError(
             "Bad Request", request=MagicMock(), response=mock_resp
         )
-        monkeypatch.setattr("backend.routers.auth.SimklClient", lambda **kw: mock_client)
+        monkeypatch.setattr("backend.services.clients.SimklClient", lambda **kw: mock_client)
 
         state = "test-state"
         request = _make_starlette_request(cookies={
@@ -1975,7 +1975,7 @@ class TestPKCE:
         mock_client.get_profile.side_effect = _httpx.HTTPStatusError(
             "Service Unavailable", request=MagicMock(), response=mock_resp
         )
-        monkeypatch.setattr("backend.routers.auth.TraktClient", lambda **kw: mock_client)
+        monkeypatch.setattr("backend.services.clients.TraktClient", lambda **kw: mock_client)
 
         state = "test-state"
         request = _make_starlette_request(cookies={
