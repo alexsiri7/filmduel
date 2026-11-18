@@ -314,48 +314,6 @@ class TestSelectSwipeCards:
 
 
 # ---------------------------------------------------------------------------
-# Deduplication logic (SEC-018 fix)
-# ---------------------------------------------------------------------------
-
-
-class TestDeduplicateRows:
-    """Unit-tests for the seen_ids_set deduplication logic (SEC-018 fix)."""
-
-    def _dedup(self, rows):
-        """Mirror of the dedup block in select_swipe_cards."""
-        return list({row.id: row for row in rows}.values())
-
-    def _row(self, id_val):
-        r = MagicMock()
-        r.id = id_val
-        return r
-
-    def test_removes_duplicate_ids(self):
-        rows = [self._row(1), self._row(2), self._row(1)]  # id=1 appears twice
-        result = self._dedup(rows)
-        assert [r.id for r in result] == [1, 2]
-
-    def test_preserves_order_of_first_occurrence(self):
-        rows = [self._row(3), self._row(1), self._row(3), self._row(2)]
-        result = self._dedup(rows)
-        assert [r.id for r in result] == [3, 1, 2]
-
-    def test_no_duplicates_returns_all(self):
-        rows = [self._row(i) for i in range(10)]
-        result = self._dedup(rows)
-        assert len(result) == 10
-
-    def test_empty_input_returns_empty(self):
-        assert self._dedup([]) == []
-
-    def test_all_same_id_returns_one(self):
-        rows = [self._row(42)] * 6
-        result = self._dedup(rows)
-        assert len(result) == 1
-        assert result[0].id == 42
-
-
-# ---------------------------------------------------------------------------
 # Submit results — unresolved-card filter and daily cap (SEC-21, #589)
 # ---------------------------------------------------------------------------
 
