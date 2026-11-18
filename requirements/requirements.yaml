@@ -760,14 +760,14 @@ requirements:
 
   - id: FD-049
     title: SSRF-safe provider URL construction
-    statement: "When calling the Trakt, Simkl or TMDB API, the system shall build the request path only from fixed literals, the movie/show media type and integer provider ids, addressing the signed-in user's data as /users/me, so no user-supplied string (such as an account username) can alter the request target."
+    statement: "When calling the Trakt, Simkl or TMDB API, the system shall build the request path only from fixed literals, the movie/show media type and integer provider ids, identifying the signed-in user only through the access token and never by username or slug, so no user-supplied string can alter the request target."
     category: non-functional
     priority: must
     status: active
     source: "PR #510 (SEC-001); issue #942"
     acceptance:
       - "Trakt user endpoints request /users/me/watched/{type}s and /users/me/ratings/{type}s; the account slug never appears in a request URL (see test_trakt_client.py::TestTraktClientUserEndpoints)"
-      - "Every interpolated path segment in backend/services/trakt.py, simkl.py and tmdb.py is either a media type validated as MediaType ('movie' or 'show') or an int id"
+      - "Every interpolated segment of a request path sent to the Trakt, Simkl or TMDB API in backend/services/trakt.py, simkl.py and tmdb.py is either a media type validated as MediaType ('movie' or 'show') or an int id"
 
   - id: FD-062
     title: Smoke-test session key scoped to one user
