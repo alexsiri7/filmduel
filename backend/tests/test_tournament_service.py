@@ -991,6 +991,18 @@ class TestCurationBookkeeping:
         assert tournament.llm_response["_theme_hint"] == "Noir"
         assert tournament.llm_response["_regen_count"] == 2
 
+    def test_copies_the_curated_tagline_and_description_onto_the_tournament(self):
+        tournament = _tournament()
+        apply_curation(
+            tournament,
+            {"name": "Noir Nights", "tagline": "Shadows", "theme_description": "Dark"},
+            CurationBookkeeping("Noir"),
+        )
+
+        assert tournament.name == "Noir Nights"
+        assert tournament.tagline == "Shadows"
+        assert tournament.theme_description == "Dark"
+
     def test_first_curation_stores_only_the_theme_hint(self):
         assert CurationBookkeeping("Noir").stamp({"name": "N"}) == {
             "name": "N",
