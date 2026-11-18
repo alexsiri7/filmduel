@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.config import get_settings
 from backend.db import async_session_factory, try_acquire_xact_lock
 from backend.db_models import Movie, PoolExpansion, User, UserMovie
+from backend.services.clients import make_trakt_client
 from backend.services.pool import build_movie_upsert
 from backend.services.tmdb import backfill_posters, fetch_similar_films
 from backend.services.trakt import TraktClient
@@ -147,10 +148,7 @@ async def _expand_from_recommendations(
     if ("trakt_recommendations", source_key) in recent_keys:
         return 0
 
-    client = TraktClient(
-        client_id=settings.TRAKT_CLIENT_ID,
-        access_token=user.trakt_access_token,
-    )
+    client = make_trakt_client(settings, access_token=user.trakt_access_token)
     try:
         recs = await client.get_recommendations(limit=100, media_type=media_type)
     except Exception:
@@ -247,10 +245,7 @@ async def _expand_from_anticipated(
     media_type: str = "movie",
 ) -> int:
     """Source C: Trakt anticipated movies/shows."""
-    client = TraktClient(
-        client_id=settings.TRAKT_CLIENT_ID,
-        access_token=user.trakt_access_token,
-    )
+    client = make_trakt_client(settings, access_token=user.trakt_access_token)
     item_key = "show" if media_type == "show" else "movie"
     try:
         items = await client.get_anticipated(limit=100, media_type=media_type)
@@ -288,10 +283,7 @@ async def _expand_from_popular_pages(
     media_type: str = "movie",
 ) -> int:
     """Source D: Deeper pages of Trakt popular movies/shows."""
-    client = TraktClient(
-        client_id=settings.TRAKT_CLIENT_ID,
-        access_token=user.trakt_access_token,
-    )
+    client = make_trakt_client(settings, access_token=user.trakt_access_token)
     source = f"popular_page_N_{media_type}"
     total = 0
     for page in range(2, 6):
