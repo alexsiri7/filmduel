@@ -533,7 +533,7 @@ async def record_match_winner(
         )
     ).scalar_one()
     if match_obj.winner_movie_id is not None:
-        raise ValueError("Match already played")
+        raise TournamentRuleError("Match already played")
     match_obj.winner_movie_id = winner_id
     match_obj.played_at = now
 

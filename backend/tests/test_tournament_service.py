@@ -563,6 +563,20 @@ def _locked_movie_id(stmt):
 
 class TestRecordMatchWinner:
     @pytest.mark.asyncio
+    async def test_already_played_match_is_a_rule_error(self):
+        """The locked re-check rejects a double submit with the same error as validate_match."""
+        from backend.services.tournament import record_match_winner
+
+        match_obj = MagicMock(winner_movie_id=uuid.uuid4())
+        db = AsyncMock()
+        db.execute.return_value = MagicMock(scalar_one=MagicMock(return_value=match_obj))
+
+        with pytest.raises(TournamentRuleError, match="^Match already played$"):
+            await record_match_winner(
+                db, uuid.uuid4(), 4, uuid.uuid4(), uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+            )
+
+    @pytest.mark.asyncio
     async def test_propagates_winner_to_next_round(self):
         """record_match_winner should propagate the winner into the next round match."""
         from backend.services.tournament import record_match_winner

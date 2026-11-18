@@ -147,6 +147,7 @@ async def quota_exceeded_handler(request: Request, exc: QuotaExceeded):
 
 @app.exception_handler(LLMBusyError)
 async def llm_busy_handler(request: Request, exc: LLMBusyError):
+    sentry_sdk.capture_exception(exc)
     return JSONResponse(
         status_code=503,
         content={"detail": "AI features are busy. Please try again in a moment."},
@@ -157,6 +158,7 @@ async def llm_busy_handler(request: Request, exc: LLMBusyError):
 @app.exception_handler(LLMNotConfiguredError)
 async def llm_not_configured_handler(request: Request, exc: LLMNotConfiguredError):
     logger.warning("AI features unavailable (LLM_API_KEY not configured) path=%s", request.url.path)
+    sentry_sdk.capture_exception(exc)
     return JSONResponse(status_code=503, content={"detail": "AI features are not available"})
 
 

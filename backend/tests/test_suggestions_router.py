@@ -100,12 +100,14 @@ class TestGetSuggestions:
             "backend.routers.suggestions._create_suggestions",
             new_callable=AsyncMock,
             side_effect=LLMNotConfiguredError("LLM_API_KEY not configured"),
-        ):
+        ), patch("backend.main.sentry_sdk.capture_exception") as mock_capture:
             with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.get("/api/suggestions")
 
         assert resp.status_code == 503
         assert resp.json()["detail"] == "AI features are not available"
+        mock_capture.assert_called_once()
+        assert isinstance(mock_capture.call_args.args[0], LLMNotConfiguredError)
 
     def test_get_suggestions_503_when_llm_busy(self):
         """A full LLM concurrency guard (AUD-01) maps to 503, not 500."""
@@ -131,12 +133,14 @@ class TestGetSuggestions:
             "backend.routers.suggestions._create_suggestions",
             new_callable=AsyncMock,
             side_effect=LLMBusyError("busy"),
-        ):
+        ), patch("backend.main.sentry_sdk.capture_exception") as mock_capture:
             with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
                 resp = client.get("/api/suggestions")
 
         assert resp.status_code == 503
         assert resp.headers.get("Retry-After") == "15"
+        mock_capture.assert_called_once()
+        assert isinstance(mock_capture.call_args.args[0], LLMBusyError)
 
     def test_get_suggestions_500_when_all_picks_malformed(self):
         """An all-malformed LLM reply is a 500, not a false "no_candidates" 200."""

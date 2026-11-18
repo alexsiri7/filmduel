@@ -380,6 +380,30 @@ class TestSubmitDuel:
         assert "pool" not in response.json()["detail"]
         _assert_rejection_logged(caplog, "invalid_submission", mid_a, mid_b)
 
+    def test_unexpected_process_duel_error_is_not_a_rejected_submission(self, caplog):
+        """Only MovieNotInPoolError is a bad submission; any other error is a bug and a 500."""
+        mid_a = str(uuid.uuid4())
+        mid_b = str(uuid.uuid4())
+        token = encode_pair_token(mid_a, mid_b, user_id=str(FAKE_USER.id))
+        with patch(
+            "backend.routers.duels.process_duel",
+            new_callable=AsyncMock,
+            side_effect=ValueError("boom"),
+        ):
+            client = TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False)
+            response = client.post(
+                "/api/duels",
+                json={
+                    "movie_a_id": mid_a,
+                    "movie_b_id": mid_b,
+                    "outcome": "a_wins",
+                    "mode": "discovery",
+                    "pair_token": token,
+                },
+            )
+        assert response.status_code == 500
+        assert "invalid_submission" not in caplog.text
+
     def test_submitting_a_served_pair_is_accepted(self):
         """Contract with frontend/src/api.js submitDuel: the ids and next_pair_token
         from GET /api/movies/pair, posted back as the SPA does, must be accepted."""
