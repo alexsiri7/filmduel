@@ -158,6 +158,21 @@ requirements:
       - "Each purge commits independently so one failure does not roll back the others"
       - "Retention windows are configurable via *_RETENTION_DAYS env vars"
 
+  - id: FD-079
+    title: Revoking provider tokens of dormant accounts
+    statement: "When the daily retention purge (FD-011) runs, for every account whose last_seen_at is older than DORMANT_TOKEN_RETENTION_DAYS (default 90, must exceed 30) and that still holds a Trakt or SIMKL access or refresh token, the system shall make a best-effort upstream revocation of its Trakt and SIMKL access tokens and clear the stored access tokens, refresh tokens and expiries of both providers, keeping the account and its data; legacy Trakt rows without a trakt_uuid that still hold their slug shall be excluded."
+    category: non-functional
+    priority: must
+    status: active
+    source: "issue #947 (req-gap orphan)"
+    acceptance:
+      - "The selection locks (FOR UPDATE) users with last_seen_at before the cutoff, at least one stored provider token, and trakt_uuid not null or trakt_user_id null"
+      - "When no account is dormant, nothing is updated and 0 is returned"
+      - "Exactly the six columns trakt_access_token, trakt_refresh_token, trakt_token_expires_at, simkl_access_token, simkl_refresh_token and simkl_token_expires_at are cleared, and each held Trakt and SIMKL access token is revoked upstream once"
+      - "DORMANT_TOKEN_RETENTION_DAYS=30 is rejected at settings load and 31 is accepted"
+      - "The daily retention_purge job runs the purge as dormant_tokens and logs its count"
+    notes: "Pinned by backend/tests/test_retention.py::TestPurgeDormantProviderTokens (test_selects_idle_accounts_with_tokens_skipping_unadopted_legacy_rows, test_no_update_when_nothing_dormant, test_clears_only_token_columns_and_revokes), backend/tests/test_config.py::test_dormant_token_window_must_outlast_sessions and the dormant_tokens cases in backend/tests/test_scheduler.py. Implemented in backend/services/retention.py (purge_dormant_provider_tokens, _revoke_provider_tokens), backend/config.py (DORMANT_TOKEN_RETENTION_DAYS) and backend/scheduler.py (_run_retention_purge). The floor exceeds the 30-day SESSION_MAX_LIFETIME so no live session loses its tokens. Issue #947 words dormancy as 'no sign-in'; the code measures last_seen_at, which sign-in, a Trakt token refresh and a pool sync all update. The excluded legacy rows (pre-#684, not yet adopted) keep their Trakt token because it is the only proof of ownership the next sign-in can use (FD-061). Revocation is best-effort: an undecryptable token is skipped with a warning. Signing in again stores fresh tokens."
+
   - id: FD-012
     title: Sensitive-data scrubbing in error tracking
     statement: "When an event, transaction or breadcrumb is reported to Sentry, the system shall send no default PII, stack-frame local variables or request bodies, and shall strip query strings and fragments from request, span and HTTP breadcrumb URLs and mask the account segment of /users/<id> paths as '/users/[Filtered]'."
