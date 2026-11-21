@@ -19,11 +19,6 @@ from backend.utils.cookies import COOKIE_NAME, cookie_name
 
 logger = logging.getLogger(__name__)
 
-# slowapi attaches a no-op handler to its logger, which also suppresses Python's
-# last-resort stderr output, so its "falling back to in-memory storage" warning
-# would never reach the process output without a real handler.
-logging.getLogger("slowapi").addHandler(logging.StreamHandler())
-
 
 _UNKNOWN_CLIENT = "unknown"
 HEALTH_PATH = "/health"

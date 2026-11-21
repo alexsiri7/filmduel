@@ -197,8 +197,6 @@ def test_build_limiter_falls_back_to_memory_when_redis_unreachable(caplog):
     ]
     assert len(fallback_records) == 1
     assert fallback_records[0].levelno == logging.WARNING
-    # slowapi's own no-op handler is a StreamHandler subclass; a real one must sit beside it.
-    assert any(type(h) is logging.StreamHandler for h in logging.getLogger("slowapi").handlers)
 
 
 def test_spoofed_x_forwarded_for_does_not_reset_anonymous_limit_on_railway(monkeypatch):

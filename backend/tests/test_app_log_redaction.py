@@ -11,6 +11,7 @@ import pytest
 from uvicorn.config import LOGGING_CONFIG as UVICORN_LOGGING_CONFIG
 
 from backend.observability import LOGGING_CONFIG, _RedactingFormatter
+from backend.rate_limit import limiter
 
 
 @pytest.fixture
@@ -70,3 +71,18 @@ def test_uvicorn_error_traceback_is_redacted(output):
     text = output.getvalue()
     assert "ValueError: no row for [Filtered]" in text
     assert str(user_id) not in text
+
+
+def test_slowapi_rate_limit_warning_is_emitted_once_redacted(output):
+    """slowapi's warnings reach stderr only through the redacting root handler."""
+    assert limiter.logger.name == "slowapi"
+    for handler in limiter.logger.handlers:
+        if isinstance(handler, logging.StreamHandler):
+            handler.setStream(output)
+    user_id = uuid.uuid4()
+    limiter.logger.warning(
+        "ratelimit 10 per 1 minute (user:%s) exceeded at endpoint: duel_vote", user_id
+    )
+    assert output.getvalue() == (
+        "WARNING slowapi: ratelimit 10 per 1 minute (user:[Filtered]) exceeded at endpoint: duel_vote\n"
+    )
