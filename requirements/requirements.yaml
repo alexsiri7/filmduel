@@ -665,13 +665,14 @@ requirements:
 
   - id: FD-043
     title: Admin-only maintenance endpoints
-    statement: "When admin endpoints are called (feedback listing/screenshot scrub/purge, duel/swipe purge), the system shall require a user with is_admin=true (403 otherwise) and rate-limit each endpoint (10/minute)."
+    statement: "When admin endpoints are called (feedback listing/screenshot scrub/purge, duel/swipe purge), the system shall require a user with is_admin=true whose session was not verified against SMOKE_SESSION_KEY (403 otherwise) and rate-limit each endpoint (10/minute)."
     category: functional
     priority: should
     status: active
     source: "PR #498 (SEC-014)"
     acceptance:
       - "A non-admin authenticated user receives 403 'Admin access required'"
+      - "A SMOKE_SESSION_KEY-verified session receives 403 'Admin access required' even when is_admin is true (#971; see FD-062)"
       - "Every /admin route carries a limiter decorator"
 
   - id: FD-059
