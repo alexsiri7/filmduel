@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient
 from backend.config import Settings
 from backend.rate_limit import limiter
 from backend.schemas import ConsentAccept, UserSettingsUpdate
+from backend.tests import SPA_HEADERS
 from starlette.requests import Request as StarletteRequest
 
 from backend.routers.auth import (
@@ -37,6 +38,7 @@ from backend.routers.auth import (
     _generate_pkce_pair,
     callback,
     create_jwt,
+    get_admin_user,
     get_current_user_id,
     login,
     logout,
@@ -678,6 +680,58 @@ class TestSmokeSessionKey:
         user_id = "11111111-2222-3333-4444-555555555555"
         token = create_jwt(user_id, SMOKE_SETTINGS)
         assert await self._authenticate(monkeypatch, SMOKE_SETTINGS, token) == user_id
+
+    @pytest.mark.asyncio
+    async def test_smoke_key_session_marked_on_request(self, monkeypatch):
+        monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SMOKE_SETTINGS)
+        smoke_token = pyjwt.encode(_make_jwt_payload(), _SMOKE_KEY, algorithm=JWT_ALGORITHM)
+        for token, smoke in ((smoke_token, True), (create_jwt(_SMOKE_USER_ID, SMOKE_SETTINGS), False)):
+            request = _make_request({COOKIE_NAME: token})
+            await get_current_user_id(request, _make_response(), _make_db())
+            assert request.state.smoke_session is smoke
+
+    @pytest.mark.asyncio
+    async def test_old_smoke_key_token_is_not_refreshed(self, monkeypatch):
+        """A refresh signs with SECRET_KEY, which would launder the CI key (#971)."""
+        monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SMOKE_SETTINGS)
+        now = datetime.now(timezone.utc)
+        payload = _make_jwt_payload(iat=now - REFRESH_INTERVAL - timedelta(hours=1))
+        token = pyjwt.encode(payload, _SMOKE_KEY, algorithm=JWT_ALGORITHM)
+        response = _make_response()
+        user_id = await get_current_user_id(_make_request({COOKIE_NAME: token}), response, _make_db())
+        assert user_id == _SMOKE_USER_ID
+        response.set_cookie.assert_not_called()
+
+    def _purge_as_admin(self, monkeypatch, token: str):
+        from backend.db import get_db
+        from backend.main import app
+
+        monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SMOKE_SETTINGS)
+        monkeypatch.setattr(limiter, "enabled", False)
+        admin = MagicMock(id=uuid.UUID(_SMOKE_USER_ID), is_admin=True)
+        db = _make_db()
+        db.execute.return_value = MagicMock(
+            scalar_one_or_none=MagicMock(return_value=admin),
+            fetchall=MagicMock(return_value=[]),
+        )
+        app.dependency_overrides[get_db] = lambda: db
+        try:
+            client = TestClient(app, headers=SPA_HEADERS)
+            client.cookies.set(COOKIE_NAME, token)
+            return client.delete("/api/duels/admin/purge-old-records")
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_admin_route_refuses_smoke_key_session_for_admin_user(self, monkeypatch):
+        token = pyjwt.encode(_make_jwt_payload(), _SMOKE_KEY, algorithm=JWT_ALGORITHM)
+        resp = self._purge_as_admin(monkeypatch, token)
+        assert resp.status_code == 403
+        assert resp.json()["detail"] == "Admin access required"
+
+    def test_admin_route_accepts_secret_key_session_for_admin_user(self, monkeypatch):
+        resp = self._purge_as_admin(monkeypatch, create_jwt(_SMOKE_USER_ID, SMOKE_SETTINGS))
+        assert resp.status_code == 200
+        assert resp.json() == {"purged": 0}
 
 
 # ---------------------------------------------------------------------------

@@ -88,9 +88,17 @@ def create_jwt(
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 
-def decode_session_jwt(token: str, settings: Settings) -> dict:
+class SessionClaims(NamedTuple):
+    """Verified session claims; smoke is true when only SMOKE_SESSION_KEY verified them."""
+
+    payload: dict
+    smoke: bool
+
+
+def decode_session_jwt(token: str, settings: Settings) -> SessionClaims:
     """Verify a session JWT signed with SECRET_KEY or, for the smoke user only,
     with SMOKE_SESSION_KEY, so the post-deploy smoke test never holds SECRET_KEY (#794).
+    `smoke` marks the second path so admin routes can refuse it (#971).
     """
     verify = dict(
         algorithms=[JWT_ALGORITHM],
@@ -99,14 +107,14 @@ def decode_session_jwt(token: str, settings: Settings) -> dict:
         options={"require": JWT_REQUIRED_CLAIMS},
     )
     try:
-        return jwt.decode(token, settings.SECRET_KEY, **verify)
+        return SessionClaims(jwt.decode(token, settings.SECRET_KEY, **verify), smoke=False)
     except jwt.InvalidSignatureError:
         if not settings.SMOKE_SESSION_KEY:
             raise
     payload = jwt.decode(token, settings.SMOKE_SESSION_KEY, **verify)
     if not _is_smoke_user(payload.get("sub"), settings):
         raise jwt.InvalidTokenError("smoke session key is valid for the smoke user only")
-    return payload
+    return SessionClaims(payload, smoke=True)
 
 
 def _is_smoke_user(sub: object, settings: Settings) -> bool:
@@ -197,7 +205,7 @@ async def get_current_user_id(
         return datetime.fromtimestamp(float(value), tz=timezone.utc)
 
     try:
-        payload = decode_session_jwt(token, settings)
+        payload, smoke = decode_session_jwt(token, settings)
         iat = _claim_time(payload["iat"])
         raw_orig = payload.get("orig_iat")
         if raw_orig is not None:
@@ -232,8 +240,12 @@ async def get_current_user_id(
     if now - orig_iat > SESSION_MAX_LIFETIME:
         _reject("Session expired")
 
+    request.state.smoke_session = smoke
+
     # Sliding refresh: only re-issue if the token is older than REFRESH_INTERVAL.
-    if now - iat > REFRESH_INTERVAL:
+    # The refresh signs with SECRET_KEY, so refreshing a smoke session would turn
+    # the CI key into a primary session (#971).
+    if not smoke and now - iat > REFRESH_INTERVAL:
         set_session_cookie(response, user_id, settings, orig_iat=orig_iat)
     return user_id
 
@@ -252,9 +264,14 @@ async def get_current_user(
 
 
 async def get_admin_user(
+    request: Request,
     current_user: User = Depends(get_current_user),
 ) -> User:
-    """Require the current user to have admin privileges."""
+    """Require admin privileges from a session signed with SECRET_KEY."""
+    # Set by get_current_user_id; absent only when a test overrides get_current_user.
+    if getattr(request.state, "smoke_session", False):
+        logger.warning("admin access refused for smoke-key session user=%s", current_user.id)
+        raise HTTPException(status_code=403, detail="Admin access required")
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
