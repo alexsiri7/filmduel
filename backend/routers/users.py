@@ -359,6 +359,14 @@ async def list_my_feedback(
     ]
 
 
+# Stored bytes are only magic-byte checked, so the response is sandboxed in case it is ever
+# parsed as a document.
+_SCREENSHOT_HEADERS = {
+    "Content-Security-Policy": "sandbox",
+    "Content-Disposition": 'inline; filename="screenshot"',
+}
+
+
 def _decode_data_url(data_url: str) -> tuple[str, bytes] | None:
     header, _, payload = data_url.partition(",")
     if not (header.startswith("data:") and header.endswith(";base64")):
@@ -401,7 +409,7 @@ async def view_my_screenshot(
         logger.error("screenshot_decode_failed report_id=%s", report_id)
         raise HTTPException(status_code=404, detail="Screenshot not found")
     mime, raw = decoded
-    return Response(content=raw, media_type=mime)
+    return Response(content=raw, media_type=mime, headers=_SCREENSHOT_HEADERS)
 
 
 @router.delete("/api/me/feedback/{report_id}", status_code=204)

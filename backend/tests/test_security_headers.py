@@ -32,6 +32,10 @@ def test_csp_frame_ancestors(response):
     assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
 
 
+def test_route_without_own_csp_gets_only_global_policy(response):
+    assert len(response.headers.get_list("content-security-policy")) == 1
+
+
 def test_csp_base_uri(response):
     assert "base-uri 'self'" in response.headers["content-security-policy"]
 

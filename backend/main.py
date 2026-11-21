@@ -258,6 +258,7 @@ async def add_security_headers(request: Request, call_next):
         response.headers["Strict-Transport-Security"] = (
             "max-age=31536000; includeSubDomains; preload"
         )
+    route_csp = response.headers.get("Content-Security-Policy")
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
         "img-src 'self' https://image.tmdb.org data:; "
@@ -271,6 +272,9 @@ async def add_security_headers(request: Request, call_next):
         f"report-uri {csp_report.CSP_REPORT_PATH}; "
         "report-to csp-endpoint"
     )
+    if route_csp:
+        # Browsers enforce each CSP header separately, so a route's own policy can only tighten.
+        response.headers.append("Content-Security-Policy", route_csp)
     response.headers["Reporting-Endpoints"] = f'csp-endpoint="{csp_report.CSP_REPORT_PATH}"'
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
     response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
