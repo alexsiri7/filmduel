@@ -52,7 +52,7 @@ def mint_session_jwt(user_id: str, secret: str, now: float | None = None) -> str
         "jti": secrets.token_hex(16),
         "iss": JWT_ISSUER,
         "aud": JWT_AUDIENCE,
-        "iat": int(now),
+        "iat": float(now),
         "exp": int(now) + JWT_LIFETIME_SECONDS,
         "orig_iat": float(now),
     }

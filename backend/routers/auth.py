@@ -86,7 +86,9 @@ def create_jwt(
         "iss": JWT_ISSUER,
         "aud": JWT_AUDIENCE,
         "exp": now + timedelta(hours=JWT_EXPIRY_HOURS),
-        "iat": now,
+        # Sub-second iat (RFC 7519 NumericDate allows it) so a login just after a
+        # logout in the same second is not revoked by that logout (#977).
+        "iat": now.timestamp(),
         "orig_iat": (orig_iat or now).timestamp(),
     }
     if revocation_mark is not None:
