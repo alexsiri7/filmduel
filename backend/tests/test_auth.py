@@ -1033,6 +1033,26 @@ class TestAcceptConsent:
         assert [t.func for t in bg.tasks] == [_run_pool_import, backfill_posters_background]
 
     @pytest.mark.asyncio
+    async def test_reconsent_within_hour_of_last_import_waits(self, monkeypatch):
+        """The cooldown is the full hour, not the 20-minute stale-import window."""
+        monkeypatch.setattr(limiter, "enabled", False)
+        user = self._make_user(privacy_policy_accepted=False)
+        user.pool_import_status = "complete"
+        user.pool_import_started_at = datetime.now(timezone.utc) - timedelta(minutes=30)
+        bg = BG()
+
+        await accept_consent(
+            body=ConsentAccept(version=CURRENT_PRIVACY_POLICY_VERSION),
+            request=_make_starlette_request(),
+            background_tasks=bg,
+            current_user=user,
+            db=AsyncMock(),
+        )
+
+        assert user.pool_import_status == "complete"
+        assert bg.tasks == []
+
+    @pytest.mark.asyncio
     async def test_reconsent_after_cooldown_starts_import(self, monkeypatch):
         """Re-accepting once the last import is older than the cooldown imports again."""
         monkeypatch.setattr(limiter, "enabled", False)
