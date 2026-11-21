@@ -444,6 +444,7 @@ async def test_process_duel_records_skip_outcome(outcome):
     assert duel_adds[0].outcome == outcome
     assert duel_adds[0].winner_movie_id is None
     assert duel_adds[0].loser_movie_id is None
+    assert duel_adds[0].mode == "discovery"
     assert duel_adds[0].pair_type == "ranked_vs_ranked"
 
 
