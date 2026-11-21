@@ -91,11 +91,6 @@ class DuelOutcome(str, Enum):
     neither = "neither"
 
 
-class DuelMode(str, Enum):
-    discovery = "discovery"
-    tournament = "tournament"
-
-
 SELF_DUEL_ERROR_MSG = "movie_a_id and movie_b_id must be different"
 
 
@@ -103,7 +98,8 @@ class DuelSubmit(BaseModel):
     movie_a_id: UUID
     movie_b_id: UUID
     outcome: DuelOutcome
-    mode: DuelMode = DuelMode.discovery
+    # Tournament duels are recorded only by the bracket's own match endpoint (#976).
+    mode: Literal["discovery"] = "discovery"
     pair_token: str
 
     @model_validator(mode="after")

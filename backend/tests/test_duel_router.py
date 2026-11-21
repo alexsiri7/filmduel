@@ -361,6 +361,29 @@ class TestSubmitDuel:
         assert response.json()["detail"] == "Invalid pair token"
         mock_pd.assert_not_called()
 
+    def test_tournament_mode_returns_422(self):
+        """A swipe duel cannot be labelled as a tournament duel (#976)."""
+        mid_a = str(uuid.uuid4())
+        mid_b = str(uuid.uuid4())
+        token = encode_pair_token(mid_a, mid_b, user_id=str(FAKE_USER.id))
+
+        with patch(
+            "backend.routers.duels.process_duel", new_callable=AsyncMock
+        ) as mock_pd:
+            client = TestClient(app, headers=SPA_HEADERS)
+            response = client.post(
+                "/api/duels",
+                json={
+                    "movie_a_id": mid_a,
+                    "movie_b_id": mid_b,
+                    "outcome": "a_wins",
+                    "mode": "tournament",
+                    "pair_token": token,
+                },
+            )
+        assert response.status_code == 422
+        mock_pd.assert_not_called()
+
     def test_process_duel_value_error_returns_generic_400(self, caplog):
         """MovieNotInPoolError from process_duel must return 400 with generic detail — not str(e)."""
         mid_a = str(uuid.uuid4())

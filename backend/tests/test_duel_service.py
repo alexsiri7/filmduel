@@ -12,7 +12,7 @@ import pytest
 from sqlalchemy.dialects import postgresql
 
 from backend.db_models import Duel, UserMovie
-from backend.schemas import DuelMode, DuelOutcome
+from backend.schemas import DuelOutcome
 from backend.services.duel import (
     MIN_SEEN_UNRANKED,
     MIN_TOTAL_SEEN,
@@ -259,7 +259,7 @@ async def test_process_duel_a_wins_elo():
     db.execute = _make_fake_execute(um_a, um_b)
 
     result = await process_duel(
-        db, uid, mid_a, mid_b, DuelOutcome.a_wins, DuelMode.discovery
+        db, uid, mid_a, mid_b, DuelOutcome.a_wins
     )
 
     # Equal ratings, K = 300/sqrt(6) each: +-61.24, shown rounded.
@@ -285,7 +285,7 @@ async def test_process_duel_delta_matches_the_displayed_ratings():
     db.execute = _make_fake_execute(um_a, um_b)
 
     result = await process_duel(
-        db, uid, mid_a, mid_b, DuelOutcome.a_wins, DuelMode.discovery
+        db, uid, mid_a, mid_b, DuelOutcome.a_wins
     )
 
     assert um_a.elo == pytest.approx(1045.63, abs=0.01)
@@ -310,7 +310,7 @@ async def test_process_duel_is_not_logged_at_info(caplog):
 
     with caplog.at_level(logging.DEBUG, logger="backend.services.duel"):
         await process_duel(
-        db, uid, mid_a, mid_b, DuelOutcome.a_wins, DuelMode.discovery
+        db, uid, mid_a, mid_b, DuelOutcome.a_wins
     )
 
     for record in caplog.records:
@@ -342,7 +342,7 @@ async def test_process_duel_a_wins_reversed_sort_order():
     db.execute = _make_fake_execute(um_a, um_b)
 
     result = await process_duel(
-        db, uid, mid_a, mid_b, DuelOutcome.a_wins, DuelMode.discovery
+        db, uid, mid_a, mid_b, DuelOutcome.a_wins
     )
 
     # A is the winner — must gain ELO regardless of UUID sort order
@@ -373,7 +373,7 @@ async def test_process_duel_b_wins_elo():
     db.execute = _make_fake_execute(um_a, um_b)
 
     result = await process_duel(
-        db, uid, mid_a, mid_b, DuelOutcome.b_wins, DuelMode.discovery
+        db, uid, mid_a, mid_b, DuelOutcome.b_wins
     )
 
     assert result.api_result.movie_b_elo_delta > 0, "Winner B should gain ELO"
@@ -401,7 +401,7 @@ async def test_process_duel_creates_duel_record():
     db.execute = _make_fake_execute(um_a, um_b)
 
     await process_duel(
-        db, uid, mid_a, mid_b, DuelOutcome.a_wins, DuelMode.discovery
+        db, uid, mid_a, mid_b, DuelOutcome.a_wins
     )
 
     # db.add is called for the Duel record
@@ -435,7 +435,7 @@ async def test_process_duel_records_skip_outcome(outcome):
     db = AsyncMock()
     db.execute = _make_fake_execute(um_a, um_b)
 
-    await process_duel(db, uid, mid_a, mid_b, outcome, DuelMode.discovery)
+    await process_duel(db, uid, mid_a, mid_b, outcome)
 
     duel_adds = [
         call.args[0] for call in db.add.call_args_list if isinstance(call.args[0], Duel)
@@ -461,7 +461,7 @@ async def test_process_duel_records_the_consumed_pair_token(outcome):
     db.execute = _make_fake_execute(um_a, um_b)
 
     await process_duel(
-        db, uid, mid_a, mid_b, outcome, DuelMode.discovery, pair_token_digest="digest"
+        db, uid, mid_a, mid_b, outcome, pair_token_digest="digest"
     )
 
     (duel,) = [
@@ -488,7 +488,7 @@ async def test_next_action_swipe_when_few_seen_unranked():
     db.execute = _make_fake_execute(um_a, um_b, seen_unranked=2, total_seen=20)
 
     result = await process_duel(
-        db, uid, mid_a, mid_b, DuelOutcome.a_wins, DuelMode.discovery
+        db, uid, mid_a, mid_b, DuelOutcome.a_wins
     )
     assert result.api_result.next_action == "swipe"
 
@@ -507,7 +507,7 @@ async def test_next_action_duel_when_enough_seen_unranked():
     db.execute = _make_fake_execute(um_a, um_b, seen_unranked=10, total_seen=20)
 
     result = await process_duel(
-        db, uid, mid_a, mid_b, DuelOutcome.a_wins, DuelMode.discovery
+        db, uid, mid_a, mid_b, DuelOutcome.a_wins
     )
     assert result.api_result.next_action == "duel"
 
@@ -531,7 +531,7 @@ async def test_process_duel_uses_seeded_elo_when_no_elo():
     db.execute = _make_fake_execute(um_a, um_b)
 
     result = await process_duel(
-        db, uid, mid_a, mid_b, DuelOutcome.a_wins, DuelMode.discovery
+        db, uid, mid_a, mid_b, DuelOutcome.a_wins
     )
 
     # A (1200) beats B (800) — A should gain less since heavily favored
@@ -561,7 +561,7 @@ async def test_process_duel_a_only_skips_elo():
     db.execute = _make_fake_execute(um_a, um_b)
 
     result = await process_duel(
-        db, uid, mid_a, mid_b, DuelOutcome.a_only, DuelMode.discovery
+        db, uid, mid_a, mid_b, DuelOutcome.a_only
     )
 
     assert result.api_result.movie_a_elo_delta == 0
@@ -592,7 +592,7 @@ async def test_process_duel_b_only_skips_elo():
     db.execute = _make_fake_execute(um_a, um_b)
 
     result = await process_duel(
-        db, uid, mid_a, mid_b, DuelOutcome.b_only, DuelMode.discovery
+        db, uid, mid_a, mid_b, DuelOutcome.b_only
     )
 
     assert result.api_result.movie_a_elo_delta == 0
@@ -622,7 +622,7 @@ async def test_process_duel_neither_skips_elo():
     db.execute = _make_fake_execute(um_a, um_b)
 
     result = await process_duel(
-        db, uid, mid_a, mid_b, DuelOutcome.neither, DuelMode.discovery
+        db, uid, mid_a, mid_b, DuelOutcome.neither
     )
 
     assert result.api_result.movie_a_elo_delta == 0
@@ -653,7 +653,7 @@ async def test_process_duel_a_only_preserves_seen_for_ranked_b():
     db.execute = _make_fake_execute(um_a, um_b)
 
     await process_duel(
-        db, uid, mid_a, mid_b, DuelOutcome.a_only, DuelMode.discovery
+        db, uid, mid_a, mid_b, DuelOutcome.a_only
     )
 
     # B is already ranked — seen must not be overridden
@@ -674,7 +674,7 @@ async def test_process_duel_b_only_preserves_seen_for_ranked_a():
     db.execute = _make_fake_execute(um_a, um_b)
 
     await process_duel(
-        db, uid, mid_a, mid_b, DuelOutcome.b_only, DuelMode.discovery
+        db, uid, mid_a, mid_b, DuelOutcome.b_only
     )
 
     assert um_a.seen is True
@@ -694,7 +694,7 @@ async def test_process_duel_neither_preserves_seen_for_ranked_films():
     db.execute = _make_fake_execute(um_a, um_b)
 
     await process_duel(
-        db, uid, mid_a, mid_b, DuelOutcome.neither, DuelMode.discovery
+        db, uid, mid_a, mid_b, DuelOutcome.neither
     )
 
     assert um_a.seen is True
@@ -715,7 +715,7 @@ async def test_process_duel_neither_marks_unseen_for_unranked_films():
     db.execute = _make_fake_execute(um_a, um_b)
 
     await process_duel(
-        db, uid, mid_a, mid_b, DuelOutcome.neither, DuelMode.discovery
+        db, uid, mid_a, mid_b, DuelOutcome.neither
     )
 
     assert um_a.seen is False
@@ -738,7 +738,7 @@ async def test_process_duel_neither_preserves_ranked_but_marks_unranked():
     db.execute = _make_fake_execute(um_a, um_b)
 
     await process_duel(
-        db, uid, mid_a, mid_b, DuelOutcome.neither, DuelMode.discovery
+        db, uid, mid_a, mid_b, DuelOutcome.neither
     )
 
     # Ranked film must NOT have seen reset
@@ -766,7 +766,7 @@ async def test_pair_type_ranked_vs_ranked():
     db.execute = _make_fake_execute(um_a, um_b)
 
     await process_duel(
-        db, uid, mid_a, mid_b, DuelOutcome.a_wins, DuelMode.discovery
+        db, uid, mid_a, mid_b, DuelOutcome.a_wins
     )
 
     duel_adds = [
@@ -790,7 +790,7 @@ async def test_pair_type_ranked_vs_unranked():
     db.execute = _make_fake_execute(um_a, um_b)
 
     await process_duel(
-        db, uid, mid_a, mid_b, DuelOutcome.a_wins, DuelMode.discovery
+        db, uid, mid_a, mid_b, DuelOutcome.a_wins
     )
 
     duel_adds = [
@@ -820,7 +820,7 @@ async def test_process_duel_a_wins_updates_timestamps():
     db.execute = _make_fake_execute(um_a, um_b)
 
     await process_duel(
-        db, uid, mid_a, mid_b, DuelOutcome.a_wins, DuelMode.discovery
+        db, uid, mid_a, mid_b, DuelOutcome.a_wins
     )
 
     assert um_a.last_dueled_at is not None
@@ -847,7 +847,7 @@ async def test_process_duel_a_only_already_seen_stays_true():
     db.execute = _make_fake_execute(um_a, um_b)
 
     await process_duel(
-        db, uid, mid_a, mid_b, DuelOutcome.a_only, DuelMode.discovery
+        db, uid, mid_a, mid_b, DuelOutcome.a_only
     )
 
     assert um_a.seen is True
