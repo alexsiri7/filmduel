@@ -279,8 +279,8 @@ class TestRetentionDefaults:
         assert s.DUEL_RETENTION_DAYS == 90
 
     def test_swipe_retention_days_override(self):
-        s = _make_settings(SWIPE_RETENTION_DAYS=365)
-        assert s.SWIPE_RETENTION_DAYS == 365
+        s = _make_settings(SWIPE_RETENTION_DAYS=30)
+        assert s.SWIPE_RETENTION_DAYS == 30
 
     def test_purge_schedule_hour_default(self):
         """PURGE_SCHEDULE_HOUR defaults to 2 UTC (low-traffic window)."""
@@ -312,6 +312,24 @@ class TestRetentionDefaults:
         with pytest.raises(ValidationError):
             _make_settings(DORMANT_TOKEN_RETENTION_DAYS=30)
         assert _make_settings(DORMANT_TOKEN_RETENTION_DAYS=31).DORMANT_TOKEN_RETENTION_DAYS == 31
+
+    @pytest.mark.parametrize(
+        "name,disclosed_days",
+        [
+            ("DUEL_RETENTION_DAYS", 180),
+            ("SWIPE_RETENTION_DAYS", 180),
+            ("TOURNAMENT_LLM_RETENTION_DAYS", 180),
+            ("SUGGESTION_RETENTION_DAYS", 180),
+            ("FEEDBACK_RETENTION_DAYS", 365),
+            ("UNCONSENTED_ACCOUNT_RETENTION_DAYS", 7),
+            ("DORMANT_TOKEN_RETENTION_DAYS", 90),
+        ],
+    )
+    def test_retention_window_capped_at_disclosed_period(self, name, disclosed_days):
+        """An override may not keep data longer than the privacy policy discloses (#983)."""
+        with pytest.raises(ValidationError):
+            _make_settings(**{name: disclosed_days + 1})
+        assert getattr(_make_settings(**{name: disclosed_days}), name) == disclosed_days
 
 
 class TestTokenEncKeyValidation:

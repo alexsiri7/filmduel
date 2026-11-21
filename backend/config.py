@@ -378,16 +378,18 @@ class Settings(BaseSettings):
             )
         return self
 
-    # Data retention (days)
-    DUEL_RETENTION_DAYS: int = 180
-    SWIPE_RETENTION_DAYS: int = 180
-    TOURNAMENT_LLM_RETENTION_DAYS: int = 180
-    SUGGESTION_RETENTION_DAYS: int = 180
-    FEEDBACK_RETENTION_DAYS: int = 365
-    UNCONSENTED_ACCOUNT_RETENTION_DAYS: Annotated[int, Field(ge=1)] = 7
+    # Data retention (days). Each ceiling is the window the privacy policy
+    # (frontend/src/pages/PrivacyPolicy.jsx) discloses, so an override can
+    # shorten a window but never keep data longer than users are told (#983).
+    DUEL_RETENTION_DAYS: Annotated[int, Field(le=180)] = 180
+    SWIPE_RETENTION_DAYS: Annotated[int, Field(le=180)] = 180
+    TOURNAMENT_LLM_RETENTION_DAYS: Annotated[int, Field(le=180)] = 180
+    SUGGESTION_RETENTION_DAYS: Annotated[int, Field(le=180)] = 180
+    FEEDBACK_RETENTION_DAYS: Annotated[int, Field(le=365)] = 365
+    UNCONSENTED_ACCOUNT_RETENTION_DAYS: Annotated[int, Field(ge=1, le=7)] = 7
     # Must exceed SESSION_MAX_LIFETIME (30 days, routers/auth.py) so no live
     # session loses its provider tokens.
-    DORMANT_TOKEN_RETENTION_DAYS: Annotated[int, Field(gt=30)] = 90
+    DORMANT_TOKEN_RETENTION_DAYS: Annotated[int, Field(gt=30, le=90)] = 90
     # Hour of day (UTC) at which the scheduled retention purge runs (0-23)
     PURGE_SCHEDULE_HOUR: Annotated[int, Field(ge=0, le=23)] = 2
 
