@@ -3,8 +3,10 @@
 import hashlib
 import logging
 import os
+import re
 import secrets
 import ssl
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -18,6 +20,10 @@ from backend.config import (
     is_cleartext_public_redis_uri,
 )
 from backend.config import _PROXY_PLATFORM_ENV_VARS as _PROXY_PLATFORM_ENV_VARS_PROD
+
+_PRIVACY_POLICY_PAGE = (
+    Path(__file__).resolve().parents[2] / "frontend" / "src" / "pages" / "PrivacyPolicy.jsx"
+)
 
 
 def _make_settings(**overrides) -> Settings:
@@ -314,22 +320,38 @@ class TestRetentionDefaults:
         assert _make_settings(DORMANT_TOKEN_RETENTION_DAYS=31).DORMANT_TOKEN_RETENTION_DAYS == 31
 
     @pytest.mark.parametrize(
-        "name,disclosed_days",
+        "name,policy_item",
         [
-            ("DUEL_RETENTION_DAYS", 180),
-            ("SWIPE_RETENTION_DAYS", 180),
-            ("TOURNAMENT_LLM_RETENTION_DAYS", 180),
-            ("SUGGESTION_RETENTION_DAYS", 180),
-            ("FEEDBACK_RETENTION_DAYS", 365),
-            ("UNCONSENTED_ACCOUNT_RETENTION_DAYS", 7),
-            ("DORMANT_TOKEN_RETENTION_DAYS", 90),
+            ("DUEL_RETENTION_DAYS", "Duel choices"),
+            ("SWIPE_RETENTION_DAYS", "Swipe answers and Watch Suggestions"),
+            ("TOURNAMENT_LLM_RETENTION_DAYS", "AI tournament responses"),
+            ("SUGGESTION_RETENTION_DAYS", "Swipe answers and Watch Suggestions"),
+            ("FEEDBACK_RETENTION_DAYS", "Feedback reports"),
+            ("UNCONSENTED_ACCOUNT_RETENTION_DAYS", "Accounts that never accept this policy"),
+            ("DORMANT_TOKEN_RETENTION_DAYS", "Trakt and SIMKL sign-in tokens"),
         ],
     )
-    def test_retention_window_capped_at_disclosed_period(self, name, disclosed_days):
-        """An override may not keep data longer than the privacy policy discloses (#983)."""
+    def test_retention_window_capped_at_disclosed_period(self, name, policy_item):
+        """An override may not keep data longer than the privacy policy discloses (#983).
+
+        The disclosed period is read from the policy page itself, so a window
+        changed on only one side fails here.
+        """
+        disclosed_days = _disclosed_retention_days(policy_item)
         with pytest.raises(ValidationError):
             _make_settings(**{name: disclosed_days + 1})
         assert getattr(_make_settings(**{name: disclosed_days}), name) == disclosed_days
+
+
+def _disclosed_retention_days(policy_item: str) -> int:
+    """The first "<n> days" in the policy page's Data Retention item for *policy_item*."""
+    match = re.search(
+        rf"<strong[^>]*>{re.escape(policy_item)}</strong>(?:(?!</li>).)*?(\d+) days",
+        _PRIVACY_POLICY_PAGE.read_text(),
+        re.DOTALL,
+    )
+    assert match, f"no retention period for {policy_item!r} in {_PRIVACY_POLICY_PAGE}"
+    return int(match.group(1))
 
 
 class TestTokenEncKeyValidation:
