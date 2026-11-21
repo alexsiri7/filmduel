@@ -46,6 +46,18 @@ describe("ConsentModal", () => {
     ).toBeInTheDocument();
   });
 
+  // The summary must name every processor the full policy does, for either sign-in provider (#980).
+  it("discloses both sign-in providers and every processor the policy names", () => {
+    render(<ConsentModal onAccepted={vi.fn()} />);
+
+    expect(screen.getByText(/OAuth tokens/i)).toHaveTextContent(/Trakt or SIMKL/i);
+    expect(screen.getByText(/watch history/i)).toHaveTextContent(/Trakt or SIMKL/i);
+    expect(screen.getByText(/Feedback reports/i)).toHaveTextContent(/screenshot/i);
+    for (const processor of ["Railway", "Supabase", "Redis", "TMDB", "Sentry"]) {
+      expect(screen.getByText(new RegExp(processor))).toBeInTheDocument();
+    }
+  });
+
   it("calls acceptConsent('2.2') and passes the updated user to onAccepted", async () => {
     const user = { pool_import_status: "importing" };
     acceptConsent.mockResolvedValueOnce(user);
