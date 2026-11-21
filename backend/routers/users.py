@@ -42,7 +42,7 @@ from backend.schemas import (
 )
 from backend.services.data_export import FEEDBACK_SCREENSHOT_PATH, export_user_data
 from backend.services.feedback import FEEDBACK_CAP_WINDOW, safe_decrypt_screenshot
-from backend.services.pool import populate_movie_pool
+from backend.services.pool import SYNC_COOLDOWN, populate_movie_pool
 from backend.services.tmdb import backfill_posters_background
 from backend.services.trakt import TraktClient
 from backend.services.simkl import SimklClient
@@ -125,6 +125,15 @@ async def _force_pool_sync(user: User, db: AsyncSession) -> tuple[User, bool]:
     return user, complete
 
 
+def _pool_import_started_recently(user: User) -> bool:
+    started = user.pool_import_started_at
+    if started is None:
+        return False
+    if started.tzinfo is None:
+        started = started.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) - started < SYNC_COOLDOWN
+
+
 def _start_pool_import(user: User) -> None:
     user.pool_import_status = "importing"
     user.pool_import_started_at = datetime.now(timezone.utc)
@@ -177,22 +186,26 @@ async def accept_consent(
     """Record that the user has accepted the privacy policy (GDPR consent).
 
     The first acceptance also starts the initial provider import in the
-    background; its progress is reported as pool_import_status.
+    background; its progress is reported as pool_import_status. Re-accepting
+    after a withdrawal starts no import if one began within SYNC_COOLDOWN, so a
+    withdraw/accept loop cannot outpace retry_pool_import (#969).
     """
     if body.version != CURRENT_PRIVACY_POLICY_VERSION:
         raise HTTPException(
             status_code=400,
             detail=f"Unrecognized policy version. Expected '{CURRENT_PRIVACY_POLICY_VERSION}'.",
         )
-    first_consent = not current_user.privacy_policy_accepted
+    start_import = not current_user.privacy_policy_accepted and not (
+        _pool_import_started_recently(current_user)
+    )
     current_user.privacy_policy_accepted = True
     current_user.privacy_policy_accepted_at = datetime.now(timezone.utc)
     current_user.privacy_policy_version = CURRENT_PRIVACY_POLICY_VERSION
-    if first_consent:
+    if start_import:
         _start_pool_import(current_user)
     await db.commit()
 
-    if first_consent:
+    if start_import:
         # Initial library import is deferred from the OAuth callback to here so no
         # provider data is ingested before consent is recorded (#571).
         background_tasks.add_task(
