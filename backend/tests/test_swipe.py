@@ -407,9 +407,9 @@ class TestSubmitSwipeResults:
         assert len(selects) == 2
         assert all("seen is null" in c for c in selects)
 
-    def test_skipped_items_are_not_logged_at_warning(self, caplog):
+    def test_skipped_items_are_not_logged_above_debug(self, caplog):
         """Skips pair a user id with a movie id and fire on benign duel races,
-        so they are summarized at DEBUG only, never WARNING (SEC-21, #589)."""
+        so they are summarized at DEBUG only (SEC-21, #589; SEC-15, #583)."""
         served, resolved = uuid.uuid4(), uuid.uuid4()
         user, _, _ = self._install(user_movies={served: MagicMock()})
 
@@ -424,6 +424,10 @@ class TestSubmitSwipeResults:
         assert resp.status_code == 200
         records = [r for r in caplog.records if r.name == "backend.routers.swipe"]
         assert not [r for r in records if r.levelno >= logging.WARNING]
+        for record in caplog.records:
+            if record.levelno >= logging.INFO:
+                assert str(served) not in record.getMessage(), record.getMessage()
+                assert str(resolved) not in record.getMessage(), record.getMessage()
         assert any(
             r.levelno == logging.DEBUG
             and r.getMessage() == f"swipe_submit_skipped user_id={user.id} skipped=1"

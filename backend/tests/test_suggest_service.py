@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -114,6 +115,34 @@ class TestBuildTasteProfile:
         assert "bottom_5" in result
         assert "genre_affinities" in result
         assert result["total_ranked"] == MIN_RANKED
+
+
+class TestSuggestLogging:
+    @pytest.mark.asyncio
+    async def test_profile_and_picks_are_not_logged_above_debug(self, caplog):
+        """INFO reaches Railway; a user's taste or picks there would be preference data (SEC-15, #583)."""
+        picks = [
+            {"trakt_id": c["trakt_id"], "reason": f"pick-reason-{c['trakt_id']}"}
+            for c in _FAKE_CANDIDATES[:NUM_PICKS]
+        ]
+
+        with (
+            patch("backend.services.suggest._build_taste_profile", AsyncMock(return_value=_FAKE_PROFILE)),
+            patch("backend.services.suggest._get_candidates", AsyncMock(return_value=_FAKE_CANDIDATES)),
+            patch("backend.services.suggest._call_llm", AsyncMock(return_value=picks)),
+            caplog.at_level(logging.DEBUG, logger="backend.services.suggest"),
+        ):
+            result = await generate_suggestions(uuid.uuid4(), AsyncMock())
+
+        assert len(result) == NUM_PICKS
+        assert any(r.getMessage().startswith("suggest_taste_profile ") for r in caplog.records)
+        info = [r.getMessage() for r in caplog.records if r.levelno >= logging.INFO]
+        assert info
+        for message in info:
+            assert "Drama" not in message
+            assert "pick-reason-" not in message
+            for candidate in _FAKE_CANDIDATES:
+                assert candidate["movie_id"] not in message, message
 
 
 class TestReasonTruncation:
