@@ -433,6 +433,38 @@ class TestGetCurrentUserId:
         _assert_session_cookie_cleared(exc_info.value.headers["set-cookie"])
 
     @staticmethod
+    def _issued_at(token: str) -> datetime:
+        payload = pyjwt.decode(
+            token, SETTINGS.SECRET_KEY, algorithms=[JWT_ALGORITHM], audience="filmduel"
+        )
+        return datetime.fromtimestamp(payload["iat"], tz=timezone.utc)
+
+    @pytest.mark.asyncio
+    async def test_login_after_logout_in_same_second_accepted(self, monkeypatch):
+        """A login later in the same wall-clock second as a logout is not
+        revoked by it (#977)."""
+        monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
+        logout_at = datetime.now(timezone.utc)
+        token = create_jwt("550e8400-e29b-41d4-a716-446655440000", SETTINGS)
+        result = await get_current_user_id(
+            _make_request({COOKIE_NAME: token}), _make_response(), _make_db(logout_at)
+        )
+        assert result == "550e8400-e29b-41d4-a716-446655440000"
+
+    @pytest.mark.asyncio
+    async def test_logout_revokes_token_issued_just_before(self, monkeypatch):
+        """A logout revokes a session issued a microsecond earlier, even within
+        the same second."""
+        monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
+        token = create_jwt("550e8400-e29b-41d4-a716-446655440000", SETTINGS)
+        logout_at = self._issued_at(token) + timedelta(microseconds=1)
+        with pytest.raises(HTTPException) as exc_info:
+            await get_current_user_id(
+                _make_request({COOKIE_NAME: token}), _make_response(), _make_db(logout_at)
+            )
+        assert exc_info.value.detail == "Session revoked"
+
+    @staticmethod
     async def _refreshed_token() -> str:
         """Run a sliding refresh on a stale token and return the re-issued one."""
         old_iat = datetime.now(timezone.utc) - REFRESH_INTERVAL - timedelta(hours=1)
