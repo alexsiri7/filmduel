@@ -1,6 +1,6 @@
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import Suggestions from "../pages/Suggestions";
 import {
   getSuggestions,
@@ -197,5 +197,37 @@ describe("Suggestions", () => {
       expect(screen.getByText("All caught up!")).toBeInTheDocument();
     });
     expect(screen.getByText("Regenerate Suggestions")).toBeInTheDocument();
+  });
+
+  describe("failed actions are never shown as success", () => {
+    beforeEach(() => {
+      vi.spyOn(console, "error").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      console.error.mockRestore();
+    });
+
+    it.each([
+      { api: dismissSuggestion, findButton: () => screen.getByTitle("Dismiss") },
+      { api: markSuggestionSeen, findButton: () => screen.getByText("Seen it") },
+      { api: addToWatchlist, findButton: () => screen.getByText("Watchlist") },
+    ])("keeps the card when the action rejects", async ({ api, findButton }) => {
+      getSuggestions.mockResolvedValue({ status: "ready", suggestions: [makeSuggestion()] });
+      api.mockRejectedValue(new Error("boom"));
+
+      renderSuggestions();
+      await waitFor(() => expect(screen.getByText("The Thing")).toBeInTheDocument());
+
+      fireEvent.click(findButton());
+
+      await waitFor(() => expect(api).toHaveBeenCalledWith("sugg-1"));
+
+      expect(screen.getByText("The Thing")).toBeInTheDocument();
+      if (api === addToWatchlist) {
+        expect(screen.queryByText("On Watchlist")).not.toBeInTheDocument();
+        expect(screen.getByText("Watchlist")).toBeInTheDocument();
+      }
+    });
   });
 });
