@@ -234,7 +234,7 @@ class TestGetSuggestionsGeneration:
     def teardown_method(self):
         app.dependency_overrides.clear()
 
-    def _get(self, *, active, latest, lock=True, created=None):
+    def _get(self, *, active, latest, lock=True, created=None, headers=SPA_HEADERS):
         """Call GET with the router's data helpers stubbed; return (resp, create mock)."""
         latest_kwargs = (
             {"side_effect": latest} if isinstance(latest, list) else {"return_value": latest}
@@ -263,7 +263,7 @@ class TestGetSuggestionsGeneration:
             "backend.routers.suggestions._build_suggestion_schema",
             return_value=_fake_suggestion_schema(),
         ):
-            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+            with TestClient(app, headers=headers, raise_server_exceptions=False) as client:
                 resp = client.get("/api/suggestions")
         return resp, mock_create
 
@@ -306,6 +306,28 @@ class TestGetSuggestionsGeneration:
         assert resp.status_code == 200
         assert resp.json()["status"] == "ready"
         mock_create.assert_awaited_once()
+
+    def test_first_use_without_spa_header_does_not_generate(self):
+        """A cross-site navigation carries the Lax session cookie but not
+        X-Requested-With; it must not spend an LLM call (AUTH-003, #973)."""
+        resp, mock_create = self._get(active=[], latest=None, headers={})
+
+        assert resp.status_code == 200
+        assert resp.json() == {"suggestions": [], "status": "ready"}
+        mock_create.assert_not_awaited()
+        self.mock_lock.assert_not_awaited()
+
+    def test_stale_batch_without_spa_header_returns_existing(self):
+        now = datetime.now(timezone.utc)
+        resp, mock_create = self._get(
+            active=[MagicMock()], latest=now - timedelta(hours=25), headers={}
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "ready"
+        assert len(resp.json()["suggestions"]) == 1
+        mock_create.assert_not_awaited()
+        self.mock_lock.assert_not_awaited()
 
     def test_generation_in_flight_returns_429_without_generating(self):
         resp, mock_create = self._get(active=[], latest=None, lock=False)

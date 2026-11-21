@@ -160,7 +160,8 @@ async def get_suggestions(
     media_type: MediaType = Query(default="movie"),
 ):
     """Return current suggestions. Generate only if none exist or the newest batch
-    (dismissed included) is >24h old, and no recent LLM attempt came back empty."""
+    (dismissed included) is >24h old, no recent LLM attempt came back empty, and
+    the request came from the SPA."""
     uid = current_user.id
 
     require_ai_consent(current_user)
@@ -173,6 +174,12 @@ async def get_suggestions(
     latest = await _latest_generated_at(uid, db, media_type)
 
     if latest is None or latest <= cutoff:
+        # SameSite=Lax lets a cross-site link carry the session cookie on GET,
+        # and the CSRF middleware exempts GET, so only the SPA's custom header
+        # (never sent cross-site without a preflight) may trigger an LLM call
+        # and new rows (AUTH-003, #973).
+        if request.headers.get("x-requested-with") != "XMLHttpRequest":
+            return _ready_response(await _get_active_suggestions(uid, db, media_type))
         # One generation per user at a time (AUD-08, #690).
         if not await try_acquire_xact_lock(db, REGENERATION_DAILY_QUOTA.name, uid):
             active = await _get_active_suggestions(uid, db, media_type)
