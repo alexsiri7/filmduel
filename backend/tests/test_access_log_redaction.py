@@ -80,9 +80,15 @@ async def test_real_uvicorn_request_drops_query(http):
     server = uvicorn.Server(uvicorn.Config(_ok_app, http=http, lifespan="off"))
     serving = asyncio.create_task(server.serve(sockets=[sock]))
     capture = _Capture()
-    try:
+    async def _wait_started():
         while not server.started:
+            if serving.done():
+                serving.result()  # re-raise the startup failure
+                raise AssertionError("uvicorn exited before starting")
             await asyncio.sleep(0.01)
+
+    try:
+        await asyncio.wait_for(_wait_started(), timeout=5)
         logging.getLogger("uvicorn.access").addHandler(capture)
         async with httpx.AsyncClient() as client:
             response = await client.get(

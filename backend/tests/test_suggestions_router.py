@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 from backend.main import app
 from backend.tests import SPA_HEADERS
 from backend.db import get_db
+from backend.db_models import Movie, Suggestion, UserMovie
 from backend.routers.auth import CURRENT_PRIVACY_POLICY_VERSION, get_current_user
 from backend.schemas import MovieSchema, SuggestionSchema
 from backend.services.llm import LLMNotConfiguredError
@@ -196,6 +197,26 @@ def _fake_suggestion_schema() -> SuggestionSchema:
             id=str(uuid.uuid4()), trakt_id=42, title="Test Film", media_type="movie"
         ),
         reason="test reason",
+        generated_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+
+
+def _make_suggestion(owner_id: uuid.UUID) -> Suggestion:
+    """Build a real transient Suggestion/Movie pair so _build_suggestion_schema
+    runs for real and the response reflects actual state."""
+    movie = Movie(
+        id=uuid.uuid4(),
+        trakt_id=42,
+        title="Test Film",
+        media_type="movie",
+        poster_url="https://img/x.jpg",
+    )
+    return Suggestion(
+        id=uuid.uuid4(),
+        user_id=owner_id,
+        movie_id=movie.id,
+        movie=movie,
+        reason="r",
         generated_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
     )
 
@@ -889,3 +910,277 @@ class TestSyncTraktWatchlistForUpdate:
             "User query in _sync_trakt_watchlist must use .with_for_update() "
             "to prevent concurrent token refresh"
         )
+
+
+# ---------------------------------------------------------------------------
+# Item 4: mark_seen updates or creates a UserMovie
+# ---------------------------------------------------------------------------
+
+
+class TestMarkSeen:
+    def setup_method(self):
+        app.dependency_overrides.clear()
+        self.user = _make_user()
+        app.dependency_overrides[get_current_user] = lambda: self.user
+
+    def teardown_method(self):
+        app.dependency_overrides.clear()
+
+    def test_mark_seen_updates_existing_user_movie(self):
+        s = _make_suggestion(self.user.id)
+        um = UserMovie(user_id=self.user.id, movie_id=s.movie_id, seen=None)
+
+        mock_db = AsyncMock()
+        mock_db.add = MagicMock()
+        mock_db.execute.return_value = MagicMock()
+        mock_db.execute.return_value.scalar_one_or_none.return_value = um
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with patch(
+            "backend.routers.suggestions._get_user_suggestion",
+            new_callable=AsyncMock,
+            return_value=s,
+        ):
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.post(f"/api/suggestions/{s.id}/seen")
+
+        assert resp.status_code == 200
+        assert um.seen is True
+        assert um.updated_at is not None
+        assert s.dismissed_at is not None
+        assert resp.json()["dismissed_at"] is not None
+        mock_db.add.assert_not_called()
+
+    def test_mark_seen_creates_user_movie_when_missing(self):
+        s = _make_suggestion(self.user.id)
+
+        mock_db = AsyncMock()
+        mock_db.add = MagicMock()
+        mock_db.execute.return_value = MagicMock()
+        mock_db.execute.return_value.scalar_one_or_none.return_value = None
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with patch(
+            "backend.routers.suggestions._get_user_suggestion",
+            new_callable=AsyncMock,
+            return_value=s,
+        ):
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.post(f"/api/suggestions/{s.id}/seen")
+
+        assert resp.status_code == 200
+        mock_db.add.assert_called_once()
+        created = mock_db.add.call_args.args[0]
+        assert isinstance(created, UserMovie)
+        assert created.user_id == self.user.id
+        assert created.movie_id == s.movie_id
+        assert created.seen is True
+        assert resp.json()["dismissed_at"] is not None
+
+
+# ---------------------------------------------------------------------------
+# Item 5: acting on another user's suggestion is a 404
+# ---------------------------------------------------------------------------
+
+
+class TestSuggestionOwnership:
+    def setup_method(self):
+        app.dependency_overrides.clear()
+
+    def teardown_method(self):
+        app.dependency_overrides.clear()
+
+    def _fake_db(self, owner_id: uuid.UUID, s: Suggestion) -> AsyncMock:
+        from sqlalchemy.dialects import postgresql
+
+        async def fake_execute(stmt, *args, **kwargs):
+            compiled = stmt.compile(dialect=postgresql.dialect())
+            params = set(compiled.params.values())
+            result = MagicMock()
+            if owner_id in params or str(owner_id) in params:
+                result.unique.return_value.scalar_one_or_none.return_value = s
+            else:
+                result.unique.return_value.scalar_one_or_none.return_value = None
+            return result
+
+        mock_db = AsyncMock()
+        mock_db.execute = AsyncMock(side_effect=fake_execute)
+        return mock_db
+
+    @pytest.mark.parametrize("action", ["dismiss", "watchlist", "seen"])
+    def test_other_users_suggestion_is_not_found(self, action):
+        owner_id = uuid.uuid4()
+        s = _make_suggestion(owner_id)
+        mock_db = self._fake_db(owner_id, s)
+        user = _make_user()  # different id from owner_id
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with patch("backend.routers.suggestions.async_session_factory"), patch(
+            "backend.routers.suggestions.TraktClient"
+        ):
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.post(f"/api/suggestions/{s.id}/{action}")
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Suggestion not found"
+        assert s.dismissed_at is None
+        assert s.added_to_watchlist_at is None
+
+    def test_owner_can_act_on_own_suggestion(self):
+        owner_id = uuid.uuid4()
+        s = _make_suggestion(owner_id)
+        mock_db = self._fake_db(owner_id, s)
+        user = _make_user()
+        user.id = owner_id
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+            resp = client.post(f"/api/suggestions/{s.id}/dismiss")
+
+        assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Item 6: dismiss sets dismissed_at; dismissed rows drop out of the active list
+# ---------------------------------------------------------------------------
+
+
+class TestDismiss:
+    def setup_method(self):
+        app.dependency_overrides.clear()
+        self.user = _make_user()
+        app.dependency_overrides[get_current_user] = lambda: self.user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+
+    def teardown_method(self):
+        app.dependency_overrides.clear()
+
+    def test_dismiss_sets_dismissed_at(self):
+        s = _make_suggestion(self.user.id)
+
+        with patch(
+            "backend.routers.suggestions._get_user_suggestion",
+            new_callable=AsyncMock,
+            return_value=s,
+        ):
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=False) as client:
+                resp = client.post(f"/api/suggestions/{s.id}/dismiss")
+
+        assert resp.status_code == 200
+        assert s.dismissed_at is not None
+        now = datetime.now(timezone.utc)
+        assert abs((now - s.dismissed_at).total_seconds()) < 5
+        body = resp.json()
+        assert body["dismissed_at"] is not None
+        assert body["id"] == str(s.id)
+
+
+class TestActiveSuggestions:
+    @pytest.mark.asyncio
+    async def test_active_list_excludes_dismissed(self):
+        from sqlalchemy.dialects import postgresql
+
+        from backend.routers.suggestions import _get_active_suggestions
+
+        db = AsyncMock()
+        db.execute.return_value = MagicMock()
+        db.execute.return_value.unique.return_value.scalars.return_value.all.return_value = []
+
+        await _get_active_suggestions(uuid.uuid4(), db, "show")
+
+        stmt = db.execute.call_args.args[0]
+        compiled = stmt.compile(dialect=postgresql.dialect())
+        sql = str(compiled)
+
+        assert "suggestions.dismissed_at IS NULL" in sql
+        assert "movies.poster_url IS NOT NULL" in sql
+        assert "show" in compiled.params.values()
+
+
+# ---------------------------------------------------------------------------
+# Item 7: watchlist background sync failure paths
+# ---------------------------------------------------------------------------
+
+
+class TestSyncTraktWatchlistFailures:
+    def setup_method(self):
+        app.dependency_overrides.clear()
+
+    def teardown_method(self):
+        app.dependency_overrides.clear()
+
+    def _post_watchlist(self, bg_user_token, add_side_effect=None):
+        """POST .../watchlist with the background sync's token lookup and Trakt
+        call mocked. Returns (resp, mock_ensure_fresh, mock_trakt_cls)."""
+        user = _make_user()
+        s = _make_suggestion(user.id)
+
+        bg_user = MagicMock()
+        bg_user.trakt_access_token = bg_user_token
+
+        async def fake_bg_session_execute(stmt, *args, **kwargs):
+            result = MagicMock()
+            result.scalar_one_or_none.return_value = bg_user
+            return result
+
+        mock_bg_session = AsyncMock()
+        mock_bg_session.execute.side_effect = fake_bg_session_execute
+        mock_bg_session.commit = AsyncMock()
+
+        mock_db = AsyncMock()
+
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        with (
+            patch(
+                "backend.routers.suggestions._get_user_suggestion",
+                new_callable=AsyncMock,
+                return_value=s,
+            ),
+            patch(
+                "backend.routers.suggestions.async_session_factory"
+            ) as mock_factory,
+            patch(
+                "backend.routers.suggestions.ensure_fresh_token",
+                new_callable=AsyncMock,
+                return_value=bg_user,
+            ) as mock_ensure_fresh,
+            patch(
+                "backend.routers.suggestions.TraktClient"
+            ) as mock_trakt_cls,
+        ):
+            mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_bg_session)
+            mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+            mock_trakt_cls.return_value = AsyncMock()
+            mock_trakt_cls.return_value.add_to_watchlist = AsyncMock(side_effect=add_side_effect)
+
+            with TestClient(app, headers=SPA_HEADERS, raise_server_exceptions=True) as client:
+                resp = client.post(f"/api/suggestions/{s.id}/watchlist")
+
+        return resp, mock_ensure_fresh, mock_trakt_cls
+
+    def test_no_trakt_token_skips_sync(self):
+        resp, mock_ensure_fresh, mock_trakt_cls = self._post_watchlist(bg_user_token=None)
+
+        assert resp.status_code == 200
+        mock_ensure_fresh.assert_not_awaited()
+        mock_trakt_cls.assert_not_called()
+
+    def test_trakt_failure_is_logged_not_raised(self, caplog):
+        import logging
+
+        with caplog.at_level(logging.ERROR, logger="backend.routers.suggestions"):
+            resp, _, mock_trakt_cls = self._post_watchlist(
+                bg_user_token="valid-token",
+                add_side_effect=httpx.ConnectError("down"),
+            )
+
+        assert resp.status_code == 200
+        assert resp.json()["added_to_watchlist_at"] is not None
+        mock_trakt_cls.return_value.add_to_watchlist.assert_awaited_once_with(42)
+        assert "Failed to sync watchlist to Trakt for movie 42" in caplog.text

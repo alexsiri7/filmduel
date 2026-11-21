@@ -45,3 +45,13 @@ def _reset_llm_concurrency_guard():
     reset_llm_slots()
     yield
     reset_llm_slots()
+
+
+@pytest.fixture(autouse=True)
+def _reset_dependency_overrides():
+    """Clear FastAPI dependency overrides between tests so one module's fake user/db can't leak."""
+    from backend.main import app
+
+    app.dependency_overrides.clear()
+    yield
+    app.dependency_overrides.clear()
