@@ -7,7 +7,6 @@ from pydantic import ValidationError
 
 from backend.schemas import (
     ConsentAccept,
-    DuelMode,
     DuelOutcome,
     DuelResult,
     DuelSubmit,
@@ -90,17 +89,18 @@ class TestDuelSubmit:
         )
         assert ds.movie_a_id == UUID("550e8400-e29b-41d4-a716-446655440000")
         assert ds.outcome == DuelOutcome.a_wins
-        assert ds.mode == DuelMode.discovery  # default
+        assert ds.mode == "discovery"  # default
 
-    def test_tournament_mode(self):
-        ds = DuelSubmit(
-            movie_a_id="550e8400-e29b-41d4-a716-446655440000",
-            movie_b_id="550e8400-e29b-41d4-a716-446655440001",
-            outcome=DuelOutcome.b_wins,
-            mode="tournament",
-            pair_token="tok",
-        )
-        assert ds.mode == DuelMode.tournament
+    def test_tournament_mode_rejected(self):
+        """Only the bracket's match endpoint records tournament duels (#976)."""
+        with pytest.raises(ValidationError):
+            DuelSubmit(
+                movie_a_id="550e8400-e29b-41d4-a716-446655440000",
+                movie_b_id="550e8400-e29b-41d4-a716-446655440001",
+                outcome=DuelOutcome.b_wins,
+                mode="tournament",
+                pair_token="tok",
+            )
 
     def test_invalid_mode_rejected(self):
         with pytest.raises(ValidationError):

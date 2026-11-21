@@ -16,7 +16,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db_models import Duel, Movie, UserMovie
-from backend.schemas import DuelMode, DuelOutcome, DuelResult
+from backend.schemas import DuelOutcome, DuelResult
 from backend.services.elo import effective_elo, update_elo
 
 logger = logging.getLogger(__name__)
@@ -214,16 +214,15 @@ async def _record_duel(
     user_id: uuid.UUID,
     effect: OutcomeEffect,
     outcome: DuelOutcome,
-    mode: DuelMode,
 ) -> Duel:
     """Rate a decided duel, or record a skip by its outcome alone."""
     if effect.winner_and_loser is None:
-        duel = Duel(user_id=user_id, mode=mode.value, outcome=outcome.value)
+        duel = Duel(user_id=user_id, mode="discovery", outcome=outcome.value)
         db.add(duel)
     else:
         um_w, um_l = effect.winner_and_loser
         duel = await apply_elo_result(
-            db, user_id, um_w.movie_id, um_l.movie_id, um_w, um_l, mode.value
+            db, user_id, um_w.movie_id, um_l.movie_id, um_w, um_l, "discovery"
         )
     duel.pair_type = effect.pair_type
     return duel
@@ -240,7 +239,6 @@ async def process_duel(
     movie_a_id: uuid.UUID,
     movie_b_id: uuid.UUID,
     outcome: DuelOutcome,
-    mode: DuelMode,
     *,
     pair_token_digest: str | None = None,
 ) -> ProcessDuelResult:
@@ -255,7 +253,7 @@ async def process_duel(
     elo_a_before, elo_b_before = effective_elo(um_a), effective_elo(um_b)
 
     effect = apply_outcome(um_a, um_b, outcome, datetime.now(timezone.utc))
-    duel = await _record_duel(db, user_id, effect, outcome, mode)
+    duel = await _record_duel(db, user_id, effect, outcome)
     duel.pair_token_digest = pair_token_digest
     delta_a = _elo_delta(elo_a_before, um_a.elo)
     delta_b = _elo_delta(elo_b_before, um_b.elo)

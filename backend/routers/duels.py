@@ -45,16 +45,14 @@ async def submit_duel(
     movie_a_id = body.movie_a_id
     movie_b_id = body.movie_b_id
     outcome = body.outcome.value
-    mode = body.mode.value
 
     # DEBUG, not INFO: user_id + preference data is behavioral personal data (SEC-15, #583).
     logger.debug(
-        "duel_submitted user_id=%s movie_a=%s movie_b=%s outcome=%s mode=%s",
+        "duel_submitted user_id=%s movie_a=%s movie_b=%s outcome=%s",
         uid,
         movie_a_id,
         movie_b_id,
         outcome,
-        mode,
     )
 
     # Validate pair token before anything else
@@ -76,7 +74,6 @@ async def submit_duel(
             movie_a_id,
             movie_b_id,
             body.outcome,
-            body.mode,
             pair_token_digest=pair_token_digest,
         )
         await db.flush()
