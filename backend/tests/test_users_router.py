@@ -430,6 +430,10 @@ class TestViewMyScreenshot(_OwnerFeedbackRoutes):
         assert resp.content == self.PNG
         assert resp.headers["content-type"] == "image/png"
         assert resp.headers["cache-control"] == "no-store"
+        csp = resp.headers.get_list("content-security-policy")
+        assert "sandbox" in csp
+        assert any("frame-ancestors 'none'" in policy for policy in csp)
+        assert resp.headers["content-disposition"] == 'inline; filename="screenshot"'
         _assert_owner_scoped(db.execute.call_args.args[0], report_id, user)
 
     def test_works_without_current_consent(self):
