@@ -53,6 +53,7 @@ from backend.routers.users import (
     _run_pool_import,
     accept_consent,
     update_settings,
+    withdraw_consent,
 )
 from backend.services.pool import sync_pool_background
 from backend.services.tmdb import backfill_posters_background
@@ -998,6 +999,58 @@ class TestAcceptConsent:
         assert result.pool_import_status == "importing"
         assert [t.func for t in bg.tasks] == [_run_pool_import, backfill_posters_background]
         assert bg.tasks[0].args == (user.id, user.pool_import_started_at)
+
+    @pytest.mark.asyncio
+    async def test_withdraw_accept_loop_starts_one_import(self, monkeypatch):
+        """A withdraw/accept loop must not restart the forced import (#969)."""
+        monkeypatch.setattr(limiter, "enabled", False)
+        user = self._make_user(privacy_policy_accepted=False)
+        db = AsyncMock()
+        bg = BG()
+
+        for _ in range(2):
+            await accept_consent(
+                body=ConsentAccept(version=CURRENT_PRIVACY_POLICY_VERSION),
+                request=_make_starlette_request(),
+                background_tasks=bg,
+                current_user=user,
+                db=db,
+            )
+            await withdraw_consent(
+                request=_make_starlette_request(), current_user=user, db=db
+            )
+        # The first import finished; re-consent within the cooldown still waits.
+        user.pool_import_status = "complete"
+        result = await accept_consent(
+            body=ConsentAccept(version=CURRENT_PRIVACY_POLICY_VERSION),
+            request=_make_starlette_request(),
+            background_tasks=bg,
+            current_user=user,
+            db=db,
+        )
+
+        assert result.privacy_policy_accepted is True
+        assert [t.func for t in bg.tasks] == [_run_pool_import, backfill_posters_background]
+
+    @pytest.mark.asyncio
+    async def test_reconsent_after_cooldown_starts_import(self, monkeypatch):
+        """Re-accepting once the last import is older than the cooldown imports again."""
+        monkeypatch.setattr(limiter, "enabled", False)
+        user = self._make_user(privacy_policy_accepted=False)
+        user.pool_import_status = "complete"
+        user.pool_import_started_at = datetime.now(timezone.utc) - timedelta(hours=2)
+        bg = BG()
+
+        await accept_consent(
+            body=ConsentAccept(version=CURRENT_PRIVACY_POLICY_VERSION),
+            request=_make_starlette_request(),
+            background_tasks=bg,
+            current_user=user,
+            db=AsyncMock(),
+        )
+
+        assert user.pool_import_status == "importing"
+        assert [t.func for t in bg.tasks] == [_run_pool_import, backfill_posters_background]
 
     @pytest.mark.asyncio
     async def test_reconsent_does_not_resync(self, monkeypatch):
