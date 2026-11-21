@@ -31,12 +31,15 @@ export default function ConsentModal({ onAccepted }) {
           FilmDuel collects the following data to provide its service:
         </p>
         <ul className="space-y-2 mb-6 text-[#d6c4ae] text-sm font-body">
-          <li>• OAuth tokens from Trakt (stored encrypted)</li>
-          <li>• Your watched film history from Trakt</li>
+          <li>• Your account details and OAuth tokens from the service you sign in with, Trakt or SIMKL (tokens stored encrypted)</li>
+          <li>• Your watch history and ratings from Trakt or SIMKL</li>
           <li>• Duel choices and ELO rankings</li>
           <li>• <strong>AI Watch Suggestions</strong> — your top 10 and bottom 5 ranked films (title, year, genres, preference tier), per-genre affinities, total ranked count, and a candidate pool of up to 50 films from the catalog (title, year, genres, community rating) are sent to Requesty.ai</li>
           <li>• <strong>AI-Curated Tournaments</strong> — candidate films (title, year, genres, preference tier, duel count) plus any theme or filter you enter are sent to Requesty.ai</li>
           <li>• Raw ELO scores and account identifiers are never transmitted</li>
+          <li>• Feedback reports you choose to send, including any screenshot you attach (stored encrypted)</li>
+          <li>• Hosting and storage: the app runs on Railway, which logs your IP address; your data is stored in Supabase; rate-limit counters keyed by IP address are kept in Redis</li>
+          <li>• Poster images load directly from TMDB, which receives your IP address and which posters you view</li>
           <li>• Error reports sent to Sentry</li>
         </ul>
         <a

@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import ConsentModal from "../components/ConsentModal";
+import PrivacyPolicy from "../pages/PrivacyPolicy";
 
 vi.mock("../api", () => ({
   acceptConsent: vi.fn(),
@@ -44,6 +45,33 @@ describe("ConsentModal", () => {
     expect(
       screen.getByText(/Raw ELO scores and account identifiers are never transmitted/i)
     ).toBeInTheDocument();
+  });
+
+  // The summary must name every processor the full policy does, for either sign-in provider (#980).
+  it("discloses both sign-in providers and feedback screenshots", () => {
+    render(<ConsentModal onAccepted={vi.fn()} />);
+
+    expect(screen.getByText(/OAuth tokens/i)).toHaveTextContent(/Trakt or SIMKL/i);
+    expect(screen.getByText(/watch history/i)).toHaveTextContent(/Trakt or SIMKL/i);
+    expect(screen.getByText(/Feedback reports/i)).toHaveTextContent(/screenshot/i);
+  });
+
+  // Read the processors from the policy itself so a service added there fails here
+  // until the summary names it too.
+  it("names every processor in the privacy policy's Third-Party Services list", () => {
+    const { unmount } = render(<PrivacyPolicy />);
+    const services = screen.getByRole("heading", { name: /third-party services/i }).closest("section");
+    const processors = [...services.querySelectorAll("li > strong")].map((el) =>
+      el.textContent.replace(/\s*\(.*\)$/, "")
+    );
+    expect(processors.length).toBeGreaterThan(0);
+    unmount();
+
+    render(<ConsentModal onAccepted={vi.fn()} />);
+    const summary = screen.getByText(/collects the following data/i).parentElement.textContent;
+    for (const processor of processors) {
+      expect(summary).toContain(processor);
+    }
   });
 
   it("calls acceptConsent('2.2') and passes the updated user to onAccepted", async () => {
