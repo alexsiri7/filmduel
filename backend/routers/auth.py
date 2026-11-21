@@ -88,17 +88,11 @@ def create_jwt(
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 
-class SessionClaims(NamedTuple):
-    """Verified session claims; smoke is true when only SMOKE_SESSION_KEY verified them."""
-
-    payload: dict
-    smoke: bool
-
-
-def decode_session_jwt(token: str, settings: Settings) -> SessionClaims:
+def decode_session_jwt(token: str, settings: Settings) -> tuple[dict, bool]:
     """Verify a session JWT signed with SECRET_KEY or, for the smoke user only,
     with SMOKE_SESSION_KEY, so the post-deploy smoke test never holds SECRET_KEY (#794).
-    `smoke` marks the second path so admin routes can refuse it (#971).
+    Returns (payload, smoke); smoke marks the second path so admin routes can
+    refuse it (#971).
     """
     verify = dict(
         algorithms=[JWT_ALGORITHM],
@@ -107,14 +101,14 @@ def decode_session_jwt(token: str, settings: Settings) -> SessionClaims:
         options={"require": JWT_REQUIRED_CLAIMS},
     )
     try:
-        return SessionClaims(jwt.decode(token, settings.SECRET_KEY, **verify), smoke=False)
+        return jwt.decode(token, settings.SECRET_KEY, **verify), False
     except jwt.InvalidSignatureError:
         if not settings.SMOKE_SESSION_KEY:
             raise
     payload = jwt.decode(token, settings.SMOKE_SESSION_KEY, **verify)
     if not _is_smoke_user(payload.get("sub"), settings):
         raise jwt.InvalidTokenError("smoke session key is valid for the smoke user only")
-    return SessionClaims(payload, smoke=True)
+    return payload, True
 
 
 def _is_smoke_user(sub: object, settings: Settings) -> bool:
