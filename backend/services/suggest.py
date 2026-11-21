@@ -272,12 +272,11 @@ async def generate_suggestions(
 
     try:
         picks = await _call_llm(taste_profile, candidates)
+        if picks is None:
+            raise SuggestionError("LLM reply was not a JSON picks list")
     except SuggestionError:
         record_empty_suggestions(user_id, media_type)
         raise
-    if picks is None:
-        record_empty_suggestions(user_id, media_type)
-        raise SuggestionError("LLM reply was not a JSON picks list")
     logger.info(
         "suggest_llm_response user_id=%s picks_returned=%d", user_id, len(picks)
     )
