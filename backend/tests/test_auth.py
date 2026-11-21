@@ -432,6 +432,43 @@ class TestGetCurrentUserId:
         assert "revoked" in exc_info.value.detail.lower()
         _assert_session_cookie_cleared(exc_info.value.headers["set-cookie"])
 
+    @staticmethod
+    async def _refreshed_token() -> str:
+        """Run a sliding refresh on a stale token and return the re-issued one."""
+        old_iat = datetime.now(timezone.utc) - REFRESH_INTERVAL - timedelta(hours=1)
+        token = pyjwt.encode(
+            _make_jwt_payload(iat=old_iat), SETTINGS.SECRET_KEY, algorithm=JWT_ALGORITHM
+        )
+        response = _make_response()
+        await get_current_user_id(_make_request({COOKIE_NAME: token}), response, _make_db())
+        return response.set_cookie.call_args.args[1]
+
+    @pytest.mark.asyncio
+    async def test_refresh_racing_logout_stays_revoked(self, monkeypatch):
+        """A refresh that read the revocation state before a concurrent logout
+        committed must not mint a session that outlives that logout (#972)."""
+        monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
+        reissued = await self._refreshed_token()
+        # The logout committed before the re-mint, so iat alone would pass it.
+        logout_at = datetime.now(timezone.utc) - timedelta(seconds=2)
+        with pytest.raises(HTTPException) as exc_info:
+            await get_current_user_id(
+                _make_request({COOKIE_NAME: reissued}), _make_response(), _make_db(logout_at)
+            )
+        assert exc_info.value.status_code == 401
+        assert exc_info.value.detail == "Session revoked"
+        _assert_session_cookie_cleared(exc_info.value.headers["set-cookie"])
+
+    @pytest.mark.asyncio
+    async def test_refreshed_token_accepted_while_not_revoked(self, monkeypatch):
+        """A re-issued token stays valid while no logout has happened."""
+        monkeypatch.setattr("backend.routers.auth.get_settings", lambda: SETTINGS)
+        reissued = await self._refreshed_token()
+        result = await get_current_user_id(
+            _make_request({COOKIE_NAME: reissued}), _make_response(), _make_db()
+        )
+        assert result == "550e8400-e29b-41d4-a716-446655440000"
+
     @pytest.mark.asyncio
     async def test_hard_cap_rejects_session_older_than_30_days(self, monkeypatch):
         """A session older than SESSION_MAX_DAYS must be rejected even if JWT is fresh."""
