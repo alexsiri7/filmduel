@@ -133,13 +133,13 @@ def count_ai_curation_attempt(request: Request) -> None:
         )
 
 
-# An LLM reply with no usable pick writes no Suggestion row, so GET would
-# otherwise ask the LLM again on every request (SEC-11, #783).
+# A failed LLM request or a reply with no usable pick writes no Suggestion row,
+# so GET would otherwise ask the LLM again on every request (SEC-11, #783; #974).
 EMPTY_SUGGESTIONS_COOLDOWN = parse("1/hour")
 
 
 def record_empty_suggestions(user_id: uuid.UUID, media_type: str) -> None:
-    """Remember that the LLM just produced no usable suggestion for this user."""
+    """Remember that the LLM just failed or produced no usable suggestion for this user."""
     try:
         limiter.limiter.hit(
             EMPTY_SUGGESTIONS_COOLDOWN, f"user:{user_id}", "suggestions_empty", media_type

@@ -234,7 +234,7 @@ async def generate_suggestions(
     at capacity, SuggestionError if the LLM request fails, its reply is not a picks list,
     or every pick in it is malformed.
     Returns empty list if user has < MIN_RANKED films (caller should check taste_profile).
-    An LLM reply with no usable pick starts the empty-suggestions cooldown.
+    A failed LLM request or a reply with no usable pick starts the empty-suggestions cooldown.
     """
     taste_profile = await _build_taste_profile(user_id, db, media_type)
     if taste_profile is None:
@@ -270,7 +270,11 @@ async def generate_suggestions(
     # Build trakt_id -> movie_id lookup
     trakt_to_movie = {c["trakt_id"]: c["movie_id"] for c in candidates}
 
-    picks = await _call_llm(taste_profile, candidates)
+    try:
+        picks = await _call_llm(taste_profile, candidates)
+    except SuggestionError:
+        record_empty_suggestions(user_id, media_type)
+        raise
     if picks is None:
         record_empty_suggestions(user_id, media_type)
         raise SuggestionError("LLM reply was not a JSON picks list")
