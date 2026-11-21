@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import functools
 import json
+import logging
 import os
 from unittest.mock import MagicMock, patch
 
@@ -176,15 +177,49 @@ async def test_chat_completion_fails_fast_when_slots_full(monkeypatch):
     monkeypatch.setattr(get_settings(), "LLM_MAX_CONCURRENT", 1)
     monkeypatch.setattr(get_settings(), "LLM_API_KEY", "x")
     gate = asyncio.Event()
+    entered = asyncio.Event()
 
     async def slow_reply(request: httpx.Request) -> httpx.Response:
+        entered.set()
         await gate.wait()
         return httpx.Response(200, json=_completion())
 
     _route_llm(monkeypatch, slow_reply)
     first = asyncio.create_task(chat_completion("s", "u"))
-    await asyncio.sleep(0)  # let `first` take the slot
-    with pytest.raises(LLMBusyError):
-        await chat_completion("s", "u")  # must not block
-    gate.set()
-    await first
+    try:
+        # Once a request reaches the transport, the slot is definitely held.
+        await asyncio.wait_for(entered.wait(), timeout=1)
+        with pytest.raises(LLMBusyError):
+            await chat_completion("s", "u")  # must not block
+    finally:
+        gate.set()
+        await first
+
+
+_MISSING = object()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "usage, expected_tokens",
+    [
+        ({"total_tokens": 42}, "tokens=42"),
+        ("garbage", "tokens=None"),
+        (_MISSING, "tokens=None"),
+    ],
+    ids=["dict", "non-dict", "missing"],
+)
+async def test_chat_completion_logs_tokens_from_usage(monkeypatch, caplog, usage, expected_tokens):
+    """chat_completion's llm_response log reflects usage.total_tokens, or None
+    when usage is missing or not a dict."""
+    monkeypatch.setattr(get_settings(), "LLM_API_KEY", "x")
+    body = _completion("hi")
+    if usage is not _MISSING:
+        body["usage"] = usage
+    _route_llm(monkeypatch, lambda request: httpx.Response(200, json=body))
+
+    with caplog.at_level(logging.INFO, logger="backend.services.llm"):
+        assert await chat_completion("s", "u") == "hi"
+
+    record = next(r for r in caplog.records if "llm_response" in r.getMessage())
+    assert expected_tokens in record.getMessage()
