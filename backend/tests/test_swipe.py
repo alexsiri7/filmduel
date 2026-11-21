@@ -460,6 +460,32 @@ class TestSubmitSwipeResults:
         db.add.assert_not_called()
         mock_next.assert_not_awaited()
 
+    def test_batch_that_would_cross_daily_cap_is_refused_whole(self):
+        served = [uuid.uuid4() for _ in range(3)]
+        _, db, _ = self._install(
+            user_movies={m: MagicMock() for m in served}, daily_count=MAX_SWIPES_PER_DAY - 2
+        )
+
+        resp, mock_next = self._post([{"movie_id": str(m), "seen": True} for m in served])
+
+        assert resp.status_code == 429
+        db.add.assert_not_called()
+        mock_next.assert_not_awaited()
+
+    def test_batch_that_reaches_daily_cap_counts_repeated_titles_once(self):
+        served = [uuid.uuid4() for _ in range(2)]
+        _, db, _ = self._install(
+            user_movies={m: MagicMock() for m in served}, daily_count=MAX_SWIPES_PER_DAY - 2
+        )
+
+        resp, _ = self._post(
+            [{"movie_id": str(m), "seen": True} for m in served]
+            + [{"movie_id": str(served[0]), "seen": False}]
+        )
+
+        assert resp.status_code == 200
+        assert db.add.call_count == 2
+
     def test_daily_cap_check_is_serialized_per_user(self):
         """The cap count must run under a per-user advisory lock (SEC-02, #570)."""
         user, _, statements = self._install(user_movies={}, daily_count=MAX_SWIPES_PER_DAY)

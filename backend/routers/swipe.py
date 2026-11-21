@@ -78,7 +78,9 @@ async def submit_swipe_results(
     """Submit all swipe results at once — bulk update seen status."""
     uid = current_user.id
 
-    await enforce_daily_quota(db, SWIPE_DAILY_QUOTA, uid, nowait=False)
+    # A title listed twice is written once, so it counts once against the cap.
+    titles = len({item.movie_id for item in body.results})
+    await enforce_daily_quota(db, SWIPE_DAILY_QUOTA, uid, nowait=False, adding=titles)
 
     tally = await record_swipes(db, uid, body.results)
     next_action = await compute_next_action(db, uid, media_type)
