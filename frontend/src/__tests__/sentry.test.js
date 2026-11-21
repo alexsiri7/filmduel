@@ -39,6 +39,14 @@ describe("redactText", () => {
     ).toBe("GET https://api.trakt.tv/users/[Filtered]/history failed for [Filtered]");
   });
 
+  it("redacts every URL, user path and UUID in the text, not just the first", () => {
+    const otherId = "9c1a2b3d-4e5f-6071-8293-a4b5c6d7e8f9";
+    expect(redactText(`${USER_ID} then ${otherId}`)).toBe("[Filtered] then [Filtered]");
+    expect(
+      redactText("GET https://a.example/users/alice/users/bob?k=1 then https://b.example/y#k=2"),
+    ).toBe("GET https://a.example/users/[Filtered]/users/[Filtered] then https://b.example/y");
+  });
+
   it("leaves text without URLs or UUIDs alone", () => {
     expect(redactText("Network error")).toBe("Network error");
   });
