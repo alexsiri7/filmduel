@@ -189,7 +189,7 @@ requirements:
 
   - id: FD-069
     title: Sensitive-data scrubbing in frontend error tracking
-    statement: "When VITE_SENTRY_DSN is configured, the SPA shall initialize Sentry with sendDefaultPii disabled and console and DOM breadcrumbs disabled, and shall strip query strings and fragments from reported event request URLs and from breadcrumb url/from/to fields, and remove the query data and Referer header from reported event requests."
+    statement: "When VITE_SENTRY_DSN is configured, the SPA shall initialize Sentry with sendDefaultPii disabled and console and DOM breadcrumbs disabled, and shall strip query strings and fragments from reported event request URLs and from breadcrumb url/from/to fields, remove the query data and Referer header from reported event requests, and redact every URL (query string and fragment stripped, /users/<id> masked as '/users/[Filtered]') and UUID (as '[Filtered]') embedded in event messages, exception values and breadcrumb messages."
     category: non-functional
     priority: must
     status: active
@@ -199,7 +199,9 @@ requirements:
       - "With a DSN, Sentry.init receives sendDefaultPii=false, beforeSend=scrubEvent, beforeBreadcrumb=scrubBreadcrumb, and breadcrumbsIntegration({console: false, dom: false})"
       - "scrubEvent cuts request.url at the first '?' or '#', deletes request.query_string and the Referer/referer header, keeps other headers, and leaves events without a request unchanged"
       - "scrubBreadcrumb cuts the url, from and to breadcrumb data fields at the first '?' or '#' and keeps other fields"
-    notes: "Pinned by frontend/src/__tests__/sentry.test.js (initSentry: does nothing without a DSN, initialises with PII off, scrubbing, and no DOM/console breadcrumbs; scrubEvent; scrubBreadcrumb). Implemented in frontend/src/lib/sentry.js (stripQuery, scrubEvent, scrubBreadcrumb, initSentry), called from frontend/src/main.jsx, which also routes React's uncaught, caught and recoverable errors to Sentry.reactErrorHandler only when initSentry returns true. The frontend counterpart of FD-012: query strings carry OAuth code/state and pair tokens, and DOM/console text can contain film titles, which are preference data. VITE_SENTRY_DSN is baked in at build time (Dockerfile ARG, empty by default, which disables frontend Sentry). Unlike FD-012 it does not mask /users/<id> paths, and no tracing sample rate is set, so no transactions are sent."
+      - "redactText cuts each embedded http(s) URL at the first '?' or '#', masks /users/<id> in it as /users/[Filtered], and replaces each UUID (any case) with [Filtered]"
+      - "scrubEvent applies redactText to event.message and every exception value; scrubBreadcrumb applies it to the breadcrumb message"
+    notes: "Pinned by frontend/src/__tests__/sentry.test.js (initSentry: does nothing without a DSN, initialises with PII off, scrubbing, and no DOM/console breadcrumbs; redactText; scrubEvent; scrubBreadcrumb). Implemented in frontend/src/lib/sentry.js (stripQuery, redactText, scrubEvent, scrubBreadcrumb, initSentry), called from frontend/src/main.jsx, which also routes React's uncaught, caught and recoverable errors to Sentry.reactErrorHandler only when initSentry returns true. The frontend counterpart of FD-012: query strings carry OAuth code/state and pair tokens, and DOM/console text can contain film titles, which are preference data. VITE_SENTRY_DSN is baked in at build time (Dockerfile ARG, empty by default, which disables frontend Sentry). redactText ports the backend's _redact_text (backend/observability.py, issue #982). Unlike FD-012 it does not mask /users/<id> in the structured request and breadcrumb URL fields, and no tracing sample rate is set, so no transactions are sent."
 
   - id: FD-064
     title: Duel-rejection logging and spike alerting

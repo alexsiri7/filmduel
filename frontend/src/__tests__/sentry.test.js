@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import * as Sentry from "@sentry/react";
-import { initSentry, scrubBreadcrumb, scrubEvent } from "../lib/sentry";
+import { initSentry, redactText, scrubBreadcrumb, scrubEvent } from "../lib/sentry";
 
 vi.mock("@sentry/react", () => ({
   init: vi.fn(),
@@ -28,6 +28,22 @@ describe("initSentry", () => {
   });
 });
 
+const USER_ID = "3f2b8c1e-9d4a-4b7e-8c21-5a6f0e9d1b23";
+
+describe("redactText", () => {
+  it("cuts embedded URLs at the query, masks /users/<id> and filters UUIDs", () => {
+    expect(
+      redactText(
+        `GET https://api.trakt.tv/users/alice/history?code=x failed for ${USER_ID.toUpperCase()}`,
+      ),
+    ).toBe("GET https://api.trakt.tv/users/[Filtered]/history failed for [Filtered]");
+  });
+
+  it("leaves text without URLs or UUIDs alone", () => {
+    expect(redactText("Network error")).toBe("Network error");
+  });
+});
+
 describe("scrubEvent", () => {
   it("strips the query string, query data and Referer from the request", () => {
     const event = scrubEvent({
@@ -40,6 +56,25 @@ describe("scrubEvent", () => {
     expect(event.request.url).toBe("https://filmduel.example/auth/callback");
     expect(event.request).not.toHaveProperty("query_string");
     expect(event.request.headers).toEqual({ "User-Agent": "ua" });
+  });
+
+  it("redacts URLs and UUIDs in the message and exception values", () => {
+    const event = scrubEvent({
+      message: `no pair for ${USER_ID}`,
+      exception: {
+        values: [
+          { type: "TypeError", value: "Failed to fetch https://filmduel.example/duel?last_pair_token=s" },
+          { type: "Error", value: `user ${USER_ID} not found` },
+          { type: "Error" },
+        ],
+      },
+    });
+    expect(event.message).toBe("no pair for [Filtered]");
+    expect(event.exception.values).toEqual([
+      { type: "TypeError", value: "Failed to fetch https://filmduel.example/duel" },
+      { type: "Error", value: "user [Filtered] not found" },
+      { type: "Error" },
+    ]);
   });
 
   it("leaves events without a request alone", () => {
@@ -60,5 +95,13 @@ describe("scrubBreadcrumb", () => {
       data: { from: "/duel?x=1#frag", to: "/auth/callback?code=x" },
     });
     expect(navCrumb.data).toEqual({ from: "/duel", to: "/auth/callback" });
+  });
+
+  it("redacts URLs and UUIDs in the message", () => {
+    const crumb = scrubBreadcrumb({
+      category: "ui",
+      message: `opened https://filmduel.example/auth/callback?code=x as ${USER_ID}`,
+    });
+    expect(crumb.message).toBe("opened https://filmduel.example/auth/callback as [Filtered]");
   });
 });
