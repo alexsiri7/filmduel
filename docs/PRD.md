@@ -151,9 +151,9 @@ re-encrypted under the current key on the spot.
 
 A token no configured key decrypts reads as disconnected: calls to that
 provider are skipped until the user signs in with it again, which stores fresh
-tokens, and a warning naming the user (never the ciphertext) is logged. The
-ciphertext stays stored, so adding a forgotten key back to
-`TOKEN_ENC_KEY_PREVIOUS` recovers it.
+tokens, and a warning is logged (never the ciphertext; the user id is redacted
+in production logs). The ciphertext stays stored, so adding a forgotten key back
+to `TOKEN_ENC_KEY_PREVIOUS` recovers it.
 
 ---
 
