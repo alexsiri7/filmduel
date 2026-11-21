@@ -62,18 +62,23 @@ JWT_ISSUER = JWT_AUDIENCE = "filmduel"
 JWT_REQUIRED_CLAIMS = ["exp", "iat"]
 REFRESH_INTERVAL = timedelta(hours=12)  # re-issue cookie at most once per 12h
 SESSION_MAX_LIFETIME = timedelta(days=30)  # absolute hard cap on total session lifetime
+_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 
 def create_jwt(
     user_id: str,
     settings: Settings,
     orig_iat: datetime | None = None,
+    revocation_mark: int | None = None,
 ) -> str:
     """Create a signed JWT for session management.
 
     orig_iat: the original login timestamp (datetime), carried forward across
     refreshes. Stored as a Unix timestamp float in the JWT payload.
     Defaults to now on initial login.
+    revocation_mark: tokens_invalid_before (µs since epoch) the token was
+    re-issued under, stored as ``rev``; a later logout changes it and revokes
+    the token.
     """
     now = datetime.now(timezone.utc)
     payload = {
@@ -85,6 +90,8 @@ def create_jwt(
         "iat": now,
         "orig_iat": (orig_iat or now).timestamp(),
     }
+    if revocation_mark is not None:
+        payload["rev"] = revocation_mark
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 
@@ -124,10 +131,12 @@ def set_session_cookie(
     user_id: str,
     settings: Settings,
     orig_iat: datetime | None = None,
+    revocation_mark: int | None = None,
 ) -> None:
     """Issue a fresh session cookie for user_id.
 
     orig_iat: original login time forwarded on refresh; None for a new login.
+    revocation_mark: forwarded to create_jwt on refresh only.
     Cookie max_age is bounded by the shorter of the per-token JWT expiry
     (72 h) and the remaining session lifetime (30-day cap - elapsed).
     The name is ``__Host-``-prefixed whenever the cookie is Secure (see
@@ -142,7 +151,9 @@ def set_session_cookie(
     secure = settings.cookie_secure
     response.set_cookie(
         cookie_name(COOKIE_NAME, secure),
-        create_jwt(user_id, settings, orig_iat=session_start),
+        create_jwt(
+            user_id, settings, orig_iat=session_start, revocation_mark=revocation_mark
+        ),
         httponly=True,
         secure=secure,
         samesite="lax",
@@ -225,7 +236,10 @@ async def get_current_user_id(
         _reject("User not found")
     if invalid_before.tzinfo is None:
         invalid_before = invalid_before.replace(tzinfo=timezone.utc)
-    if iat < invalid_before:
+    # A re-issued token carries the revocation state it was minted under, so a
+    # logout committed while that refresh was in flight still revokes it (#972).
+    revocation_mark = (invalid_before - _EPOCH) // timedelta(microseconds=1)
+    if iat < invalid_before or payload.get("rev", revocation_mark) != revocation_mark:
         _reject("Session revoked")
 
     now = datetime.now(timezone.utc)
@@ -240,7 +254,9 @@ async def get_current_user_id(
     # The refresh signs with SECRET_KEY, so refreshing a smoke session would turn
     # the CI key into a primary session (#971).
     if not smoke and now - iat > REFRESH_INTERVAL:
-        set_session_cookie(response, user_id, settings, orig_iat=orig_iat)
+        set_session_cookie(
+            response, user_id, settings, orig_iat=orig_iat, revocation_mark=revocation_mark
+        )
     return user_id
 
 
