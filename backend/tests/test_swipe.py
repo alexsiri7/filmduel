@@ -17,6 +17,7 @@ from backend.services.swipe import (
     BANDS,
     _community_rating_range,
     _elo_to_band_index,
+    count_unresolved,
     plan_card_mix,
     select_swipe_cards,
 )
@@ -525,3 +526,19 @@ class TestSubmitSwipeResults:
         lock_params = set(compiled[lock_idx].params.values())
         assert "swipe_daily_cap" in lock_params
         assert str(user.id) in lock_params
+
+
+@pytest.mark.asyncio
+async def test_count_unresolved_counts_only_this_users_unresolved_rows():
+    """The cap's batch size must count exactly the rows record_swipes will write."""
+    db = AsyncMock()
+    db.execute.return_value = MagicMock(scalar_one=MagicMock(return_value=0))
+    user_id = uuid.uuid4()
+    movie_id = uuid.uuid4()
+
+    await count_unresolved(db, user_id, {movie_id})
+
+    compiled = db.execute.await_args.args[0].compile(dialect=postgresql.dialect())
+    params = {str(v) for v in compiled.params.values()}
+    assert str(user_id) in params
+    assert "user_movies.seen is null" in str(compiled).lower()
