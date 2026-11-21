@@ -71,7 +71,7 @@ coverage:
   notes: Scrubbers exercised; send_default_pii=False and main.py init options never asserted.
 - id: FD-069
   status: partial
-  code_paths: ['frontend/src/lib/sentry.js:7-44', 'frontend/src/main.jsx:4-16']
+  code_paths: ['frontend/src/lib/sentry.js:8-61', 'frontend/src/main.jsx:4-16']
   test_paths: [frontend/src/__tests__/sentry.test.js]
   notes: Lowercase referer deletion and URL with '#' but no '?' untested.
 - id: FD-064
