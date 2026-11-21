@@ -125,7 +125,9 @@ GET  /api/suggestions
      If none exist or the newest batch, dismissed included, is stale (> 24h):
      triggers generation, returns 202 with { status: "generating" } if async,
      or waits synchronously (< 5s expected). 429 if a generation is already
-     in flight for this user.
+     in flight for this user. Generation requires the
+     `X-Requested-With: XMLHttpRequest` header (sent by the SPA's API client);
+     without it, returns the current/stale suggestions instead (AUTH-003, #973).
      If every suggestion in a fresh batch is dismissed: { status: "all_dismissed" }
      (no generation; the client offers the capped regenerate endpoint).
      403 { detail: "Privacy policy consent required" } — policy not accepted

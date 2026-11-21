@@ -30,6 +30,7 @@ from backend.services.duel_rejections import record_duel_rejection
 from backend.services.llm import LLMBusyError, LLMNotConfiguredError
 from backend.services.quota import QuotaExceeded
 from backend.services.tmdb import is_read_access_token
+from backend.utils.provenance import is_spa_request
 from backend.routers import (
     auth,
     movies,
@@ -204,9 +205,7 @@ async def csrf_origin_check(request: Request, call_next):
     if request.url.path == csp_report.CSP_REPORT_PATH:
         return await call_next(request)
 
-    # X-Requested-With is a custom header — browsers never send it cross-site
-    # without a preflight, so its presence proves the request came from our SPA
-    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+    if is_spa_request(request):
         return await call_next(request)
 
     origin = request.headers.get("origin") or request.headers.get("referer", "")
