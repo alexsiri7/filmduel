@@ -62,21 +62,20 @@ JWT_ISSUER = JWT_AUDIENCE = "filmduel"
 JWT_REQUIRED_CLAIMS = ["exp", "iat"]
 REFRESH_INTERVAL = timedelta(hours=12)  # re-issue cookie at most once per 12h
 SESSION_MAX_LIFETIME = timedelta(days=30)  # absolute hard cap on total session lifetime
-_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 
 def create_jwt(
     user_id: str,
     settings: Settings,
     orig_iat: datetime | None = None,
-    revocation_mark: int | None = None,
+    revocation_mark: str | None = None,
 ) -> str:
     """Create a signed JWT for session management.
 
     orig_iat: the original login timestamp (datetime), carried forward across
     refreshes. Stored as a Unix timestamp float in the JWT payload.
     Defaults to now on initial login.
-    revocation_mark: tokens_invalid_before (µs since epoch) the token was
+    revocation_mark: tokens_invalid_before (ISO 8601) the token was
     re-issued under, stored as ``rev``; a later logout changes it and revokes
     the token.
     """
@@ -131,7 +130,7 @@ def set_session_cookie(
     user_id: str,
     settings: Settings,
     orig_iat: datetime | None = None,
-    revocation_mark: int | None = None,
+    revocation_mark: str | None = None,
 ) -> None:
     """Issue a fresh session cookie for user_id.
 
@@ -238,7 +237,7 @@ async def get_current_user_id(
         invalid_before = invalid_before.replace(tzinfo=timezone.utc)
     # A re-issued token carries the revocation state it was minted under, so a
     # logout committed while that refresh was in flight still revokes it (#972).
-    revocation_mark = (invalid_before - _EPOCH) // timedelta(microseconds=1)
+    revocation_mark = invalid_before.isoformat()
     if iat < invalid_before or payload.get("rev", revocation_mark) != revocation_mark:
         _reject("Session revoked")
 
