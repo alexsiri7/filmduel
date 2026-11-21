@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import logging.config
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlparse
@@ -23,7 +24,7 @@ from backend.config import (
     is_cleartext_public_redis_uri,
 )
 from backend.middleware.body_limit import BodyLimitMiddleware
-from backend.observability import SENTRY_OPTIONS
+from backend.observability import LOGGING_CONFIG, SENTRY_OPTIONS
 from backend.rate_limit import HEALTH_PATH, limiter
 from backend.scheduler import build_scheduler
 from backend.services.duel_rejections import record_duel_rejection
@@ -45,6 +46,7 @@ from backend.routers import (
 )
 from backend.schemas import SELF_DUEL_ERROR_MSG
 
+logging.config.dictConfig(LOGGING_CONFIG)
 logger = logging.getLogger(__name__)
 
 settings = get_settings()

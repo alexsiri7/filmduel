@@ -1,4 +1,4 @@
-"""Sentry/observability scrubbing: redact URLs, UUIDs, and OAuth query params."""
+"""Sentry and log scrubbing: redact URLs, UUIDs, and OAuth query params."""
 
 from __future__ import annotations
 
@@ -26,8 +26,8 @@ def _redact_url(url: str) -> str:
 def _redact_text(text: str) -> str:
     """Redact every URL and UUID embedded in free text, such as httpx's error messages.
 
-    User ids are UUIDs and log lines embed them; Sentry keeps events after the
-    account is deleted, so no UUID may reach it.
+    User ids are UUIDs and log lines embed them; Sentry and Railway keep events
+    and log lines after the account is deleted, so no UUID may reach either.
     """
     text = _URL_IN_TEXT.sub(lambda m: _redact_url(m.group()), text)
     return _UUID_IN_TEXT.sub("[Filtered]", text)
@@ -48,6 +48,41 @@ class _AccessLogQueryFilter(logging.Filter):
 
 
 logging.getLogger("uvicorn.access").addFilter(_AccessLogQueryFilter())
+
+
+class _RedactingFormatter(logging.Formatter):
+    """Redact URLs and UUIDs from the whole rendered line, traceback included."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        return _redact_text(super().format(record))
+
+
+# Applied once at app import, after uvicorn's own dictConfig. Every line reaching
+# stderr goes through the one redacting handler: naming ``uvicorn`` here makes
+# dictConfig drop the handlers uvicorn gave it and its ``error``/``access``
+# children, so they propagate to root (the access query filter stays attached).
+LOGGING_CONFIG = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "redacting": {
+            "()": _RedactingFormatter,
+            "format": "%(levelname)s %(name)s: %(message)s",
+        },
+    },
+    "handlers": {
+        "redacting": {
+            "class": "logging.StreamHandler",
+            "formatter": "redacting",
+            "stream": "ext://sys.stderr",
+        },
+    },
+    "root": {"level": "WARNING", "handlers": ["redacting"]},
+    "loggers": {
+        "backend": {"level": "INFO"},
+        "uvicorn": {"handlers": [], "propagate": True},
+    },
+}
 
 
 def _scrub_http_data(data: dict) -> None:

@@ -1,5 +1,6 @@
 """Tests for tournament service pure functions and bracket logic."""
 
+import logging
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -277,7 +278,7 @@ class TestCreateTournamentBracketWithByes:
         assert len(real_matches) == 1
 
     @pytest.mark.asyncio
-    async def test_bracket_8_films_no_byes(self):
+    async def test_bracket_8_films_no_byes(self, caplog):
         """8 films in an 8-slot bracket should have zero byes."""
         tournament_id = uuid.uuid4()
         films = [_make_seeded_film() for _ in range(8)]
@@ -286,7 +287,8 @@ class TestCreateTournamentBracketWithByes:
         db = AsyncMock()
         db.add = MagicMock(side_effect=lambda obj: added_objects.append(obj))
 
-        await create_tournament_bracket(db, tournament_id, 8, films)
+        with caplog.at_level(logging.DEBUG, logger="backend.services.tournament"):
+            await create_tournament_bracket(db, tournament_id, 8, films)
 
         from backend.db_models import TournamentMatch
 
@@ -298,6 +300,12 @@ class TestCreateTournamentBracketWithByes:
         bye_matches = [m for m in round1_matches if getattr(m, "is_bye", False)]
         assert len(bye_matches) == 0
         assert len(round1_matches) == 4
+        # INFO reaches Railway; a user's bracket films there would be preference data (SEC-15, #583).
+        info = [r.getMessage() for r in caplog.records if r.levelno >= logging.INFO]
+        assert info
+        for message in info:
+            for film in films:
+                assert str(film.movie_id) not in message, message
 
     @pytest.mark.asyncio
     async def test_bye_winner_has_correct_movie_id(self):
@@ -650,7 +658,7 @@ class TestRecordMatchWinner:
         assert match_obj.winner_movie_id == winner_id
 
     @pytest.mark.asyncio
-    async def test_completes_tournament_on_final_match(self):
+    async def test_completes_tournament_on_final_match(self, caplog):
         """record_match_winner sets champion and status='completed' on the final round."""
         from backend.services.tournament import record_match_winner
 
@@ -713,12 +721,22 @@ class TestRecordMatchWinner:
         ) as mock_elo:
             mock_elo.return_value = MagicMock(id=uuid.uuid4())
             # bracket_size=2 → _num_rounds(2)=1 → round 1 is final
-            await record_match_winner(
-                db, tournament_id, 2, match_id, winner_id, loser_id, user_id
-            )
+            with caplog.at_level(logging.DEBUG, logger="backend.services.tournament"):
+                await record_match_winner(
+                    db, tournament_id, 2, match_id, winner_id, loser_id, user_id
+                )
 
         assert tournament_obj.champion_movie_id == winner_id
         assert tournament_obj.status == "completed"
+        # Match outcomes are a user's preference data: DEBUG only (SEC-15, #583).
+        debug_events = {
+            r.getMessage().split(" ", 1)[0] for r in caplog.records if r.levelno == logging.DEBUG
+        }
+        assert {"match_result", "champion_crowned"} <= debug_events
+        for record in caplog.records:
+            if record.levelno >= logging.INFO:
+                assert str(winner_id) not in record.getMessage(), record.getMessage()
+                assert str(loser_id) not in record.getMessage(), record.getMessage()
 
 
 # ---------------------------------------------------------------------------
