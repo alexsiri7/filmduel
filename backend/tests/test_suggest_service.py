@@ -196,6 +196,22 @@ class TestReasonTruncation:
             await generate_suggestions(uuid.uuid4(), AsyncMock())
 
     @pytest.mark.asyncio
+    async def test_failed_llm_request_starts_cooldown(self):
+        """A failed LLM request starts the cooldown, so GET stops retrying it during an outage."""
+        from backend.rate_limit import empty_suggestions_recent
+
+        uid = uuid.uuid4()
+        with (
+            patch("backend.services.suggest._build_taste_profile", AsyncMock(return_value=_FAKE_PROFILE)),
+            patch("backend.services.suggest._get_candidates", AsyncMock(return_value=_FAKE_CANDIDATES)),
+            patch("backend.services.suggest._call_llm", AsyncMock(side_effect=SuggestionError("LLM request failed"))),
+            pytest.raises(SuggestionError),
+        ):
+            await generate_suggestions(uid, AsyncMock())
+
+        assert empty_suggestions_recent(uid, "movie") is True
+
+    @pytest.mark.asyncio
     async def test_out_of_pool_pick_returns_empty_without_raising(self):
         """A well-formed pick outside the candidate pool is an empty result, not a malformed reply."""
         fake_picks = [{"trakt_id": 999, "reason": "not a real candidate"}]
