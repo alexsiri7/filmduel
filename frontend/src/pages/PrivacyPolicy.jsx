@@ -122,7 +122,8 @@ export default function PrivacyPolicy() {
           </p>
           <p className="text-[#d6c4ae] text-sm font-body leading-relaxed">
             <strong className="text-[#F5F0E8]">Opt-out:</strong> Turn off "AI Suggestions" in
-            the settings panel of the desktop navigation at any time. While it is off, nothing is
+            Settings (the sidebar on desktop, or the Settings link in the bottom bar on mobile)
+            at any time. While it is off, nothing is
             sent to Requesty.ai: Watch Suggestions and AI-Curated Tournaments are unavailable, and
             every other FilmDuel feature keeps working. You can turn it back on whenever you like.
             Withdrawing your consent to this policy (see Your Rights) also stops all AI processing.
@@ -163,11 +164,11 @@ export default function PrivacyPolicy() {
             Under the General Data Protection Regulation, you have the right to:
           </p>
           <ul className="space-y-2 text-[#d6c4ae] text-sm font-body">
-            <li>• <strong className="text-[#F5F0E8]">Access</strong> — Download a copy of all the data we hold about you using "Download My Data" in the desktop navigation, or by visiting /api/me/export while signed in</li>
+            <li>• <strong className="text-[#F5F0E8]">Access</strong> — Download a copy of all the data we hold about you using "Download My Data" in Settings, or by visiting /api/me/export while signed in</li>
             <li>• <strong className="text-[#F5F0E8]">Rectification</strong> — Request correction of inaccurate data</li>
             <li>• <strong className="text-[#F5F0E8]">Erasure</strong> — Delete your account and all associated data, except error reports already sent to Sentry (see Data Retention)</li>
             <li>• <strong className="text-[#F5F0E8]">Portability</strong> — The same download is a machine-readable JSON file you can take to another service</li>
-            <li>• <strong className="text-[#F5F0E8]">Withdraw consent</strong> — Use "Withdraw Consent" in the desktop navigation at any time. Withdrawal is complete: it revokes your consent to this whole policy, FilmDuel starts no new recording or processing about you, including AI requests, and the app stays locked behind the consent screen until you accept again. A library import already running when you withdraw may still finish. Your existing data is kept, and you can still download it or delete your account from the consent screen</li>
+            <li>• <strong className="text-[#F5F0E8]">Withdraw consent</strong> — Use "Withdraw Consent" in Settings at any time. Withdrawal is complete: it revokes your consent to this whole policy, FilmDuel starts no new recording or processing about you, including AI requests, and the app stays locked behind the consent screen until you accept again. A library import already running when you withdraw may still finish. Your existing data is kept, and you can still download it or delete your account from the consent screen</li>
           </ul>
           <p className="text-[#d6c4ae] text-sm font-body leading-relaxed mt-4">
             You can also make any of these requests privately by email (see Contact).

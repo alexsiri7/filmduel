@@ -12,6 +12,7 @@ import Swipe from "./pages/Swipe";
 import Tournaments from "./pages/Tournaments";
 import Suggestions from "./pages/Suggestions";
 import TournamentBracket from "./pages/TournamentBracket";
+import Settings from "./pages/Settings";
 
 function ProtectedRoute({ children }) {
   const [status, setStatus] = useState("loading");
@@ -152,6 +153,14 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <Settings />
+              </ProtectedRoute>
+            }
+          />
         </Routes>
       </main>
       {/* Mobile bottom nav */}
@@ -178,6 +187,18 @@ export default function App() {
           >
             Shows
           </button>
+          <a
+            href="/settings"
+            aria-label="Settings"
+            aria-current={location.pathname === "/settings" ? "page" : undefined}
+            className={`px-3 py-1 text-[10px] font-bold uppercase tracking-[0.1em] font-headline rounded-sm transition-colors ${
+              location.pathname === "/settings"
+                ? "bg-primary-container text-[#0F0E0D]"
+                : "text-[#F5F0E8]/40 hover:text-[#F5F0E8]/60"
+            }`}
+          >
+            Settings
+          </a>
         </div>
         <div className="flex justify-around items-center w-full px-4 py-2">
           <a

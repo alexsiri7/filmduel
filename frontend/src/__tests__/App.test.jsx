@@ -96,6 +96,19 @@ describe("App", () => {
     expect(swipeLinks.length).toBeGreaterThanOrEqual(1);
   });
 
+  // Regression guard for PRIV-001: privacy/account controls must be reachable
+  // on mobile, not just the desktop sidebar. jsdom doesn't apply `md:`
+  // breakpoints, so this asserts the link exists rather than that it's visible.
+  it("renders a Settings link in the mobile bottom nav", () => {
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>
+    );
+    const link = screen.getByRole("link", { name: /settings/i });
+    expect(link).toHaveAttribute("href", "/settings");
+  });
+
   it("adds show-mode class to body when mediaType is show", async () => {
     localStorage.setItem("filmduel_media_type", "show");
     render(
