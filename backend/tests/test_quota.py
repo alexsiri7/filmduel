@@ -63,3 +63,23 @@ async def test_at_limit_raises_with_the_quota_message():
     lock.assert_not_awaited()
     assert excinfo.value.quota is quota
     assert str(excinfo.value) == quota.message
+
+
+
+@pytest.mark.asyncio
+async def test_batch_that_would_pass_the_limit_is_refused():
+    quota = _quota(LIMIT - 2)
+
+    with (
+        patch("backend.services.quota.acquire_quota_lock", new_callable=AsyncMock),
+        pytest.raises(QuotaExceeded),
+    ):
+        await enforce_daily_quota(AsyncMock(), quota, uuid.uuid4(), nowait=False, adding=3)
+
+
+@pytest.mark.asyncio
+async def test_batch_that_reaches_the_limit_is_allowed():
+    quota = _quota(LIMIT - 2)
+
+    with patch("backend.services.quota.acquire_quota_lock", new_callable=AsyncMock):
+        await enforce_daily_quota(AsyncMock(), quota, uuid.uuid4(), nowait=False, adding=2)

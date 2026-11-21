@@ -17,6 +17,7 @@ from backend.services.swipe import (
     BANDS,
     _community_rating_range,
     _elo_to_band_index,
+    count_unresolved,
     plan_card_mix,
     select_swipe_cards,
 )
@@ -348,6 +349,9 @@ class TestSubmitSwipeResults:
                 return result
             if "count(" in sql and "swipe_results" in sql:
                 result.scalar_one.return_value = daily_count
+            elif "count(" in sql and "user_movies" in sql and "movie_id in" in sql:
+                ids = next(v for v in compiled.params.values() if isinstance(v, list))
+                result.scalar_one.return_value = sum(m in user_movies for m in ids)
             elif "count(" in sql and "user_movies" in sql:
                 result.scalar.return_value = 100  # pool not low; no expand_pool
             else:
@@ -460,20 +464,81 @@ class TestSubmitSwipeResults:
         db.add.assert_not_called()
         mock_next.assert_not_awaited()
 
+    def test_batch_that_would_cross_daily_cap_is_refused_whole(self):
+        served = [uuid.uuid4() for _ in range(3)]
+        _, db, _ = self._install(
+            user_movies={m: MagicMock() for m in served}, daily_count=MAX_SWIPES_PER_DAY - 2
+        )
+
+        resp, mock_next = self._post([{"movie_id": str(m), "seen": True} for m in served])
+
+        assert resp.status_code == 429
+        db.add.assert_not_called()
+        mock_next.assert_not_awaited()
+
+    def test_batch_that_reaches_daily_cap_counts_repeated_titles_once(self):
+        served = [uuid.uuid4() for _ in range(2)]
+        _, db, _ = self._install(
+            user_movies={m: MagicMock() for m in served}, daily_count=MAX_SWIPES_PER_DAY - 2
+        )
+
+        resp, _ = self._post(
+            [{"movie_id": str(m), "seen": True} for m in served]
+            + [{"movie_id": str(served[0]), "seen": False}]
+        )
+
+        assert resp.status_code == 200
+        assert db.add.call_count == 2
+
+    def test_already_resolved_titles_do_not_count_against_daily_cap(self):
+        served = [uuid.uuid4() for _ in range(2)]
+        resolved = uuid.uuid4()
+        _, db, _ = self._install(
+            user_movies={m: MagicMock() for m in served}, daily_count=MAX_SWIPES_PER_DAY - 2
+        )
+
+        resp, _ = self._post([{"movie_id": str(m), "seen": True} for m in [*served, resolved]])
+
+        assert resp.status_code == 200
+        assert resp.json()["seen_count"] == 2
+        assert db.add.call_count == 2
+
     def test_daily_cap_check_is_serialized_per_user(self):
         """The cap count must run under a per-user advisory lock (SEC-02, #570)."""
-        user, _, statements = self._install(user_movies={}, daily_count=MAX_SWIPES_PER_DAY)
+        served = uuid.uuid4()
+        user, _, statements = self._install(
+            user_movies={served: MagicMock()}, daily_count=MAX_SWIPES_PER_DAY
+        )
 
-        resp, _ = self._post([{"movie_id": str(uuid.uuid4()), "seen": True}])
+        resp, _ = self._post([{"movie_id": str(served), "seen": True}])
         assert resp.status_code == 429
 
         compiled = [stmt.compile(dialect=postgresql.dialect()) for stmt in statements]
         lock_idx = next(
             i for i, c in enumerate(compiled) if "pg_advisory_xact_lock" in str(c)
         )
-        count_idx = next(i for i, c in enumerate(compiled) if "count(" in str(c).lower())
+        count_idx = next(
+            i for i, c in enumerate(compiled)
+            if "count(" in str(c).lower() and "swipe_results" in str(c).lower()
+        )
         assert lock_idx < count_idx, "advisory lock must be taken before the daily count"
 
         lock_params = set(compiled[lock_idx].params.values())
         assert "swipe_daily_cap" in lock_params
         assert str(user.id) in lock_params
+
+
+@pytest.mark.asyncio
+async def test_count_unresolved_counts_only_this_users_unresolved_rows():
+    """The cap's batch size must count exactly the rows record_swipes will write."""
+    db = AsyncMock()
+    db.execute.return_value = MagicMock(scalar_one=MagicMock(return_value=0))
+    user_id = uuid.uuid4()
+    movie_id = uuid.uuid4()
+
+    await count_unresolved(db, user_id, {movie_id})
+
+    compiled = db.execute.await_args.args[0].compile(dialect=postgresql.dialect())
+    params = {str(v) for v in compiled.params.values()}
+    assert str(user_id) in params
+    assert "user_movies.seen is null" in str(compiled).lower()

@@ -182,6 +182,18 @@ class SwipeTally:
     skipped: int
 
 
+async def count_unresolved(
+    db: AsyncSession, user_id: uuid.UUID, movie_ids: set[uuid.UUID]
+) -> int:
+    """How many of these films are still unresolved, i.e. would get a swipe row."""
+    stmt = select(func.count()).where(
+        UserMovie.user_id == user_id,
+        UserMovie.movie_id.in_(movie_ids),
+        UserMovie.seen.is_(None),
+    )
+    return (await db.execute(stmt)).scalar_one()
+
+
 async def record_swipes(
     db: AsyncSession, user_id: uuid.UUID, results: list[SwipeResultItem]
 ) -> SwipeTally:

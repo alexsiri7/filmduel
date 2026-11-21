@@ -35,9 +35,17 @@ class QuotaExceeded(Exception):
 
 
 async def enforce_daily_quota(
-    db: AsyncSession, quota: DailyQuota, user_id: uuid.UUID, *, nowait: bool
+    db: AsyncSession,
+    quota: DailyQuota,
+    user_id: uuid.UUID,
+    *,
+    nowait: bool,
+    adding: int = 1,
 ) -> None:
-    """Raise QuotaExceeded if the user already has quota.limit rows in the window.
+    """Raise QuotaExceeded if writing `adding` more rows would pass quota.limit.
+
+    A caller writing a batch passes its size, so the whole batch is refused
+    rather than letting it carry the count past the cap (#975).
 
     The count is serialized per user with a transaction-scoped advisory lock held
     until get_db commits, so parallel requests cannot all read the same count and
@@ -52,6 +60,8 @@ async def enforce_daily_quota(
 
     cutoff = datetime.now(timezone.utc) - quota.window
     count = await quota.count_since(db, user_id, cutoff)
-    if count >= quota.limit:
-        logger.warning("%s_hit user_id=%s count=%d", quota.name, user_id, count)
+    if count + adding > quota.limit:
+        logger.warning(
+            "%s_hit user_id=%s count=%d adding=%d", quota.name, user_id, count, adding
+        )
         raise QuotaExceeded(quota)

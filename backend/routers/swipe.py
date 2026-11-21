@@ -20,6 +20,7 @@ from backend.services.retention import (
 )
 from backend.services.swipe import (
     SWIPE_DAILY_QUOTA,
+    count_unresolved,
     pool_needs_expansion,
     record_swipes,
     select_swipe_cards,
@@ -78,7 +79,10 @@ async def submit_swipe_results(
     """Submit all swipe results at once — bulk update seen status."""
     uid = current_user.id
 
-    await enforce_daily_quota(db, SWIPE_DAILY_QUOTA, uid, nowait=False)
+    # Count only the rows record_swipes will write: a repeated title once, a
+    # resolved one not at all. A resolve racing past this count only lowers it.
+    writes = await count_unresolved(db, uid, {item.movie_id for item in body.results})
+    await enforce_daily_quota(db, SWIPE_DAILY_QUOTA, uid, nowait=False, adding=writes)
 
     tally = await record_swipes(db, uid, body.results)
     next_action = await compute_next_action(db, uid, media_type)
