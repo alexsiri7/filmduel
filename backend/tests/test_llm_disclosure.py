@@ -229,8 +229,8 @@ class TestTournamentPayloadMatchesDisclosure:
     async def test_theme_and_filter_reach_the_prompt(self):
         prompt = await self._capture(filter_context="Genre: Horror", theme_hint="heists")
 
-        assert "Active filter: Genre: Horror" in prompt
-        assert "heists" in prompt
+        assert "Active filter: <data>Genre: Horror</data>" in prompt
+        assert "<data>heists</data>" in prompt
 
 
 class TestGatewayMatchesDisclosure:
