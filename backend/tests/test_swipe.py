@@ -348,6 +348,9 @@ class TestSubmitSwipeResults:
                 return result
             if "count(" in sql and "swipe_results" in sql:
                 result.scalar_one.return_value = daily_count
+            elif "count(" in sql and "user_movies" in sql and "movie_id in" in sql:
+                ids = next(v for v in compiled.params.values() if isinstance(v, list))
+                result.scalar_one.return_value = sum(m in user_movies for m in ids)
             elif "count(" in sql and "user_movies" in sql:
                 result.scalar.return_value = 100  # pool not low; no expand_pool
             else:
@@ -486,18 +489,37 @@ class TestSubmitSwipeResults:
         assert resp.status_code == 200
         assert db.add.call_count == 2
 
+    def test_already_resolved_titles_do_not_count_against_daily_cap(self):
+        served = [uuid.uuid4() for _ in range(2)]
+        resolved = uuid.uuid4()
+        _, db, _ = self._install(
+            user_movies={m: MagicMock() for m in served}, daily_count=MAX_SWIPES_PER_DAY - 2
+        )
+
+        resp, _ = self._post([{"movie_id": str(m), "seen": True} for m in [*served, resolved]])
+
+        assert resp.status_code == 200
+        assert resp.json()["seen_count"] == 2
+        assert db.add.call_count == 2
+
     def test_daily_cap_check_is_serialized_per_user(self):
         """The cap count must run under a per-user advisory lock (SEC-02, #570)."""
-        user, _, statements = self._install(user_movies={}, daily_count=MAX_SWIPES_PER_DAY)
+        served = uuid.uuid4()
+        user, _, statements = self._install(
+            user_movies={served: MagicMock()}, daily_count=MAX_SWIPES_PER_DAY
+        )
 
-        resp, _ = self._post([{"movie_id": str(uuid.uuid4()), "seen": True}])
+        resp, _ = self._post([{"movie_id": str(served), "seen": True}])
         assert resp.status_code == 429
 
         compiled = [stmt.compile(dialect=postgresql.dialect()) for stmt in statements]
         lock_idx = next(
             i for i, c in enumerate(compiled) if "pg_advisory_xact_lock" in str(c)
         )
-        count_idx = next(i for i, c in enumerate(compiled) if "count(" in str(c).lower())
+        count_idx = next(
+            i for i, c in enumerate(compiled)
+            if "count(" in str(c).lower() and "swipe_results" in str(c).lower()
+        )
         assert lock_idx < count_idx, "advisory lock must be taken before the daily count"
 
         lock_params = set(compiled[lock_idx].params.values())

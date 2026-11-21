@@ -853,6 +853,8 @@ class TestDataCollectionConsentGuard:
             result = MagicMock()
             if "swipe_results" in sql:
                 result.scalar_one.return_value = 0  # under the daily cap
+            elif "movie_id in" in sql:
+                result.scalar_one.return_value = 0  # nothing to write
             else:
                 result.scalar.return_value = 100  # pool not low
             return result
