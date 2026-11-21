@@ -34,6 +34,7 @@ from backend.services.suggest import (
     has_enough_ranked,
 )
 from backend.services.trakt import TraktClient
+from backend.utils.provenance import is_spa_request
 
 logger = logging.getLogger(__name__)
 
@@ -175,10 +176,9 @@ async def get_suggestions(
 
     if latest is None or latest <= cutoff:
         # SameSite=Lax lets a cross-site link carry the session cookie on GET,
-        # and the CSRF middleware exempts GET, so only the SPA's custom header
-        # (never sent cross-site without a preflight) may trigger an LLM call
-        # and new rows (AUTH-003, #973).
-        if request.headers.get("x-requested-with") != "XMLHttpRequest":
+        # and the CSRF middleware exempts GET, so only the SPA may trigger an
+        # LLM call and new rows (AUTH-003, #973).
+        if not is_spa_request(request):
             return _ready_response(await _get_active_suggestions(uid, db, media_type))
         # One generation per user at a time (AUD-08, #690).
         if not await try_acquire_xact_lock(db, REGENERATION_DAILY_QUOTA.name, uid):
