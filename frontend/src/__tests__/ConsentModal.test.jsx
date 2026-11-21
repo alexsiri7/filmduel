@@ -1,6 +1,5 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { MemoryRouter } from "react-router-dom";
 import ConsentModal from "../components/ConsentModal";
 import PrivacyPolicy from "../pages/PrivacyPolicy";
 
@@ -60,11 +59,7 @@ describe("ConsentModal", () => {
   // Read the processors from the policy itself so a service added there fails here
   // until the summary names it too.
   it("names every processor in the privacy policy's Third-Party Services list", () => {
-    const { unmount } = render(
-      <MemoryRouter>
-        <PrivacyPolicy />
-      </MemoryRouter>
-    );
+    const { unmount } = render(<PrivacyPolicy />);
     const services = screen.getByRole("heading", { name: /third-party services/i }).closest("section");
     const processors = [...services.querySelectorAll("li > strong")].map((el) =>
       el.textContent.replace(/\s*\(.*\)$/, "")
