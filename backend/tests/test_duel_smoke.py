@@ -49,7 +49,9 @@ def test_minted_session_is_accepted_by_backend_decoder():
     payload, smoke = decode_session_jwt(mint_session_jwt(user_id, smoke_key), settings)
     assert smoke is True
     assert payload["sub"] == user_id
+    assert isinstance(payload["iat"], float)
     assert isinstance(payload["orig_iat"], float)
+    assert payload["iat"] == payload["orig_iat"]
     assert payload["exp"] - payload["iat"] <= JWT_EXPIRY_HOURS * 3600
 
 
